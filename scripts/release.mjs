@@ -36,7 +36,10 @@ const parts = (v) => v.split(".").map(Number)
 /** The version after `bump`, from `current`. An exact one may be the current, for its first release. */
 function next(current, bump) {
   if (/^\d+\.\d+\.\d+$/.test(bump)) {
-    const order = parts(bump).map((n, i) => n - parts(current)[i]).find((d) => d !== 0) ?? 0
+    const order =
+      parts(bump)
+        .map((n, i) => n - parts(current)[i])
+        .find((d) => d !== 0) ?? 0
     if (order < 0) fail(`${bump} is older than the current ${current}.`)
     return bump
   }
@@ -72,15 +75,19 @@ const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: ROOT, encodi
 const unexpected = dirty.filter((line) => line.slice(3) !== CHANGELOG)
 if (unexpected.length) fail(`Commit or stash these first; only ${CHANGELOG} may have changes:\n${unexpected.join("\n")}`)
 run("git", ["fetch", "--quiet", "--tags", "origin", "main"])
-if (read("git", ["rev-parse", "HEAD"]) !== read("git", ["rev-parse", "origin/main"])) fail("main isn't the same as origin/main: pull or push first.")
+if (read("git", ["rev-parse", "HEAD"]) !== read("git", ["rev-parse", "origin/main"]))
+  fail("main isn't the same as origin/main: pull or push first.")
 if (read("git", ["tag", "--list", tag])) fail(`${tag} is already tagged.`)
 if (!notes(version)) fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`)
-if (!read("vsce", ["ls-publishers"]).split("\n").includes(publisher)) fail(`vsce has no token for the publisher ${publisher}: run \`vsce login ${publisher}\`.`)
+if (!read("vsce", ["ls-publishers"]).split("\n").includes(publisher))
+  fail(`vsce has no token for the publisher ${publisher}: run \`vsce login ${publisher}\`.`)
 run("gh", ["auth", "status"], { stdio: "ignore" })
 
 step("Testing")
 run("npm", ["test"])
 run("npm", ["run", "typecheck"])
+run("npm", ["run", "lint"])
+run("npm", ["run", "format:check"])
 run("npm", ["run", "test:integration"])
 
 if (version !== current) {
@@ -93,7 +100,9 @@ run("npm", ["run", "package"])
 
 if (!yes) {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
-  const answer = await rl.question(`\nPublish ${publisher}.${name} ${version} to the Marketplace? A version can't be published twice. [y/N] `)
+  const answer = await rl.question(
+    `\nPublish ${publisher}.${name} ${version} to the Marketplace? A version can't be published twice. [y/N] `,
+  )
   rl.close()
   if (answer.trim().toLowerCase() !== "y") fail(`Not published. To undo the bump: git checkout ${MANIFEST} package-lock.json`)
 }
@@ -120,14 +129,18 @@ step("Pushing")
 try {
   run("git", ["push", "--quiet", "origin", "main", tag])
 } catch {
-  fail(`${version} is published, but pushing failed. Finish with:\n  git push origin main ${tag}\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`)
+  fail(
+    `${version} is published, but pushing failed. Finish with:\n  git push origin main ${tag}\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`,
+  )
 }
 
 step("Making the GitHub release")
 try {
   run("gh", ["release", "create", tag, vsix, "--title", version, "--notes", notes(version)])
 } catch {
-  fail(`${version} is published and pushed, but the GitHub release failed. Finish with:\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`)
+  fail(
+    `${version} is published and pushed, but the GitHub release failed. Finish with:\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`,
+  )
 }
 
 console.log(`\n✓ Released ${version}: https://marketplace.visualstudio.com/items?itemName=${publisher}.${name}`)

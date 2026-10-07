@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-test/
+coverage/
+.vscode-test/
+*.vsix
+package-lock.json
+specs/
+blueprints/
+*.md

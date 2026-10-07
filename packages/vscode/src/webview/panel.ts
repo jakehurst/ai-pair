@@ -73,12 +73,16 @@ const FILE =
   /^[\w@.~-]*(\/[\w@.~-]+)*\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|css|scss|less|html|vue|svelte|py|rs|go|java|kt|swift|c|h|cc|cpp|hpp|cs|rb|php|lua|sh|zsh|toml|yaml|yml|xml|sql|txt|lock|env)$/
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]]/g
 const codeSpan = (code: string) =>
-  FILE.test(code) && !code.startsWith(".") ? '<a href="#" class="file" data-file="' + code + '">' + code + "</a>" : "<code>" + code + "</code>"
+  FILE.test(code) && !code.startsWith(".")
+    ? '<a href="#" class="file" data-file="' + code + '">' + code + "</a>"
+    : "<code>" + code + "</code>"
 const rich = (s: string) =>
   esc(s)
     .split(/(`[^`]+`)/)
     .map((part, i) =>
-      i % 2 === 1 ? codeSpan(part.slice(1, -1)) : part.replace(URL_PATTERN, (u) => '<a href="#" class="url" data-url="' + u + '">' + u + "</a>"),
+      i % 2 === 1
+        ? codeSpan(part.slice(1, -1))
+        : part.replace(URL_PATTERN, (u) => '<a href="#" class="url" data-url="' + u + '">' + u + "</a>"),
     )
     .join("")
 
@@ -247,7 +251,10 @@ function setState(e: Extract<PanelEvent, { type: "state" }>): void {
   setTip(ui.pause, paused ? "Resume (Space)" : "Pause (Space)")
   ui.turnLabel.textContent = turn === "user" ? "Hand back" : "My turn"
   ui.turn.setAttribute("aria-label", ui.turnLabel.textContent)
-  setTip(ui.turn, turn === "user" ? "Hand the turn back to the agent, with your reply if you typed one" : "Take the turn: you drive, the agent navigates")
+  setTip(
+    ui.turn,
+    turn === "user" ? "Hand the turn back to the agent, with your reply if you typed one" : "Take the turn: you drive, the agent navigates",
+  )
   syncStatus()
   syncTip()
 }

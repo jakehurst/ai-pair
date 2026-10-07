@@ -32,7 +32,14 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: "wel
   const address = server.address()
   if (address === null || typeof address === "string") throw new Error("no TCP address")
   const { port } = address
-  const discovery = { pid: process.pid, workspaceFolders: [folder], port, token: "token", protocolVersion: PROTOCOL_VERSION, lastFocused: 0 }
+  const discovery = {
+    pid: process.pid,
+    workspaceFolders: [folder],
+    port,
+    token: "token",
+    protocolVersion: PROTOCOL_VERSION,
+    lastFocused: 0,
+  }
   fs.writeFileSync(path.join(dir, `${port}.json`), JSON.stringify(discovery))
   const sockets: WebSocket[] = []
   const calls: { ws: WebSocket; id: number; tool: string }[] = []
@@ -73,7 +80,10 @@ describe("link", () => {
     link.locate(["/b"])
     const second = link.call("read", {})
     let settled = false
-    second.then(() => (settled = true), () => (settled = true))
+    second.then(
+      () => (settled = true),
+      () => (settled = true),
+    )
     await until(() => b.calls.length === 1)
     a.sockets[0]!.resume()
     await until(() => a.sockets[0]!.readyState === a.sockets[0]!.CLOSED)

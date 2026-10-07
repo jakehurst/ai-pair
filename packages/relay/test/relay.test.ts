@@ -386,7 +386,14 @@ describe("discovery", () => {
   it("skips a window whose file outlived it, even when its pid now belongs to another process", async () => {
     fs.writeFileSync(
       path.join(dir, "stale.json"),
-      JSON.stringify({ pid: process.pid, workspaceFolders: ["/project"], port: 1, token: "x", protocolVersion: 1, lastFocused: Date.now() + 60_000 }),
+      JSON.stringify({
+        pid: process.pid,
+        workspaceFolders: ["/project"],
+        port: 1,
+        token: "x",
+        protocolVersion: 1,
+        lastFocused: Date.now() + 60_000,
+      }),
     )
     const client = await connect()
     expect((await call(client, "start")).error).toBe(false)

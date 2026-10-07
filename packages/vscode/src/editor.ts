@@ -538,15 +538,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       for (const [key, type] of Object.entries(this.cursorTypes)) editor.setDecorations(type, key === cursorKey ? at : [])
       for (const [key, type] of Object.entries(this.labelTypes)) editor.setDecorations(type, key === cursorKey ? at : [])
       const sel = here?.selection
-      editor.setDecorations(
-        this.selectionType,
-        sel ? [new vscode.Range(doc.positionAt(sel.start), doc.positionAt(sel.end))] : [],
-      )
+      editor.setDecorations(this.selectionType, sel ? [new vscode.Range(doc.positionAt(sel.start), doc.positionAt(sel.end))] : [])
       const point = this.point && this.point.file === file ? this.point : null
-      editor.setDecorations(
-        this.pointType,
-        point ? [new vscode.Range(doc.positionAt(point.start), doc.positionAt(point.end))] : [],
-      )
+      editor.setDecorations(this.pointType, point ? [new vscode.Range(doc.positionAt(point.start), doc.positionAt(point.end))] : [])
     }
   }
 

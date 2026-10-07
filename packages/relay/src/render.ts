@@ -70,11 +70,7 @@ function renderBatch(b: BatchResult): string {
 }
 
 function renderRejected(r: NonNullable<Report["rejected"]>): string {
-  const parts = [
-    `Your batch was rejected: its action ${r.index} would fail:`,
-    `  ${JSON.stringify(r.action)}`,
-    renderError(r.error),
-  ]
+  const parts = [`Your batch was rejected: its action ${r.index} would fail:`, `  ${JSON.stringify(r.action)}`, renderError(r.error)]
   if (r.code) parts.push(`The code would read then, in ${r.code.file}:\n${renderCode(r.code)}`)
   parts.push("Nothing of it was queued. Fix it and submit the whole batch again.")
   return parts.join("\n")

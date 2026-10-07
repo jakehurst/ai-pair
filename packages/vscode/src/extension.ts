@@ -8,7 +8,14 @@ import { NarrationPanel } from "./panel"
 import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
 
 /** Returned from `activate`, for integration tests. */
-export type Api = { controller: Controller; editor: VsCodeEditor; bridge: Bridge; playDemo: () => Promise<void>; launcher: string; ready: Promise<void> }
+export type Api = {
+  controller: Controller
+  editor: VsCodeEditor
+  bridge: Bridge
+  playDemo: () => Promise<void>
+  launcher: string
+  ready: Promise<void>
+}
 
 const config = () => vscode.workspace.getConfiguration("aiPair")
 

@@ -84,7 +84,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   private receive(m: FromPanel): void {
     const c = this.controller
-    this.trace?.(`panel ${m.type}${m.type === "reply" ? ` ${JSON.stringify(m.text)}` : m.type === "draft" ? (m.empty ? " empty" : " typed") : ""}`)
+    this.trace?.(
+      `panel ${m.type}${m.type === "reply" ? ` ${JSON.stringify(m.text)}` : m.type === "draft" ? (m.empty ? " empty" : " typed") : ""}`,
+    )
     switch (m.type) {
       case "ready":
         // A new page has an empty draft (#69).

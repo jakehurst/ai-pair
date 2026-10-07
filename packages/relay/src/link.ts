@@ -40,11 +40,16 @@ function isDiscovery(d: unknown): d is Discovery {
   return (
     typeof d === "object" &&
     d !== null &&
-    "pid" in d && typeof d.pid === "number" &&
-    "port" in d && typeof d.port === "number" &&
-    "token" in d && typeof d.token === "string" &&
-    "protocolVersion" in d && typeof d.protocolVersion === "number" &&
-    "lastFocused" in d && typeof d.lastFocused === "number" &&
+    "pid" in d &&
+    typeof d.pid === "number" &&
+    "port" in d &&
+    typeof d.port === "number" &&
+    "token" in d &&
+    typeof d.token === "string" &&
+    "protocolVersion" in d &&
+    typeof d.protocolVersion === "number" &&
+    "lastFocused" in d &&
+    typeof d.lastFocused === "number" &&
     "workspaceFolders" in d &&
     Array.isArray(d.workspaceFolders) &&
     d.workspaceFolders.every((f: unknown) => typeof f === "string")
@@ -76,7 +81,10 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
     const here = realpath(folder)
     const matches: { window: Discovery; length: number }[] = []
     for (const window of windows) {
-      const lengths = window.workspaceFolders.map(realpath).filter((f) => contains(f, here)).map((f) => f.length)
+      const lengths = window.workspaceFolders
+        .map(realpath)
+        .filter((f) => contains(f, here))
+        .map((f) => f.length)
       if (lengths.length > 0) matches.push({ window, length: Math.max(...lengths) })
     }
     if (matches.length === 0) continue

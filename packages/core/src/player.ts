@@ -263,7 +263,10 @@ export class Player {
     const timing = this.stage.config().timing
     const kinds = actionKinds(action)
     if (kinds.length > 1) {
-      return fail("invalid_action", `One action per object, got ${kinds.map((k) => `\`${k}\``).join(" and ")}: make them separate actions, in order.`)
+      return fail(
+        "invalid_action",
+        `One action per object, got ${kinds.map((k) => `\`${k}\``).join(" and ")}: make them separate actions, in order.`,
+      )
     }
     const named = this.names(action, playing)
     if (typeof named === "object") return named
@@ -531,10 +534,14 @@ export class Player {
       cursor.offset = start + insert.length
       s.selection = null
       this.touch(playing, cursor.file, start, deleteLength, insert.length)
-      await this.edit(cursor.file, { offset: start, deleteLength, text: insert }, {
-        undoStopBefore: i === 0,
-        undoStopAfter: i === chunks.length - 1,
-      })
+      await this.edit(
+        cursor.file,
+        { offset: start, deleteLength, text: insert },
+        {
+          undoStopBefore: i === 0,
+          undoStopAfter: i === chunks.length - 1,
+        },
+      )
       typed += chunk.text
       this.follow()
     }
@@ -566,7 +573,8 @@ export class Player {
    * file, which it names before its first edit.
    */
   private names(action: Action, playing: Playing): string | undefined | Outcome {
-    const target: unknown = "move" in action ? action.move : "select" in action ? action.select : "point" in action ? action.point : undefined
+    const target: unknown =
+      "move" in action ? action.move : "select" in action ? action.select : "point" in action ? action.point : undefined
     const file = typeof target === "object" && target !== null && "file" in target ? target.file : undefined
     if (typeof file !== "string") return undefined
     const path = this.resolvePath(file)
@@ -601,7 +609,8 @@ export class Player {
     const text = await this.stage.editor.getText(file)
     if (line === undefined) {
       // The cursor's line, which may be the empty one after a final newline, if it's there.
-      if (s.cursor?.file !== file) return fail("invalid_action", `Give \`line\`: without it, a \`${action}\` is on your cursor's line, in its file.`)
+      if (s.cursor?.file !== file)
+        return fail("invalid_action", `Give \`line\`: without it, a \`${action}\` is on your cursor's line, in its file.`)
       return { text, line: position(text, s.cursor.offset).line }
     }
     // An empty file has one line, the empty one; a newline at the end doesn't start another.
@@ -630,7 +639,13 @@ export class Player {
    * isn't one it knows. Says what the line reads now, and where what it looks for is, which it's
    * shown then. An empty file's one line needs no showing.
    */
-  private unseen(file: string, text: string, line: number, what: string, find: ((text: string) => Candidate[]) | undefined): Outcome | undefined {
+  private unseen(
+    file: string,
+    text: string,
+    line: number,
+    what: string,
+    find: ((text: string) => Candidate[]) | undefined,
+  ): Outcome | undefined {
     const { lines } = this.stage
     if (!this.stage.knows || text === "" || this.stage.knows(file, line, lines.of(file, text)[line - 1]!)) return undefined
     const candidates = find?.(text) ?? []

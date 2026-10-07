@@ -232,7 +232,10 @@ const HEADER = /^\s*\[\[?\s*([^\]]*?)\s*\]\]?\s*(#.*)?$/
 /** The dotted key of a table header, unquoted: `[mcp_servers."pair".env]` → `mcp_servers.pair.env`. */
 function headerKey(line: string): string | undefined {
   const key = HEADER.exec(line)?.[1]
-  return key?.split(/\s*\.\s*/).map((part) => part.replace(/^(["'])(.*)\1$/, "$2")).join(".")
+  return key
+    ?.split(/\s*\.\s*/)
+    .map((part) => part.replace(/^(["'])(.*)\1$/, "$2"))
+    .join(".")
 }
 
 function ownTable(key: string | undefined, name: string): boolean {
@@ -303,7 +306,13 @@ export function withTomlTable(text: string, name: string, body: string[]): strin
 function definesInline(table: string, line: string, name: string): boolean {
   const key = /^\s*([^=#]+?)\s*=/.exec(line)?.[1]
   if (!key) return false
-  const full = [table, key.split(/\s*\.\s*/).map((p) => p.replace(/^(["'])(.*)\1$/, "$2")).join(".")]
+  const full = [
+    table,
+    key
+      .split(/\s*\.\s*/)
+      .map((p) => p.replace(/^(["'])(.*)\1$/, "$2"))
+      .join("."),
+  ]
     .filter(Boolean)
     .join(".")
   return full === "mcp_servers" || full === `mcp_servers.${name}` || full.startsWith(`mcp_servers.${name}.`)

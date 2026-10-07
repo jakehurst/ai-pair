@@ -70,9 +70,7 @@ describe("Claude Code", () => {
 describe("Codex", () => {
   it("creates config.toml", async () => {
     expect(agent("codex").detect(host)).toBe(false)
-    expect(await setUpTwice("codex", ".codex", "config.toml")).toBe(
-      `[mcp_servers.pair]\ncommand = "${LAUNCHER}"\nargs = []\n`,
-    )
+    expect(await setUpTwice("codex", ".codex", "config.toml")).toBe(`[mcp_servers.pair]\ncommand = "${LAUNCHER}"\nargs = []\n`)
   })
 
   it("adds the table after what's there, keeping comments", async () => {

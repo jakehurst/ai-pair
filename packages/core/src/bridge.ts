@@ -47,7 +47,9 @@ function reported(r: unknown): string {
   if (typeof r !== "object" || r === null || !("batches" in r) || !("events" in r)) return ""
   const { batches, events } = r
   const parts = [
-    Array.isArray(batches) ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(", ")}]` : "",
+    Array.isArray(batches)
+      ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(", ")}]`
+      : "",
     Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(", ")}]` : "",
   ]
   if ("rejected" in r && r.rejected) parts.push("rejected")

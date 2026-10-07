@@ -75,8 +75,7 @@ export async function run(): Promise<void> {
   const root = vscode.workspace.workspaceFolders![0]!.uri.fsPath
   const file = (name: string) => path.join(root, name)
   const buffer = async (name: string) => (await vscode.workspace.openTextDocument(file(name))).getText()
-  const disk = async (name: string) =>
-    new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file(name))))
+  const disk = async (name: string) => new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file(name))))
 
   // The demo, sped up. If our own edits were mistaken for the programmer's, it would stop early.
   api.controller.setSpeed(20)
@@ -103,10 +102,16 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file("other.txt"), "after\n")
   await until(() => other.getText() === "after\n")
   const first = await queued
-  assert.deepEqual(first.batches.map((b) => b.status), ["completed"])
+  assert.deepEqual(
+    first.batches.map((b) => b.status),
+    ["completed"],
+  )
   assert.deepEqual(first.events, [{ kind: "edit", file: "other.txt", diff: "@@ -1,1 +1,1 @@\n-before\n+after", by: "other" }])
   const toolDone = await c.step([])
-  assert.deepEqual(toolDone.batches.map((b) => b.status), ["completed"])
+  assert.deepEqual(
+    toolDone.batches.map((b) => b.status),
+    ["completed"],
+  )
 
   // ...and a save participant, trimming what the agent typed when its batch is saved: its change isn't
   // the programmer's, and the batch queued behind it, planned against the untrimmed text, is discarded.
@@ -115,8 +120,14 @@ export async function run(): Promise<void> {
   const trimmed = await c.step([{ type: "!▌" }])
   const trimDone = await c.step([])
   await vscode.workspace.getConfiguration("files").update("trimTrailingWhitespace", undefined, vscode.ConfigurationTarget.Global)
-  assert.deepEqual([...trimmed.batches, ...trimDone.batches].map((b) => b.status), ["completed", "discarded"])
-  assert.deepEqual([...trimmed.events, ...trimDone.events].map((e) => e.kind === "edit" && `${e.file} ${e.by}`), ["tool.txt other"])
+  assert.deepEqual(
+    [...trimmed.batches, ...trimDone.batches].map((b) => b.status),
+    ["completed", "discarded"],
+  )
+  assert.deepEqual(
+    [...trimmed.events, ...trimDone.events].map((e) => e.kind === "edit" && `${e.file} ${e.by}`),
+    ["tool.txt other"],
+  )
   assert.ok((await buffer("tool.txt")).endsWith("abc\nend"))
   await c.end()
   console.log("changes by others are reported as theirs")
@@ -132,7 +143,10 @@ export async function run(): Promise<void> {
   await api.editor.save(file("race.txt"))
   await keystroke
   const raced = await c.listen()
-  assert.deepEqual(raced.events.map((e) => e.kind === "edit" && `${e.file} ${e.by}`), ["race.txt programmer"])
+  assert.deepEqual(
+    raced.events.map((e) => e.kind === "edit" && `${e.file} ${e.by}`),
+    ["race.txt programmer"],
+  )
   await c.end()
   console.log("a keystroke just before a save is the programmer's")
 
@@ -144,14 +158,20 @@ export async function run(): Promise<void> {
   await c.start("follow")
   await c.read("follow-a.txt")
   await c.step([{ move: { file: "follow-a.txt", line: 1, to: "line_end" } }])
-  assert.deepEqual((await c.step([])).batches.map((b) => b.status), ["completed"])
+  assert.deepEqual(
+    (await c.step([])).batches.map((b) => b.status),
+    ["completed"],
+  )
   await c.read("follow-b.txt")
   api.editor.selfNavMs = 0
   await c.step([{ move: { file: "follow-b.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
   const moved = await c.step([])
   api.editor.selfNavMs = 400
   assert.equal(c.isPaused, false, "paused by our own move")
-  assert.deepEqual(moved.batches.map((b) => b.status), ["completed"])
+  assert.deepEqual(
+    moved.batches.map((b) => b.status),
+    ["completed"],
+  )
   assert.equal(await buffer("follow-b.txt"), "bx\n")
   await c.end()
   console.log("our own move to another file doesn't pause")
@@ -166,7 +186,10 @@ export async function run(): Promise<void> {
   const twice = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { point: { line: 2, text: "second" } }])
   assert.equal(twice.rejected, undefined)
   const pointed = await c.step([])
-  assert.deepEqual(pointed.batches.map((b) => b.status), ["completed"])
+  assert.deepEqual(
+    pointed.batches.map((b) => b.status),
+    ["completed"],
+  )
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, file("named-b.txt"))
   const outside = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { type: "y\u{258c}" }])
   assert.equal(outside.rejected?.error.kind, "invalid_action")
@@ -192,8 +215,14 @@ export async function run(): Promise<void> {
   c.userMessage("stop")
   cancelListen.abort()
   const restored = await relayed("step", { actions: [{ move: { file: "return.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }] })
-  assert.deepEqual(restored.events.map((e) => e.kind), ["message"])
-  assert.deepEqual(restored.batches.map((b) => b.status), ["discarded"])
+  assert.deepEqual(
+    restored.events.map((e) => e.kind),
+    ["message"],
+  )
+  assert.deepEqual(
+    restored.batches.map((b) => b.status),
+    ["discarded"],
+  )
   assert.equal(await buffer("return.txt"), "a\n")
 
   const cancelLast = new AbortController()
@@ -203,7 +232,10 @@ export async function run(): Promise<void> {
   c.endSession()
   cancelLast.abort()
   const ended = await relayed("listen", {})
-  assert.deepEqual(ended.events.map((e) => e.kind), ["message", "end"])
+  assert.deepEqual(
+    ended.events.map((e) => e.kind),
+    ["message", "end"],
+  )
   link.close()
   // The bridge disconnects the socket's session when it sees the close; let that happen before the next start.
   await sleep(300)
@@ -236,7 +268,10 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file("..cache/x.txt"), "b\n")
   await until(() => dotted.getText() === "b\n")
   const dottedReport = await c.listen()
-  assert.deepEqual(dottedReport.events.map((e) => e.kind === "edit" && e.file), ["..cache/x.txt"])
+  assert.deepEqual(
+    dottedReport.events.map((e) => e.kind === "edit" && e.file),
+    ["..cache/x.txt"],
+  )
   await c.end()
   console.log("a change in ..cache/ is reported, by its path in the workspace")
 
@@ -335,7 +370,9 @@ export async function run(): Promise<void> {
   }
   c.setSpeed(20)
   await tool("start", { task: "relay test" })
-  await tool("step", { actions: [{ say: "Hello from the relay." }, { move: { file: "relay.txt", line: 1, to: "line_end" } }, { type: "typed via the relay▌" }] })
+  await tool("step", {
+    actions: [{ say: "Hello from the relay." }, { move: { file: "relay.txt", line: 1, to: "line_end" } }, { type: "typed via the relay▌" }],
+  })
   const last = await tool("step", { actions: [] })
   assert.match(last, /Batch \d+ completed/)
   assert.equal(await buffer("relay.txt"), "typed via the relay")
