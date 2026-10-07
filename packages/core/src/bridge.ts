@@ -23,6 +23,8 @@ export type BridgeOptions = {
   workspaceFolders: () => string[]
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
   trace?: (line: string) => void
+  /** Called when the discovery file can't be written, so relays won't find this window (#9). */
+  failed?: (error: unknown) => void
 }
 
 /** What a frame says, for `trace`: its type and id, and for a report, what it reports. */
@@ -106,12 +108,17 @@ export class Bridge {
       protocolVersion: PROTOCOL_VERSION,
       lastFocused: this.lastFocused,
     }
-    fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 })
-    // Written beside it, then renamed over it, so a relay reading it never sees it half written
-    // (#72). Not a `.json`, so relays don't read the temporary one.
-    const written = `${this.file}.tmp`
-    fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 })
-    fs.renameSync(written, this.file)
+    // Reported, not thrown: it runs on every focus, and the server works without it (#9).
+    try {
+      fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 })
+      // Written beside it, then renamed over it, so a relay reading it never sees it half written
+      // (#72). Not a `.json`, so relays don't read the temporary one.
+      const written = `${this.file}.tmp`
+      fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 })
+      fs.renameSync(written, this.file)
+    } catch (e) {
+      this.options.failed?.(e)
+    }
   }
 
   dispose(): void {

@@ -52,6 +52,11 @@ export function activate(context: vscode.ExtensionContext): Api {
     dir: discoveryDir(),
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
     trace,
+    // Once: it would fail again on every focus.
+    failed: once(
+      (e) =>
+        void vscode.window.showErrorMessage(`AI Pair couldn't write its discovery file, so agents won't find this window: ${String(e)}`),
+    ),
   })
   const ready = bridge.start()
   ready.catch((e: unknown) => void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`))
@@ -113,3 +118,13 @@ export function activate(context: vscode.ExtensionContext): Api {
 }
 
 export function deactivate(): void {}
+
+/** `f`, run the first time only. */
+function once<T>(f: (arg: T) => void): (arg: T) => void {
+  let done = false
+  return (arg) => {
+    if (done) return
+    done = true
+    f(arg)
+  }
+}

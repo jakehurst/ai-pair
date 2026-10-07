@@ -40,3 +40,23 @@ it("rewrites the discovery file on focus without a reader ever seeing it half wr
   expect(reads).toBeGreaterThan(0)
   expect(broken).toBe(0)
 }, 30_000)
+
+it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "reports a discovery file it can't write, without throwing, on start and on focus (#9)",
+  async () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "ai-pair-discovery-"))
+    fs.chmodSync(parent, 0o500)
+    const failures: unknown[] = []
+    const bridge = new Bridge(new Controller(new FakeEditor(), new FakePanel(), testConfig), {
+      dir: path.join(parent, "windows"),
+      workspaceFolders: () => ["/project"],
+      failed: (e) => failures.push(e),
+    })
+    await bridge.start()
+    expect(() => bridge.focused()).not.toThrow()
+    bridge.dispose()
+    fs.chmodSync(parent, 0o700)
+    fs.rmSync(parent, { recursive: true, force: true })
+    expect(failures).toHaveLength(2)
+  },
+)
