@@ -246,6 +246,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   async save(file: string): Promise<void> {
     const doc = this.openDocument(file)
     if (!doc?.isDirty) return
+    // First a round trip to the main thread: its answer comes after every change event VS Code sent
+    // before it, so a change made before this save is handled before `saving` says otherwise (#40).
+    await vscode.workspace.fs.stat(doc.uri)
     this.saving.add(file)
     try {
       // A save that fails, say because the file on disk is newer, resolves to false instead of throwing.

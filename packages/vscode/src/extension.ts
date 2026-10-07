@@ -8,7 +8,7 @@ import { NarrationPanel } from "./panel"
 import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
 
 /** Returned from `activate`, for integration tests. */
-export type Api = { controller: Controller; playDemo: () => Promise<void>; launcher: string; ready: Promise<void> }
+export type Api = { controller: Controller; editor: VsCodeEditor; playDemo: () => Promise<void>; launcher: string; ready: Promise<void> }
 
 const config = () => vscode.workspace.getConfiguration("aiPair")
 
@@ -91,7 +91,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       .then((answer) => answer && setUpAgent(launcher))
   }
 
-  return { controller, playDemo: () => playDemo(controller, root), launcher, ready }
+  return { controller, editor, playDemo: () => playDemo(controller, root), launcher, ready }
 }
 
 export function deactivate(): void {}
