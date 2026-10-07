@@ -12,7 +12,9 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "npm run test:integration -w packages/vscode",
     "typecheck": "tsc -p . && tsc -p packages/vscode/src/webview",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
@@ -22,6 +24,7 @@
     "happy-dom": "^20.14.5",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2003",
+    "prettier": "^3.9.9",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },

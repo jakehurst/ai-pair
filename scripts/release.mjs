@@ -81,6 +81,8 @@ run("gh", ["auth", "status"], { stdio: "ignore" })
 step("Testing")
 run("npm", ["test"])
 run("npm", ["run", "typecheck"])
+run("npm", ["run", "lint"])
+run("npm", ["run", "format:check"])
 run("npm", ["run", "test:integration"])
 
 if (version !== current) {
