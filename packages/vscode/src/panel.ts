@@ -53,7 +53,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   post(event: PanelEvent): void {
     this.log.push(event)
-    if (this.log.length > MAX_LOG) this.log.splice(0, this.log.length - MAX_LOG)
+    if (this.log.length > MAX_LOG) {
+      const cut = this.log.splice(0, this.log.length - MAX_LOG)
+      // A view replays its session state from the last `session` event: keep it, or a view created
+      // after a long session shows none while one runs (#54).
+      const session = cut.findLast((e) => e.type === "session")
+      if (session && !this.log.some((e) => e.type === "session")) this.log.unshift(session)
+    }
     void this.view?.webview.postMessage(event)
     if (event.type === "session") {
       void vscode.commands.executeCommand("setContext", "aiPair.active", event.active)

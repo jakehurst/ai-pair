@@ -20,6 +20,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Wire_57ac07f_29.cfg` | same | `NoReportLost` violated (#29) | 120 |
 | `Panel.cfg` | `N = 5` events | holds | 21 |
 | `Panel_57ac07f.cfg` | same | S13 `NewestFirst` violated (#18) | 10 |
+| `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
+| `PanelReplay_57ac07f_54.cfg` | same | `ReplayShowsSession` violated (#54) | 67 |
 | `Controller.cfg` | `B = 2` batches, `E = 1` event, `MaxCancels = 1` | holds | 1,488 |
 | `Controller_57ac07f.cfg` | same | S1 `BatchesDelivered` violated (#28) | 1,533 |
 | `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
@@ -80,6 +82,15 @@ Each violation's trace was checked against the code step by step before it was r
 | `Entry` | `addYou`, `addRun`, the interrupt and turn dividers: `add()` |
 | `Edge` | the `session` event, start and end |
 | `band`, `flag`, `Flushed` | `current`, `filed`, `fileCurrent()` |
+
+### `PanelReplay`: the panel's log and its replay
+
+`post` and `ready` in `packages/vscode/src/panel.ts`, and the page's `setActive`. `KeepSession` is the fix for #54.
+
+| Spec | Code |
+|---|---|
+| `Post(e)` | `post()`: the event onto `log`, the oldest cut beyond `MAX_LOG`, the last `session` event kept |
+| `ReplayShowsSession` | a view created now: `ready` → `replay`, its session state from the log's last `session` event |
 
 ### `Controller`: what reaches the agent
 
