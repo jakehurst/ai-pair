@@ -6,7 +6,7 @@ Models of the code's state machines, checked with TLC (issue #19). Run them all 
 specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 ```
 
-CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. `Spec_<commit>[_<issue>].cfg` models the code at that commit, before a fix, and has to find a violation: it is how each spec was validated, by reproducing a known bug.
+CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. `Spec_<commit>[_<issue>].cfg` models the code at that commit, before a fix, and has to find a violation: it is how each spec was validated, by reproducing a known bug. Where no known bug lived, `Spec_mutation.cfg` switches off the code's defenses instead, and has to find a violation the same way.
 
 ## Results
 
@@ -30,6 +30,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
+| `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
+| `Rehearsal_mutation.cfg` | same, both defenses off | S10 violated (validation by mutation; no known bug) | |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
 | `Player_57ac07f_49.cfg` | same | S11 `DeletesTheSelection` violated (#49) | 12 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -147,6 +149,18 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 |---|---|
 | `Begin`, `Finish` | the delete: before #49 it copied the selection, then awaited `show` and `getText` |
 | `TypeBefore`, `TypeAfter` | a programmer's edit: `transform` moves the live selection, and the edit interrupts |
+
+### `Rehearsal`: line identities across a rehearsal
+
+S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player's `knows`. Each line has a ghost, which line it really is, next to the tracker's id, and changes are whole lines inserted or deleted or an edit within a line, where `applyChange`'s rules are plain. Two defenses keep S10, and the mutation config turns both off: a change by others to a file the queue edits interrupts it (`OtherInterrupts`), and `adopt` takes the fork's ids only for a text that reads as in the fork (`AdoptChecksText`). Either one alone is enough at these bounds.
+
+| Spec | Code |
+|---|---|
+| `ReadEditor`, `ReadPlanned` | `read`: `saw` with the editor's lines, or with the queue's `after.lines` |
+| `Submit` | `step`'s rehearsal: `fork()`, the batch played in memory |
+| `Play`, `PlayFails` | the batch playing, the editor tracking its edits, `adopt` |
+| `Other` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted |
+| `Accept` | the player's `knows` in `unseen`: the id seen at a number is the editor's id there now |
 
 ### `Terminals`: running commands
 
