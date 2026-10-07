@@ -40,3 +40,35 @@ export type EditorMessage =
   | { type: "rejected"; reason: string }
   | { type: "result"; id: number; result: unknown }
   | { type: "error"; id: number; code: ToolErrorCode | "internal"; message: string }
+
+/**
+ * A frame's message, or `undefined` if it isn't one: not JSON, or JSON that isn't an object with a
+ * string `type` (#4, #30).
+ */
+function parseFrame(data: Frame): { type: string } | undefined {
+  const bytes = Array.isArray(data) ? Buffer.concat(data) : data instanceof ArrayBuffer ? Buffer.from(data) : data
+  const text = bytes.toString("utf8")
+  let m: unknown
+  try {
+    m = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (typeof m !== "object" || m === null || !("type" in m) || typeof m.type !== "string") return undefined
+  return m as { type: string }
+}
+
+/** The raw data of a WebSocket frame, as `ws` hands it over. */
+export type Frame = Buffer | ArrayBuffer | Buffer[]
+
+// Only `type` is checked: the other fields are taken on trust from a peer that authenticated, as they always were.
+
+/** A frame from the relay, or `undefined` if it isn't a message. */
+export function parseRelayMessage(data: Frame): RelayMessage | undefined {
+  return parseFrame(data) as RelayMessage | undefined
+}
+
+/** A frame from the editor, or `undefined` if it isn't a message. */
+export function parseEditorMessage(data: Frame): EditorMessage | undefined {
+  return parseFrame(data) as EditorMessage | undefined
+}

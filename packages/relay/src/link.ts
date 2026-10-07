@@ -3,7 +3,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import WebSocket from "ws"
-import { PROTOCOL_VERSION, type Discovery, type EditorMessage, type ToolName } from "@ai-pair/protocol"
+import { parseEditorMessage, PROTOCOL_VERSION, type Discovery, type ToolName } from "@ai-pair/protocol"
 
 export class RelayError extends Error {
   constructor(
@@ -184,7 +184,15 @@ export class EditorLink {
         ws.send(JSON.stringify({ type: "hello", token: window.token, protocolVersion: PROTOCOL_VERSION }))
       })
       ws.on("message", (data) => {
-        const m = JSON.parse(String(data)) as EditorMessage
+        const m = parseEditorMessage(data)
+        if (!m) {
+          // Before the welcome, whatever is on this port isn't our editor. After it, drop the frame.
+          if (!welcomed) {
+            reject(new RelayError("no_editor", "The editor's port answered with something that isn't a message."))
+            ws.close()
+          }
+          return
+        }
         if (m.type === "welcome") {
           welcomed = true
           this.ws = ws

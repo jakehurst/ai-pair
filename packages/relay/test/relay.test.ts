@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { WebSocket } from "ws"
 import { Bridge, Controller } from "@ai-pair/core"
 import { FakeEditor, FakePanel, testConfig } from "../../core/test/fake"
 import { EditorLink, findWindows } from "../src/link"
@@ -161,6 +162,16 @@ describe("relay", () => {
     const report = await call(client, "listen")
     expect(report.text).toMatch(/hello/)
     expect(report.text).toMatch(/Batch 1 completed/)
+  })
+
+  it("keeps serving after frames that aren't messages", async () => {
+    const { port } = findWindows(["/project"], dir).windows[0]!
+    const raw = new WebSocket(`ws://127.0.0.1:${port}`)
+    await new Promise((r) => raw.once("open", r))
+    for (const frame of ["null", "42", "[]", '{ "kind": "hello" }', "not json"]) raw.send(frame)
+    const client = await connect()
+    expect((await call(client, "start")).error).toBe(false)
+    raw.close()
   })
 
   it("ends the session when the agent's harness goes away", async () => {

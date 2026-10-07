@@ -79,4 +79,29 @@ describe("link", () => {
     expect(await second).toBe("from b")
     link.close()
   })
+
+  it("fails to connect, without crashing, when a window answers with a frame that is not JSON", async () => {
+    await fakeWindow("/a", "not json")
+    const link = new EditorLink("/a", dir)
+    await expect(link.call("read", {})).rejects.toMatchObject({ code: "no_editor" })
+  })
+
+  for (const frame of ["null", "42", '"text"', "[]", '{ "kind": "welcome" }']) {
+    it(`fails to connect, without crashing, when a window answers with JSON that isn't a message: ${frame}`, async () => {
+      await fakeWindow("/a", frame)
+      const link = new EditorLink("/a", dir)
+      await expect(link.call("read", {})).rejects.toMatchObject({ code: "no_editor" })
+    })
+  }
+
+  it("drops a frame that is not JSON after the welcome", async () => {
+    const a = await fakeWindow("/a")
+    const link = new EditorLink("/a", dir)
+    const call = link.call("read", {})
+    await until(() => a.calls.length === 1)
+    a.sockets[0]!.send("not json")
+    answer(a.calls[0]!, "result")
+    expect(await call).toBe("result")
+    link.close()
+  })
 })

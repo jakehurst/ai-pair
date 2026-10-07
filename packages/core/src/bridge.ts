@@ -6,12 +6,12 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { WebSocketServer, type WebSocket } from "ws"
 import {
+  parseRelayMessage,
   PROTOCOL_VERSION,
   ToolError,
   type Action,
   type Discovery,
   type EditorMessage,
-  type RelayMessage,
   type ToolName,
 } from "@ai-pair/protocol"
 import type { Controller } from "./controller"
@@ -92,12 +92,9 @@ export class Bridge {
     }
 
     ws.on("message", (data) => {
-      let m: RelayMessage
-      try {
-        m = JSON.parse(String(data)) as RelayMessage
-      } catch {
-        return
-      }
+      // A frame that isn't a message is dropped (#30).
+      const m = parseRelayMessage(data)
+      if (!m) return
       if (!authenticated) {
         if (m.type !== "hello" || !this.tokenMatches(m.token)) {
           send({ type: "rejected", reason: "Authentication failed." })
