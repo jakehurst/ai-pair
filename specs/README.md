@@ -26,6 +26,8 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 | `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
 | `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 25 |
+| `Bridge.cfg` | `S = 2` sockets | holds | 64 |
+| `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (14,699 states) and `B = 3, E = 2, MaxCancels = 3` (91,414 states).
 
@@ -107,6 +109,16 @@ Each violation's trace was checked against the code step by step before it was r
 | `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
 
 A keystroke made while the save participants run can't be told from their edits, since VS Code doesn't say who made a change. The spec allows that one wrong attribution by name (`"programmer during save"`).
+
+### `Bridge`: who drives the session
+
+`dispatch` and the socket's `close` handler in `packages/core/src/bridge.ts`, with the controller's session. `CheckOpen` is the fix for #42.
+
+| Spec | Code |
+|---|---|
+| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active; `controller.start()`; `this.owner = ws` |
+| `Close` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session |
+| `EndSession`, `Closed` | the programmer ending the session from the panel; its last report closing it |
 
 ## Keeping specs and code in step
 

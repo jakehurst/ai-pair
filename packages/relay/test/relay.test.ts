@@ -9,6 +9,7 @@ import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { WebSocket } from "ws"
 import { Bridge, Controller } from "@ai-pair/core"
+import { PROTOCOL_VERSION } from "@ai-pair/protocol"
 import { FakeEditor, FakePanel, testConfig } from "../../core/test/fake"
 import { EditorLink, findWindows } from "../src/link"
 import { agentGuide, createServer } from "../src/server"
@@ -210,6 +211,35 @@ describe("relay", () => {
     const client = await connect()
     expect((await call(client, "start")).error).toBe(false)
     raw.close()
+  })
+
+  it("doesn't leave a session to a socket that closed while it started", async () => {
+    // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
+    const { port, token } = findWindows(["/project"], dir).windows[0]!
+    const start = controller.start.bind(controller)
+    let open!: () => void, reached!: () => void
+    const gate = new Promise<void>((r) => (open = r))
+    const atGate = new Promise<void>((r) => (reached = r))
+    controller.start = async (...args) => {
+      reached()
+      await gate
+      return start(...args)
+    }
+    const raw = new WebSocket(`ws://127.0.0.1:${port}`)
+    await new Promise((r) => raw.once("open", r))
+    raw.send(JSON.stringify({ type: "hello", token, protocolVersion: PROTOCOL_VERSION }))
+    raw.send(JSON.stringify({ type: "call", id: 1, tool: "start", args: {} }))
+    await atGate
+    raw.close()
+    await new Promise((r) => raw.once("close", r))
+    await new Promise((r) => setTimeout(r, 50))
+    controller.start = start
+    open()
+    await new Promise((r) => setTimeout(r, 50))
+
+    // Another agent can pair: the session didn't stay with the closed socket.
+    const client = await connect()
+    expect((await call(client, "start")).error).toBe(false)
   })
 
   it("ends the session when the agent's harness goes away", async () => {

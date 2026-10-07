@@ -149,6 +149,12 @@ export class Bridge {
         throw new ToolError("session_active", "Another agent is already pairing in this editor window.")
       }
       const report = await c.start(optionalString(args.task), optionalString(args.cwd))
+      // The socket may have closed while the session started, when its close handler didn't own it yet:
+      // close the session again rather than leave it to no one (#42). From here to `owner`, nothing awaits.
+      if (ws.readyState !== ws.OPEN) {
+        c.disconnect()
+        throw new ToolError("no_session", "The connection closed while the session started.")
+      }
       this.owner = ws
       return report
     }
