@@ -88,6 +88,8 @@ export type PanelEvent =
   | { type: "turn"; to: Turn; message?: string; ref?: Ref }
   | { type: "interrupt" }
   | { type: "point"; file: string; line: number }
+  /** Files changed on disk outside the protocol, written close together (#15). As the agent names them. */
+  | { type: "outside"; files: string[] }
   | {
       type: "run"
       id: number

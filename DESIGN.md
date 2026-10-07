@@ -224,16 +224,25 @@ command the batch runs, so the command sees them.
 
 ## Changes outside the protocol
 
-Files that change on disk without going through the protocol (the agent's
-native tools, or anything else) are marked:
+During a session, files that change on disk without going through the
+protocol (the agent's native tools, or anything else) are marked:
 
 - a badge on the file in the explorer,
 - an entry in the narration history ("`package.json` changed outside the
-  editor") with a link to the diff.
+  editor") with a link to the diff against git's index, or to the file outside
+  git. Files changed within half a second of each other share one entry ("3
+  files changed outside the editor: …"), so a bulk rename or a branch switch is
+  one line.
 
 The mark clears when the programmer opens the file or the diff. The extension
 can't tell the agent's native edits from other tools (git, formatters), so the
 wording stays neutral.
+
+A file watcher sees saves too, reports them late, and may report several writes
+as one. So once a group of changes settles, each file is read, and marked only
+if it differs from the text VS Code last wrote to it (a save, or a file `show`
+created) or the programmer last saw in it (`specs/Outside.tla`). Files under
+`.git` and `node_modules` aren't marked.
 
 ## Open questions
 
@@ -243,5 +252,3 @@ wording stays neutral.
   large text, or should the panel be an editor-group webview?
 - **Type-to-pause.** Does pausing when the programmer starts typing a reply
   feel natural, or does it surprise?
-- **Bulk changes outside the protocol.** A bulk rename marks many files at
-  once; the history entry should probably group them.

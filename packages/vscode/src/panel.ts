@@ -141,9 +141,22 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case "command":
         if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command)
         return
+      case "openChange":
+        void this.openChange(m.file)
+        return
       case "openUrl":
         if (/^https?:\/\//.test(m.url)) void vscode.env.openExternal(vscode.Uri.parse(m.url))
         return
+    }
+  }
+
+  /** Opens a file changed outside the protocol: its diff against git's index, or the file itself outside git (#15). */
+  private async openChange(file: string): Promise<void> {
+    const uri = vscode.Uri.file(this.resolvePath(file))
+    try {
+      await vscode.commands.executeCommand("git.openChange", uri)
+    } catch {
+      await vscode.commands.executeCommand("vscode.open", uri)
     }
   }
 

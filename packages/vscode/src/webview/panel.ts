@@ -124,6 +124,23 @@ function refLink(ref: Ref): HTMLAnchorElement {
   return codeLink(ref.file + ":" + ref.line + (ref.endLine > ref.line ? "–" + ref.endLine : ""), ref.file, ref.line)
 }
 
+/** Files changed on disk outside the protocol, each a link to its diff (#15). */
+function addOutside(files: string[]): void {
+  const el = entry("outside")
+  el.append(files.length === 1 ? "" : files.length + " files changed outside the editor: ")
+  files.forEach((file, i) => {
+    if (i > 0) el.append(", ")
+    const a = document.createElement("a")
+    a.href = "#"
+    a.className = "change"
+    a.textContent = file
+    a.addEventListener("click", () => vscode.postMessage({ type: "openChange", file }))
+    el.append(a)
+  })
+  if (files.length === 1) el.append(" changed outside the editor")
+  add(el)
+}
+
 function addYou(text: string | undefined, ref: Ref | undefined): void {
   const el = entry("you", text ? rich(text) : "")
   if (ref) el.append(refLink(ref))
@@ -325,6 +342,9 @@ function handle(e: ToPanel): void {
       return
     case "interrupt":
       addDivider("You interrupted")
+      return
+    case "outside":
+      addOutside(e.files)
       return
     case "turn":
       addDivider(e.to === "user" ? "You took the turn" : "You handed the turn back")

@@ -64,3 +64,14 @@ it("announces the agent's narration and the state, and a command waiting for a d
   send({ type: "run", id: 2, command: "npm run build", phase: "declined" })
   expect(run.getAttribute("role")).toBeNull()
 })
+
+it("lists files changed outside the editor, each a link to its diff (#15)", () => {
+  send({ type: "session", active: true })
+  send({ type: "outside", files: ["src/a.ts"] })
+  send({ type: "outside", files: ["b.ts", "c.ts"] })
+  const entries = [...document.querySelectorAll("#history .outside")].map((e) => e.textContent)
+  expect(entries).toEqual(["2 files changed outside the editor: b.ts, c.ts", "src/a.ts changed outside the editor"])
+  const link = document.querySelector('#history .outside a[href="#"]')!
+  link.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
+  expect(posted.at(-1)).toEqual({ type: "openChange", file: "b.ts" })
+})
