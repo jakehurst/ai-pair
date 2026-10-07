@@ -6,7 +6,7 @@ Models of the code's state machines, checked with TLC (issue #19). Run them all 
 specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 ```
 
-`check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. `Spec_<commit>[_<issue>].cfg` models the code at that commit, before a fix, and has to find a violation: it is how each spec was validated, by reproducing a known bug.
+CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. `Spec_<commit>[_<issue>].cfg` models the code at that commit, before a fix, and has to find a violation: it is how each spec was validated, by reproducing a known bug.
 
 ## Results
 

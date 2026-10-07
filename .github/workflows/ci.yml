@@ -1,0 +1,40 @@
+# Lint, type check, and unit tests, and the TLA+ specs (#7, #19). The integration test needs a
+# real VS Code with a display, so it isn't here yet (#7).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      # TLA+ tools 1.7.4, the latest stable release, checked against its SHA-256.
+      - name: Download TLC
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/tla2tools.jar" https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+          echo "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  $RUNNER_TEMP/tla2tools.jar" | sha256sum -c
+      - name: Check every spec
+        run: specs/check.sh
+        env:
+          TLC: java -XX:+UseParallelGC -cp ${{ runner.temp }}/tla2tools.jar tlc2.TLC

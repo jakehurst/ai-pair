@@ -37,10 +37,11 @@ Apply(t, ids, start, del, ins) ==
         prefix == start > lineStart
         suffix == end < lineEnd
         fresh == [i \in 1..(k + 1) |-> 99 + i]
-        first == IF prefix THEN [fresh EXCEPT ![1] = ids[a + 1]]
-                 ELSE IF a = b THEN [fresh EXCEPT ![IF suffix THEN k + 1 ELSE 1] = ids[a + 1]]
-                 ELSE fresh
-        made == IF b > a /\ suffix /\ (k > 0 \/ ~prefix) THEN [first EXCEPT ![k + 1] = ids[b + 1]] ELSE first
+        \* ids[0] = v.ids[a] with a prefix, or ids[suffix ? k : 0] = v.ids[a] within one line...
+        keepsA(i) == IF prefix THEN i = 1 ELSE a = b /\ i = (IF suffix THEN k + 1 ELSE 1)
+        \* ...and ids[k] = v.ids[b] when the change ends inside a later line.
+        keepsB(i) == i = k + 1 /\ b > a /\ suffix /\ (k > 0 \/ ~prefix)
+        made == [i \in 1..(k + 1) |-> IF keepsB(i) THEN ids[b + 1] ELSE IF keepsA(i) THEN ids[a + 1] ELSE fresh[i]]
     IN IF a = b /\ k = 0
           THEN [text |-> after, ids |-> ids]
           ELSE [text |-> after, ids |-> SubSeq(ids, 1, a) \o made \o SubSeq(ids, b + 2, Len(ids))]
