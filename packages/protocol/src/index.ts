@@ -239,6 +239,8 @@ export type Report = {
   /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
   cursor?: Code
   waiting?: true
+  /** Some of it may repeat a report the agent already saw: a call it canceled came back after its answer (#67). */
+  repeated?: true
 }
 
 export type FileContent = {

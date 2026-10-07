@@ -114,6 +114,8 @@ export class EditorLink {
   private readonly pending = new WeakMap<WebSocket, Map<number, Pending>>()
   /** Each socket's cancelled calls not yet answered: settled once the editor's answer arrives. */
   private readonly cancelled = new WeakMap<WebSocket, Set<Promise<void>>>()
+  /** The socket each report came over, for `handBack`. */
+  private readonly answeredOn = new WeakMap<object, WebSocket>()
   private folder: string
 
   constructor(
@@ -180,6 +182,16 @@ export class EditorLink {
     return answer
   }
 
+  /**
+   * Hands a report back to the editor, on the socket it came over, to be delivered with the next
+   * report, marked as one the agent may have seen: for a call it canceled after the relay answered (#67).
+   */
+  handBack(report: unknown): void {
+    if (typeof report !== "object" || report === null) return
+    const ws = this.answeredOn.get(report)
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "return", report, mayRepeat: true }))
+  }
+
   close(): void {
     this.ws?.close()
   }
@@ -244,6 +256,7 @@ export class EditorLink {
           // The call returned before our cancellation reached the editor, so the agent will never
           // see this report. Hand it back to be delivered with the next one.
           if (p?.cancelled && REPORTING.has(p.tool)) ws.send(JSON.stringify({ type: "return", report: m.result }))
+          else if (p && REPORTING.has(p.tool) && typeof m.result === "object" && m.result !== null) this.answeredOn.set(m.result, ws)
           p?.resolve(m.result)
         } else if (m.type === "error") {
           settle(m.id)?.reject(new RelayError(m.code, m.message))

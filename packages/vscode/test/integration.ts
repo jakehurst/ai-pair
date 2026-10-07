@@ -314,6 +314,20 @@ export async function run(): Promise<void> {
   const last = await tool("step", { actions: [] })
   assert.match(last, /Batch \d+ completed/)
   assert.equal(await buffer("relay.txt"), "typed via the relay")
+  // A call the agent cancels after taking its answer: the SDK's client still sends the cancel, so
+  // the relay hands the report back, and it comes again saying it may repeat (#67).
+  const cancelAfter = new AbortController()
+  const taken = agent.callTool({ name: "listen", arguments: {} }, undefined, { signal: cancelAfter.signal })
+  await sleep(300)
+  c.userMessage("seen once")
+  // The relay answers with text parts only.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  assert.match(((await taken).content as { text: string }[])[0]!.text, /seen once/)
+  cancelAfter.abort()
+  const repeated = await tool("listen")
+  assert.match(repeated, /seen once/)
+  assert.match(repeated, /may repeat/)
+  console.log("a report canceled after it was taken comes again, marked")
   await tool("end", { summary: "Bye." })
   await agent.close()
   console.log("relay session OK")

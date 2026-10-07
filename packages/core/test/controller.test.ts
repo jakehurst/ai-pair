@@ -1151,6 +1151,24 @@ describe("cancellation", () => {
     expect(after.submitted).toMatchObject({ status: "playing" })
   })
 
+  it("says a returned report may repeat one already seen, when the relay can't tell (#67)", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const listening = controller.listen()
+    controller.userMessage("hello")
+    const seen = await until(listening)
+    controller.restore(seen, true)
+    const again = await until(controller.listen())
+    expect(again).toMatchObject({ events: seen.events, repeated: true })
+    controller.userMessage("next")
+    expect((await until(controller.listen())).repeated).toBeUndefined()
+    // A report the agent surely never saw comes back unmarked.
+    controller.userMessage("unseen")
+    const unseen = await until(controller.listen())
+    controller.restore(unseen)
+    expect((await until(controller.listen())).repeated).toBeUndefined()
+  })
+
   it("reports a returned report again after the programmer ended the session with it", async () => {
     const { controller } = setup({ "a.ts": "" })
     await controller.start()

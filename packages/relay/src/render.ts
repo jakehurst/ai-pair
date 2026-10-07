@@ -8,6 +8,9 @@ export type ReportingTool = "start" | "step" | "listen" | "end"
 export function renderReport(report: Report, tool: ReportingTool): string {
   const sections: string[] = []
   if (tool === "start") sections.push("The session has started.")
+  if (report.repeated) {
+    sections.push("Part of this report may repeat an earlier one: a call you canceled had already returned. Skip what you've already seen.")
+  }
   for (const e of report.events) sections.push(renderEvent(e))
   for (const b of report.batches) sections.push(renderBatch(b))
   if (report.submitted) sections.push(`Batch ${report.submitted.id} is ${report.submitted.status}.`)

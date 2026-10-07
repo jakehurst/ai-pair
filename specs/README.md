@@ -14,12 +14,12 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 |---|---|---|---|
 | `Serialize.cfg` | `N = 2` calls | holds | 163 |
 | `Serialize_57ac07f.cfg` | same | L2 `CancelReleases` violated (#1) | 199 |
-| `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 19,074 |
+| `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
 | `Wire_57ac07f_3.cfg` | same | S8 `OwnCloseOnly` violated (#3) | 324 |
 | `Wire_57ac07f_4.cfg` | same | S9 `RelayStaysUp` violated (#4) | 6 |
 | `Wire_57ac07f_29.cfg` | same | `NoReportLost` violated (#29) | 247 |
-| `Wire_06b93b9_67.cfg` | same | S1 `DroppedHandedBack` violated (#67, open) | 19,074 |
-| `Wire_handback_67.cfg` | same, with the relay handing back on a late cancel | `TakenNotHandedBack` violated: the obvious fix for #67 delivers reports twice | 512 |
+| `Wire_06b93b9_67.cfg` | same | S1 `DroppedHandedBack` violated (#67) | 19,074 |
+| `Wire_unmarked_67.cfg` | same, handing back on a late cancel without the mark | `RepeatsMarked` violated: a report the agent took comes again unmarked (validation of #67's mark by mutation) | 512 |
 | `Panel.cfg` | `N = 5` events | holds | 21 |
 | `Panel_57ac07f.cfg` | same | S13 `NewestFirst` violated (#18) | 10 |
 | `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
@@ -80,13 +80,13 @@ Each violation's trace was checked against the code step by step before it was r
 
 ### `Wire`: the relay's side of the WebSocket
 
-`packages/relay/src/link.ts`, with the editor's replies from `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse` (#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked in `Controller`), `HandBackAnswered` (#67). The agent's MCP client is modeled too: it drops an answer once it has cancelled, and it sends a cancel even after it took the answer, since the SDK never removes its abort listener. `Wire.cfg` checks the code as it is, with `DroppedHandedBack` left out: #67 is open, and `Wire_06b93b9_67.cfg` shows it.
+`packages/relay/src/link.ts`, with the editor's replies from `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse` (#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67). The agent's MCP client is modeled too: it drops an answer once it has canceled, and it sends a cancel even after it took the answer, since the SDK never removes its abort listener. So the relay can't tell whether the agent saw a report whose cancel came after its answer. The fix for #67 delivers it at least once: the relay hands it back with `mayRepeat`, and the next report says it may repeat an earlier one (`RepeatsMarked`).
 
 | Spec | Code |
 |---|---|
 | `Open`, `Welcome` | `connect()` → `open()` → `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
-| `ClientAbort`, `Abort` | the agent's client cancelling; the relay handling `notifications/cancelled` (the abort listener in `call()`) |
+| `ClientAbort`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
 | `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer |
 | `Close`, `Closed` | `locate()` closing `this.ws`, or the editor's end closing; the `close` handler rejecting `Victims` |

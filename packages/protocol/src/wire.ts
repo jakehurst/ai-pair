@@ -33,7 +33,7 @@ export type RelayMessage =
   | { type: "call"; id: number; tool: ToolName; args: Record<string, unknown> }
   | { type: "cancel"; id: number }
   /** A report that arrived for a call the agent had already cancelled: deliver it again. */
-  | { type: "return"; report: Report }
+  | { type: "return"; report: Report; mayRepeat?: true }
 
 export type EditorMessage =
   | { type: "welcome" }

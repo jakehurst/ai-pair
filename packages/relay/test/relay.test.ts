@@ -190,6 +190,57 @@ describe("relay", () => {
     ])
   })
 
+  it("hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
+    // The relay's answers to the agent, held while the test says so.
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+    const server = createServer(new EditorLink("/project/src", dir), "THE GUIDE", "/project/src")
+    await server.connect(serverSide)
+    const send = serverSide.send.bind(serverSide)
+    let hold = false
+    const held: Parameters<typeof send>[] = []
+    serverSide.send = (...args) => (hold ? (held.push(args), Promise.resolve()) : send(...args))
+    const client = new Client({ name: "test", version: "0" })
+    await client.connect(clientSide)
+    clients.push(client)
+
+    await call(client, "start")
+    const abort = new AbortController()
+    const listening = call(client, "listen", {}, abort.signal).catch((e: unknown) => e)
+    await until(() => traced.some((l) => l.endsWith("listen")))
+    hold = true
+    controller.userMessage("hello")
+    await until(() => held.length > 0)
+    // The agent cancels with the answer on its way: its client drops the answer, and the relay
+    // learns of the cancel only after it answered.
+    abort.abort()
+    expect(await listening).toBeInstanceOf(Error)
+    hold = false
+    for (const args of held.splice(0)) await send(...args)
+    const timeout = new Promise<{ text: string }>((r) => setTimeout(() => r({ text: "timed out" }), 1000))
+    const again = await Promise.race([call(client, "listen"), timeout])
+    expect(again.text).toMatch(/hello/)
+    expect(again.text).toMatch(/may repeat/)
+  })
+
+  it("delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
+    const client = await connect()
+    await call(client, "start")
+    const abort = new AbortController()
+    const listening = call(client, "listen", {}, abort.signal)
+    await until(() => traced.some((l) => l.endsWith("listen")))
+    controller.userMessage("hello")
+    expect((await listening).text).toMatch(/hello/)
+    // The SDK's client sends a cancel for a signal aborted after the answer, too.
+    abort.abort()
+    await until(() => traced.some((l) => l.includes("← return")))
+    const again = await call(client, "listen")
+    expect(again.text).toMatch(/hello/)
+    expect(again.text).toMatch(/may repeat/)
+    // Only once.
+    controller.userMessage("next")
+    expect((await call(client, "listen")).text).not.toMatch(/may repeat/)
+  })
+
   it("keeps the report of a call cancelled as it starts", async () => {
     const client = await connect()
     await call(client, "start")
