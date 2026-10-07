@@ -44,6 +44,8 @@ function renderEvent(e: Event): string {
       return `The programmer handed the turn back to you${e.message ? `:\n${quote(e.message)}` : "."}${e.selection ? `\n${renderExcerpt(e.selection)}` : ""}`
     case "end":
       return "The programmer ended the session. This is the final report: stop using the pair tools."
+    default:
+      throw new Error(`Unknown event: ${JSON.stringify(e satisfies never)}`)
   }
 }
 

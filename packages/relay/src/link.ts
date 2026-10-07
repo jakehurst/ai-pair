@@ -32,7 +32,7 @@ function alive(pid: number): boolean {
     process.kill(pid, 0)
     return true
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "EPERM"
+    return e instanceof Error && "code" in e && e.code === "EPERM"
   }
 }
 
@@ -146,7 +146,7 @@ export class EditorLink {
         ws.send(JSON.stringify({ type: "call", id, tool, args }))
       } catch (e) {
         calls.delete(id)
-        reject(new RelayError("no_editor", `Couldn't send to the editor: ${(e as Error).message}`))
+        reject(new RelayError("no_editor", `Couldn't send to the editor: ${e instanceof Error ? e.message : String(e)}`))
         return
       }
       signal?.addEventListener(

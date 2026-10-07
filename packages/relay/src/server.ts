@@ -40,17 +40,24 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   const roots = async (): Promise<string[]> => {
     if (!server.server.getClientCapabilities()?.roots) return []
     try {
-      const { roots } = await server.server.listRoots(undefined, { timeout: ROOTS_MS })
-      return roots.filter((r) => r.uri.startsWith("file:")).map((r) => fileURLToPath(r.uri))
+      const listed = await server.server.listRoots(undefined, { timeout: ROOTS_MS })
+      return listed.roots.filter((r) => r.uri.startsWith("file:")).map((r) => fileURLToPath(r.uri))
     } catch {
       return []
     }
   }
 
-  const run = async (tool: ToolName, args: object, signal: AbortSignal, before?: () => Promise<object>): Promise<CallToolResult> => {
+  const run = async (
+    tool: ToolName,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+    before?: () => Promise<Record<string, unknown>>,
+  ): Promise<CallToolResult> => {
     try {
       if (before) args = { ...args, ...(await before()) }
-      const result = await link.call(tool, args as Record<string, unknown>, signal)
+      const result = await link.call(tool, args, signal)
+      // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts).
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const text = tool === "read" ? renderFile(result as FileContent) : renderReport(result as Report, tool)
       const content: CallToolResult["content"] = [{ type: "text", text }]
       if (tool === "start") content.push({ type: "text", text: `# Pairing guide\n\n${guide}` })

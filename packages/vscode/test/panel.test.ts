@@ -8,6 +8,8 @@ it("has a page script that parses", () => {
   const html = panelHtml("vscode-resource:")
   const scripts = [...html.matchAll(/<script nonce="[^"]+">([\s\S]*?)<\/script>/g)].map((m) => m[1]!)
   expect(scripts).toHaveLength(1)
+  // Parsing the page's own script is what this test is for.
+  // oxlint-disable-next-line typescript/no-implied-eval
   expect(() => new Function(scripts[0]!)).not.toThrow()
 })
 

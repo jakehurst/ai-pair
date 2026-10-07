@@ -175,7 +175,7 @@ describe("editing", () => {
     expect(pair.map((e) => e.text).join("")).toBe("update()")
     expect(pair.map((e) => [e.options.undoStopBefore, e.options.undoStopAfter])).toEqual([
       [true, false],
-      ...Array(6).fill([false, false]),
+      ...Array.from({ length: 6 }, () => [false, false]),
       [false, true],
     ])
   })
@@ -282,7 +282,7 @@ describe("editing", () => {
     await controller.start()
     await controller.read("a.ts")
     const problem = async (move: object) => {
-      const report = await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { move } as Action])
+      const report = await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { move }])
       expect(report.rejected).toMatchObject({ index: 2, action: { move }, error: { kind: "invalid_action" } })
       return report.rejected!.error.message
     }
@@ -317,7 +317,7 @@ describe("editing", () => {
   it("rejects an action that combines two, instead of playing only one of them", async () => {
     const { editor, controller } = setup({ "a.ts": "x\n" })
     await controller.start()
-    const report = await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" }, type: "y▌" } as Action])
+    const report = await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" }, type: "y▌" }])
     expect(report.rejected).toMatchObject({
       index: 1,
       error: { kind: "invalid_action", message: expect.stringContaining("`move` and `type`") },

@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    // VS Code's `Webview.postMessage(message)` has no `targetOrigin`: the rule is for `window.postMessage`.
+    "unicorn/require-post-message-target-origin": "off"
+  },
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  }
+}

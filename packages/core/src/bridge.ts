@@ -158,6 +158,8 @@ export class Bridge {
     switch (tool) {
       case "step":
         if (!Array.isArray(args.actions)) throw new ToolError("invalid_arguments", "`actions` must be an array.")
+        // Each action is checked as it's rehearsed and played; the relay's schema checked them too.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return c.step(args.actions as Action[], signal)
       case "listen":
         return c.listen(signal)

@@ -10,9 +10,10 @@ import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
 /** Returned from `activate`, for integration tests. */
 export type Api = { controller: Controller; playDemo: () => Promise<void>; launcher: string; ready: Promise<void> }
 
+const config = () => vscode.workspace.getConfiguration("aiPair")
+
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir()
-  const config = () => vscode.workspace.getConfiguration("aiPair")
 
   const editor = new VsCodeEditor(root, config().get("agentName", "Agent"))
   const speed = {
