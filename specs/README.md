@@ -24,6 +24,8 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 | `Controller_57ac07f.cfg` | same | S1 `BatchesDelivered` violated (#28) | 1,533 |
 | `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
 | `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
+| `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
+| `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 23 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (14,699 states) and `B = 3, E = 2, MaxCancels = 3` (91,414 states).
 
@@ -92,6 +94,19 @@ Each violation's trace was checked against the code step by step before it was r
 | `Start` | `locate` → `findWindows`: files that hold a `Discovery` with a live `pid` |
 | `Try` | `openWindow` on one candidate, best first |
 | `Disconnect` | the socket closing, so the next call opens again |
+
+### `EditorAdapter`: who made a change
+
+`edit`, `save`, `onChange`, and `byProgrammer` in `packages/vscode/src/editor.ts`, which call the controller's `userEdit` or `otherEdit`. `FlushBeforeSave` is the fix for #40. VS Code delivers a change event before the call that made it resolves, and replies after the events sent before them: one channel, in order.
+
+| Spec | Code |
+|---|---|
+| `AgentEdit`, `AgentResolved` | `edit()`: the entry in `own`, VS Code applying it, `finally` |
+| `Programmer` | a keystroke: its change event is queued for the extension host |
+| `SaveStart`, `Participant`, `ParticipantsDone`, `SaveDone` | `save()`: the round trip, `saving`, the save participants (format on save), the write |
+| `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
+
+A keystroke made while the save participants run can't be told from their edits, since VS Code doesn't say who made a change. The spec allows that one wrong attribution by name (`"programmer during save"`).
 
 ## Keeping specs and code in step
 
