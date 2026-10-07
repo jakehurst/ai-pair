@@ -36,6 +36,22 @@ function alive(pid: number): boolean {
   }
 }
 
+/** Whether a discovery file holds a Discovery: one that parses but doesn't is skipped like garbage (#31). */
+function isDiscovery(d: unknown): d is Discovery {
+  return (
+    typeof d === "object" &&
+    d !== null &&
+    "pid" in d && typeof d.pid === "number" &&
+    "port" in d && typeof d.port === "number" &&
+    "token" in d && typeof d.token === "string" &&
+    "protocolVersion" in d && typeof d.protocolVersion === "number" &&
+    "lastFocused" in d && typeof d.lastFocused === "number" &&
+    "workspaceFolders" in d &&
+    Array.isArray(d.workspaceFolders) &&
+    d.workspaceFolders.every((f: unknown) => typeof f === "string")
+  )
+}
+
 /**
  * The first of `folders` inside a live window's workspace folder, and the windows it's in, best
  * first: the most closely containing workspace folder, then the most recently focused window.
@@ -50,8 +66,8 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
   }
   for (const f of files) {
     try {
-      const d = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as Discovery
-      if (alive(d.pid)) windows.push(d)
+      const d: unknown = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"))
+      if (isDiscovery(d) && alive(d.pid)) windows.push(d)
     } catch {
       // Being written, or garbage.
     }

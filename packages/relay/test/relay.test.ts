@@ -277,6 +277,13 @@ describe("discovery", () => {
     const client = await connect()
     expect((await call(client, "start")).error).toBe(false)
   })
+
+  it("skips a discovery file that parses but isn't a window's", async () => {
+    const bad = [{ pid: process.pid }, { pid: process.pid, workspaceFolders: "/project" }, [process.pid]]
+    bad.forEach((d, i) => fs.writeFileSync(path.join(dir, `bad-${i}.json`), JSON.stringify(d)))
+    const client = await connect()
+    expect((await call(client, "start")).error).toBe(false)
+  })
 })
 
 describe("agent guide", () => {
