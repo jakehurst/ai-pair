@@ -2,7 +2,7 @@
 // text on a given line. See "Places" in PROTOCOL.md.
 
 import { CURSOR_MARKER, type Candidate, type ErrorKind } from "@ai-pair/protocol"
-import { lineText, position } from "./text"
+import { lineSpan, lineText, position } from "./text"
 
 export type Range = { start: number; end: number }
 
@@ -59,7 +59,9 @@ export function spanCandidates(text: string, find: string): Candidate[] {
  * where the text is. `found`: where each match is, anywhere; `what`: what's looked for, to say so.
  */
 function onLine(text: string, line: number, needle: string, found: number[], what: string): Resolution & { ok: false } | number {
-  const here = found.filter((at) => position(text, at).line === line)
+  // The line's offsets once, not a scan from the start of the text for each match (#2).
+  const span = lineSpan(text, line)
+  const here = span ? found.filter((at) => at >= span.start && at <= span.end) : []
   if (here.length === 1) return here[0]!
   if (here.length > 1) {
     return {

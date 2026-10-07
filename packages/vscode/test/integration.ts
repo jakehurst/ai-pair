@@ -227,6 +227,18 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a file changed on disk keeps the selection on its text")
 
+  // Finding short text on a line of a long file, where it matches on every line, takes no time (#2).
+  fs.writeFileSync(file("long.ts"), "  foo(bar(baz(1), 2), 3);\n".repeat(40_000))
+  await c.start("long")
+  await c.read("long.ts", 39_999, 40_000)
+  const finding = Date.now()
+  const found = await c.step([{ point: { file: "long.ts", line: 40_000, text: "foo(" } }])
+  const findMs = Date.now() - finding
+  assert.equal(found.rejected, undefined)
+  assert.ok(findMs < 2000, `the step took ${findMs} ms`)
+  await c.end()
+  console.log(`a point on line 40,000 was rehearsed in ${findMs} ms`)
+
   // The panel's page reloading takes its draft with it, and the draft's pause (#69). The test can't
   // type into the page, so it adds the pause the page's `draft` message adds.
   await vscode.commands.executeCommand("aiPair.narration.focus")

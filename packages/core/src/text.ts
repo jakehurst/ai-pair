@@ -28,6 +28,22 @@ export function fileLines(text: string): { lines: string[]; finalNewline: boolea
   return { lines, finalNewline }
 }
 
+/**
+ * The offsets on a line, as `position` counts them: from its first character through its newline,
+ * or the end of the text. None for a line the text doesn't have.
+ */
+export function lineSpan(text: string, line: number): { start: number; end: number } | undefined {
+  if (line < 1) return undefined
+  let start = 0
+  for (let l = 1; l < line; l++) {
+    const next = text.indexOf("\n", start)
+    if (next === -1) return undefined
+    start = next + 1
+  }
+  const newline = text.indexOf("\n", start)
+  return { start, end: newline === -1 ? text.length : newline }
+}
+
 export function lineText(text: string, line: number): string {
   return splitLines(text)[line - 1] ?? ""
 }
