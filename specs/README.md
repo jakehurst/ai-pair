@@ -36,6 +36,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
+| `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
+| `Turns_57ac07f_49.cfg` | same | S6 `OnlyTalkInTheirTurn` violated (#49) | 518 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
 | `Rehearsal_mutation.cfg` | same, both defenses off | S10 violated (validation by mutation; no known bug) | |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
@@ -100,7 +102,7 @@ Each violation's trace was checked against the code step by step before it was r
 
 ### `Controller`: what reaches the agent
 
-`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, S2 (`PlaysKnowingEvents`), S3 (`PlaysAfterCompleted`), and L5 (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the relay sending a call only once every cancelled call on the socket has settled, so a `return` reaches the editor before the next call. `RestoreEnded` is the fix for #60: `restore()` working on a session the programmer ended, and putting a closed one back.
+`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, S2 (`PlaysKnowingEvents`), S3 (`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the relay sending a call only once every cancelled call on the socket has settled, so a `return` reaches the editor before the next call. `RestoreEnded` is the fix for #60: `restore()` working on a session the programmer ended, and putting a closed one back.
 
 | Spec | Code |
 |---|---|
@@ -187,6 +189,17 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 | `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete`; only `move` and `select` move the cursor |
 | `Reject` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file |
 | `NextBatch` | a new `Playing` for the next batch; the cursor stays |
+
+### `Turns`: only talk during the programmer's turn
+
+S6 in `packages/core/src/player.ts`: `perform` checks the turn as each action starts, a turn change interrupts (`takeTurn`, `handBack` in `controller.ts`), and each action that edits checks for an interrupt after its awaits, before its effect. A batch may start at any time, from either turn, which is more than the controller allows. `DeleteChecks` is the fix for #49, which also let a `delete` take effect after the programmer took the turn.
+
+| Spec | Code |
+|---|---|
+| `Begin` | `startHead`: the next batch, with `timeline.reset()` |
+| `Start` | the loop in `actions` checking `isInterrupted`; `perform` rejecting with `not_your_turn` |
+| `Effect` | the action after its awaits: `type`'s `delay` before each chunk, `delete`'s check after `show` and `getText`, `run`'s `notStarted` after `shellIntegration` |
+| `Change` | `takeTurn` or `handBack`, which call `interrupt()` |
 
 ### `Rehearsal`: line identities across a rehearsal
 

@@ -1,7 +1,7 @@
 ------------------------------ MODULE Controller ------------------------------
 \* Reports in packages/core/src/controller.ts: what the agent has to be told, the
 \* snapshot a call takes, and a cancelled call's report coming back through
-\* `return` (relay/src/link.ts) and `restore`. Issue #19: S1, S2, S3 and L5.
+\* `return` (relay/src/link.ts) and `restore`. Issue #19: S1, S2, S3, L1 and L5.
 \*
 \* A cancelled call's result can reach the relay after the agent made its next call. Without
 \* WaitForReturn the relay forwards that call at once, so `return` can reach the editor after
@@ -203,6 +203,10 @@ PlaysAfterCompleted ==
 \* S1, liveness: every batch submitted, and every event, is eventually reported.
 BatchesDelivered == \A b \in Batches : bs[b] # "new" ~> bs[b] = "delivered"
 EventsDelivered == \A e \in Events : ev[e] # "new" ~> ev[e] = "delivered"
+
+\* L1: a blocked call returns. `Commit` is enabled whenever a call is blocked, as the timer that
+\* block() sets for maxBlockMs ends it whether or not it is ready; only a cancel ends it otherwise.
+BlockedReturns == call = "blocked" ~> call # "blocked"
 
 \* L5: the programmer ending the session reaches the agent.
 EndDelivered == endEv # "new" ~> endEv = "delivered"
