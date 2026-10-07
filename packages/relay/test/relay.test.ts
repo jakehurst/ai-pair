@@ -175,6 +175,31 @@ describe("relay", () => {
     expect((await call(client, "listen")).text).toMatch(/hello/)
   })
 
+  it("reports the rejection of a step cancelled during its rehearsal", async () => {
+    const client = await connect()
+    await call(client, "start")
+    // Holds the rehearsal at its first read of the file, so the cancel arrives during it.
+    const getText = editor.getText.bind(editor)
+    let open!: () => void, reached!: () => void
+    const gate = new Promise<void>((r) => (open = r))
+    const atGate = new Promise<void>((r) => (reached = r))
+    editor.getText = async (file) => {
+      reached()
+      await gate
+      return getText(file)
+    }
+
+    const abort = new AbortController()
+    const actions = [{ move: { file: "a.ts", line: 5, to: "line_end" } }]
+    const stepping = call(client, "step", { actions }, abort.signal).catch((e: unknown) => e)
+    await atGate
+    abort.abort()
+    expect(await stepping).toBeInstanceOf(Error)
+    editor.getText = getText
+    open()
+    expect((await call(client, "listen")).text).toMatch(/Your batch was rejected/)
+  })
+
   it("keeps serving after frames that aren't messages", async () => {
     const { port } = findWindows(["/project"], dir).windows[0]!
     const raw = new WebSocket(`ws://127.0.0.1:${port}`)
