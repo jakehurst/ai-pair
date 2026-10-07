@@ -38,6 +38,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Draft.cfg` | `Views = 3` pages | holds | 12 |
 | `Draft_fa2e74a_69.cfg` | same | L4 `ReplyMeansDraft` violated (#69) | 6 |
+| `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
+| `RunBox_mutation.cfg` | same, the page keeping the box for a phase that ends the run | `BoxMatches` violated (validation by mutation; no known bug) | 6 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -220,6 +222,17 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 | `Type`, `Clear` | `syncDraft` posting `draft` when the box's emptiness changes; `takeDraft` on sending or handing the turn back |
 | `ResumeAll` | the Resume button, or sending a reply: `resume()` with no reason |
 | `Dispose`, `Ready` | `onDidDispose`; a page loaded, in a new view or by "Reload Webviews", posting `ready` |
+
+### `RunBox`: the panel's run box
+
+One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and the page's `case "run"` and `setActive` in `panelHtml.ts`. Every way a run ends posts a phase other than `confirm` and `running`, which clears the box: skipped or interrupted at the confirmation (`declined`), a command that never started or threw (`declined`), and one that ran (`done`, `background`). A session ending clears it too.
+
+| Spec | Code |
+|---|---|
+| `Saved` | after `save`: `confirm` with confirmation on, else `running`; a failed save posts nothing |
+| `Decided` | `confirm` resolving: `running`, or `declined` for a skip or an interrupt |
+| `Ran` | `editor.runCommand`: `done` or `background`, or `declined` for `notStarted` or a throw |
+| `End` | the session ending: `setActive(false)` |
 
 ### `Turns`: only talk during the programmer's turn
 
