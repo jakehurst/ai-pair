@@ -587,7 +587,7 @@ The agent receives `{ kind: "turn", to: "user" }`.
   for a few seconds (*tunable*), so the agent can comment as a navigator
   would ("you'll want to handle the empty case there").
 
-**Programmer hands the turn back** ("Your turn" button, optionally with a
+**Programmer hands the turn back** ("Hand back" button, optionally with a
 message). The agent receives the programmer's edits since the last report and
 `{ kind: "turn", to: "agent", message? }`.
 
@@ -714,7 +714,7 @@ Programmer presses "My turn".
 [{ "point": { "line": 21, "text": "for (let i = 0; i <= todos.length; i++)" } },
  { "say": "Careful: `<=` will go one past the end." }]
 → listen
-... programmer fixes it, presses "Your turn" ...
+... programmer fixes it, presses "Hand back" ...
 ← The programmer edited src/server.ts:
   ...
   The programmer handed the turn back to you:
