@@ -79,6 +79,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
     view.onDidDispose(() => {
       if (this.view === view) this.view = undefined
+      // Its draft went with it, and so does the pause the draft asked for (#69).
+      this.controller?.resume("reply")
     })
   }
 
@@ -91,6 +93,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     const c = this.controller
     switch (m.type) {
       case "ready":
+        // A new page has an empty draft (#69).
+        c?.resume("reply")
         void this.view?.webview.postMessage({ type: "replay", events: this.log })
         this.showSpeed(this.speed.get())
         this.showSelection(this.selection.ref())
