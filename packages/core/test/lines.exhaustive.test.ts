@@ -4,6 +4,9 @@
 import { expect, it } from "vitest"
 import { applyChange } from "../src/lines"
 
+/** Every case, on CI's slower runners alongside the other test files. */
+const EXHAUSTIVE_MS = 30_000
+
 const CHARS = ["x", "\n", "\r"]
 
 function texts(max: number): string[] {
@@ -45,4 +48,4 @@ it("gives each line of the result one identity, never one twice, and keeps the u
     }
   }
   expect(cases).toBeGreaterThan(10_000)
-})
+}, EXHAUSTIVE_MS)

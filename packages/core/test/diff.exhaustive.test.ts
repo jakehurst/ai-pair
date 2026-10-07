@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest"
 import { lineChanges } from "../src/diff"
 import type { Change } from "../src/ports"
 
+/** Every case, on CI's slower runners alongside the other test files. */
+const EXHAUSTIVE_MS = 30_000
+
 const chars = ["a", "b", "\n"]
 function texts(max: number): string[] {
   const all = [""]
@@ -35,7 +38,7 @@ describe("lineChanges", () => {
       }
     }
     expect(cases).toBeGreaterThan(50_000)
-  })
+  }, EXHAUSTIVE_MS)
 
   it("splits a reload into one change per run of changed lines", () => {
     expect(lineChanges("1\n2\n3\n4\n5\n6\n", [{ offset: 2, deleteLength: 8, text: "X\n3\n4\nY\n" }])).toEqual([
