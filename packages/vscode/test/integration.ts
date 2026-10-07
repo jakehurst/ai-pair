@@ -226,6 +226,15 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a file changed on disk keeps the selection on its text")
 
+  // The panel's page reloading takes its draft with it, and the draft's pause (#69). The test can't
+  // type into the page, so it adds the pause the page's `draft` message adds.
+  await vscode.commands.executeCommand("aiPair.narration.focus")
+  await sleep(1000)
+  c.pause("reply")
+  await vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction")
+  await until(() => !c.isPaused)
+  console.log("a reloaded panel ends its draft's pause")
+
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
   await c.start("interrupt test")

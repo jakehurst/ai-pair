@@ -36,6 +36,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `FollowMode_57ac07f_56.cfg` | same | `NoPauseFromOurOwnShow` violated (#56) | 11 |
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
+| `Draft.cfg` | `Views = 3` pages | holds | 12 |
+| `Draft_fa2e74a_69.cfg` | same | L4 `ReplyMeansDraft` violated (#69) | 6 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -208,6 +210,16 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 | `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete`; only `move` and `select` move the cursor |
 | `Reject` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file |
 | `NextBatch` | a new `Playing` for the next batch; the cursor stays |
+
+### `Draft`: the reply box's pause, across the view's page
+
+`packages/vscode/src/panelHtml.ts` (`syncDraft`, `takeDraft`) and `panel.ts` (`draft`, `reply`, `ready`, `onDidDispose`), with `Controller.pause` and `resume`. A draft in the reply box pauses playback for the reason "reply". `ClearOnReady` is the fix for #69: a new page (`ready`) and a disposed view have no draft, so they remove that reason.
+
+| Spec | Code |
+|---|---|
+| `Type`, `Clear` | `syncDraft` posting `draft` when the box's emptiness changes; `takeDraft` on sending or handing the turn back |
+| `ResumeAll` | the Resume button, or sending a reply: `resume()` with no reason |
+| `Dispose`, `Ready` | `onDidDispose`; a page loaded, in a new view or by "Reload Webviews", posting `ready` |
 
 ### `Turns`: only talk during the programmer's turn
 
