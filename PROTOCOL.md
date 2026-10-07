@@ -29,7 +29,10 @@ by feel.
 2. **The programmer always preempts the agent.** Anything the programmer does
    takes effect immediately on their side. The agent learns about it on its
    next call.
-3. **Events are delivered exactly once**, in the reports of `step` and `listen`.
+3. **Events are delivered exactly once**, in the reports of `step` and `listen`,
+   unless the agent cancels a call just as it returns. The relay can't tell
+   then whether the agent saw the report, so it is delivered again, and that
+   report says it may repeat an earlier one.
 4. **No stale plans.** A batch never plays if it was planned without knowledge
    of an interrupting event.
 5. **During a session, the agent never ends its turn.** When it has nothing to

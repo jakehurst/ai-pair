@@ -158,7 +158,7 @@ export class Bridge {
       if (m.type === "cancel") {
         calls.get(m.id)?.abort()
       } else if (m.type === "return") {
-        if (this.owner === ws) this.controller.restore(m.report)
+        if (this.owner === ws) this.controller.restore(m.report, m.mayRepeat === true)
       } else if (m.type === "call") {
         const abort = new AbortController()
         calls.set(m.id, abort)

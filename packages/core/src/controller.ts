@@ -68,6 +68,8 @@ type Session = {
   stale: boolean
   /** Rejections handed back by `restore`, to be reported again, one per report (#28). */
   held: NonNullable<Report["rejected"]>[]
+  /** A report restored may have reached the agent already: the next report says so (#67). */
+  mayRepeat: boolean
   /** Text of each file edited by the programmer, as of the last report. */
   baselines: Map<string, string>
   latest: Map<string, string>
@@ -153,6 +155,7 @@ export class Controller {
         events: [],
         stale: false,
         held: [],
+        mayRepeat: false,
         baselines: new Map(),
         latest: new Map(),
         timeline,
@@ -240,8 +243,9 @@ export class Controller {
   /**
    * Puts a report back to be delivered again. For a report that raced with a cancellation: the
    * call returned just before the cancellation arrived, so the agent never saw the report.
+   * `mayRepeat`: or the cancellation came after the answer, and the agent may have seen it (#67).
    */
-  restore(report: Report): void {
+  restore(report: Report, mayRepeat = false): void {
     // Also once the session ended, or the report closed it: the next call takes the report again,
     // and closes the session again (#60).
     const s = this.session ?? this.closed
@@ -253,6 +257,7 @@ export class Controller {
     }
     s.finished.unshift(...report.batches)
     s.events.unshift(...report.events)
+    if (mayRepeat) s.mayRepeat = true
     if (report.events.some(interrupting) || report.batches.some((b) => b.status !== "completed")) s.stale = true
     // A step that never queued its batch: its rejection is the only report of it.
     if (report.rejected) {
@@ -642,6 +647,8 @@ export class Controller {
     const b = submitted
     if (b && b.state !== "done") report.submitted = { id: b.id, status: b.state }
     if (waiting) report.waiting = true
+    if (s.mayRepeat) report.repeated = true
+    s.mayRepeat = false
     // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
     const held = s.held.shift()
     if (held) report.rejected = held
