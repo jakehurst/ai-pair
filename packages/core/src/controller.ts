@@ -6,7 +6,16 @@ import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
 import { fileDiff, lineChanges } from "./diff"
 import { LineIds, type Sighting } from "./lines"
 import { agentPath, displayPath, Player, type Scene } from "./player"
-import type { AgentState, Change, CursorView, EditorPort, PanelPort, Ref, SharedSelection } from "./ports"
+import {
+  MissingFile,
+  type AgentState,
+  type Change,
+  type CursorView,
+  type EditorPort,
+  type PanelPort,
+  type Ref,
+  type SharedSelection,
+} from "./ports"
 import { followChange, rehearse, type Rehearsal } from "./rehearsal"
 import { fileLines } from "./text"
 import { Timeline } from "./timeline"
@@ -192,7 +201,7 @@ export class Controller {
     const s = this.requireSession()
     const path = this.resolvePath(s, file)
     const planned = this.planned(s, path)
-    const text = planned ?? (await this.editor.getText(path))
+    const text = planned ?? (await this.textOrMissing(s, path))
     const { lines, finalNewline } = fileLines(text)
     const from = Math.max(1, fromLine ?? 1)
     const to = Math.min(lines.length, toLine ?? lines.length)
@@ -206,6 +215,16 @@ export class Controller {
     }
     if (to === lines.length) content.end = { final_newline: finalNewline }
     return content
+  }
+
+  /** The file's text; a file that doesn't exist is the agent's to create, with a `move` (#89). */
+  private async textOrMissing(s: Session, path: string): Promise<string> {
+    try {
+      return await this.editor.getText(path)
+    } catch (e) {
+      if (!(e instanceof MissingFile)) throw e
+      throw new ToolError("invalid_arguments", `${this.displayPath(s, path)} doesn't exist. A \`move\` to it creates it, empty.`)
+    }
   }
 
   /**

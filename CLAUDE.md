@@ -24,6 +24,14 @@ Set by Justine on 2026-10-07.
 - **A finding that holds gets its own issue,** without asking first. Write the detailed findings, and say how it was found: the spec, the property, the config and bounds, and the counterexample trace.
 - **Fix it spec first, then code.** First correct the spec until TLC passes both the safety and the liveness checks. Then change the code to match the corrected spec. Then confirm the code is fixed with unit and integration test coverage.
 
+## New features
+
+- **Spec first.** For a new feature, write its TLA+ spec first, so the mechanics are right, and check it with TLC; then write the code that follows the spec (set by Justine on 2026-10-07).
+
+## Problems found along the way
+
+- **Fix them inline.** A problem found while fixing or testing another one is fixed with it, in the same branch and PR, and described in its commit message; it doesn't get an issue of its own (set by Justine on 2026-10-07). This takes precedence over filing TLA+ findings separately, while a fix is under way.
+
 ## Code
 
 - In test files, write the cursor marker as the escape `"\u{258c}"`, not as the literal character. Justine prefers the escape to a special character encoded in the file (2026-10-06).

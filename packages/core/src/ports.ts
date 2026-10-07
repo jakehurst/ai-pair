@@ -43,6 +43,13 @@ export type SharedSelection = Excerpt
 
 export type Ref = { file: string; line: number; endLine: number }
 
+/** A file that isn't on disk, with no unsaved text in the editor for it (#88, #89). */
+export class MissingFile extends Error {
+  constructor(readonly file: string) {
+    super(`${file} doesn't exist`)
+  }
+}
+
 /** Files are absolute paths; offsets are into the document text. */
 export interface EditorPort {
   /**
@@ -52,7 +59,7 @@ export interface EditorPort {
   resolvePath(file: string): string
   /** How to name a file to the agent. */
   displayPath(file: string): string
-  /** Buffer contents if open, otherwise from disk. */
+  /** The file's text: the editor's, with unsaved changes. Throws `MissingFile` for a file that doesn't exist. */
   getText(file: string): Promise<string>
   /** The line ending the editor stores in the file, "\n" or "\r\n", known even for an empty buffer. */
   eol(file: string): Promise<string>

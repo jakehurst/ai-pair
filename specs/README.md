@@ -41,6 +41,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Draft_fa2e74a_69.cfg` | same | L4 `ReplyMeansDraft` violated (#69) | 6 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `RunBox_mutation.cfg` | same, the page keeping the box for a phase that ends the run | `BoxMatches` violated (validation by mutation; no known bug) | 6 |
+| `FileText.cfg` | one file, 4 changes | holds | 123 |
+| `FileText_160344c_88.cfg` | same | `NotStale` violated (#88; #89's `MissingIsReported` and `CreatedIsEmpty` fail too, checked alone) | 8 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -235,6 +237,17 @@ One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and t
 | `Decided` | `confirm` resolving: `running`, or `declined` for a skip or an interrupt |
 | `Ran` | `editor.runCommand`: `done` or `background`, or `declined` for `notStarted` or a throw |
 | `End` | the session ending: `setActive(false)` |
+
+### `FileText`: the text the session takes for a file
+
+`getText` and `show` in `packages/vscode/src/editor.ts`, for #88 and #89. One file, on disk or absent, and a document VS Code may hold for it, with or without a tab. VS Code keeps a document after its file is deleted, and reloads one without unsaved changes some time after its file changes. `Fixed` is the fix for both: a document with unsaved changes is the programmer's text; otherwise a file not on disk is `MissingFile`; and `show` creates a missing file by emptying and saving a document VS Code kept for it, never one with unsaved changes (`KeepsUnsaved`).
+
+| Spec | Code |
+|---|---|
+| `GetText` | `getText` → `document()`: `openDocument()`, `exists()`, `openTextDocument` |
+| `Open`, `Close`, `Edit`, `Save`, `Reload` | VS Code's documents: opened by anything, dropped, edited, saved (recreating a deleted file), reloaded |
+| `Write`, `Delete` | the file changed or deleted on disk |
+| `Show` | `show` → `create`, for a `move` to the file |
 
 ### `Turns`: only talk during the programmer's turn
 
