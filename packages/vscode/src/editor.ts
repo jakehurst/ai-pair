@@ -83,6 +83,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private readonly terminals = new PairTerminals()
   private readonly mirror = new Map<string, string>()
   private readonly own = new Map<string, OwnEdit[]>()
+  /** Called with a file the editor writes on disk itself, and its text: `show` creating it (#15). */
+  wrote: (file: string, text: string) => void = () => {}
   /** Files we're saving: changes to them meanwhile are by save participants, like format on save. */
   private readonly saving = new Set<string>()
   private cursor: CursorView | null = null
@@ -609,6 +611,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       return
     }
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file)))
+    this.wrote(file, "")
     await vscode.workspace.fs.writeFile(vscode.Uri.file(file), new Uint8Array())
   }
 

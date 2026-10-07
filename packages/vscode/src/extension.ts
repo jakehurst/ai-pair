@@ -4,6 +4,8 @@ import { Bridge, Controller } from "@ai-pair/core"
 import { discoveryDir } from "@ai-pair/protocol"
 import { playDemo } from "./demo"
 import { VsCodeEditor } from "./editor"
+import type { OutsideChanges } from "./outside"
+import { watchOutside } from "./outsideWatch"
 import { NarrationPanel } from "./panel"
 import { settingSpeed } from "./panelHtml"
 import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
@@ -13,6 +15,7 @@ export type Api = {
   controller: Controller
   editor: VsCodeEditor
   bridge: Bridge
+  outside: OutsideChanges
   playDemo: () => Promise<void>
   launcher: string
   ready: Promise<void>
@@ -48,6 +51,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   controller.setSpeed(speed.get())
   controller.setTiming(config().get("timing", {}))
   controller.setConfirmCommands(config().get("confirmCommands", true))
+  const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
 
   const bridge = new Bridge(controller, {
     dir: discoveryDir(),
@@ -66,6 +70,7 @@ export function activate(context: vscode.ExtensionContext): Api {
 
   context.subscriptions.push(
     log,
+    outsideWatch,
     { dispose: () => bridge.dispose() },
     vscode.window.onDidChangeWindowState((state) => {
       if (state.focused) bridge.focused()
@@ -115,7 +120,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       .then((answer) => answer && setUpAgent(launcher))
   }
 
-  return { controller, editor, bridge, playDemo: () => playDemo(controller, root), launcher, ready }
+  return { controller, editor, bridge, outside, playDemo: () => playDemo(controller, root), launcher, ready }
 }
 
 export function deactivate(): void {}

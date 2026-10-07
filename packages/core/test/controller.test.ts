@@ -1448,7 +1448,7 @@ describe("run", () => {
     const confirm = panel.events.find((e) => e.type === "run" && e.phase === "confirm")
     expect(confirm).toBeDefined()
 
-    controller.decideRun(confirm!.type === "run" ? confirm!.id : -1, false)
+    controller.decideRun(confirm!.type === "run" ? confirm.id : -1, false)
     const report = await until(controller.listen())
     expect(report.batches).toMatchObject([
       { id: 1, status: "failed", error: { kind: "command_declined" }, unplayed: [{ run: "rm -rf build" }] },
@@ -1487,7 +1487,7 @@ describe("run", () => {
     await controller.step([{ run: "npm test" }])
     await advance(10)
     const confirm = panel.events.find((e) => e.type === "run" && e.phase === "confirm")
-    controller.decideRun(confirm!.type === "run" ? confirm!.id : -1, true)
+    controller.decideRun(confirm!.type === "run" ? confirm.id : -1, true)
     const report = await until(controller.step([]))
     expect(report.batches[0]).toMatchObject({ status: "completed", runs: [{ command: "npm test", exit_code: 0 }] })
     expect(editor.commands.map((c) => c.command)).toEqual(["npm test"])

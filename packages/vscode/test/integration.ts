@@ -293,6 +293,28 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("missing and deleted files read as missing, and are created empty")
 
+  // A file written on disk outside the protocol is marked, during a session, until it's opened; a
+  // save and a file the agent created aren't (#15, specs/Outside.tla).
+  fs.writeFileSync(file("outside-saved.txt"), "a\n")
+  const savedDoc = await vscode.workspace.openTextDocument(file("outside-saved.txt"))
+  // The watcher reports that write late; outside a session it isn't marked.
+  await sleep(2000)
+  await c.start("outside")
+  fs.writeFileSync(file("outside-written.txt"), "by another tool\n")
+  await until(() => api.outside.isMarked(file("outside-written.txt")))
+  await insertAsProgrammer(savedDoc.uri, new vscode.Position(0, 1), "b")
+  await savedDoc.save()
+  await c.step([{ move: { file: "outside-new.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+  await c.step([])
+  // Past the group's settling, and the watcher's own delay.
+  await sleep(2000)
+  assert.equal(api.outside.isMarked(file("outside-saved.txt")), false, "a save was marked")
+  assert.equal(api.outside.isMarked(file("outside-new.txt")), false, "the agent's new file was marked")
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("outside-written.txt")))
+  await until(() => !api.outside.isMarked(file("outside-written.txt")))
+  await c.end()
+  console.log("a file written outside is marked until it's opened; saves and new files aren't")
+
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })
   fs.writeFileSync(file("..cache/x.txt"), "a\n")

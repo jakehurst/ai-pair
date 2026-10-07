@@ -16,6 +16,8 @@ export type FromPanel =
   /** A file named in a message: a path, or just its name. */
   | { type: "openFile"; file: string }
   | { type: "openUrl"; url: string }
+  /** A file changed outside the protocol: its diff, or the file outside git (#15). */
+  | { type: "openChange"; file: string }
   /** A command the intro offers, like Set Up Agent. */
   | { type: "command"; command: string }
   | { type: "speed"; value: number }

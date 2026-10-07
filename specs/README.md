@@ -43,6 +43,10 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `RunBox_mutation.cfg` | same, the page keeping the box for a phase that ends the run | `BoxMatches` violated (validation by mutation; no known bug) | 6 |
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
 | `FileText_160344c_88.cfg` | same | `NotStale` violated (#88; #89's `MissingIsReported` and `CreatedIsEmpty` fail too, checked alone) | 8 |
+| `Outside.cfg` | one file, 5 contents | holds | 564 |
+| `Outside_every.cfg` | same, marking every watcher event | `NoFalseMark` violated (validation by mutation) | 12 |
+| `Outside_afterSave.cfg` | same, skipping an event after a save | `NoFalseMark` violated (validation by mutation) | 12 |
+| `Outside_unsettled.cfg` | same, deciding before VS Code tells of its save | `NoFalseMark` violated (validation by mutation) | 53 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -248,6 +252,18 @@ One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and t
 | `Open`, `Close`, `Edit`, `Save`, `Reload` | VS Code's documents: opened by anything, dropped, edited, saved (recreating a deleted file), reloaded |
 | `Write`, `Delete` | the file changed or deleted on disk |
 | `Show` | `show` → `create`, for a `move` to the file |
+
+### `Outside`: marking files changed outside the protocol
+
+The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts` in `packages/vscode/src`. One file, written by VS Code's saves, by the extension's own `show`, and by anything else; a watcher that reports writes late and merges them. The code marks a file when a group of writes settles, if the file differs from the text it knows: the last VS Code wrote, or the programmer saw. A timing assumption: VS Code tells of a save (`onDidSaveTextDocument`) within milliseconds, before the group settles, and nothing the programmer does falls in between. The mutation configs are the rules that fail: marking every event, skipping an event after a save, and deciding before the save's notification.
+
+| Spec | Code |
+|---|---|
+| `Save`, `Saved` | a document saved; `onDidSaveTextDocument` → `saved` |
+| `Create` | `show` creating a missing file → `wrote` → `saved` |
+| `Write` | anything else writing the file; an open document without unsaved changes reloads |
+| `Report` | the watcher's events → `reported`; the group settles → `settle` reads and compares |
+| `Open` | opening the file or its diff → `seen` |
 
 ### `Turns`: only talk during the programmer's turn
 

@@ -208,6 +208,7 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
   .run .outcome.ok { color: var(--ok); }
   .run .outcome.fail { color: var(--fail); }
   body.vscode-high-contrast :is(.you, .run), body.vscode-high-contrast-light :is(.you, .run) { outline: 1px solid var(--border); }
+  .outside { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
   .divider { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--faint); }
   .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
 
