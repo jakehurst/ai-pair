@@ -29,6 +29,8 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
+| `Player.cfg` | `Edits = 2` | holds | 26 |
+| `Player_57ac07f_49.cfg` | same | S11 `DeletesTheSelection` violated (#49) | 12 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
@@ -135,6 +137,15 @@ A keystroke made while the save participants run can't be told from their edits,
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code doesn't end the `away` pause, and the agent isn't told about pauses.
+
+### `Player`: a delete while the programmer edits
+
+The `delete` action in `packages/core/src/player.ts`, between its awaits, while the programmer types in front of the selection or behind it. `ReadAfterAwait` and `CheckInterrupt` are the fix for #49.
+
+| Spec | Code |
+|---|---|
+| `Begin`, `Finish` | the delete: before #49 it copied the selection, then awaited `show` and `getText` |
+| `TypeBefore`, `TypeAfter` | a programmer's edit: `transform` moves the live selection, and the edit interrupts |
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`
 

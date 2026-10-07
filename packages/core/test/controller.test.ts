@@ -796,6 +796,34 @@ describe("reports", () => {
 })
 
 describe("interruptions", () => {
+  it("stops a delete when the programmer edits while it starts, and deletes nothing", async () => {
+    const { editor, controller } = setup({ "a.ts": "keep DELETE keep\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    // Holds the delete at its show(): during play, the select's show is the first call and the delete's the second.
+    const show = editor.show.bind(editor)
+    let open!: () => void, reached!: () => void
+    const gate = new Promise<void>((r) => (open = r))
+    const atGate = new Promise<void>((r) => (reached = r))
+    let calls = 0
+    editor.show = async (file) => {
+      if (++calls === 2) {
+        reached()
+        await gate
+      }
+      return show(file)
+    }
+    void controller.step([{ select: { file: "a.ts", line: 1, text: "DELETE" } }, { delete: true }])
+    await until(atGate)
+    // The programmer types in front of the selection while the delete waits.
+    editor.userEdit("a.ts", 0, 0, ">>>")
+    editor.show = show
+    open()
+    const report = await until(controller.step([]))
+    expect(editor.text("a.ts")).toBe(">>>keep DELETE keep\n")
+    expect(report.batches).toMatchObject([{ id: 1, status: "interrupted", unplayed: [{ delete: true }] }])
+  })
+
   it("shows the code as far as it got, returns the rest of the cut action, and discards the queued batch", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
