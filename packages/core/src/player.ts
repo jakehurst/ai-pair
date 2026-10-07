@@ -363,10 +363,14 @@ export class Player {
     if ("delete" in action) {
       if (!s.cursor || !s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
       const { file } = s.cursor
-      const { start, end } = s.selection
-      playing.edited = true
       await editor.show(file)
       this.stage.lines.of(file, await editor.getText(file))
+      // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
+      // read the selection only now (#49).
+      if (this.stage.pacing.isInterrupted) return { kind: "interrupted" }
+      if (!s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
+      const { start, end } = s.selection
+      playing.edited = true
       this.clearPoint()
       s.cursor.offset = start
       s.selection = null
