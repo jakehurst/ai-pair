@@ -164,6 +164,17 @@ describe("relay", () => {
     expect(report.text).toMatch(/Batch 1 completed/)
   })
 
+  it("keeps the report of a call cancelled as it starts", async () => {
+    const client = await connect()
+    await call(client, "start")
+    controller.userMessage("hello")
+    const abort = new AbortController()
+    const cancelled = call(client, "listen", {}, abort.signal).catch((e: unknown) => e)
+    abort.abort()
+    expect(await cancelled).toBeInstanceOf(Error)
+    expect((await call(client, "listen")).text).toMatch(/hello/)
+  })
+
   it("keeps serving after frames that aren't messages", async () => {
     const { port } = findWindows(["/project"], dir).windows[0]!
     const raw = new WebSocket(`ws://127.0.0.1:${port}`)

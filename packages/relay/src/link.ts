@@ -118,6 +118,9 @@ export class EditorLink {
 
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     const ws = await this.connect()
+    // An abort that fired before the listener below is added won't fire again (#29). A call never
+    // sent takes no report, so there is nothing to hand back.
+    if (signal?.aborted) throw new RelayError("cancelled", "The call was cancelled.")
     const calls = this.pending.get(ws)!
     const id = this.nextId++
     return new Promise((resolve, reject) => {
