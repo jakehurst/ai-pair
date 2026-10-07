@@ -352,9 +352,10 @@ export class Player {
       const fast = "type_fast" in action
       const text: unknown = fast ? action.type_fast : action.type
       const problem = typeProblem(text)
-      if (problem) return fail("invalid_action", problem)
-      const [before, after] = (text as string).split(CURSOR_MARKER) as [string, string]
-      return this.type(before, after, fast, playing)
+      if (problem || typeof text !== "string") return fail("invalid_action", problem ?? "Give the text to type.")
+      // typeProblem passed: exactly one marker.
+      const marker = text.indexOf(CURSOR_MARKER)
+      return this.type(text.slice(0, marker), text.slice(marker + CURSOR_MARKER.length), fast, playing)
     }
 
     if ("delete" in action) {
@@ -614,8 +615,8 @@ export class Player {
    * shown then. An empty file's one line needs no showing.
    */
   private unseen(file: string, text: string, line: number, what: string, find: ((text: string) => Candidate[]) | undefined): Outcome | undefined {
-    const { knows, lines } = this.stage
-    if (!knows || text === "" || knows(file, line, lines.of(file, text)[line - 1]!)) return undefined
+    const { lines } = this.stage
+    if (!this.stage.knows || text === "" || this.stage.knows(file, line, lines.of(file, text)[line - 1]!)) return undefined
     const candidates = find?.(text) ?? []
     const reads = `line ${line} reads ${JSON.stringify(lineText(text, line))}`
     const where = !find ? "." : candidates.length > 0 ? `, and ${what} is on these lines:` : `, and ${what} isn't anywhere in the file.`

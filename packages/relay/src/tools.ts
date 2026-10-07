@@ -25,6 +25,8 @@ const Span = z
       from: z.string().optional().describe("Instead of `text`, for a range: the exact text it starts with, on `line`."),
       through: z.string().optional().describe("With `from`: the range ends with the first match of this text after `from`."),
     },
+    // zod reports unrecognized keys only on an object it matched to this schema.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     { error: (issue) => (issue.code === "unrecognized_keys" ? spanProblem(issue.input as SpanTarget) : undefined) },
   )
   .superRefine((span, ctx) => {
@@ -63,6 +65,8 @@ const Action = z.union([
           .describe(
             "Instead of a spot: `line_end`, the end of the line. Only that: it steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
           ),
+        // zod reports unrecognized keys only on an object it matched to this schema.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       }, { error: (issue) => (issue.code === "unrecognized_keys" ? moveProblem(issue.input as MoveTarget) : undefined) })
       .superRefine((m, ctx) => {
         const problem = moveProblem(m)
@@ -117,9 +121,9 @@ function actionError(issue: { input?: unknown }): string | undefined {
   if (kinds.length > 1) return combined(input)
   // A malformed field fails on its type, before the action's own check gets to say what's wrong.
   const move: unknown = "move" in input ? input.move : undefined
-  if (typeof move === "object" && move !== null) return moveProblem(move as MoveTarget)
+  if (typeof move === "object" && move !== null) return moveProblem(move)
   const span: unknown = "select" in input ? input.select : "point" in input ? input.point : undefined
-  if (typeof span === "object" && span !== null) return spanProblem(span as SpanTarget)
+  if (typeof span === "object" && span !== null) return spanProblem(span)
   if ("type" in input) return typeProblem(input.type)
   if ("type_fast" in input) return typeProblem(input.type_fast)
   return undefined

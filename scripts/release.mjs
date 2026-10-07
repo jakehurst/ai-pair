@@ -44,7 +44,7 @@ function next(current, bump) {
   if (bump === "major") return `${major + 1}.0.0`
   if (bump === "minor") return `${major}.${minor + 1}.0`
   if (bump === "patch") return `${major}.${minor}.${patch + 1}`
-  fail("Say which version: patch, minor, major, or an exact x.y.z.")
+  return fail("Say which version: patch, minor, major, or an exact x.y.z.")
 }
 
 /** The body of the changelog's section for `version`, without its heading. */

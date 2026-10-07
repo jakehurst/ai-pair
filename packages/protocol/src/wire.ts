@@ -55,6 +55,8 @@ function parseFrame(data: Frame): { type: string } | undefined {
     return undefined
   }
   if (typeof m !== "object" || m === null || !("type" in m) || typeof m.type !== "string") return undefined
+  // Checked just above; TypeScript doesn't narrow `m` itself from a check on its property.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return m as { type: string }
 }
 
@@ -65,10 +67,12 @@ export type Frame = Buffer | ArrayBuffer | Buffer[]
 
 /** A frame from the relay, or `undefined` if it isn't a message. */
 export function parseRelayMessage(data: Frame): RelayMessage | undefined {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return parseFrame(data) as RelayMessage | undefined
 }
 
 /** A frame from the editor, or `undefined` if it isn't a message. */
 export function parseEditorMessage(data: Frame): EditorMessage | undefined {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return parseFrame(data) as EditorMessage | undefined
 }

@@ -65,6 +65,8 @@ type Content = { type: string; text: string }[]
 
 async function call(client: Client, name: string, args: Record<string, unknown> = {}, signal?: AbortSignal) {
   const result = await client.callTool({ name, arguments: args }, undefined, { signal })
+  // The relay answers with text parts only.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const content = result.content as Content
   return { error: result.isError === true, text: content[0]!.text, content }
 }
@@ -73,7 +75,7 @@ describe("relay", () => {
   it("lists the tools and the prompt, with short instructions", async () => {
     const client = await connect()
     const tools = await client.listTools()
-    expect(tools.tools.map((t) => t.name).sort()).toEqual(["end", "listen", "read", "start", "step"])
+    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(["end", "listen", "read", "start", "step"])
     expect(client.getInstructions()).toContain("`start`")
     const prompt = await client.getPrompt({ name: "start", arguments: { task: "add a todos API" } })
     expect(JSON.stringify(prompt.messages)).toContain("The task: add a todos API")

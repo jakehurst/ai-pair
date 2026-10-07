@@ -51,6 +51,8 @@ export function isLineStart(text: string, offset: number): boolean {
 
 /** Raw terminal output as plain text: no escape sequences, carriage-return overwrites resolved. */
 export function terminalText(raw: string): string {
+  // Escape sequences start with ESC (\x1b) and some end with BEL (\x07): matching control characters is the point.
+  /* oxlint-disable no-control-regex */
   const plain = raw
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
@@ -61,6 +63,7 @@ export function terminalText(raw: string): string {
     .map((line) => {
       const parts = line.split("\r").filter((p) => p !== "")
       return (parts.at(-1) ?? "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").trimEnd()
+      /* oxlint-enable no-control-regex */
     })
     .join("\n")
     .trim()

@@ -2,12 +2,11 @@
 // the counterexamples TLC found in specs/Wire.tla.
 
 import * as fs from "node:fs"
-import type { AddressInfo } from "node:net"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { type WebSocket, WebSocketServer } from "ws"
-import { PROTOCOL_VERSION } from "@ai-pair/protocol"
+import { parseRelayMessage, PROTOCOL_VERSION } from "@ai-pair/protocol"
 import { EditorLink } from "../src/link"
 
 let dir: string
@@ -30,7 +29,9 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: "wel
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 })
   servers.push(server)
   await new Promise((r) => server.once("listening", r))
-  const { port } = server.address() as AddressInfo
+  const address = server.address()
+  if (address === null || typeof address === "string") throw new Error("no TCP address")
+  const { port } = address
   const discovery = { pid: process.pid, workspaceFolders: [folder], port, token: "token", protocolVersion: PROTOCOL_VERSION, lastFocused: 0 }
   fs.writeFileSync(path.join(dir, `${port}.json`), JSON.stringify(discovery))
   const sockets: WebSocket[] = []
@@ -38,9 +39,9 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: "wel
   server.on("connection", (ws) => {
     sockets.push(ws)
     ws.on("message", (data) => {
-      const m = JSON.parse(String(data)) as { type: string; id: number; tool: string }
-      if (m.type === "hello") ws.send(greeting)
-      else if (m.type === "call") calls.push({ ws, id: m.id, tool: m.tool })
+      const m = parseRelayMessage(data)
+      if (m?.type === "hello") ws.send(greeting)
+      else if (m?.type === "call") calls.push({ ws, id: m.id, tool: m.tool })
     })
   })
   return { sockets, calls }

@@ -5,6 +5,7 @@ import type { Report } from "@ai-pair/protocol"
 import { renderFile, renderReport } from "../src/render"
 
 const report = (r: Partial<Report>): Report => ({ batches: [], events: [], turn: "agent", ...r })
+const code = (final_newline: boolean) => ({ file: "a.ts", lines: [{ number: 9, text: "}\u{258c}" }], end: { final_newline } })
 
 describe("reports", () => {
   it("shows a batch's code as numbered lines, with the cursor", () => {
@@ -61,7 +62,6 @@ describe("reports", () => {
   })
 
   it("says where code reaches the end of the file, and when no newline ends it", () => {
-    const code = (final_newline: boolean) => ({ file: "a.ts", lines: [{ number: 9, text: "}▌" }], end: { final_newline } })
     const ending = renderReport(report({ batches: [{ id: 1, status: "completed", code: code(true) }] }), "step")
     expect(ending).toMatch(/9  }▌\n   \(end of file\)$/)
     const missing = renderReport(report({ batches: [{ id: 1, status: "completed", code: code(false) }] }), "step")

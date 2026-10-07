@@ -2,7 +2,7 @@
 // See PROTOCOL.md for the rules implemented here.
 
 import type { Action, BatchResult, Event, Excerpt, FileContent, Report, Turn } from "@ai-pair/protocol"
-import { actionKinds, CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
+import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
 import { fileDiff } from "./diff"
 import { LineIds, type Sighting } from "./lines"
 import { agentPath, displayPath, Player, type Scene } from "./player"
@@ -218,7 +218,7 @@ export class Controller {
       const content: FileContent = {
         file: this.displayPath(s, path),
         dirty: await this.editor.isDirty(path),
-        lines: lines.slice(from - 1, to).map((text, i) => ({ number: from + i, text })),
+        lines: lines.slice(from - 1, to).map((line, i) => ({ number: from + i, text: line })),
       }
       if (to === lines.length) content.end = { final_newline: finalNewline }
       return content
@@ -303,7 +303,7 @@ export class Controller {
     if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, before, after, changes)
     this.recordEdit(s, file, before, after, changes, "other")
     if (planned) {
-      const e = s.events.find((e): e is EditEvent => e.kind === "edit" && e.file === file && e.diff === undefined)
+      const e = s.events.find((p): p is EditEvent => p.kind === "edit" && p.file === file && p.diff === undefined)
       if (e) e.interrupted = true
       this.interrupt(s)
     }
@@ -534,6 +534,8 @@ export class Controller {
         if (s.scene.turn === "agent") return s.events.some(interrupting)
         // The programmer's edits during their turn wait until they pause typing.
         return s.events.some((e) => e.kind !== "edit") || (s.navigatorReady && s.events.some(interrupting))
+      default:
+        throw new Error(`Unknown call: ${JSON.stringify(call.kind satisfies never)}`)
     }
   }
 
@@ -598,7 +600,7 @@ export class Controller {
 
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
   private snapshot(s: Session, submitted: Batch | undefined, waiting: boolean): Report {
-    const batches = s.finished.sort((a, b) => a.id - b.id)
+    const batches = s.finished.toSorted((a, b) => a.id - b.id)
     const events: Event[] = []
     for (const e of s.events) {
       if (e.kind !== "edit") {

@@ -200,6 +200,8 @@ export async function until<T>(promise: Promise<T>, maxMs = 120_000): Promise<T>
   }
   if (!t.done) throw new Error(`Still pending after ${maxMs} ms`)
   if (t.error !== undefined) throw t.error
+  // `track` keeps the value of the promise it was given, a `T`.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return t.value as T
 }
 

@@ -335,8 +335,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.mirror.set(file, after)
 
     // Applied from the highest offset down, each change leaves the offsets below it valid.
-    const changes: Change[] = [...e.contentChanges]
-      .sort((a, b) => b.rangeOffset - a.rangeOffset)
+    const changes: Change[] = e.contentChanges
+      .toSorted((a, b) => b.rangeOffset - a.rangeOffset)
       .map((c) => ({ offset: c.rangeOffset, deleteLength: c.rangeLength, text: c.text }))
 
     const pending = this.own.get(file)
@@ -349,7 +349,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       change.deleteLength === own.deleteLength &&
       change.text === own.text
     ) {
-      pending!.shift()
+      pending.shift()
       return
     }
 

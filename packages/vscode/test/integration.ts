@@ -66,9 +66,9 @@ async function insertAsProgrammer(uri: vscode.Uri, position: vscode.Position, te
 }
 
 export async function run(): Promise<void> {
-  const ext = vscode.extensions.getExtension("michalstrba.ai-pair")
+  const ext = vscode.extensions.getExtension<Api>("michalstrba.ai-pair")
   assert.ok(ext, "extension not found")
-  const api = (await ext.activate()) as Api
+  const api = await ext.activate()
   const root = vscode.workspace.workspaceFolders![0]!.uri.fsPath
   const file = (name: string) => path.join(root, name)
   const buffer = async (name: string) => (await vscode.workspace.openTextDocument(file(name))).getText()
@@ -155,14 +155,16 @@ export async function run(): Promise<void> {
   const transport = new StdioClientTransport({
     command: api.launcher,
     cwd: root,
-    env: process.env as Record<string, string>,
+    env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)),
   })
   const agent = new Client({ name: "integration", version: "0" })
   await agent.connect(transport)
   const tools = await agent.listTools()
-  assert.deepEqual(tools.tools.map((t) => t.name).sort(), ["end", "listen", "read", "start", "step"])
+  assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ["end", "listen", "read", "start", "step"])
   const tool = async (name: string, args: Record<string, unknown> = {}) => {
     const result = await agent.callTool({ name, arguments: args })
+    // The relay answers with text parts only.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const content = result.content as { type: string; text: string }[]
     assert.ok(!result.isError, content[0]?.text ?? "tool error")
     return content[0]!.text

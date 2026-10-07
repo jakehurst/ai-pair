@@ -88,15 +88,15 @@ describe("places", () => {
   })
 })
 
-describe("line identities", () => {
-  /** Which line of `text` (from 1) each line is after the change, or 0 for a new one. */
-  const follow = (text: string, offset: number, deleteLength: number, insert: string) => {
-    const ids = text.split("\n").map((_, i) => -(i + 1))
-    const after = applyChange({ text, ids }, { offset, deleteLength, text: insert })
-    expect(after.text).toBe(text.slice(0, offset) + insert + text.slice(offset + deleteLength))
-    return after.ids.map((id) => (id < 0 ? -id : 0))
-  }
+/** Which line of `text` (from 1) each line is after the change, or 0 for a new one. */
+function follow(text: string, offset: number, deleteLength: number, insert: string): number[] {
+  const ids = text.split("\n").map((_, i) => -(i + 1))
+  const after = applyChange({ text, ids }, { offset, deleteLength, text: insert })
+  expect(after.text).toBe(text.slice(0, offset) + insert + text.slice(offset + deleteLength))
+  return after.ids.map((id) => (id < 0 ? -id : 0))
+}
 
+describe("line identities", () => {
   it("keeps every line in place for a change within a line", () => {
     expect(follow("a\nb\n", 1, 0, "x")).toEqual([1, 2, 3])
     expect(follow("a\n\nb", 2, 0, "x")).toEqual([1, 2, 3])
