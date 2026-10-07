@@ -66,6 +66,8 @@ type Session = {
   events: PendingEvent[]
   /** An unreported interruption or failure: new batches are discarded. */
   stale: boolean
+  /** Rejections handed back by `restore`, to be reported again, one per report (#28). */
+  held: NonNullable<Report["rejected"]>[]
   /** Text of each file edited by the programmer, as of the last report. */
   baselines: Map<string, string>
   latest: Map<string, string>
@@ -148,6 +150,7 @@ export class Controller {
         finished: [],
         events: [],
         stale: false,
+        held: [],
         baselines: new Map(),
         latest: new Map(),
         timeline,
@@ -241,6 +244,11 @@ export class Controller {
     s.finished.unshift(...report.batches)
     s.events.unshift(...report.events)
     if (report.events.some(interrupting) || report.batches.some((b) => b.status !== "completed")) s.stale = true
+    // A step that never queued its batch: its rejection is the only report of it.
+    if (report.rejected) {
+      s.held.push(report.rejected)
+      s.stale = true
+    }
     this.update()
   }
 
@@ -520,6 +528,7 @@ export class Controller {
       case "end":
         return s.queue.length === 0
       case "listen":
+        if (s.held.length > 0) return true
         if (s.finished.some((r) => r.status !== "completed")) return true
         if (s.queue.length > 0) return false
         if (s.scene.turn === "agent") return s.events.some(interrupting)
@@ -617,6 +626,10 @@ export class Controller {
     const b = submitted
     if (b && b.state !== "done") report.submitted = { id: b.id, status: b.state }
     if (waiting) report.waiting = true
+    // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
+    const held = s.held.shift()
+    if (held) report.rejected = held
+    if (s.held.length > 0) s.stale = true
     return report
   }
 

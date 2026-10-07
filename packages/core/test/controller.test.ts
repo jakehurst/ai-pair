@@ -1037,6 +1037,27 @@ describe("cancellation", () => {
       [2, "completed"],
     ])
   })
+
+  it("reports a returned rejection again, discarding steps until it has", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const rejected = await controller.step([{ move: { file: "a.ts", line: 5, to: "line_end" } }])
+    expect(rejected.rejected).toBeDefined()
+
+    // The agent cancelled the step as it returned, so the relay hands the report back.
+    controller.restore(rejected)
+
+    // A step sent meanwhile is discarded, and its report carries the rejection.
+    const write: Action[] = [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "x\u{258c}" }]
+    const next = await until(controller.step(write))
+    expect(next.rejected).toEqual(rejected.rejected)
+    expect(next.batches).toMatchObject([{ status: "discarded", unplayed: write }])
+
+    // Once it has been reported, steps play again.
+    const after = await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }]))
+    expect(after.rejected).toBeUndefined()
+    expect(after.submitted).toMatchObject({ status: "playing" })
+  })
 })
 
 describe("sessions", () => {
