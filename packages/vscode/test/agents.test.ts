@@ -51,6 +51,14 @@ describe("Claude Code", () => {
     ])
   })
 
+  it("runs an npm shim on Windows through the host's ComSpec (#11)", async () => {
+    host.platform = "win32"
+    host.env = { PATH: "", PATHEXT: ".CMD", ComSpec: "C:\\Windows\\system32\\cmd.exe" }
+    put("", ".local", "bin", "claude.CMD")
+    await agent("claude").setUp(host, LAUNCHER)
+    expect(calls.map((c) => c[0])).toEqual(["C:\\Windows\\system32\\cmd.exe", "C:\\Windows\\system32\\cmd.exe"])
+  })
+
   it("edits ~/.claude.json without it, keeping the rest", async () => {
     put(`{\n  "numStartups": 3,\n  "mcpServers": {\n    "other": { "command": "x" }\n  }\n}\n`, ".claude.json")
     const text = await setUpTwice("claude", ".claude.json")
@@ -123,6 +131,11 @@ describe("OpenCode", () => {
     const text = await setUpTwice("opencode", ".config", "opencode", "opencode.jsonc")
     expect(text).toContain(`\t// my theme\n\t"theme": "dark",`)
     expect(text).toContain(`\t"mcp": {\n\t\t"pair": {`)
+  })
+
+  it("isn't set up by a command that is a string, not a list (#11)", () => {
+    put(`{ "mcp": { "pair": { "type": "local", "command": "x" } } }`, ".config", "opencode", "opencode.json")
+    expect(agent("opencode").isSetUp(host, "x")).toBe(false)
   })
 
   it("honors XDG_CONFIG_HOME", async () => {

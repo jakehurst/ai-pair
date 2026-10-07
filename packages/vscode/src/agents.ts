@@ -35,7 +35,7 @@ export const AGENTS: Agent[] = [
     id: "claude",
     label: "Claude Code",
     detect: (host) => !!which(host, "claude", [path.join(host.home, ".local", "bin")]) || exists(claudeFile(host)),
-    isSetUp: (host, command) => readJson(claudeFile(host))?.mcpServers?.[SERVER]?.command === command,
+    isSetUp: (host, command) => at(readJson(claudeFile(host)), "mcpServers", SERVER, "command") === command,
     async setUp(host, command) {
       // Claude Code rewrites its file all the time, so its own CLI is the safer writer, when it's there.
       const cli = which(host, "claude", [path.join(host.home, ".local", "bin")])
@@ -70,9 +70,11 @@ export const AGENTS: Agent[] = [
     label: "OpenCode",
     detect: (host) => !!which(host, "opencode", [path.join(host.home, ".opencode", "bin")]) || exists(opencodeDir(host)),
     isSetUp: (host, command) =>
-      ["config.json", "opencode.json", "opencode.jsonc"].some(
-        (name) => readJson(path.join(opencodeDir(host), name))?.mcp?.[SERVER]?.command?.[0] === command,
-      ),
+      ["config.json", "opencode.json", "opencode.jsonc"].some((name) => {
+        // A list: the program, then its arguments. A string isn't OpenCode's form (#11).
+        const configured = at(readJson(path.join(opencodeDir(host), name)), "mcp", SERVER, "command")
+        return Array.isArray(configured) && configured[0] === command
+      }),
     async setUp(host, command) {
       const dir = opencodeDir(host)
       const file = ["opencode.jsonc", "opencode.json"].map((name) => path.join(dir, name)).find(exists)
@@ -86,7 +88,7 @@ export const AGENTS: Agent[] = [
     id: "gemini",
     label: "Gemini CLI",
     detect: (host) => !!which(host, "gemini") || exists(path.join(host.home, ".gemini")),
-    isSetUp: (host, command) => readJson(geminiFile(host))?.mcpServers?.[SERVER]?.command === command,
+    isSetUp: (host, command) => at(readJson(geminiFile(host)), "mcpServers", SERVER, "command") === command,
     async setUp(host, command) {
       editJson(geminiFile(host), ["mcpServers", SERVER], { command, args: [] })
       return geminiFile(host)
@@ -96,7 +98,7 @@ export const AGENTS: Agent[] = [
     id: "cursor",
     label: "Cursor",
     detect: (host) => !!which(host, "cursor") || exists(path.join(host.home, ".cursor")),
-    isSetUp: (host, command) => readJson(cursorFile(host))?.mcpServers?.[SERVER]?.command === command,
+    isSetUp: (host, command) => at(readJson(cursorFile(host)), "mcpServers", SERVER, "command") === command,
     async setUp(host, command) {
       editJson(cursorFile(host), ["mcpServers", SERVER], { type: "stdio", command, args: [] })
       return cursorFile(host)
@@ -154,7 +156,7 @@ function pathVar(host: Host): string | undefined {
 /** Runs `file`; on Windows, a `.cmd` or `.bat` (an npm shim) only runs through the shell. */
 function run(host: Host, file: string, args: string[]): Promise<void> {
   if (host.platform === "win32" && /\.(cmd|bat)$/i.test(file)) {
-    return host.exec(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${[file, ...args].map(cmdQuoted).join(" ")}"`])
+    return host.exec(host.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${[file, ...args].map(cmdQuoted).join(" ")}"`])
   }
   return host.exec(file, args)
 }
@@ -191,9 +193,21 @@ function write(file: string, text: string): void {
   fs.writeFileSync(file, text)
 }
 
-function readJson(file: string): any {
+/** Another program's file: anything, so it's read with `at` (#11). */
+function readJson(file: string): unknown {
   const text = readText(file)
-  return text === undefined ? undefined : parse(text, [], { allowTrailingComma: true })
+  return text === undefined ? undefined : (parse(text, [], { allowTrailingComma: true }) as unknown)
+}
+
+/** `value[keys[0]][keys[1]]...`, or `undefined` where something on the way isn't an object. */
+function at(value: unknown, ...keys: string[]): unknown {
+  let here = value
+  for (const key of keys) {
+    if (typeof here !== "object" || here === null || !(key in here)) return undefined
+    const next: unknown = Reflect.get(here, key)
+    here = next
+  }
+  return here
 }
 
 /** Sets `value` at `keys` in a JSON (or JSONC) file, leaving the rest of its text as it was. */
