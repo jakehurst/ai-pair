@@ -13,7 +13,8 @@ Issues for this work live on the fork, `jakehurst/ai-pair` (the `jakehurst` remo
 ## Working notes while fixing an issue
 
 - Keep notes as you work in `blueprints/notes/issue-<N>-<slug>.md`: the bug, the change and why, the test, every verification run with its result, the review, and anything noticed about the tool itself.
-- The notes are ephemeral. When Justine asks, post the file verbatim as a comment on the issue (`gh issue comment <N> -R jakehurst/ai-pair --body-file <file>`) so the record lives there. Never stage or commit the notes file, and do not mention it in the commit message.
+- The notes file is working memory while the issue is being worked: draw the commit message and the PR description from it. The issue is where the notes are kept for good. Once the fix is merged, or work on the issue stops, post the file verbatim as a comment on the issue (`gh issue comment <N> -R jakehurst/ai-pair --body-file <file>`), without asking first, then delete the local file (set by Justine on 2026-10-07).
+- Never stage or commit the notes file, and do not mention it in the commit message.
 
 ## Findings from the TLA+ specs (#19)
 
