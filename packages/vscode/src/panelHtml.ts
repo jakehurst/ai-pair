@@ -299,6 +299,7 @@ export function panelHtml(cspSource: string): string {
   let selection = null, selectionDismissed = false;   // the programmer's selection, offered with the reply
   let runId = null, runConfirming = false;   // the command shown in the run box
   let current = null;   // text of the current message
+  let filed = false;    // whether the current message is in the history already
   let reading = null;   // { ms, elapsed, last }
   let pointed = null;   // a link to the code the agent just pointed at, shown with the message about it
 
@@ -312,8 +313,16 @@ export function panelHtml(cspSource: string): string {
     i % 2 === 1 ? codeSpan(part.slice(1, -1)) : part.replace(URL, (u) => '<a class="url" data-url="' + u + '">' + u + "</a>")).join("");
 
   function add(el) {
+    // Newest first: the current message came before this entry, so it goes in first.
+    fileCurrent();
     ui.history.prepend(el);
     return el;
+  }
+
+  /** Puts the current message into the history, once: when the next entry comes, or when it is replaced. */
+  function fileCurrent() {
+    if (current !== null && !filed) ui.history.prepend(entry("agent", rich(current)));
+    filed = true;
   }
 
   function entry(cls, html) {
@@ -322,8 +331,6 @@ export function panelHtml(cspSource: string): string {
     if (html !== undefined) el.innerHTML = html;
     return el;
   }
-
-  function addAgent(html) { add(entry("agent", html)); }
 
   function addDivider(text) { add(entry("divider")).textContent = text; }
 
@@ -382,8 +389,9 @@ export function panelHtml(cspSource: string): string {
   }
 
   function setNow(text) {
-    if (current !== null) addAgent(rich(current));
+    fileCurrent();
     current = text;
+    filed = false;
     ui.now.className = "";
     ui.now.innerHTML = rich(text);
     // The agent points first, then says what's there.
@@ -472,7 +480,7 @@ export function panelHtml(cspSource: string): string {
         return;
       case "session":
         if (e.active) {
-          if (current !== null) addAgent(rich(current));
+          fileCurrent();
           current = null;
           state = null;
           ui.now.className = "empty";
@@ -482,7 +490,7 @@ export function panelHtml(cspSource: string): string {
           addDivider("Session started" + (e.task ? ": " + e.task : ""));
           setActive(true);
         } else {
-          if (current !== null) addAgent(rich(current));
+          fileCurrent();
           current = null;
           const why = { agent: "The agent ended the session", user: "You ended the session", disconnected: "The agent disconnected" }[e.reason];
           addDivider(why);
