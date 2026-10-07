@@ -13,7 +13,9 @@ if [ -z "$EXTENSION_PATH" ]; then
   EXTENSION_PATH="$PWD"
 fi
 npx esbuild test/integration.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist-test/integration.js --log-level=warning
-"$CODE" --user-data-dir="$TMP/user" --extensions-dir="$TMP/extensions" \
+# VSCODE_ARGS: more flags, like the ones a CI machine needs (--no-sandbox).
+# shellcheck disable=SC2086
+"$CODE" $VSCODE_ARGS --user-data-dir="$TMP/user" --extensions-dir="$TMP/extensions" \
   --disable-workspace-trust --skip-welcome --skip-release-notes \
   --extensionDevelopmentPath="$EXTENSION_PATH" --extensionTestsPath="$PWD/dist-test/integration.js" \
   "$TMP/workspace"

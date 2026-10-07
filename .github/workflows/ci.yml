@@ -1,11 +1,14 @@
-# Lint, type check, and unit tests, and the TLA+ specs (#7, #19). The integration test needs a
-# real VS Code with a display, so it isn't here yet (#7).
+# Lint, type check, and unit tests; the integration test in a real VS Code, downloaded, on a
+# virtual display; and the TLA+ specs (#7, #19).
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -20,6 +23,23 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Download VS Code
+        run: echo "VSCODE_BIN=$(node scripts/vscode-bin.mjs | tail -1)" >> "$GITHUB_ENV"
+        working-directory: packages/vscode
+      - name: Run the integration test
+        run: xvfb-run -a npm run test:integration
+        env:
+          VSCODE_ARGS: --no-sandbox --disable-gpu
 
   specs:
     runs-on: ubuntu-latest

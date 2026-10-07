@@ -6,3 +6,6 @@ dist-test/
 packages/vscode/LICENSE
 # Built by `npm run package`.
 *.vsix
+coverage/
+# VS Code, downloaded for the integration test on CI.
+.vscode-test/

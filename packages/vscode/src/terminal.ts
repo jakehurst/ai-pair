@@ -3,12 +3,11 @@
 
 import * as path from "node:path"
 import * as vscode from "vscode"
-import { samePath, terminalText, type CommandOutcome, type RunOptions } from "@ai-pair/core"
+import { samePath, type CommandOutcome, type RunOptions } from "@ai-pair/core"
+import { MAX_OUTPUT, outcomeOf, Tail } from "./output"
 
 /** How long a new terminal gets to report shell integration before the command is just typed in. */
 const SHELL_INTEGRATION_MS = 5000
-/** Output kept for the agent: the tail, where the result and the errors are. */
-const MAX_OUTPUT = 12_000
 /** After the command ends, how long its output stream gets to drain. */
 const DRAIN_MS = 500
 
@@ -73,17 +72,7 @@ export class PairTerminals implements vscode.Disposable {
     const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)])
     if (finished) await Promise.race([drained, delay(DRAIN_MS)])
 
-    const text = terminalText(output.text)
-    const outcome: CommandOutcome = { output: text.length > MAX_OUTPUT ? text.slice(-MAX_OUTPUT) : text }
-    if (terminal.state.shell) outcome.shell = terminal.state.shell
-    if (output.dropped || text.length > MAX_OUTPUT) outcome.truncated = true
-    if (finished) {
-      if (exitCode !== undefined) outcome.exitCode = exitCode
-    } else {
-      outcome.running = true
-      outcome.exited = ended.then(() => exitCode)
-    }
-    return outcome
+    return outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended })
   }
 
   private acquire(cwd: string): Owned {
@@ -139,18 +128,3 @@ function stopWaiting(ms: number, signal: AbortSignal, ended: Promise<void>): Pro
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
-
-/** Keeps the last `max` characters of a stream. */
-class Tail {
-  text = ""
-  dropped = false
-  constructor(private readonly max: number) {}
-  push(data: string): void {
-    this.text += data
-    if (this.text.length > this.max) {
-      this.text = this.text.slice(-this.max)
-      this.dropped = true
-    }
-  }
-}
-

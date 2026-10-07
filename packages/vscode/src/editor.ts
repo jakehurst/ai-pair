@@ -17,6 +17,7 @@ import type {
   RunOptions,
   SharedSelection,
 } from "@ai-pair/core"
+import { comfortable, glideTop, isOwnEdit, landing, row, viewport, type Lines } from "./view"
 import { PairTerminals } from "./terminal"
 
 type OwnEdit = { offset: number; deleteLength: number; text: string }
@@ -65,20 +66,8 @@ function labelDecoration(text: string, color: string, foreground: string, opacit
   })
 }
 
-/**
- * Where `line` is in the view: how many visible lines are above it, negative above the view, and as
- * many as there are visible lines, or more, below it. Folded lines don't count.
- */
-function row(ranges: readonly vscode.Range[], line: number): number {
-  const first = ranges[0]!.start.line
-  if (line < first) return line - first
-  let above = 0
-  for (const r of ranges) {
-    if (line <= r.end.line) return above + Math.max(0, line - r.start.line)
-    above += r.end.line - r.start.line + 1
-  }
-  return above + line - ranges.at(-1)!.end.line - 1
-}
+/** The visible ranges, by their lines. */
+const lines = (ranges: readonly vscode.Range[]): Lines[] => ranges.map((r) => ({ start: r.start.line, end: r.end.line }))
 
 const CURSOR = "var(--vscode-aiPair-cursor)"
 const READ = "var(--vscode-aiPair-cursorRead)"
@@ -354,15 +343,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       .map((c) => ({ offset: c.rangeOffset, deleteLength: c.rangeLength, text: c.text }))
 
     const pending = this.own.get(file)
-    const own = pending?.[0]
-    const change = changes[0]!
-    if (
-      own &&
-      changes.length === 1 &&
-      change.offset === own.offset &&
-      change.deleteLength === own.deleteLength &&
-      change.text === own.text
-    ) {
+    if (pending && isOwnEdit(changes, pending[0])) {
       pending.shift()
       return
     }
@@ -428,10 +409,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const view = editor && this.viewport(editor)
     if (!editor || !view) return
     const line = editor.document.positionAt(target.offset).line
-    const at = row(editor.visibleRanges, line)
+    const at = row(lines(editor.visibleRanges), line)
     const { height } = view
     // Not knowing the height, at a document's end, the target is in view: everything to the end is.
-    if (height === undefined ? at >= 0 : at >= height / 4 && at < (height * 3) / 4) return
+    if (height === undefined ? at >= 0 : comfortable(at, height)) return
     if (height !== undefined && this.landing(editor, line, height) === view.top) return
     // At a document's end, the height may be out of date, so measure it on the way.
     const measure = view.atEnd && this.scrollsBeyondEnd(editor)
@@ -452,7 +433,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         await this.revealLine(editor, line, vscode.TextEditorRevealType.InCenter)
         // Near a document's start, the middle is out of reach and the view stays at its top.
         if (editor.visibleRanges[0] && editor.visibleRanges[0].start.line > 0) {
-          height = 2 * row(editor.visibleRanges, line)
+          height = 2 * row(lines(editor.visibleRanges), line)
           this.viewportLines.set(editor.viewColumn, height)
         }
         const target = this.target()
@@ -482,7 +463,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       await new Promise((resolve) => setTimeout(resolve, FRAME_MS))
       if (!FOLLOWING.has(this.state)) return
       const t = Math.min(1, (Date.now() - started) / GLIDE_MS)
-      const next = Math.round(from + (to - from) * (1 - (1 - t) ** 3))
+      const next = glideTop(from, to, t)
       if (next === top) continue
       top = next
       await this.revealTop(editor, top, height)
@@ -502,9 +483,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   /** The top line of the view that has `line` a third of the way down, as far as the editor can scroll. */
   private landing(editor: vscode.TextEditor, line: number, height: number): number {
-    const last = editor.document.lineCount - 1
-    const max = this.scrollsBeyondEnd(editor) ? last : Math.max(0, last + 1 - height)
-    return Math.max(0, Math.min(max, line - Math.floor(height / 3)))
+    return landing(line, height, editor.document.lineCount, this.scrollsBeyondEnd(editor))
   }
 
   /** Whether the editor scrolls on past a document's last line, up to where it's the top one. */
@@ -543,15 +522,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * known. At a document's end the visible ranges stop at its last line, short of the viewport's
    * bottom, so there the height is the one last seen or measured.
    */
-  private viewport(editor: vscode.TextEditor): { top: number; rows: number; atEnd: boolean; height?: number } | undefined {
-    const ranges = editor.visibleRanges
-    if (ranges.length === 0) return undefined
-    const rows = ranges.reduce((n, r) => n + r.end.line - r.start.line + 1, 0)
-    const atEnd = ranges.at(-1)!.end.line >= editor.document.lineCount - 1
-    if (!atEnd) this.viewportLines.set(editor.viewColumn, rows)
-    const known = this.viewportLines.get(editor.viewColumn)
-    const height = !atEnd ? rows : known === undefined ? undefined : Math.max(rows, known)
-    return { top: ranges[0]!.start.line, rows, atEnd, height }
+  private viewport(editor: vscode.TextEditor): ReturnType<typeof viewport> {
+    const view = viewport(lines(editor.visibleRanges), editor.document.lineCount, this.viewportLines.get(editor.viewColumn))
+    if (view && !view.atEnd) this.viewportLines.set(editor.viewColumn, view.rows)
+    return view
   }
 
   private redraw(): void {
