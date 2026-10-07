@@ -28,6 +28,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
 | `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 25 |
+| `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
+| `FollowMode_57ac07f_56.cfg` | same | `NoPauseFromOurOwnShow` violated (#56) | 11 |
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
@@ -129,6 +131,16 @@ Each violation's trace was checked against the code step by step before it was r
 | `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
 
 A keystroke made while the save participants run can't be told from their edits, since VS Code doesn't say who made a change. The spec allows that one wrong attribution by name (`"programmer during save"`).
+
+### `FollowMode`: our own navigation against looking away
+
+`show`, `selfNav`, and `onActiveEditor` in `packages/vscode/src/editor.ts`, with a `move` that shows its file before the agent cursor moves there. `HoldWhileShowing` is the fix for #56.
+
+| Spec | Code |
+|---|---|
+| `ShowStart`, `Expire`, `Resolved` | `show()`: our navigation starts; the window (`SELF_NAV_MS`) runs out; `showTextDocument` resolves |
+| `Shown`, `Handle` | VS Code's change of active editor, and `onActiveEditor` pausing as `away` outside the window |
+| `LookAway` | the programmer switching files themselves |
 
 ### `Bridge`: who drives the session
 

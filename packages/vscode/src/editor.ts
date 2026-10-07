@@ -103,6 +103,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private pulse?: ReturnType<typeof setInterval>
   private pulseOn = true
   private selfNavUntil = 0
+  /** Our shows in progress: view changes meanwhile are ours, however long VS Code takes (#56). */
+  private showing = 0
+  /** How long after our own navigation view changes are ours. Tests set it to 0, to leave only `showing`. */
+  selfNavMs = SELF_NAV_MS
   /**
    * How many lines each editor group's viewport shows, as last seen without a document's end in view,
    * or measured. A zoom or a resize since, with a document's end in view, goes unnoticed.
@@ -209,13 +213,19 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       await vscode.workspace.fs.writeFile(uri, new Uint8Array())
     }
     if (this.visibleEditor(file)) return
-    this.selfNav()
-    const doc = await vscode.workspace.openTextDocument(uri)
-    await vscode.window.showTextDocument(doc, {
-      preview: false,
-      preserveFocus: true,
-      viewColumn: vscode.window.activeTextEditor?.viewColumn,
-    })
+    // The change of active editor comes before showTextDocument's reply, however long that takes.
+    this.showing++
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri)
+      await vscode.window.showTextDocument(doc, {
+        preview: false,
+        preserveFocus: true,
+        viewColumn: vscode.window.activeTextEditor?.viewColumn,
+      })
+    } finally {
+      this.showing--
+      this.selfNav()
+    }
   }
 
   async edit(file: string, offset: number, deleteLength: number, text: string, options: EditOptions): Promise<void> {
@@ -385,14 +395,14 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private onActiveEditor(editor: vscode.TextEditor | undefined): void {
     if (editor?.document.uri.scheme === "file") this.onSelectionChange(editor)
     const target = this.target()
-    if (!editor || Date.now() < this.selfNavUntil || !target || !FOLLOWING.has(this.state)) return
+    if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return
     if (editor.document.uri.fsPath !== target.file) this.controller?.pause("away")
   }
 
   private onScroll(e: vscode.TextEditorVisibleRangesChangeEvent): void {
     this.viewport(e.textEditor)
     const target = this.target()
-    if (Date.now() < this.selfNavUntil || !target || !FOLLOWING.has(this.state)) return
+    if (this.navigating() || !target || !FOLLOWING.has(this.state)) return
     if (e.textEditor.document.uri.fsPath !== target.file) return
     const line = e.textEditor.document.positionAt(target.offset).line
     const visible = e.visibleRanges.some((r) => r.start.line <= line && line <= r.end.line)
@@ -579,7 +589,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   // ---- Helpers -------------------------------------------------------------
 
   private selfNav(): void {
-    this.selfNavUntil = Date.now() + SELF_NAV_MS
+    this.selfNavUntil = Date.now() + this.selfNavMs
+  }
+
+  /** Whether a view change now is from our own navigation. */
+  private navigating(): boolean {
+    return this.showing > 0 || Date.now() < this.selfNavUntil
   }
 
   private inWorkspace(file: string): boolean {
