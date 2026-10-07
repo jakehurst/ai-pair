@@ -15,6 +15,14 @@ Issues for this work live on the fork, `jakehurst/ai-pair` (the `jakehurst` remo
 - Keep notes as you work in `blueprints/notes/issue-<N>-<slug>.md`: the bug, the change and why, the test, every verification run with its result, the review, and anything noticed about the tool itself.
 - The notes are ephemeral. When Justine asks, post the file verbatim as a comment on the issue (`gh issue comment <N> -R jakehurst/ai-pair --body-file <file>`) so the record lives there. Never stage or commit the notes file, and do not mention it in the commit message.
 
+## Findings from the TLA+ specs (#19)
+
+Set by Justine on 2026-10-07.
+
+- **Rule out a false positive first.** When TLC finds a violation, check the spec against the code before reporting it: every action and variable in the counterexample trace must match what the code does.
+- **A finding that holds gets its own issue,** without asking first. Write the detailed findings, and say how it was found: the spec, the property, the config and bounds, and the counterexample trace.
+- **Fix it spec first, then code.** First correct the spec until TLC passes both the safety and the liveness checks. Then change the code to match the corrected spec. Then confirm the code is fixed with unit and integration test coverage.
+
 ## Code
 
 - In test files, write the cursor marker as the escape `"\u{258c}"`, not as the literal character. Justine prefers the escape to a special character encoded in the file (2026-10-06).
