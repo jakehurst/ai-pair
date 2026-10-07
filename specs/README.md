@@ -36,6 +36,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
 | `Rehearsal_mutation.cfg` | same, both defenses off | S10 violated (validation by mutation; no known bug) | |
+| `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
+| `BatchFile_57ac07f_58.cfg` | same | `ActsInNamedFile` violated (#58) | 79 |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
 | `Player_57ac07f_49.cfg` | same | S11 `DeletesTheSelection` violated (#49) | 12 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -172,6 +174,16 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 |---|---|
 | `Begin`, `Finish` | the delete: before #49 it copied the selection, then awaited `show` and `getText` |
 | `TypeBefore`, `TypeAfter` | a programmer's edit: `transform` moves the live selection, and the edit interrupts |
+
+### `BatchFile`: the file each action of a batch acts in
+
+`names`, `fileOf`, `type` and `delete` in `packages/core/src/player.ts`, over every sequence of up to 4 actions, each with `file` of `a`, `b`, or none, from any cursor. A `point` names a file without moving the cursor, so with the cursor elsewhere an action without `file` looked in the cursor's file, and a `type` or `delete` edited it. `FallBackToNamed` and `CursorInNamed` are the fix for #58.
+
+| Spec | Code |
+|---|---|
+| `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete`; only `move` and `select` move the cursor |
+| `Reject` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file |
+| `NextBatch` | a new `Playing` for the next batch; the cursor stays |
 
 ### `Rehearsal`: line identities across a rehearsal
 

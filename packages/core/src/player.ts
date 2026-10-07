@@ -271,6 +271,14 @@ export class Player {
     if (s.turn === "user" && !("say" in action) && !("point" in action)) {
       return fail("not_your_turn", "During the programmer's turn, only `say` and `point` are allowed.")
     }
+    // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file.
+    const atCursor = "type" in action || "type_fast" in action || "delete" in action
+    if (atCursor && playing.named !== undefined && s.cursor && s.cursor.file !== playing.named) {
+      return fail(
+        "invalid_action",
+        `Your cursor is in ${this.displayPath(s.cursor.file)}, but this batch works in ${this.displayPath(playing.named)}: \`move\` or \`select\` there first.`,
+      )
+    }
 
     // An action at the cursor brings the view back to it from the code last pointed at. A far jump
     // back gets a far move's pause, before anything happens there; one to another file has its own.
@@ -279,7 +287,7 @@ export class Player {
     const farBack = lookingBack && s.pointFar
     if (lookingBack) {
       s.focus = "cursor"
-      if (farBack && !("move" in action) && named === undefined && s.cursor) {
+      if (farBack && !("move" in action) && named === undefined && s.cursor && this.fileOf({}, playing) === s.cursor.file) {
         await editor.show(s.cursor.file)
         this.follow()
         if (!(await this.delay(timing.afterMoveFarMs))) return { kind: "interrupted" }
@@ -303,7 +311,7 @@ export class Player {
       const m = action.move
       const problem = moveProblem(m)
       if (problem) return fail("invalid_action", problem)
-      const file = this.fileOf(m)
+      const file = this.fileOf(m, playing)
       if (!file) return fail("no_cursor", "Your cursor isn't in a file yet; give `file`.")
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: "interrupted" }
       await editor.show(file)
@@ -336,7 +344,7 @@ export class Player {
       const target = action.select
       const problem = spanProblem(target)
       if (problem) return fail("invalid_action", problem)
-      const file = this.fileOf(target)
+      const file = this.fileOf(target, playing)
       if (!file) return fail("no_cursor", "Your cursor isn't in a file yet; give `file`.")
       if (!(await this.delay(timing.beforeSelectMs))) return { kind: "interrupted" }
       await editor.show(file)
@@ -385,7 +393,7 @@ export class Player {
       const target = action.point
       const problem = spanProblem(target)
       if (problem) return fail("invalid_action", problem)
-      const file = this.fileOf(target)
+      const file = this.fileOf(target, playing)
       if (!file) return fail("no_cursor", "Your cursor isn't in a file yet; give `file`.")
       if (s.turn === "agent") await editor.show(file)
       const span = await this.span(file, target, "point")
@@ -546,9 +554,10 @@ export class Player {
     return this.stage.editor.edit(file, change.offset, change.deleteLength, change.text, options)
   }
 
-  /** The file an action names, or the cursor's. */
-  private fileOf(target: { file?: string }): string | undefined {
-    return target.file !== undefined ? this.resolvePath(target.file) : this.scene.cursor?.file
+  /** The file an action names, or else the one its batch named, or else the cursor's. */
+  private fileOf(target: { file?: string }, playing: Playing): string | undefined {
+    if (target.file !== undefined) return this.resolvePath(target.file)
+    return playing.named ?? this.scene.cursor?.file
   }
 
   /**

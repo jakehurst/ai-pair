@@ -153,6 +153,26 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("our own move to another file doesn't pause")
 
+  // An action without `file` acts in the file its batch named, not the cursor's (#58).
+  fs.writeFileSync(file("named-a.txt"), "a\n")
+  fs.writeFileSync(file("named-b.txt"), "b\nsecond\n")
+  await c.start("named file")
+  await c.read("named-a.txt")
+  await c.read("named-b.txt")
+  await c.step([{ move: { file: "named-a.txt", line: 1, to: "line_end" } }])
+  const twice = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { point: { line: 2, text: "second" } }])
+  assert.equal(twice.rejected, undefined)
+  const pointed = await c.step([])
+  assert.deepEqual(pointed.batches.map((b) => b.status), ["completed"])
+  assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, file("named-b.txt"))
+  const outside = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { type: "y\u{258c}" }])
+  assert.equal(outside.rejected?.error.kind, "invalid_action")
+  await c.step([])
+  assert.equal(await buffer("named-a.txt"), "a\n")
+  assert.equal(await buffer("named-b.txt"), "b\nsecond\n")
+  await c.end()
+  console.log("an action without file acts in the file its batch named")
+
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
   await c.start("interrupt test")
