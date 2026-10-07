@@ -29,6 +29,9 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
+| `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
+| `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
+| `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (14,699 states) and `B = 3, E = 2, MaxCancels = 3` (91,414 states).
 
@@ -132,6 +135,16 @@ A keystroke made while the save participants run can't be told from their edits,
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code doesn't end the `away` pause, and the agent isn't told about pauses.
+
+### Pure functions: `LineIdentity`, `Places`, `Typing`
+
+These have no state or concurrency, so each spec is a model of the function and `ASSUME`s that TLC checks over every small input. Each also has an exhaustive test that checks the same properties on the code itself, so the model and the code are held to one contract.
+
+| Spec | Code | Contract | Test |
+|---|---|---|---|
+| `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.exhaustive.test.ts` |
+| `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts` |
+| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts` |
 
 ## Keeping specs and code in step
 
