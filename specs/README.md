@@ -29,6 +29,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
+| `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
 | `Player_57ac07f_49.cfg` | same | S11 `DeletesTheSelection` violated (#49) | 12 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -146,6 +147,16 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 |---|---|
 | `Begin`, `Finish` | the delete: before #49 it copied the selection, then awaited `show` and `getText` |
 | `TypeBefore`, `TypeAfter` | a programmer's edit: `transform` moves the live selection, and the edit interrupts |
+
+### `Terminals`: running commands
+
+`packages/vscode/src/terminal.ts`: `acquire`, the wait for shell integration, the command, and what ends each wait. No validation config: no known bug was in this code.
+
+| Spec | Code |
+|---|---|
+| `Start` | `acquire()`: an open terminal that isn't busy, or a new one; `busy = true`. The signal is the one `confirm()` checked, synchronously, so it hasn't fired |
+| `Integrated`, `AbortBeforeStart`, `ClosedWhileWaiting` | `shellIntegration()`: integration or its timer; the signal; a terminal closed meanwhile (VS Code throws for its `sendText`) |
+| `End`, `StopWaiting`, `Close` | `onDidEndTerminalShellExecution`; `stopWaiting` (the wait or an interrupt); `onDidCloseTerminal` |
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`
 
