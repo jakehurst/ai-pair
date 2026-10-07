@@ -1,4 +1,5 @@
-export { Controller, defaultConfig, type Config } from "./controller"
+export { defaultConfig, type Config } from "./config"
+export { Controller } from "./controller"
 export type {
   AgentState,
   Change,

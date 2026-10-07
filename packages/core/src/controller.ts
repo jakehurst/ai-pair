@@ -10,30 +10,8 @@ import type { AgentState, Change, CursorView, EditorPort, PanelPort, Ref, Shared
 import { followChange, rehearse, type Rehearsal } from "./rehearsal"
 import { fileLines } from "./text"
 import { Timeline } from "./timeline"
-import { defaultTiming, withOverrides, type Timing, type TimingOverrides } from "./timing"
-
-export type Config = {
-  maxBlockMs: number
-  /** During the programmer's turn, how long after their last edit `listen` returns. */
-  navigatorIdleMs: number
-  timing: Timing
-  random: () => number
-  /** Ask the programmer before each `run`. */
-  confirmCommands: boolean
-  /** How long a `run` waits for its command by default, and at most. */
-  runWaitMs: number
-  maxRunWaitMs: number
-}
-
-export const defaultConfig: Config = {
-  maxBlockMs: 45_000,
-  navigatorIdleMs: 3000,
-  timing: defaultTiming,
-  random: Math.random,
-  confirmCommands: true,
-  runWaitMs: 120_000,
-  maxRunWaitMs: 600_000,
-}
+import { defaultConfig, type Config } from "./config"
+import { defaultTiming, withOverrides, type TimingOverrides } from "./timing"
 
 type Batch = {
   id: number
@@ -183,7 +161,7 @@ export class Controller {
       const rehearsal = s.stale || s.ended ? undefined : await this.rehearse(s, actions)
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it.
       const current = rehearsal && !s.stale && !s.ended
-      if (current && rehearsal.result.status === "failed") return this.reject(s, actions, rehearsal)
+      if (current && rehearsal.result.status === "failed") return this.rejectBatch(s, actions, rehearsal)
       const batch: Batch = { id: this.nextBatchId++, actions, state: "queued", after: rehearsal?.after }
       if (current) {
         s.queue.push(batch)
@@ -209,26 +187,25 @@ export class Controller {
     })
   }
 
-  read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
+  /** Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
+  async read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
     const s = this.requireSession()
     const path = this.resolvePath(s, file)
-    return (async () => {
-      const planned = this.planned(s, path)
-      const text = planned ?? (await this.editor.getText(path))
-      const { lines, finalNewline } = fileLines(text)
-      const from = Math.max(1, fromLine ?? 1)
-      const to = Math.min(lines.length, toLine ?? lines.length)
-      const numbers = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
-      // As the queued batches leave the file, if they edit it.
-      this.saw(s, planned !== undefined ? s.queue.at(-1)!.after!.lines : s.lines, { file: path, text, lines: numbers })
-      const content: FileContent = {
-        file: this.displayPath(s, path),
-        dirty: await this.editor.isDirty(path),
-        lines: lines.slice(from - 1, to).map((line, i) => ({ number: from + i, text: line })),
-      }
-      if (to === lines.length) content.end = { final_newline: finalNewline }
-      return content
-    })()
+    const planned = this.planned(s, path)
+    const text = planned ?? (await this.editor.getText(path))
+    const { lines, finalNewline } = fileLines(text)
+    const from = Math.max(1, fromLine ?? 1)
+    const to = Math.min(lines.length, toLine ?? lines.length)
+    const numbers = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
+    // As the queued batches leave the file, if they edit it.
+    this.saw(s, planned !== undefined ? s.queue.at(-1)!.after!.lines : s.lines, { file: path, text, lines: numbers })
+    const content: FileContent = {
+      file: this.displayPath(s, path),
+      dirty: await this.editor.isDirty(path),
+      lines: lines.slice(from - 1, to).map((line, i) => ({ number: from + i, text: line })),
+    }
+    if (to === lines.length) content.end = { final_newline: finalNewline }
+    return content
   }
 
   /**
@@ -486,7 +463,7 @@ export class Controller {
   }
 
   /** Reports a batch that played in memory failed, without queuing it; nothing else changes. */
-  private async reject(s: Session, actions: Action[], rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
+  private async rejectBatch(s: Session, actions: Action[], rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
     const rehearsed = rehearsal.result
     const index = actions.length - (rehearsed.unplayed?.length ?? 0) + 1
     const rejected: NonNullable<Report["rejected"]> = { index, action: actions[index - 1]!, error: rehearsed.error! }
