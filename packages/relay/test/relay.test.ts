@@ -375,6 +375,14 @@ describe("discovery", () => {
     expect(findWindows(["/", "/work/lib", "/work/app"], dir).folder).toBe("/work/lib")
   })
 
+  it("finds a window for a folder inside it whose name starts with two dots (#5)", () => {
+    fs.writeFileSync(
+      path.join(dir, "w.json"),
+      JSON.stringify({ pid: process.pid, workspaceFolders: ["/work"], port: 1, token: "w", protocolVersion: 1, lastFocused: 1 }),
+    )
+    expect(findWindows(["/work/..cache"], dir).windows.map((w) => w.token)).toEqual(["w"])
+  })
+
   it("skips a window whose file outlived it, even when its pid now belongs to another process", async () => {
     fs.writeFileSync(
       path.join(dir, "stale.json"),

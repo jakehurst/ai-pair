@@ -4,6 +4,8 @@ import { applyChange } from "../src/lines"
 import { planTyping, readingTime } from "../src/typing"
 import { terminalText } from "../src/text"
 import { samePath, withinFolder, type PathStyle } from "../src/paths"
+import { displayPath } from "../src/player"
+import { FakeEditor } from "./fake"
 
 describe("terminal text", () => {
   it("drops colors and shell integration sequences, and resolves progress overwrites", () => {
@@ -35,6 +37,12 @@ describe("paths", () => {
     expect(withinFolder("c:\\proj", "c:\\project\\a.ts", windows)).toBeUndefined()
     expect(withinFolder("c:\\proj", "d:\\proj\\a.ts", windows)).toBeUndefined()
     expect(withinFolder("/home/me/Proj", "/home/me/proj/a.ts", linux)).toBeUndefined()
+  })
+
+  it("shows a file in a folder whose name starts with two dots by its path in the root (#5)", () => {
+    const editor = new FakeEditor()
+    expect(displayPath(editor, "/proj", "/proj/..cache/a.ts")).toBe("..cache/a.ts")
+    expect(displayPath(editor, "/proj", "/other/a.ts")).toBe("/other/a.ts")
   })
 
   it("handles a folder that is a drive root", () => {

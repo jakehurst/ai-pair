@@ -3,7 +3,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import WebSocket from "ws"
-import { parseEditorMessage, PROTOCOL_VERSION, type Discovery, type ToolName } from "@ai-pair/protocol"
+import { parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, type ToolName } from "@ai-pair/protocol"
 
 export class RelayError extends Error {
   constructor(
@@ -23,8 +23,7 @@ function realpath(p: string): string {
 }
 
 function contains(folder: string, file: string): boolean {
-  const rel = path.relative(folder, file)
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
+  return withinFolder(folder, file) !== undefined
 }
 
 function alive(pid: number): boolean {
