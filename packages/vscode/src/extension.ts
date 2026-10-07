@@ -31,6 +31,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       ref: () => editor.selectionRef(),
     },
     trace,
+    context.extensionUri,
   )
   const controller = new Controller(editor, panel)
   editor.controller = controller

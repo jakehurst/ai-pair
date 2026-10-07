@@ -34,7 +34,11 @@ Status: **draft**.
   tells the agent's edits apart from the programmer's by tracking the document
   versions its own edits produce.
 - **The narration panel** is a webview. It talks to the extension via
-  `postMessage`.
+  `postMessage`, with the messages typed in
+  [`panelMessages.ts`](packages/vscode/src/panelMessages.ts). Its markup is
+  [`panelHtml.ts`](packages/vscode/src/panelHtml.ts), and its script is
+  [`webview/panel.ts`](packages/vscode/src/webview/panel.ts), bundled as
+  `dist/panel.js`.
 
 ### Why a relay
 

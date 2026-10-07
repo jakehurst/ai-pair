@@ -3,20 +3,14 @@
 
 import { beforeEach, expect, it } from "vitest"
 import type { Window } from "happy-dom"
-import { panelHtml } from "../src/panelHtml"
+import { loadPage } from "./page"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { window, document } = globalThis as unknown as { window: Window; document: Window["document"] }
 
-// Loads the page into the document and runs its script, as the webview does.
-beforeEach(() => {
-  const html = panelHtml("vscode-resource:")
-  document.body.innerHTML = /<body[^>]*>([\s\S]*)<\/body>/.exec(html)![1]!
-  const script = /<script nonce="[^"]+">([\s\S]*?)<\/script>/.exec(html)![1]!
-  // Running the page's own script is what this test is for.
-  // oxlint-disable-next-line typescript/no-implied-eval
-  new Function("acquireVsCodeApi", script)(() => ({ postMessage() {}, getState() {}, setState() {} }))
+beforeEach(async () => {
+  await loadPage()
 })
 
 function send(event: object): void {
