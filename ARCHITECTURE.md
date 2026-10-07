@@ -31,8 +31,9 @@ Status: **draft**.
   editor dependencies, so it can be tested against a fake editor.
 - **The VS Code adapter** is a thin layer over the VS Code API: apply edits with
   undo stops, report document changes, render decorations, scroll, save. It
-  tells the agent's edits apart from the programmer's by tracking the document
-  versions its own edits produce.
+  tells the agent's edits apart from the programmer's by keeping a queue of its
+  own pending edits for each file, and matching each change VS Code reports by
+  its offset, deleted length, and text.
 - **The narration panel** is a webview. It talks to the extension via
   `postMessage`, with the messages typed in
   [`panelMessages.ts`](packages/vscode/src/panelMessages.ts). Its markup is
@@ -67,8 +68,8 @@ file:
   "workspaceFolders": ["/Users/me/projects/todo-app"],
   "port": 53817,
   "token": "…",               // random, per window
-  "protocolVersion": 1,
-  "lastFocused": 1758700000   // updated when the window gains focus
+  "protocolVersion": 3,
+  "lastFocused": 1758700000000   // epoch ms, updated when the window gains focus
 }
 ```
 
@@ -92,15 +93,17 @@ editor may be opened after the harness. To find the window it:
 If no window matches, `start` fails with a clear message: "Open
 `/Users/me/projects/todo-app` in VS Code with the extension installed."
 
-**Relay ↔ extension messages** are JSON-RPC over the WebSocket, mirroring the
-MCP tool calls one to one:
+**Relay ↔ extension messages** are JSON objects with a `type` field, over the
+WebSocket, mirroring the MCP tool calls one to one:
 
-- `hello { token, protocolVersion }`: the handshake, rejected on a mismatch.
+- `hello { token, protocolVersion }`: the handshake, answered with `welcome`, or
+  with `rejected { reason }` for a wrong token or another protocol version.
 - `call { id, tool, args }` → `result { id, … }` or `error { id, … }`.
 - `cancel { id }`: forwarded when the harness cancels a tool call, for example
   when the programmer presses Esc in the harness.
-- `return { report }`: a report that arrived for a call the relay had already
-  cancelled, handed back to be delivered again (see below).
+- `return { report, mayRepeat? }`: a report that arrived for a call the relay had
+  already cancelled, handed back to be delivered again (see below). `mayRepeat`
+  marks one whose cancel came after the answer, which the agent may have seen.
 
 **Cancelling a call doesn't affect the session.** A cancelled `step` has
 already queued its batch, and its outcome is reported on the next call.
@@ -145,7 +148,7 @@ The panel keeps each session's narration history. Between sessions it shows
 
 ## Starting a session
 
-**First-time setup.** The command *AI Pair: Set up agent* registers `pair-mcp`
+**First-time setup.** The command *AI Pair: Set Up Agent* registers `pair-mcp`
 with the harnesses the programmer picks, in each one's user-wide MCP
 configuration, so it works in every project. It edits only the `pair` entry,
 keeping the rest of the file as it was: JSON and JSONC with `jsonc-parser`,

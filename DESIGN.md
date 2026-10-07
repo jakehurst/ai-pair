@@ -20,10 +20,11 @@ The cursor's appearance shows the agent's state:
 |-----------|----------------------------------------------------|-----------------------------|
 | typing    | playing `type`, `type_fast`, `move`, `select`, `delete` | agent color            |
 | read      | reading pause after `say`                          | accent color, pulsing       |
+| running   | a `run` command is executing                       | dimmed, label "· running"   |
 | thinking  | queue empty, agent hasn't called yet               | dimmed                      |
-| paused    | playback paused                                    | dimmed, pause marker        |
-| listening | agent is in `listen`                               | outline only                |
-| navigator | programmer's turn                                  | outline only, name label    |
+| paused    | playback paused                                    | dashed, label "· paused"    |
+| listening | agent is in `listen`                               | dotted, label "· listening" |
+| navigator | programmer's turn                                  | dotted, label "· your turn" |
 
 The **read** state is the important one: it tells the programmer to look at the
 narration panel. Decorations can't animate, so the pulse is done by swapping
@@ -246,8 +247,6 @@ created) or the programmer last saw in it (`specs/Outside.tla`). Files under
 
 ## Open questions
 
-- **Setup flow.** Discovery file vs. a command that writes the harness's MCP
-  config directly. How to make the first run trivial.
 - **Panel placement.** Secondary side bar by default; is it wide enough for
   large text, or should the panel be an editor-group webview?
 - **Type-to-pause.** Does pausing when the programmer starts typing a reply
