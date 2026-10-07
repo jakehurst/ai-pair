@@ -28,6 +28,7 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 | `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 25 |
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
 | `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
+| `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (14,699 states) and `B = 3, E = 2, MaxCancels = 3` (91,414 states).
 
@@ -119,6 +120,18 @@ A keystroke made while the save participants run can't be told from their edits,
 | `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active; `controller.start()`; `this.owner = ws` |
 | `Close` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session |
 | `EndSession`, `Closed` | the programmer ending the session from the panel; its last report closing it |
+
+### `Timeline`: pausing
+
+`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause` and `Controller.resume`, and where they come from: the Pause button, the reply box's draft, sending a reply, and the turn button (`panel.ts`), and looking away (`editor.ts`). No validation config: no known bug was in this code.
+
+| Spec | Code |
+|---|---|
+| `Sleep`, `Fire` | `sleep(ms)` and its timer |
+| `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
+| `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
+
+A pause lasts until a resume, as PROTOCOL.md says: looking back at the code doesn't end the `away` pause, and the agent isn't told about pauses.
 
 ## Keeping specs and code in step
 
