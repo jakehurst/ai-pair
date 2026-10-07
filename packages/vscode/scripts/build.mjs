@@ -14,7 +14,8 @@ const common = {
   bundle: true,
   platform: "node",
   format: "cjs",
-  target: "node20",
+  // The oldest VS Code the extension supports, 1.106, runs Node 22.20 (measured).
+  target: "node22",
   minify: production,
   sourcemap: !production,
   logLevel: "warning",
