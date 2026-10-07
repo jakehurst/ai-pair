@@ -94,7 +94,8 @@ export class EditorLink {
   private ws: WebSocket | null = null
   private connecting: Promise<WebSocket> | null = null
   private nextId = 1
-  private readonly pending = new Map<number, Pending>()
+  /** Each socket's calls waiting for an answer, so that a socket's close rejects only its own. */
+  private readonly pending = new WeakMap<WebSocket, Map<number, Pending>>()
   private folder: string
 
   constructor(
@@ -117,16 +118,23 @@ export class EditorLink {
 
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     const ws = await this.connect()
+    const calls = this.pending.get(ws)!
     const id = this.nextId++
     return new Promise((resolve, reject) => {
       const pending: Pending = { tool, cancelled: false, resolve, reject }
-      this.pending.set(id, pending)
-      ws.send(JSON.stringify({ type: "call", id, tool, args }))
+      calls.set(id, pending)
+      try {
+        ws.send(JSON.stringify({ type: "call", id, tool, args }))
+      } catch (e) {
+        calls.delete(id)
+        reject(new RelayError("no_editor", `Couldn't send to the editor: ${(e as Error).message}`))
+        return
+      }
       signal?.addEventListener(
         "abort",
         () => {
           pending.cancelled = true
-          if (this.pending.has(id) && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "cancel", id }))
+          if (calls.has(id) && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "cancel", id }))
         },
         { once: true },
       )
@@ -165,9 +173,11 @@ export class EditorLink {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: HANDSHAKE_MS })
       let welcomed = false
+      const calls = new Map<number, Pending>()
+      this.pending.set(ws, calls)
       const settle = (id: number) => {
-        const p = this.pending.get(id)
-        this.pending.delete(id)
+        const p = calls.get(id)
+        calls.delete(id)
         return p
       }
       ws.on("open", () => {
@@ -197,10 +207,10 @@ export class EditorLink {
       ws.on("close", () => {
         if (this.ws === ws) this.ws = null
         if (!welcomed) reject(new RelayError("no_editor", "The editor closed the connection."))
-        for (const p of this.pending.values()) {
+        for (const p of calls.values()) {
           p.reject(new RelayError("no_editor", "The editor disconnected. If its window was reloaded, start a new session."))
         }
-        this.pending.clear()
+        calls.clear()
       })
     })
   }
