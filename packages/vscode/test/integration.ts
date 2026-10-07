@@ -118,6 +118,21 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("changes by others are reported as theirs")
 
+  // A keystroke just before the agent saves is the programmer's, even though its change event is
+  // handled while the save runs (#40). The test's own edit stands in for the keystroke.
+  fs.writeFileSync(file("race.txt"), "a\n")
+  const race = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("race.txt")))
+  await c.start("save race")
+  await race.edit((b) => b.insert(new vscode.Position(0, 1), "b"))
+  await c.listen()
+  const keystroke = race.edit((b) => b.insert(new vscode.Position(0, 2), "c"))
+  await api.editor.save(file("race.txt"))
+  await keystroke
+  const raced = await c.listen()
+  assert.deepEqual(raced.events.map((e) => e.kind === "edit" && `${e.file} ${e.by}`), ["race.txt programmer"])
+  await c.end()
+  console.log("a keystroke just before a save is the programmer's")
+
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
   await c.start("interrupt test")

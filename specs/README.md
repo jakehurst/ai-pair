@@ -25,7 +25,7 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 | `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
 | `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
-| `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 23 |
+| `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 25 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (14,699 states) and `B = 3, E = 2, MaxCancels = 3` (91,414 states).
 
