@@ -208,6 +208,24 @@ export async function run(): Promise<void> {
   await sleep(300)
   console.log("a cancelled report is restored before the next call")
 
+  // A file changed on disk, as a git checkout does, comes from VS Code as one change spanning the
+  // lines between the changed ones; the agent's selection there stays on its text (#65).
+  fs.writeFileSync(file("reload.txt"), "1\n2\n3\n4\n5\n6\n")
+  const reloading = await vscode.workspace.openTextDocument(file("reload.txt"))
+  await vscode.window.showTextDocument(reloading)
+  await c.start("reload")
+  await c.read("reload.txt")
+  await c.step([{ select: { file: "reload.txt", line: 3, text: "3" } }])
+  await c.step([])
+  fs.writeFileSync(file("reload.txt"), "1\nX\n3\n4\nY\n6\n")
+  await until(() => reloading.getText() === "1\nX\n3\n4\nY\n6\n")
+  const reloaded = await c.step([{ point: { file: "reload.txt", line: 4, text: "4" } }, { delete: true }])
+  assert.equal(reloaded.rejected, undefined)
+  await c.step([])
+  assert.equal(await buffer("reload.txt"), "1\nX\n\n4\nY\n6\n")
+  await c.end()
+  console.log("a file changed on disk keeps the selection on its text")
+
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
   await c.start("interrupt test")

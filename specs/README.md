@@ -38,6 +38,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
 | `Turns_57ac07f_49.cfg` | same | S6 `OnlyTalkInTheirTurn` violated (#49) | 518 |
+| `Reload.cfg` | `N = 5` lines, any of them changed on disk | holds | 160 |
+| `Reload_38f71fa_65.cfg` | same | `UnchangedKeepIds` violated, and S11 `SelectionStays` alone (#65) | 40; 43 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
 | `Rehearsal_mutation.cfg` | same, both defenses off | S10 violated (validation by mutation; no known bug) | |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
@@ -213,6 +215,15 @@ S6 in `packages/core/src/player.ts`: `perform` checks the turn as each action st
 | `Start` | the loop in `actions` checking `isInterrupted`; `perform` rejecting with `not_your_turn` |
 | `Effect` | the action after its awaits: `type`'s `delay` before each chunk, `delete`'s check after `show` and `getText`, `run`'s `notStarted` after `shellIntegration` |
 | `Change` | `takeTurn` or `handBack`, which call `interrupt()` |
+
+### `Reload`: a file changed on disk
+
+S10 and S11 for `otherEdit` and `recordEdit` in `packages/core/src/controller.ts`, with the change VS Code reports when it reloads a document from disk. Measured in an integration run, that is one change from the first line that differs to the last, unchanged lines included. `Refine` is the fix for #65: `lineChanges` in `diff.ts` splits it into one change per run of changed lines.
+
+| Spec | Code |
+|---|---|
+| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` → `recordEdit` moves the scene (`mapThrough`) and the identities (`applyChange`) through them |
+| `Runs`, `Coarse` | the changes `recordEdit` is given, with and without `lineChanges` |
 
 ### `Rehearsal`: line identities across a rehearsal
 
