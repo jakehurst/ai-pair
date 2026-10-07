@@ -33,6 +33,13 @@ it("gives each line of the result one identity, never one twice, and keeps the u
           for (let i = 0; i < a; i++) expect(after.ids[i], at).toBe(ids[i])
           for (let i = b + 1; i < ids.length; i++) expect(after.ids[i + shift], at).toBe(ids[i])
           if (a === b && !insert.includes("\n")) expect(after.ids, at).toEqual(ids)
+          // A line break at the end of a line with text leaves it in place; at its start, it moves it down.
+          if (deleteLength === 0 && insert === "\n") {
+            const atEnd = offset > 0 && text[offset - 1] === "x" && (offset === text.length || text[offset] === "\n")
+            const atStart = (offset === 0 || text[offset - 1] === "\n") && text[offset] === "x"
+            if (atEnd) expect(after.ids[a], at).toBe(ids[a])
+            if (atStart) expect(after.ids[a + 1], at).toBe(ids[a])
+          }
         }
       }
     }
