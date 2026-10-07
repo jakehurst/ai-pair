@@ -5,11 +5,12 @@
 import * as assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { Worker } from "node:worker_threads"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import * as vscode from "vscode"
 import { discoveryDir, type Report, type ToolName } from "@ai-pair/protocol"
-import { EditorLink } from "../../relay/src/link"
+import { EditorLink, findWindows } from "../../relay/src/link"
 import type { Api } from "../src/extension"
 
 const EXPECTED_TODOS = `export interface Todo {
@@ -234,6 +235,27 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction")
   await until(() => !c.isPaused)
   console.log("a reloaded panel ends its draft's pause")
+
+  // The window's discovery file, rewritten on focus, is never half written for a relay reading it (#72).
+  await api.ready
+  const stop = new SharedArrayBuffer(4)
+  const reader = new Worker(
+    `const { parentPort, workerData } = require("node:worker_threads"); const fs = require("node:fs")
+    const stop = new Int32Array(workerData.stop); let reads = 0, broken = 0
+    while (Atomics.load(stop, 0) === 0) { try { JSON.parse(fs.readFileSync(workerData.file, "utf8")) } catch { broken++ } reads++ }
+    parentPort.postMessage({ reads, broken })`,
+    { eval: true, workerData: { file: api.bridge.file, stop } },
+  )
+  const counted = new Promise<{ reads: number; broken: number }>((r) => reader.once("message", r))
+  await sleep(100)
+  for (let i = 0; i < 2000; i++) api.bridge.focused()
+  Atomics.store(new Int32Array(stop), 0, 1)
+  const { reads, broken } = await counted
+  await reader.terminate()
+  assert.ok(reads > 0)
+  assert.equal(broken, 0, `${broken} of ${reads} reads didn't parse`)
+  assert.ok(findWindows([root], discoveryDir()).windows.some((w) => w.pid === process.pid))
+  console.log(`the discovery file is never half written (${reads} reads)`)
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
