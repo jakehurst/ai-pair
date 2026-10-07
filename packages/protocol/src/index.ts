@@ -264,3 +264,4 @@ export class ToolError extends Error {
 }
 
 export * from "./wire"
+export * from "./paths"

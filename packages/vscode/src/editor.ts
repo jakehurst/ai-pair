@@ -189,7 +189,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   displayPath(file: string): string {
-    return this.inWorkspace(file) ? path.relative(this.root, file) : file
+    const inside = withinFolder(this.root, file)
+    return inside === undefined ? file : path.relative(this.root, inside)
   }
 
   async getText(file: string): Promise<string> {
@@ -597,8 +598,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     return this.showing > 0 || Date.now() < this.selfNavUntil
   }
 
+  /** Not by `relative`: it gives another drive's path, and `..cache` starts with "..", too (#5). */
   private inWorkspace(file: string): boolean {
-    return !path.relative(this.root, file).startsWith("..")
+    return withinFolder(this.root, file) !== undefined
   }
 
   private openDocument(file: string): vscode.TextDocument | undefined {

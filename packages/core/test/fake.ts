@@ -1,5 +1,6 @@
 import * as nodePath from "node:path"
 import { vi } from "vitest"
+import { withinFolder } from "@ai-pair/protocol"
 import { Controller, defaultConfig, type Config } from "../src/controller"
 import type {
   AgentState,
@@ -31,8 +32,8 @@ export class FakeEditor implements EditorPort {
     return nodePath.resolve(ROOT, file)
   }
   displayPath(file: string): string {
-    const rel = nodePath.relative(ROOT, file)
-    return rel.startsWith("..") || nodePath.isAbsolute(rel) ? file : rel
+    const inside = withinFolder(ROOT, file)
+    return inside === undefined ? file : nodePath.relative(ROOT, inside)
   }
   async getText(file: string): Promise<string> {
     const text = this.files.get(file)

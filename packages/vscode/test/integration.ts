@@ -227,6 +227,19 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a file changed on disk keeps the selection on its text")
 
+  // A folder in the workspace whose name starts with two dots is in the workspace (#5).
+  fs.mkdirSync(file("..cache"), { recursive: true })
+  fs.writeFileSync(file("..cache/x.txt"), "a\n")
+  const dotted = await vscode.workspace.openTextDocument(file("..cache/x.txt"))
+  await vscode.window.showTextDocument(dotted)
+  await c.start("dotted")
+  fs.writeFileSync(file("..cache/x.txt"), "b\n")
+  await until(() => dotted.getText() === "b\n")
+  const dottedReport = await c.listen()
+  assert.deepEqual(dottedReport.events.map((e) => e.kind === "edit" && e.file), ["..cache/x.txt"])
+  await c.end()
+  console.log("a change in ..cache/ is reported, by its path in the workspace")
+
   // Finding short text on a line of a long file, where it matches on every line, takes no time (#2).
   fs.writeFileSync(file("long.ts"), "  foo(bar(baz(1), 2), 3);\n".repeat(40_000))
   await c.start("long")

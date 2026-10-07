@@ -3,7 +3,7 @@
 
 import type { Action, BatchResult, Candidate, Code, ErrorKind, RunResult, SpanTarget, Turn } from "@ai-pair/protocol"
 import * as nodePath from "node:path"
-import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, typeProblem } from "@ai-pair/protocol"
+import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, typeProblem, withinFolder } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from "./places"
 import type { Config } from "./controller"
 import type { LineIds, Sighting } from "./lines"
@@ -104,8 +104,9 @@ export function agentPath(editor: EditorPort, root: string | undefined, file: st
 /** How to name a file to the agent. */
 export function displayPath(editor: EditorPort, root: string | undefined, file: string): string {
   if (!root) return editor.displayPath(file)
-  const rel = nodePath.relative(root, file)
-  return rel.startsWith("..") || nodePath.isAbsolute(rel) ? file : rel
+  // Not by `relative` starting with "..": a folder in the root may be named `..cache` (#5).
+  const inside = withinFolder(root, file)
+  return inside === undefined ? file : nodePath.relative(root, inside)
 }
 
 function mapThrough(change: Change): (pos: number) => number {
