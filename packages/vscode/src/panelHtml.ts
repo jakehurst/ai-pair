@@ -240,7 +240,7 @@ export function panelHtml(cspSource: string): string {
   <section id="band">
     <div id="main">
       <div id="head">
-        <div id="status"><span id="dot" class="dot off"></span><span id="status-text">No session</span></div>
+        <div id="status"><span id="dot" class="dot off"></span><span id="status-text" role="status">No session</span></div>
         <div id="controls">
           <button id="pause" class="quiet" aria-label="Pause" data-tip="Pause (Space)" aria-keyshortcuts="Space">${ICONS.pause}${ICONS.resume}</button>
           <button id="interrupt" class="quiet" aria-label="Interrupt" data-tip="Interrupt">${ICONS.stop}</button>
@@ -253,7 +253,7 @@ export function panelHtml(cspSource: string): string {
         </div>
       </div>
       <div id="now">
-        <div id="now-text" class="empty"></div>
+        <div id="now-text" class="empty" aria-live="polite"></div>
         <div id="now-ref"></div>
         <div id="run">
           <div id="run-label"></div>
@@ -268,11 +268,11 @@ export function panelHtml(cspSource: string): string {
       <div id="idle">
         <div id="idle-title">No active session</div>
         <div id="idle-summary"></div>
-        <div id="idle-text">Ask your agent to pair with you, or run <a class="command" data-command="aiPair.playDemo">AI Pair: Play Demo Session</a>. First time? Run <a class="command" data-command="aiPair.setUpAgent">AI Pair: Set Up Agent</a>.</div>
+        <div id="idle-text">Ask your agent to pair with you, or run <a href="#" class="command" data-command="aiPair.playDemo">AI Pair: Play Demo Session</a>. First time? Run <a href="#" class="command" data-command="aiPair.setUpAgent">AI Pair: Set Up Agent</a>.</div>
       </div>
     </div>
     <div id="composer">
-      <div id="attach"><span>With selection</span><a id="attach-ref"></a><button id="attach-x" class="quiet" aria-label="Don't send the selection" data-tip="Don't send the selection">×</button></div>
+      <div id="attach"><span>With selection</span><span id="attach-ref"></span><button id="attach-x" class="quiet" aria-label="Don't send the selection" data-tip="Don't send the selection">×</button></div>
       <div id="compose-row">
         <textarea id="reply" rows="1" aria-label="Reply to the agent" placeholder="Reply to the agent…"></textarea>
         <button id="send" class="quiet" aria-label="Send" data-tip="Send (Enter)">${ICONS.send}</button>
@@ -308,9 +308,9 @@ export function panelHtml(cspSource: string): string {
   const FILE = /^[\\w@.~-]*(\\/[\\w@.~-]+)*\\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|css|scss|less|html|vue|svelte|py|rs|go|java|kt|swift|c|h|cc|cpp|hpp|cs|rb|php|lua|sh|zsh|toml|yaml|yml|xml|sql|txt|lock|env)$/;
   const URL = /\\bhttps?:\\/\\/[^\\s<>"'\`]*[^\\s<>"'\`.,;:!?)\\]]/g;
   const codeSpan = (code) =>
-    FILE.test(code) && !code.startsWith(".") ? '<a class="file" data-file="' + code + '">' + code + "</a>" : "<code>" + code + "</code>";
+    FILE.test(code) && !code.startsWith(".") ? '<a href="#" class="file" data-file="' + code + '">' + code + "</a>" : "<code>" + code + "</code>";
   const rich = (s) => esc(s).split(/(\`[^\`]+\`)/).map((part, i) =>
-    i % 2 === 1 ? codeSpan(part.slice(1, -1)) : part.replace(URL, (u) => '<a class="url" data-url="' + u + '">' + u + "</a>")).join("");
+    i % 2 === 1 ? codeSpan(part.slice(1, -1)) : part.replace(URL, (u) => '<a href="#" class="url" data-url="' + u + '">' + u + "</a>")).join("");
 
   function add(el) {
     // Newest first: the current message came before this entry, so it goes in first.
@@ -336,6 +336,7 @@ export function panelHtml(cspSource: string): string {
 
   function refLink(ref) {
     const a = document.createElement("a");
+    a.href = "#";
     a.className = "ref";
     a.textContent = ref.file + ":" + ref.line + (ref.endLine > ref.line ? "–" + ref.endLine : "");
     a.onclick = () => vscode.postMessage({ type: "open", file: ref.file, line: ref.line });
@@ -463,7 +464,7 @@ export function panelHtml(cspSource: string): string {
     ui.reply.disabled = !on;
     if (!on) {
       reading = null;
-      runId = null; runConfirming = false; ui.run.className = "";
+      runId = null; runConfirming = false; ui.run.className = ""; ui.run.removeAttribute("role");
       closeSpeedMenu();
     }
     syncStatus();
@@ -512,6 +513,7 @@ export function panelHtml(cspSource: string): string {
         return;
       case "point": {
         const a = document.createElement("a");
+        a.href = "#";
         a.className = "ref";
         a.textContent = "→ " + e.file + ":" + e.line;
         a.onclick = () => vscode.postMessage({ type: "open", file: e.file, line: e.line });
@@ -523,6 +525,9 @@ export function panelHtml(cspSource: string): string {
           runId = e.id;
           runConfirming = e.phase === "confirm";
           ui.run.className = "on" + (runConfirming ? " confirm" : "");
+          // A command waiting for the programmer's decision is announced at once (#16).
+          if (runConfirming) ui.run.setAttribute("role", "alert");
+          else ui.run.removeAttribute("role");
           ui.runLabel.textContent = runConfirming ? "Allow this command in the terminal?" : "Running in the terminal…";
           ui.runCmd.textContent = e.command;
           syncStatus();
@@ -535,7 +540,7 @@ export function panelHtml(cspSource: string): string {
           if (row) setOutcome(row, e.phase, e.exitCode);
           return;
         }
-        if (runId === e.id) { runId = null; runConfirming = false; ui.run.className = ""; syncStatus(); }
+        if (runId === e.id) { runId = null; runConfirming = false; ui.run.className = ""; ui.run.removeAttribute("role"); syncStatus(); }
         addRun(e.id, e.command, e.phase, e.exitCode);
         return;
       }
@@ -702,7 +707,9 @@ export function panelHtml(cspSource: string): string {
   });
 
   // File names in messages open the file, URLs open in the browser, and the intro's commands run.
+  // Links have an href, so they take focus and Enter (#16); it isn't followed.
   document.addEventListener("click", (e) => {
+    if (e.target.closest && e.target.closest("a[href]")) e.preventDefault();
     const a = e.target.closest && e.target.closest("a.file, a.url, a.command");
     if (a?.dataset.file) vscode.postMessage({ type: "openFile", file: a.dataset.file });
     if (a?.dataset.url) vscode.postMessage({ type: "openUrl", url: a.dataset.url });
