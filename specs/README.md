@@ -30,6 +30,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Controller_4e59c17_60.cfg` | same | S1 `EventsDelivered` violated (#60) | 4,393 |
 | `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
 | `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
+| `Discovery_7c2f54e_72.cfg` | same | `FindsRunning` violated (#72) | 22 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
 | `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 25 |
 | `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
@@ -129,12 +130,13 @@ Each violation's trace was checked against the code step by step before it was r
 
 ### `Discovery`: finding a window
 
-`writeDiscovery` and `dispose` in `bridge.ts`, `findWindows` and `open` in `link.ts`. `CheckFiles` is the fix for #31.
+`writeDiscovery`, `focused` and `dispose` in `bridge.ts`, `findWindows` and `open` in `link.ts`. `CheckFiles` is the fix for #31. `AtomicWrite` is the fix for #72: a window rewrites its file each time it gains focus, and written in place, a relay reading it mid-write skipped it. `locate` switching windows mid-session is `Close` in `Wire`.
 
 | Spec | Code |
 |---|---|
 | `OpenW`, `CloseW`, `Crash`, `Reuse` | a window writing its file; `dispose()` removing it; a crash leaving it; its `pid` reused |
-| `Start` | `locate` → `findWindows`: files that hold a `Discovery` with a live `pid` |
+| `Focus`, `Written` | `focused()` → `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
+| `Start` | `locate` → `findWindows`: files that hold a `Discovery` with a live `pid`, and parse |
 | `Try` | `openWindow` on one candidate, best first |
 | `Disconnect` | the socket closing, so the next call opens again |
 
