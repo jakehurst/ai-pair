@@ -12,6 +12,7 @@ import {
   type Action,
   type Discovery,
   type EditorMessage,
+  type RelayMessage,
   type ToolName,
 } from "@ai-pair/protocol"
 import type { Controller } from "./controller"
@@ -20,6 +21,38 @@ export type BridgeOptions = {
   /** Where discovery files live; see `discoveryDir()`. */
   dir: string
   workspaceFolders: () => string[]
+  /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
+  trace?: (line: string) => void
+}
+
+/** What a frame says, for `trace`: its type and id, and for a report, what it reports. */
+function describe(m: RelayMessage | EditorMessage): string {
+  switch (m.type) {
+    case "call":
+      return `call ${m.id} ${m.tool}`
+    case "cancel":
+      return `cancel ${m.id}`
+    case "return":
+      return `return ${reported(m.report)}`
+    case "result":
+      return `result ${m.id} ${reported(m.result)}`
+    case "error":
+      return `error ${m.id} ${m.code}`
+    default:
+      return m.type
+  }
+}
+
+function reported(r: unknown): string {
+  if (typeof r !== "object" || r === null || !("batches" in r) || !("events" in r)) return ""
+  const { batches, events } = r
+  const parts = [
+    Array.isArray(batches) ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(", ")}]` : "",
+    Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(", ")}]` : "",
+  ]
+  if ("rejected" in r && r.rejected) parts.push("rejected")
+  if ("waiting" in r && r.waiting) parts.push("waiting")
+  return parts.filter(Boolean).join(" ")
 }
 
 export class Bridge {
@@ -29,6 +62,8 @@ export class Bridge {
   private lastFocused = Date.now()
   /** The relay connection whose agent started the current (or last) session. */
   private owner: WebSocket | null = null
+  /** Sockets accepted so far, to tell them apart in `trace`. */
+  private accepted = 0
 
   constructor(
     private readonly controller: Controller,
@@ -91,14 +126,19 @@ export class Bridge {
   private accept(ws: WebSocket): void {
     let authenticated = false
     const calls = new Map<number, AbortController>()
+    const socket = ++this.accepted
+    const trace = this.options.trace
     const send = (m: EditorMessage) => {
-      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m))
+      const open = ws.readyState === ws.OPEN
+      trace?.(`socket ${socket} → ${describe(m)}${open ? "" : " (not sent: closed)"}`)
+      if (open) ws.send(JSON.stringify(m))
     }
 
     ws.on("message", (data) => {
       // A frame that isn't a message is dropped (#30).
       const m = parseRelayMessage(data)
       if (!m) return
+      trace?.(`socket ${socket} ← ${describe(m)}`)
       if (!authenticated) {
         if (m.type !== "hello" || !this.tokenMatches(m.token)) {
           send({ type: "rejected", reason: "Authentication failed." })
@@ -138,6 +178,7 @@ export class Bridge {
     })
 
     ws.on("close", () => {
+      trace?.(`socket ${socket} closed`)
       for (const abort of calls.values()) abort.abort()
       if (this.owner === ws) {
         this.owner = null

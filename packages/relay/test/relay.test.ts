@@ -31,6 +31,7 @@ let editor: FakeEditor
 let panel: FakePanel
 let controller: Controller
 let bridge: Bridge
+let traced: string[]
 const clients: Client[] = []
 
 beforeEach(async () => {
@@ -40,7 +41,10 @@ beforeEach(async () => {
   editor.files.set(editor.resolvePath("src/a.ts"), "")
   controller = new Controller(editor, panel, fast)
   editor.controller = controller
-  bridge = new Bridge(controller, { dir, workspaceFolders: () => ["/project"] })
+  // Its own, since the last test's bridge may still see its socket close.
+  const lines: string[] = []
+  traced = lines
+  bridge = new Bridge(controller, { dir, workspaceFolders: () => ["/project"], trace: (line) => lines.push(line) })
   await bridge.start()
 })
 
@@ -60,6 +64,10 @@ async function connect(cwd = "/project/src", roots?: string[]): Promise<Client> 
   await client.connect(clientSide)
   clients.push(client)
   return client
+}
+
+async function until(check: () => boolean): Promise<void> {
+  while (!check()) await new Promise((r) => setTimeout(r, 5))
 }
 
 type Content = { type: string; text: string }[]
@@ -165,6 +173,21 @@ describe("relay", () => {
     const report = await call(client, "listen")
     expect(report.text).toMatch(/hello/)
     expect(report.text).toMatch(/Batch 1 completed/)
+  })
+
+  it("traces each frame, with what a report reports (#27)", async () => {
+    const client = await connect()
+    await call(client, "start")
+    const listening = call(client, "listen")
+    await until(() => traced.some((l) => l.endsWith("listen")))
+    controller.userMessage("hello")
+    await listening
+    expect(traced.filter((l) => !l.endsWith("hello") && !l.endsWith("welcome"))).toEqual([
+      "socket 1 ← call 1 start",
+      "socket 1 → result 1 batches [] events []",
+      "socket 1 ← call 2 listen",
+      "socket 1 → result 2 batches [] events [message]",
+    ])
   })
 
   it("keeps the report of a call cancelled as it starts", async () => {
