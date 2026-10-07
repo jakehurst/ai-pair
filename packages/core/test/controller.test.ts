@@ -1502,6 +1502,36 @@ describe("saving", () => {
   })
 })
 
+// VS Code reloads a file changed on disk with one change from the first line that differs to the
+// last (#65): here lines 2 and 5 of 6 changed, reported as one change replacing lines 2 to 5.
+function reload(editor: ReturnType<typeof setup>["editor"]): void {
+  editor.otherEdit("a.ts", 2, 8, "X\n3\n4\nY\n")
+}
+
+describe("a file changed on disk", () => {
+
+  it("keeps the agent's selection on a line between the changed ones", async () => {
+    const { editor, controller } = setup({ "a.ts": "1\n2\n3\n4\n5\n6\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await until(controller.step([{ select: { file: "a.ts", line: 3, text: "3" } }]))
+    await until(controller.step([]))
+    reload(editor)
+    await until(controller.step([{ delete: true }]))
+    await until(controller.step([]))
+    expect(editor.text("a.ts")).toBe("1\nX\n\n4\nY\n6\n")
+  })
+
+  it("keeps the numbers of the lines between the changed ones known", async () => {
+    const { editor, controller } = setup({ "a.ts": "1\n2\n3\n4\n5\n6\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    reload(editor)
+    const report = await until(controller.step([{ point: { file: "a.ts", line: 4, text: "4" } }]))
+    expect(report.rejected).toBeUndefined()
+  })
+})
+
 describe("changes by others, while batches are queued", () => {
   it("rehearses the queued batches from a change that didn't interrupt them", async () => {
     const { editor, controller } = setup({ "a.ts": "hello\nworld\n" })

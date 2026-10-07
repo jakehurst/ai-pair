@@ -3,7 +3,7 @@
 
 import type { Action, BatchResult, Event, Excerpt, FileContent, Report, Turn } from "@ai-pair/protocol"
 import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
-import { fileDiff } from "./diff"
+import { fileDiff, lineChanges } from "./diff"
 import { LineIds, type Sighting } from "./lines"
 import { agentPath, displayPath, Player, type Scene } from "./player"
 import type { AgentState, Change, CursorView, EditorPort, PanelPort, Ref, SharedSelection } from "./ports"
@@ -305,9 +305,11 @@ export class Controller {
    * playing or queued batches edit the file, since they were planned against the text before it.
    * Otherwise it's just reported, and the queued rehearsals follow it.
    */
-  otherEdit(file: string, before: string, after: string, changes: Change[]): void {
+  otherEdit(file: string, before: string, after: string, reported: Change[]): void {
     const s = this.activeSession()
     if (!s) return
+    // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
+    const changes = lineChanges(before, reported)
     const planned = s.queue.some((b) => b.after?.edits.has(file))
     // Before recordEdit moves the editor's line identities, which the rehearsals' start from.
     if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, before, after, changes)
