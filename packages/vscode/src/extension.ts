@@ -5,6 +5,7 @@ import { discoveryDir } from "@ai-pair/protocol"
 import { playDemo } from "./demo"
 import { VsCodeEditor } from "./editor"
 import { NarrationPanel } from "./panel"
+import { settingSpeed } from "./panelHtml"
 import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
 
 /** Returned from `activate`, for integration tests. */
@@ -24,7 +25,7 @@ export function activate(context: vscode.ExtensionContext): Api {
 
   const editor = new VsCodeEditor(root, config().get("agentName", "Agent"))
   const speed = {
-    get: () => config().get("speed", 1),
+    get: () => settingSpeed(config().get<unknown>("speed", 1)),
     set: (value: number) => void config().update("speed", value, vscode.ConfigurationTarget.Global),
   }
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set (#27).

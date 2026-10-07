@@ -68,11 +68,31 @@ export type TimingOverrides = Partial<Omit<Timing, "type" | "reading">> & {
   reading?: Partial<Reading>
 }
 
+/**
+ * `base` with the overrides from the programmer's settings. They are JSON VS Code doesn't check, so
+ * one that isn't a finite number of zero or more keeps the base value: a `NaN` or negative delay
+ * would turn pacing off without a word (#17).
+ */
 export function withOverrides(base: Timing, overrides: TimingOverrides): Timing {
   return {
-    ...base,
-    ...overrides,
-    type: { ...base.type, ...overrides.type },
-    reading: { ...base.reading, ...overrides.reading },
+    ...numbers(base, overrides),
+    type: numbers(base.type, field(overrides, "type")),
+    reading: numbers(base.reading, field(overrides, "reading")),
   }
+}
+
+/** `base`, with each of its numbers replaced by the one `over` has under its key, if that's valid. */
+function numbers<T extends object>(base: T, over: unknown): T {
+  const out = { ...base }
+  for (const key of Object.keys(base)) {
+    const value = field(over, key)
+    if (typeof Reflect.get(base, key) === "number" && typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      Reflect.set(out, key, value)
+    }
+  }
+  return out
+}
+
+function field(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? (Reflect.get(value, key) as unknown) : undefined
 }

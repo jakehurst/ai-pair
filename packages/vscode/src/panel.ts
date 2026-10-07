@@ -2,7 +2,7 @@
 
 import * as vscode from "vscode"
 import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from "@ai-pair/core"
-import { panelHtml } from "./panelHtml"
+import { panelHtml, SPEEDS } from "./panelHtml"
 import type { FromPanel, ToPanel } from "./panelMessages"
 
 const MAX_LOG = 400
@@ -96,7 +96,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showSelection(this.selection.ref())
         return
       case "speed":
-        this.speed.set(m.value)
+        // Only the menu's speeds: the page sends no others (#17).
+        if (SPEEDS.includes(m.value)) this.speed.set(m.value)
         return
       case "reply":
         // Replying means "go on with this", so any pause ends.
