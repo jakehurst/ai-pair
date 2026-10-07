@@ -1,6 +1,6 @@
 ------------------------------- MODULE Wire -------------------------------
 \* The relay's side of the WebSocket link in packages/relay/src/link.ts, with
-\* the editor's replies from packages/core/src/bridge.ts. Issues #3 and #4.
+\* the editor's replies from packages/core/src/bridge.ts. Issues #3, #4, #29 and #59.
 EXTENDS Naturals
 
 CONSTANTS
@@ -8,7 +8,8 @@ CONSTANTS
     C,            \* how many calls the agent makes
     PerSocket,    \* TRUE: a close rejects only its own socket's calls (fix for #3)
     GuardedParse, \* TRUE: a frame that is not a message (not JSON, or no string `type`) is dropped (#4)
-    CheckAbort    \* TRUE: call() checks signal.aborted after connect(), before sending
+    CheckAbort,   \* TRUE: call() checks signal.aborted after connect(), before sending
+    WaitCancelled \* TRUE: call() sends only once the socket's cancelled calls are answered (#59)
 
 Sockets == 1..S
 Calls == 1..C
@@ -78,9 +79,11 @@ Abort(c) ==
     /\ call' = Set(call, c, IF call[c] = "requested" THEN "requestedAborted" ELSE "pendingNoticed")
     /\ UNCHANGED <<sock, cur, on, pending, rejectedBy, garbage, relayUp>>
 
-\* call() sends the call on the open socket that connect() returned.
+\* call() sends the call on the open socket that connect() returned, once no cancelled call on
+\* it waits for its answer: then a `return` for it went out first.
 Send(c) ==
     /\ relayUp /\ cur # 0 /\ call[c] \in {"requested", "requestedAborted"}
+    /\ WaitCancelled => ~\E d \in pending : on[d] = cur /\ call[d] = "pendingNoticed"
     /\ IF call[c] = "requestedAborted" /\ CheckAbort
           THEN /\ call' = Set(call, c, "cancelled")
                /\ UNCHANGED <<on, pending>>

@@ -36,15 +36,18 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: "wel
   fs.writeFileSync(path.join(dir, `${port}.json`), JSON.stringify(discovery))
   const sockets: WebSocket[] = []
   const calls: { ws: WebSocket; id: number; tool: string }[] = []
+  /** The type of each message after `hello`, in the order it arrived. */
+  const received: string[] = []
   server.on("connection", (ws) => {
     sockets.push(ws)
     ws.on("message", (data) => {
       const m = parseRelayMessage(data)
       if (m?.type === "hello") ws.send(greeting)
-      else if (m?.type === "call") calls.push({ ws, id: m.id, tool: m.tool })
+      else if (m) received.push(m.type)
+      if (m?.type === "call") calls.push({ ws, id: m.id, tool: m.tool })
     })
   })
-  return { sockets, calls }
+  return { sockets, calls, received }
 }
 
 function answer(call: { ws: WebSocket; id: number }, result: unknown): void {
@@ -119,6 +122,45 @@ describe("link", () => {
     expect(a.calls.map((c) => c.tool)).toEqual(["read"])
     answer(a.calls[0]!, "result")
     expect(await second).toBe("result")
+    link.close()
+  })
+
+  it("sends the next call only after a cancelled call's report is handed back", async () => {
+    const a = await fakeWindow("/a")
+    const link = new EditorLink("/a", dir)
+    const abort = new AbortController()
+    void link.call("listen", {}, abort.signal).catch(() => {})
+    await until(() => a.calls.length === 1)
+    abort.abort()
+    await until(() => a.received.includes("cancel"))
+    // The agent's next call, made while the editor's answer to the cancelled one is on its way.
+    const second = link.call("step", { actions: [] })
+    await new Promise((r) => setTimeout(r, 50))
+    answer(a.calls[0]!, { batches: [], events: [], turn: "agent" })
+    await until(() => a.calls.length === 2)
+    // The editor restores the report before it takes the next call.
+    expect(a.received).toEqual(["call", "cancel", "return", "call"])
+    answer(a.calls[1]!, "second")
+    expect(await second).toBe("second")
+    link.close()
+  })
+
+  it("sends the next call once the editor answers a cancelled call with an error", async () => {
+    const a = await fakeWindow("/a")
+    const link = new EditorLink("/a", dir)
+    const abort = new AbortController()
+    const first = link.call("listen", {}, abort.signal)
+    await until(() => a.calls.length === 1)
+    abort.abort()
+    await until(() => a.received.includes("cancel"))
+    const second = link.call("read", {})
+    await new Promise((r) => setTimeout(r, 50))
+    expect(a.calls).toHaveLength(1)
+    a.calls[0]!.ws.send(JSON.stringify({ type: "error", id: a.calls[0]!.id, code: "cancelled", message: "The call was cancelled." }))
+    await expect(first).rejects.toMatchObject({ code: "cancelled" })
+    await until(() => a.calls.length === 2)
+    answer(a.calls[1]!, "second")
+    expect(await second).toBe("second")
     link.close()
   })
 })
