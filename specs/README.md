@@ -146,6 +146,16 @@ These have no state or concurrency, so each spec is a model of the function and 
 | `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts` |
 | `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts` |
 
+### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
+
+These three contracts from #19 are about what the code accepts or writes, not about states, so they are tests on the code, not TLA+.
+
+| Contract | Test |
+|---|---|
+| The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: 68 actions through both |
+| Every field of a `Report` appears in its rendered text | `relay/test/render.fields.test.ts` |
+| Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/setup.properties.test.ts`: TOML and JSON configs |
+
 ## Keeping specs and code in step
 
 Nothing ties a spec to its code but the tables above. When code in one of the files above changes, update its spec, and run `specs/check.sh`.
