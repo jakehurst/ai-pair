@@ -3,25 +3,7 @@
 import * as vscode from "vscode"
 import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from "@ai-pair/core"
 import { panelHtml } from "./panelHtml"
-
-/** Messages from the webview. */
-type FromPanel =
-  | { type: "ready" }
-  | { type: "reply"; text: string; attach?: boolean }
-  | { type: "draft"; empty: boolean }
-  | { type: "pause" }
-  | { type: "resume" }
-  | { type: "interrupt" }
-  | { type: "turn"; message?: string; attach?: boolean }
-  | { type: "end" }
-  | { type: "open"; file: string; line: number }
-  /** A file named in a message: a path, or just its name. */
-  | { type: "openFile"; file: string }
-  | { type: "openUrl"; url: string }
-  /** A command the intro offers, like Set Up Agent. */
-  | { type: "command"; command: string }
-  | { type: "speed"; value: number }
-  | { type: "runDecision"; id: number; run: boolean; remember?: boolean }
+import type { FromPanel, ToPanel } from "./panelMessages"
 
 const MAX_LOG = 400
 
@@ -41,16 +23,23 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly selection: { current: () => SharedSelection | undefined; ref: () => Ref | undefined },
     /** Called with a line for each message from the page, for diagnosing deliveries (#27). */
     private readonly trace?: (line: string) => void,
+    /** Where dist/panel.js, the page's script, is: the extension's folder. */
+    private readonly extensionUri?: vscode.Uri,
   ) {}
+
+  /** Posts to the page, if there is one. */
+  private send(message: ToPanel): void {
+    void this.view?.webview.postMessage(message)
+  }
 
   /** The programmer's selection changed. Not logged: only the current one matters. */
   showSelection(ref: Ref | undefined): void {
-    void this.view?.webview.postMessage({ type: "selection", ref })
+    this.send({ type: "selection", ref })
   }
 
   /** The speed setting changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
-    void this.view?.webview.postMessage({ type: "speed", value })
+    this.send({ type: "speed", value })
   }
 
   post(event: PanelEvent): void {
@@ -62,7 +51,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       const session = cut.findLast((e) => e.type === "session")
       if (session && !this.log.some((e) => e.type === "session")) this.log.unshift(session)
     }
-    void this.view?.webview.postMessage(event)
+    this.send(event)
     if (event.type === "session") {
       void vscode.commands.executeCommand("setContext", "aiPair.active", event.active)
       if (event.active) this.reveal()
@@ -71,13 +60,15 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   focusReply(): void {
     this.reveal(false)
-    void this.view?.webview.postMessage({ type: "focusReply" })
+    this.send({ type: "focusReply" })
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
-    view.webview.options = { enableScripts: true }
-    view.webview.html = panelHtml(view.webview.cspSource)
+    const dist = this.extensionUri && vscode.Uri.joinPath(this.extensionUri, "dist")
+    view.webview.options = { enableScripts: true, localResourceRoots: dist ? [dist] : [] }
+    const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, "panel.js")).toString() : ""
+    view.webview.html = panelHtml(view.webview.cspSource, script)
     view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
     view.onDidDispose(() => {
       if (this.view === view) this.view = undefined
@@ -98,7 +89,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case "ready":
         // A new page has an empty draft (#69).
         c?.resume("reply")
-        void this.view?.webview.postMessage({ type: "replay", events: this.log })
+        this.send({ type: "replay", events: this.log })
         this.showSpeed(this.speed.get())
         this.showSelection(this.selection.ref())
         return

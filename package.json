@@ -10,7 +10,7 @@
     "package": "npm run package -w packages/vscode",
     "test": "vitest run",
     "test:integration": "npm run test:integration -w packages/vscode",
-    "typecheck": "tsc -p .",
+    "typecheck": "tsc -p . && tsc -p packages/vscode/src/webview",
     "lint": "oxlint"
   },
   "devDependencies": {

@@ -23,6 +23,18 @@ const common = {
 }
 
 await esbuild.build({ ...common, entryPoints: ["src/extension.ts"], external: ["vscode"], outfile: "dist/extension.js" })
+// The narration panel's page script, for the webview.
+await esbuild.build({
+  bundle: true,
+  platform: "browser",
+  format: "iife",
+  target: "es2022",
+  minify: production,
+  sourcemap: !production,
+  logLevel: "warning",
+  entryPoints: ["src/webview/panel.ts"],
+  outfile: "dist/panel.js",
+})
 // The relay tells agents the extension's version.
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"))
 await esbuild.build({
