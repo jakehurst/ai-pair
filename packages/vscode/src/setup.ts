@@ -18,16 +18,37 @@ function relayPath(extensionPath: string): string {
  */
 export function writeLauncher(extensionPath: string): string {
   const bin = path.join(aiPairHome(), "bin")
-  fs.mkdirSync(bin, { recursive: true })
   const relay = relayPath(extensionPath)
-  if (process.platform === "win32") {
-    const launcher = path.join(bin, "pair-mcp.cmd")
-    fs.writeFileSync(launcher, `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${relay}" %*\r\n`)
-    return launcher
+  const windows = process.platform === "win32"
+  const launcher = path.join(bin, windows ? "pair-mcp.cmd" : "pair-mcp")
+  // A launcher that can't be written leaves agents without it, not the extension without its panel (#9).
+  try {
+    fs.mkdirSync(bin, { recursive: true })
+    if (windows) {
+      fs.writeFileSync(
+        launcher,
+        `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${cmdLiteral(process.execPath)}" "${cmdLiteral(relay)}" %*\r\n`,
+      )
+    } else {
+      fs.writeFileSync(launcher, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shQuoted(process.execPath)} ${shQuoted(relay)} "$@"\n`)
+      // writeFileSync's `mode` applies only to a file it creates.
+      fs.chmodSync(launcher, 0o755)
+    }
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e)
+    void vscode.window.showErrorMessage(`AI Pair couldn't write its launcher at ${launcher}, so agents can't start it: ${why}`)
   }
-  const launcher = path.join(bin, "pair-mcp")
-  fs.writeFileSync(launcher, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "${relay}" "$@"\n`, { mode: 0o755 })
   return launcher
+}
+
+/** For sh: single quotes, inside which nothing expands; a single quote ends them, so it is `'\''` (#9). */
+function shQuoted(s: string): string {
+  return `'${s.replaceAll("'", "'\\''")}'`
+}
+
+/** For a .cmd file: `%` expands even inside quotes, and `%%` is a literal one. A path can't hold `"`. */
+function cmdLiteral(s: string): string {
+  return s.replaceAll("%", "%%")
 }
 
 /**
