@@ -39,6 +39,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly resolvePath: (file: string) => string,
     private readonly speed: { get: () => number; set: (value: number) => void },
     private readonly selection: { current: () => SharedSelection | undefined; ref: () => Ref | undefined },
+    /** Called with a line for each message from the page, for diagnosing deliveries (#27). */
+    private readonly trace?: (line: string) => void,
   ) {}
 
   /** The programmer's selection changed. Not logged: only the current one matters. */
@@ -91,6 +93,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   private receive(m: FromPanel): void {
     const c = this.controller
+    this.trace?.(`panel ${m.type}${m.type === "reply" ? ` ${JSON.stringify(m.text)}` : m.type === "draft" ? (m.empty ? " empty" : " typed") : ""}`)
     switch (m.type) {
       case "ready":
         // A new page has an empty draft (#69).

@@ -20,10 +20,18 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => config().get("speed", 1),
     set: (value: number) => void config().update("speed", value, vscode.ConfigurationTarget.Global),
   }
-  const panel = new NarrationPanel((file) => editor.resolvePath(file), speed, {
-    current: () => editor.programmerSelection(),
-    ref: () => editor.selectionRef(),
-  })
+  // Frames and panel messages at the Trace level, which VS Code hides unless it is set (#27).
+  const log = vscode.window.createOutputChannel("AI Pair", { log: true })
+  const trace = (line: string) => log.trace(line)
+  const panel = new NarrationPanel(
+    (file) => editor.resolvePath(file),
+    speed,
+    {
+      current: () => editor.programmerSelection(),
+      ref: () => editor.selectionRef(),
+    },
+    trace,
+  )
   const controller = new Controller(editor, panel)
   editor.controller = controller
   editor.onSelection = (ref) => panel.showSelection(ref)
@@ -35,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const bridge = new Bridge(controller, {
     dir: discoveryDir(),
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+    trace,
   })
   const ready = bridge.start()
   ready.catch((e: unknown) => void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`))
@@ -42,6 +51,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   registerServerProvider(context)
 
   context.subscriptions.push(
+    log,
     { dispose: () => bridge.dispose() },
     vscode.window.onDidChangeWindowState((state) => {
       if (state.focused) bridge.focused()
