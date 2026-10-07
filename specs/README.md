@@ -42,6 +42,8 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Rehearsal_mutation.cfg` | same, both defenses off | S10 violated (validation by mutation; no known bug) | |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
 | `BatchFile_57ac07f_58.cfg` | same | `ActsInNamedFile` violated (#58) | 79 |
+| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 1,859 |
+| `Actions_mutation.cfg` | same, both defenses off | S14 `PlaysNothingTwice` violated (validation by mutation; no known bug) | |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
 | `Player_57ac07f_49.cfg` | same | S11 `DeletesTheSelection` violated (#49) | 12 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -170,6 +172,17 @@ A keystroke made while the save participants run can't be told from their edits,
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code doesn't end the `away` pause, and the agent isn't told about pauses.
+
+### `Actions`: what an interrupted batch reports as unplayed
+
+S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is its steps between awaits, read from the code: awaits, checks of a sleep's or `confirm`'s result or of `notStarted`, and effects the programmer sees. An interrupt comes at any await. Two defenses keep S14, and the mutation config turns both off; either one off alone is also found. A `type` cut after a chunk returns only what's left of it (`RestOnly`), and a `run` interrupted while its command keeps running counts as played (`ConsumeRun`). Unit tests cover both: "returns what's left of a type cut inside its second part" and "stops waiting when the programmer interrupts, reporting the command as still running".
+
+| Spec | Code |
+|---|---|
+| `Steps(k)` | each action's awaits, checks, and effects; `type` with two chunks |
+| `Next1` | the loop in `actions` checking `isInterrupted` before each action, then the action's steps |
+| `Stopped` | `stopped(id, unplayed, effect)`: `discarded` if nothing took effect |
+| `Interrupt` | the timeline interrupted, by an edit, a message, a turn change |
 
 ### `Player`: a delete while the programmer edits
 
