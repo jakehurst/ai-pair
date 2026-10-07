@@ -1,16 +1,24 @@
+// @vitest-environment happy-dom
 // The panel's page markup. Its script is a module of its own (webview/panel.ts, #6), run in a DOM
 // by the other panel tests.
 
 import { expect, it } from "vitest"
+import type { Window } from "happy-dom"
 import { panelHtml, SPEEDS } from "../src/panelHtml"
+
+// The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+const { window } = globalThis as unknown as { window: Window }
 
 it("loads its script from the file it is given, with the page's nonce, and has no inline script", () => {
   const html = panelHtml("vscode-resource:", "https://file.vscode-resource/dist/panel.js")
-  const nonce = /script-src 'nonce-([^']+)'/.exec(html)![1]
-  expect([...html.matchAll(/<script[^>]*>/g)].map((m) => m[0])).toEqual([
-    `<script nonce="${nonce}" src="https://file.vscode-resource/dist/panel.js">`,
-  ])
-  expect(html).toMatch(/<script[^>]*><\/script>/)
+  const page = new window.DOMParser().parseFromString(html, "text/html")
+  const csp = page.querySelector('meta[http-equiv="Content-Security-Policy"]')!.getAttribute("content")!
+  const scripts = [...page.querySelectorAll("script")]
+  expect(scripts).toHaveLength(1)
+  expect(csp).toContain(`script-src 'nonce-${scripts[0]!.getAttribute("nonce")}'`)
+  expect(scripts[0]!.getAttribute("src")).toBe("https://file.vscode-resource/dist/panel.js")
+  expect(scripts[0]!.textContent).toBe("")
 })
 
 it("offers the speeds with one decimal, so they line up", () => {
