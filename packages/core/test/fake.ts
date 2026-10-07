@@ -3,6 +3,7 @@ import { vi } from "vitest"
 import { withinFolder } from "@ai-pair/protocol"
 import { defaultConfig, type Config } from "../src/config"
 import { Controller } from "../src/controller"
+import { MissingFile } from "../src/ports"
 import type {
   AgentState,
   CommandOutcome,
@@ -38,7 +39,7 @@ export class FakeEditor implements EditorPort {
   }
   async getText(file: string): Promise<string> {
     const text = this.files.get(file)
-    if (text === undefined) throw new Error(`No such file: ${file}`)
+    if (text === undefined) throw new MissingFile(file)
     return text
   }
   /** Files the editor stores with CRLF, whatever they contain so far. */

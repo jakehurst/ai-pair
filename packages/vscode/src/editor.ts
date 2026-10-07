@@ -3,7 +3,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as vscode from "vscode"
-import { samePath, withinFolder } from "@ai-pair/core"
+import { MissingFile, samePath, withinFolder } from "@ai-pair/core"
 import type {
   AgentState,
   Change,
@@ -196,12 +196,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   async show(file: string): Promise<void> {
     const uri = vscode.Uri.file(file)
-    try {
-      await vscode.workspace.fs.stat(uri)
-    } catch {
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file)))
-      await vscode.workspace.fs.writeFile(uri, new Uint8Array())
-    }
+    await this.create(file)
     if (this.visibleEditor(file)) return
     // The change of active editor comes before showTextDocument's reply, however long that takes.
     this.showing++
@@ -230,8 +225,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         const range = new vscode.Range(doc.positionAt(offset), doc.positionAt(offset + deleteLength))
         if (!(await editor.edit((b) => b.replace(range, text), options))) throw new Error("The edit was rejected.")
       } else {
-        // Not visible (e.g. the programmer looked away): no control over undo stops.
-        const doc = await this.document(file)
+        // Not visible (e.g. the programmer looked away): no control over undo stops. An edit is to the
+        // document VS Code holds, if any, even one whose file is gone: `create` empties that one.
+        const doc = this.openDocument(file) ?? (await this.document(file))
         const range = new vscode.Range(doc.positionAt(offset), doc.positionAt(offset + deleteLength))
         const edit = new vscode.WorkspaceEdit()
         edit.replace(doc.uri, range, text)
@@ -575,8 +571,45 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     return vscode.workspace.textDocuments.find((d) => d.uri.fsPath === file)
   }
 
+  /**
+   * The document for a file, as the session takes it (#88, #89). One with unsaved changes is the
+   * programmer's text, whether its file still exists or not. Otherwise the file on disk decides:
+   * VS Code keeps a document after its file is deleted, with the text it had, so a file that isn't
+   * on disk is `MissingFile`, whatever document there is.
+   */
   private async document(file: string): Promise<vscode.TextDocument> {
-    return this.openDocument(file) ?? (await vscode.workspace.openTextDocument(vscode.Uri.file(file)))
+    const doc = this.openDocument(file)
+    if (doc?.isDirty) return doc
+    if (!(await this.exists(file))) throw new MissingFile(file)
+    return doc ?? (await vscode.workspace.openTextDocument(vscode.Uri.file(file)))
+  }
+
+  private async exists(file: string): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(file))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Creates a missing file, empty. A document VS Code kept for it when it was deleted is emptied and
+   * saved, which creates the file, so the two agree at once rather than when VS Code reloads it. One
+   * with unsaved changes is left as it is: the programmer's text (#88).
+   */
+  private async create(file: string): Promise<void> {
+    if (await this.exists(file)) return
+    const doc = this.openDocument(file)
+    if (doc?.isDirty) return
+    const text = doc?.getText() ?? ""
+    if (doc && text !== "") {
+      await this.edit(file, 0, text.length, "", { undoStopBefore: true, undoStopAfter: true })
+      if (!(await doc.save())) throw new Error(`Couldn't create ${file}.`)
+      return
+    }
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file)))
+    await vscode.workspace.fs.writeFile(vscode.Uri.file(file), new Uint8Array())
   }
 
   private visibleEditor(file: string): vscode.TextEditor | undefined {

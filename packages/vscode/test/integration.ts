@@ -68,6 +68,11 @@ async function insertAsProgrammer(uri: vscode.Uri, position: vscode.Position, te
   assert.fail("VS Code kept rejecting the programmer's edit")
 }
 
+/** A `read` of a file that doesn't exist (#89). */
+function missing(e: unknown): boolean {
+  return e instanceof Error && "code" in e && e.code === "invalid_arguments" && /doesn't exist/.test(e.message)
+}
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.getExtension<Api>("michalstrba.ai-pair")
   assert.ok(ext, "extension not found")
@@ -258,6 +263,35 @@ export async function run(): Promise<void> {
   assert.equal(await buffer("reload.txt"), "1\nX\n\n4\nY\n6\n")
   await c.end()
   console.log("a file changed on disk keeps the selection on its text")
+
+  // A file that doesn't exist is reported as missing, and a move creates it (#89). One deleted on
+  // disk while VS Code holds a document for it, as Claude Code's file tools leave one, isn't read with
+  // its old text, and a move creates it empty (#88). Unsaved text for a deleted file is kept.
+  await c.start("missing files")
+  await assert.rejects(c.read("missing-89.txt"), missing)
+  fs.writeFileSync(file("stale-88.txt"), "old\n")
+  const stale = await vscode.workspace.openTextDocument(file("stale-88.txt"))
+  assert.equal(stale.getText(), "old\n")
+  fs.unlinkSync(file("stale-88.txt"))
+  await assert.rejects(c.read("stale-88.txt"), missing)
+  const recreated = await c.step([{ move: { file: "stale-88.txt", line: 1, to: "line_end" } }, { type: "new\u{258c}" }])
+  assert.equal(recreated.rejected, undefined)
+  const played = (await c.step([])).batches
+  assert.deepEqual(
+    played.map((b) => b.status),
+    ["completed"],
+    JSON.stringify(played),
+  )
+  assert.equal(await buffer("stale-88.txt"), "new")
+  assert.equal(await disk("stale-88.txt"), "new")
+  fs.writeFileSync(file("unsaved-88.txt"), "a\n")
+  const unsaved = await vscode.workspace.openTextDocument(file("unsaved-88.txt"))
+  await insertAsProgrammer(unsaved.uri, new vscode.Position(0, 1), "b")
+  fs.unlinkSync(file("unsaved-88.txt"))
+  assert.deepEqual((await c.read("unsaved-88.txt")).lines, [{ number: 1, text: "ab" }])
+  await unsaved.save()
+  await c.end()
+  console.log("missing and deleted files read as missing, and are created empty")
 
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })

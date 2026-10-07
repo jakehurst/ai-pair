@@ -6,7 +6,7 @@ import type { Action, BatchResult } from "@ai-pair/protocol"
 import type { Config } from "./config"
 import type { LineIds, Sighting } from "./lines"
 import { Player, transformScene, type Scene } from "./player"
-import type { Change, CommandOutcome, EditorPort, PanelPort } from "./ports"
+import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort } from "./ports"
 import { instant } from "./timeline"
 
 /** What playing batches leaves behind: the scene, the text of each file they edited, and its lines. `edits`: this batch's own. */
@@ -97,8 +97,9 @@ class MemoryEditor implements EditorPort {
     if (this.texts.has(file)) return
     try {
       await this.real.getText(file)
-    } catch {
+    } catch (e) {
       // Showing a file creates it.
+      if (!(e instanceof MissingFile)) throw e
       this.texts.set(file, "")
     }
   }

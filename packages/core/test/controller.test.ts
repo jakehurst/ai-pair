@@ -1176,6 +1176,15 @@ describe("cancellation", () => {
     expect((await until(controller.listen())).repeated).toBeUndefined()
   })
 
+  it("says a file to read doesn't exist, and that a move creates it (#89)", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    await expect(controller.read("new.ts")).rejects.toMatchObject({
+      code: "invalid_arguments",
+      message: expect.stringMatching(/new\.ts doesn't exist.*`move`/),
+    })
+  })
+
   it("reports a returned report again after the programmer ended the session with it", async () => {
     const { controller } = setup({ "a.ts": "" })
     await controller.start()

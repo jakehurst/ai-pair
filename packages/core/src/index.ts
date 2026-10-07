@@ -14,6 +14,7 @@ export type {
   RunOptions,
   SharedSelection,
 } from "./ports"
+export { MissingFile } from "./ports"
 export { resolveSpan, resolveSpot } from "./places"
 export { terminalText } from "./text"
 export { hostPathStyle, samePath, withinFolder, type PathStyle } from "./paths"
