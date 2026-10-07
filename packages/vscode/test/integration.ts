@@ -133,6 +133,26 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a keystroke just before a save is the programmer's")
 
+  // Our own move to another file doesn't pause playback, however long VS Code takes to show it (#56).
+  // With no window after our navigation, only the hold while show() awaits covers it.
+  fs.writeFileSync(file("follow-a.txt"), "a\n")
+  fs.writeFileSync(file("follow-b.txt"), "b\n")
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("follow-a.txt")))
+  await c.start("follow")
+  await c.read("follow-a.txt")
+  await c.step([{ move: { file: "follow-a.txt", line: 1, to: "line_end" } }])
+  assert.deepEqual((await c.step([])).batches.map((b) => b.status), ["completed"])
+  await c.read("follow-b.txt")
+  api.editor.selfNavMs = 0
+  await c.step([{ move: { file: "follow-b.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+  const moved = await c.step([])
+  api.editor.selfNavMs = 400
+  assert.equal(c.isPaused, false, "paused by our own move")
+  assert.deepEqual(moved.batches.map((b) => b.status), ["completed"])
+  assert.equal(await buffer("follow-b.txt"), "bx\n")
+  await c.end()
+  console.log("our own move to another file doesn't pause")
+
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
   await c.start("interrupt test")
