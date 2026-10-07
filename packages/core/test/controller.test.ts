@@ -1123,6 +1123,34 @@ describe("cancellation", () => {
     expect(after.rejected).toBeUndefined()
     expect(after.submitted).toMatchObject({ status: "playing" })
   })
+
+  it("reports a returned report again after the programmer ended the session with it", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const listening = controller.listen()
+    controller.userMessage("one more thing")
+    controller.endSession()
+    const ending = await until(listening)
+    expect(ending.events.map((e) => e.kind)).toEqual(["message", "end"])
+
+    // The agent cancelled the listen as it returned, so the relay hands the report back.
+    controller.restore(ending)
+    const again = await until(controller.listen())
+    expect(again.events).toEqual(ending.events)
+    await expect(controller.listen()).rejects.toMatchObject({ code: "no_session" })
+  })
+
+  it("reports a returned report again when the programmer ends the session before it comes back", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const listening = controller.listen()
+    controller.userMessage("stop")
+    const stopped = await until(listening)
+    controller.endSession()
+    controller.restore(stopped)
+    const again = await until(controller.listen())
+    expect(again.events.map((e) => e.kind)).toEqual(["message", "end"])
+  })
 })
 
 describe("sessions", () => {

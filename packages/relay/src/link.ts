@@ -112,6 +112,8 @@ export class EditorLink {
   private nextId = 1
   /** Each socket's calls waiting for an answer, so that a socket's close rejects only its own. */
   private readonly pending = new WeakMap<WebSocket, Map<number, Pending>>()
+  /** Each socket's cancelled calls not yet answered: settled once the editor's answer arrives. */
+  private readonly cancelled = new WeakMap<WebSocket, Set<Promise<void>>>()
   private folder: string
 
   constructor(
@@ -133,31 +135,49 @@ export class EditorLink {
   }
 
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
-    const ws = await this.connect()
+    // A cancelled call's report may be on its way back, to be handed back with `return`. This call
+    // goes out after it, so the editor restores the report before it takes this call (#59). The socket
+    // may close meanwhile, so it is taken again after each wait; from there to `send`, nothing awaits.
+    let ws: WebSocket
+    let cancelled: Set<Promise<void>>
+    for (;;) {
+      ws = await this.connect()
+      cancelled = this.cancelled.get(ws)!
+      if (cancelled.size === 0) break
+      await Promise.all(cancelled)
+    }
     // An abort that fired before the listener below is added won't fire again (#29). A call never
     // sent takes no report, so there is nothing to hand back.
     if (signal?.aborted) throw new RelayError("cancelled", "The call was cancelled.")
     const calls = this.pending.get(ws)!
     const id = this.nextId++
-    return new Promise((resolve, reject) => {
-      const pending: Pending = { tool, cancelled: false, resolve, reject }
+    let pending!: Pending
+    const answer = new Promise((resolve, reject) => {
+      pending = { tool, cancelled: false, resolve, reject }
       calls.set(id, pending)
       try {
         ws.send(JSON.stringify({ type: "call", id, tool, args }))
       } catch (e) {
         calls.delete(id)
         reject(new RelayError("no_editor", `Couldn't send to the editor: ${e instanceof Error ? e.message : String(e)}`))
-        return
       }
-      signal?.addEventListener(
-        "abort",
-        () => {
-          pending.cancelled = true
-          if (calls.has(id) && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "cancel", id }))
-        },
-        { once: true },
-      )
     })
+    signal?.addEventListener(
+      "abort",
+      () => {
+        pending.cancelled = true
+        if (!calls.has(id)) return
+        const settled = answer.then(
+          () => {},
+          () => {},
+        )
+        cancelled.add(settled)
+        void settled.then(() => cancelled.delete(settled))
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "cancel", id }))
+      },
+      { once: true },
+    )
+    return answer
   }
 
   close(): void {
@@ -194,6 +214,7 @@ export class EditorLink {
       let welcomed = false
       const calls = new Map<number, Pending>()
       this.pending.set(ws, calls)
+      this.cancelled.set(ws, new Set())
       const settle = (id: number) => {
         const p = calls.get(id)
         calls.delete(id)

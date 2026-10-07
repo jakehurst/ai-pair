@@ -100,6 +100,8 @@ const cancelled = () => new ToolError("cancelled", "The call was cancelled.")
 
 export class Controller {
   private session: Session | null = null
+  /** The session the last report closed, until another starts: a report handed back puts it back. */
+  private closed: Session | null = null
   private call: Call | null = null
   private chain: Promise<unknown> = Promise.resolve()
   private nextBatchId = 1
@@ -161,6 +163,7 @@ export class Controller {
         seen: new Map(),
       }
       this.session = s
+      this.closed = null
       this.lastPosted = ""
       this.panel.post({ type: "session", active: true, task })
       this.render()
@@ -239,8 +242,15 @@ export class Controller {
    * call returned just before the cancellation arrived, so the agent never saw the report.
    */
   restore(report: Report): void {
-    const s = this.activeSession()
+    // Also once the session ended, or the report closed it: the next call takes the report again,
+    // and closes the session again (#60).
+    const s = this.session ?? this.closed
     if (!s) return
+    if (!this.session) {
+      s.ended = true
+      this.session = s
+      this.closed = null
+    }
     s.finished.unshift(...report.batches)
     s.events.unshift(...report.events)
     if (report.events.some(interrupting) || report.batches.some((b) => b.status !== "completed")) s.stale = true
@@ -365,6 +375,7 @@ export class Controller {
   /** The agent is gone (the relay disconnected). */
   disconnect(): void {
     const s = this.session
+    this.closed = null
     if (this.call) {
       clearTimeout(this.call.timer)
       this.call.reject(new ToolError("no_session", "Disconnected."))
@@ -559,6 +570,7 @@ export class Controller {
     const report = this.snapshot(s, call.batch, timedOut && !closing)
     if (closing) {
       this.close(s)
+      this.closed = s
       if (call.kind === "end" && !s.ended) {
         this.panel.post({ type: "session", active: false, reason: "agent", summary: call.summary })
       }

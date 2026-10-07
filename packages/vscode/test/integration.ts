@@ -8,6 +8,8 @@ import * as path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import * as vscode from "vscode"
+import { discoveryDir, type Report, type ToolName } from "@ai-pair/protocol"
+import { EditorLink } from "../../relay/src/link"
 import type { Api } from "../src/extension"
 
 const EXPECTED_TODOS = `export interface Todo {
@@ -172,6 +174,39 @@ export async function run(): Promise<void> {
   assert.equal(await buffer("named-b.txt"), "b\nsecond\n")
   await c.end()
   console.log("an action without file acts in the file its batch named")
+
+  // A report the agent cancelled as it returned is handed back before the agent's next call goes out,
+  // so the editor restores it first: the next batch isn't played without it (#59), and once the
+  // programmer ends the session, the session still takes it (#60). The relay's own link, against this window.
+  const link = new EditorLink(root, discoveryDir())
+  // The editor answers these tools with reports.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const relayed = (tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal) => link.call(tool, args, signal) as Promise<Report>
+  fs.writeFileSync(file("return.txt"), "a\n")
+  await relayed("start", { task: "return", cwd: root })
+  await link.call("read", { file: "return.txt" })
+  const cancelListen = new AbortController()
+  void relayed("listen", {}, cancelListen.signal)
+  await sleep(300)
+  c.userMessage("stop")
+  cancelListen.abort()
+  const restored = await relayed("step", { actions: [{ move: { file: "return.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }] })
+  assert.deepEqual(restored.events.map((e) => e.kind), ["message"])
+  assert.deepEqual(restored.batches.map((b) => b.status), ["discarded"])
+  assert.equal(await buffer("return.txt"), "a\n")
+
+  const cancelLast = new AbortController()
+  void relayed("listen", {}, cancelLast.signal)
+  await sleep(300)
+  c.userMessage("one more thing")
+  c.endSession()
+  cancelLast.abort()
+  const ended = await relayed("listen", {})
+  assert.deepEqual(ended.events.map((e) => e.kind), ["message", "end"])
+  link.close()
+  // The bridge disconnects the socket's session when it sees the close; let that happen before the next start.
+  await sleep(300)
+  console.log("a cancelled report is restored before the next call")
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"

@@ -22,8 +22,10 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Panel_57ac07f.cfg` | same | S13 `NewestFirst` violated (#18) | 10 |
 | `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
 | `PanelReplay_57ac07f_54.cfg` | same | `ReplayShowsSession` violated (#54) | 67 |
-| `Controller.cfg` | `B = 2` batches, `E = 1` event, `MaxCancels = 1` | holds | 1,488 |
-| `Controller_57ac07f.cfg` | same | S1 `BatchesDelivered` violated (#28) | 1,533 |
+| `Controller.cfg` | `B = 2` batches, `E = 1` event, `MaxCancels = 1` | holds | 3,937 |
+| `Controller_57ac07f.cfg` | same | S1 `BatchesDelivered` violated (#28); with S3 checked too, S3 `PlaysAfterCompleted` is found first | 358 |
+| `Controller_4e59c17_59.cfg` | same | S3 `PlaysAfterCompleted` violated (#59) | 317 |
+| `Controller_4e59c17_60.cfg` | same | S1 `EventsDelivered` violated (#60) | 4,393 |
 | `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
 | `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
@@ -44,7 +46,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 
-`Controller.tla` also passes at `B = 3, MaxCancels = 2` (14,699 states) and `B = 3, E = 2, MaxCancels = 3` (91,414 states).
+`Controller.tla` also passes at `B = 3, MaxCancels = 2` (35,336 states) and `B = 3, E = 2, MaxCancels = 3` (216,195 states).
 
 Each violation's trace was checked against the code step by step before it was reported. The traces are in the issues.
 
@@ -65,13 +67,13 @@ Each violation's trace was checked against the code step by step before it was r
 
 ### `Wire`: the relay's side of the WebSocket
 
-`packages/relay/src/link.ts`, with the editor's replies from `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse` (#4, #30), `CheckAbort` (#29).
+`packages/relay/src/link.ts`, with the editor's replies from `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse` (#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked in `Controller`).
 
 | Spec | Code |
 |---|---|
 | `Open`, `Welcome` | `connect()` → `open()` → `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
 | `Request`, `Abort` | the agent's tool call reaching `call()`, which awaits `connect()`; the agent cancelling |
-| `Send` | `call()` registering the call in its socket's map and sending it |
+| `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer |
 | `Close`, `Closed` | `locate()` closing `this.ws`, or the editor's end closing; the `close` handler rejecting `Victims` |
 | `Reply` | a `result` frame: `result`, or `return` for a call the relay marked cancelled |
 | `Garbage` | a frame that isn't a message (`parseEditorMessage`) |
@@ -98,15 +100,16 @@ Each violation's trace was checked against the code step by step before it was r
 
 ### `Controller`: what reaches the agent
 
-`packages/core/src/controller.ts`, with `return` in `link.ts`. `RestoreRejected` is the fix for #28.
+`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, S2 (`PlaysKnowingEvents`), S3 (`PlaysAfterCompleted`), and L5 (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the relay sending a call only once every cancelled call on the socket has settled, so a `return` reaches the editor before the next call. `RestoreEnded` is the fix for #60: `restore()` working on a session the programmer ended, and putting a closed one back.
 
 | Spec | Code |
 |---|---|
-| `Submit`, `Listen` | `step` with a batch; `listen` |
+| `Submit`, `Listen` | `step` with a batch; `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
+| `EndSession` | `endSession()`: `ended`, the `end` event, `interrupt()` |
 | `RehearseFails`, `RehearseOk` | `reject()`; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
 | `Programmer` | an interrupting event: `interrupt()` discards what is queued and sets `stale` |
-| `Commit` | `finishCall` → `snapshot`, which also hands out one `held` rejection |
+| `Commit` | `finishCall` → `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
 | `Cancel` | the agent cancelling a call |
 | `Answer`, `Bounce`, `Restore` | the report reaching the agent; the relay's `return`; `restore()` |
 
