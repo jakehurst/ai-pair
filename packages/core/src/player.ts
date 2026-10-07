@@ -386,8 +386,9 @@ export class Player {
       this.clearPoint()
       s.cursor.offset = start
       s.selection = null
-      this.touch(playing, file, start, end - start, 0)
-      await this.edit(file, { offset: start, deleteLength: end - start, text: "" }, { undoStopBefore: true, undoStopAfter: true })
+      const change = { offset: start, deleteLength: end - start, text: "" }
+      this.touch(playing, file, change)
+      await this.edit(file, change, { undoStopBefore: true, undoStopAfter: true })
       this.follow()
       await this.delay(timing.afterDeleteMs)
       return ok
@@ -533,15 +534,12 @@ export class Player {
       // Move the cursor before awaiting, so programmer edits arriving meanwhile transform the right position.
       cursor.offset = start + insert.length
       s.selection = null
-      this.touch(playing, cursor.file, start, deleteLength, insert.length)
-      await this.edit(
-        cursor.file,
-        { offset: start, deleteLength, text: insert },
-        {
-          undoStopBefore: i === 0,
-          undoStopAfter: i === chunks.length - 1,
-        },
-      )
+      const change = { offset: start, deleteLength, text: insert }
+      this.touch(playing, cursor.file, change)
+      await this.edit(cursor.file, change, {
+        undoStopBefore: i === 0,
+        undoStopAfter: i === chunks.length - 1,
+      })
       typed += chunk.text
       this.follow()
     }
@@ -681,17 +679,14 @@ export class Player {
   }
 
   /** Records an edit of the batch: the file to save, and the text it changed for the report. */
-  private touch(p: Playing, file: string, start: number, removed: number, inserted: number): void {
+  /** Records a change the batch makes: the file it touched, and the span of its edits so far, moved through it. */
+  private touch(p: Playing, file: string, change: Change): void {
     p.touched.add(file)
-    const map = (pos: number): number => {
-      if (pos <= start) return pos
-      if (pos >= start + removed) return pos + inserted - removed
-      return start + inserted
-    }
+    const map = mapThrough(change)
+    const start = change.offset
+    const end = start + change.text.length
     const span = p.span?.file === file ? p.span : undefined
-    p.span = span
-      ? { file, start: Math.min(map(span.start), start), end: Math.max(map(span.end), start + inserted) }
-      : { file, start, end: start + inserted }
+    p.span = span ? { file, start: Math.min(map(span.start), start), end: Math.max(map(span.end), end) } : { file, start, end }
   }
 
   private resolvePath(file: string): string {
