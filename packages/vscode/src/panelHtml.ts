@@ -5,8 +5,16 @@
 
 import { randomBytes } from "node:crypto"
 
-/** Speeds offered in the panel's menu. The `aiPair.speed` setting takes any value. */
+/** Speeds offered in the panel's menu. The `aiPair.speed` setting takes any value in its range. */
 export const SPEEDS = [0.4, 0.6, 1, 1.5, 2, 3]
+
+/**
+ * The `aiPair.speed` setting as played: clamped to the range it declares (0.25 to 4), or 1 for what
+ * isn't a finite number. VS Code only warns about a value out of range in settings.json (#17).
+ */
+export function settingSpeed(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(4, Math.max(0.25, value)) : 1
+}
 
 const svg = (paths: string, cls = "") =>
   `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
