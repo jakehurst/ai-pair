@@ -34,13 +34,13 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: "wel
   const discovery = { pid: process.pid, workspaceFolders: [folder], port, token: "token", protocolVersion: PROTOCOL_VERSION, lastFocused: 0 }
   fs.writeFileSync(path.join(dir, `${port}.json`), JSON.stringify(discovery))
   const sockets: WebSocket[] = []
-  const calls: { ws: WebSocket; id: number }[] = []
+  const calls: { ws: WebSocket; id: number; tool: string }[] = []
   server.on("connection", (ws) => {
     sockets.push(ws)
     ws.on("message", (data) => {
-      const m = JSON.parse(String(data)) as { type: string; id: number }
+      const m = JSON.parse(String(data)) as { type: string; id: number; tool: string }
       if (m.type === "hello") ws.send(greeting)
-      else if (m.type === "call") calls.push({ ws, id: m.id })
+      else if (m.type === "call") calls.push({ ws, id: m.id, tool: m.tool })
     })
   })
   return { sockets, calls }
@@ -102,6 +102,22 @@ describe("link", () => {
     a.sockets[0]!.send("not json")
     answer(a.calls[0]!, "result")
     expect(await call).toBe("result")
+    link.close()
+  })
+
+  it("doesn't send a call that was cancelled before it went out", async () => {
+    const a = await fakeWindow("/a")
+    const link = new EditorLink("/a", dir)
+    const abort = new AbortController()
+    const call = link.call("listen", {}, abort.signal)
+    abort.abort()
+    await expect(call).rejects.toMatchObject({ code: "cancelled" })
+    // Calls arrive in order, so a `listen` that went out would arrive before this `read`.
+    const second = link.call("read", {})
+    await until(() => a.calls.length > 0)
+    expect(a.calls.map((c) => c.tool)).toEqual(["read"])
+    answer(a.calls[0]!, "result")
+    expect(await second).toBe("result")
     link.close()
   })
 })
