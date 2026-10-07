@@ -3,7 +3,7 @@
 
 import type { Action, BatchResult, Candidate, Code, ErrorKind, RunResult, SpanTarget, Turn } from "@ai-pair/protocol"
 import * as nodePath from "node:path"
-import { actionKinds, CURSOR_MARKER, moveProblem, spanProblem, typeProblem } from "@ai-pair/protocol"
+import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, typeProblem } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from "./places"
 import type { Config } from "./controller"
 import type { LineIds, Sighting } from "./lines"
@@ -266,6 +266,8 @@ export class Player {
     }
     const named = this.names(action, playing)
     if (typeof named === "object") return named
+    const fields = fieldsProblem(action)
+    if (fields) return fail("invalid_action", fields)
     if (s.turn === "user" && !("say" in action) && !("point" in action)) {
       return fail("not_your_turn", "During the programmer's turn, only `say` and `point` are allowed.")
     }
