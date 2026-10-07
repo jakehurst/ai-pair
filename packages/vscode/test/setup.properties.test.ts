@@ -27,7 +27,10 @@ function withoutPair(crlf: string): string {
   const text = crlf.replaceAll("\r\n", "\n")
   const own = tomlTable(text, "pair")
   const rest = own === undefined ? text : text.replace(own, "")
-  return rest.split(/\r?\n/).filter((l) => l.trim() !== "").join("\n")
+  return rest
+    .split(/\r?\n/)
+    .filter((l) => l.trim() !== "")
+    .join("\n")
 }
 
 it("sets the TOML table once, however many times it's run, and leaves the rest as it was", () => {
@@ -35,7 +38,9 @@ it("sets the TOML table once, however many times it's run, and leaves the rest a
     const once = withTomlTable(text, "pair", BODY)
     expect(withTomlTable(once, "pair", BODY), JSON.stringify(text)).toBe(once)
     // tomlTable counts the comments and blank lines before the next table as this one's; withTomlTable keeps them for the next.
-    const keys = tomlTable(once, "pair")?.split(/\r?\n/).filter((l) => l.trim() !== "" && !l.trim().startsWith("#"))
+    const keys = tomlTable(once, "pair")
+      ?.split(/\r?\n/)
+      .filter((l) => l.trim() !== "" && !l.trim().startsWith("#"))
     expect(keys, JSON.stringify(text)).toEqual(["[mcp_servers.pair]", ...BODY])
     expect(withoutPair(once), JSON.stringify(text)).toBe(withoutPair(text))
     expect(tomlTable(once, "other"), JSON.stringify(text)).toBe(tomlTable(text, "other"))

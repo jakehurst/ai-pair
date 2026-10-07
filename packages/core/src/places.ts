@@ -6,9 +6,7 @@ import { lineSpan, lineText, position } from "./text"
 
 export type Range = { start: number; end: number }
 
-export type Resolution =
-  | { ok: true; range: Range }
-  | { ok: false; kind: ErrorKind; message: string; candidates?: Candidate[] }
+export type Resolution = { ok: true; range: Range } | { ok: false; kind: ErrorKind; message: string; candidates?: Candidate[] }
 
 /** A span on `line`: `text`, or from `from` through the first `through` after it. */
 export type Span = { line: number; text?: string; from?: string; through?: string }
@@ -58,7 +56,7 @@ export function spanCandidates(text: string, find: string): Candidate[] {
  * Finds `needle` on `line`, exactly: a match elsewhere doesn't count, and is only listed, to show
  * where the text is. `found`: where each match is, anywhere; `what`: what's looked for, to say so.
  */
-function onLine(text: string, line: number, needle: string, found: number[], what: string): Resolution & { ok: false } | number {
+function onLine(text: string, line: number, needle: string, found: number[], what: string): (Resolution & { ok: false }) | number {
   // The line's offsets once, not a scan from the start of the text for each match (#2).
   const span = lineSpan(text, line)
   const here = span ? found.filter((at) => at >= span.start && at <= span.end) : []

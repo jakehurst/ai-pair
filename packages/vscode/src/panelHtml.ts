@@ -24,9 +24,7 @@ const ICONS = {
 /** `scriptUri`: dist/panel.js, built from webview/panel.ts, as the webview loads it. */
 export function panelHtml(cspSource: string, scriptUri: string): string {
   const nonce = randomBytes(16).toString("base64")
-  const speeds = SPEEDS.map(
-    (s) => `<button role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}×</button>`,
-  ).join("")
+  const speeds = SPEEDS.map((s) => `<button role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}×</button>`).join("")
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>

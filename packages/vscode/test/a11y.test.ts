@@ -34,9 +34,7 @@ function withEveryLink(): void {
 it("makes every link focusable, and none holds another", () => {
   withEveryLink()
   const links = [...document.querySelectorAll("a")]
-  expect(links.map((a) => a.className).toSorted()).toEqual(
-    expect.arrayContaining(["command", "file", "ref", "url"]),
-  )
+  expect(links.map((a) => a.className).toSorted()).toEqual(expect.arrayContaining(["command", "file", "ref", "url"]))
   for (const a of links) {
     expect(a.getAttribute("href"), a.outerHTML).toBe("#")
     expect(a.querySelector("a"), a.outerHTML).toBeNull()

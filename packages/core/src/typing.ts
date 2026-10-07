@@ -21,13 +21,7 @@ function isIndent(ch: string | undefined): boolean {
  * The rhythm: quick within words, a small pause as each word starts, and longer ones after
  * punctuation, opening brackets, and newlines.
  */
-export function planTyping(
-  text: string,
-  cadence: Cadence,
-  atLineStart: boolean,
-  random: () => number,
-  scale = 1,
-): Chunk[] {
+export function planTyping(text: string, cadence: Cadence, atLineStart: boolean, random: () => number, scale = 1): Chunk[] {
   const chars = Array.from(text)
   const chunks: Chunk[] = []
   let pause = 0

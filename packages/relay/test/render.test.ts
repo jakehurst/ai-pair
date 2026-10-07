@@ -129,7 +129,12 @@ describe("reports", () => {
     const text = renderReport(
       report({
         batches: [
-          { id: 9, status: "failed", error: { kind: "command_failed", message: "The command exited with 1." }, runs: [{ command: "npm test", exit_code: 1, output: "1 failed", shell: "zsh" }] },
+          {
+            id: 9,
+            status: "failed",
+            error: { kind: "command_failed", message: "The command exited with 1." },
+            runs: [{ command: "npm test", exit_code: 1, output: "1 failed", shell: "zsh" }],
+          },
         ],
       }),
       "step",
@@ -171,7 +176,10 @@ describe("files", () => {
 
 describe("saving", () => {
   it("says which files a batch couldn't save, and that the disk has the old file", () => {
-    const text = renderReport(report({ batches: [{ id: 3, status: "completed", unsaved: [{ file: "a.ts", error: "the file on disk is newer" }] }] }), "step")
+    const text = renderReport(
+      report({ batches: [{ id: 3, status: "completed", unsaved: [{ file: "a.ts", error: "the file on disk is newer" }] }] }),
+      "step",
+    )
     expect(text).toMatch(/Couldn't save a\.ts \(the file on disk is newer\)/)
     expect(text).toMatch(/file on disk doesn't/)
   })

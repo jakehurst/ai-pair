@@ -61,11 +61,19 @@ describe("places", () => {
     expect(resolveSpan(text, { line: 1, text: "c = 1" })).toMatchObject({
       ok: false,
       kind: "not_found",
-      message: 'The text isn\'t on line 1: line 1 reads "a = 1". It\'s on these lines:',
+      message: "The text isn't on line 1: line 1 reads \"a = 1\". It's on these lines:",
       candidates: [{ line: 3, context: "c = 1" }],
     })
-    expect(resolveSpan(text, { line: 1, text: "d" })).toMatchObject({ ok: false, kind: "not_found", message: 'Text not found: "d"; line 1 reads "a = 1"' })
-    expect(resolveSpan(text, { line: 1, text: " " })).toMatchObject({ ok: false, kind: "ambiguous", message: expect.stringContaining("2 times on line 1") })
+    expect(resolveSpan(text, { line: 1, text: "d" })).toMatchObject({
+      ok: false,
+      kind: "not_found",
+      message: 'Text not found: "d"; line 1 reads "a = 1"',
+    })
+    expect(resolveSpan(text, { line: 1, text: " " })).toMatchObject({
+      ok: false,
+      kind: "ambiguous",
+      message: expect.stringContaining("2 times on line 1"),
+    })
   })
 
   it("takes a span's text starting on its line, which may go on past it", () => {
@@ -136,8 +144,7 @@ describe("line identities", () => {
 
 describe("typing", () => {
   const cadence = { charMs: 100, jitter: 0, wordStartMs: 50, punctuationMs: 30, openBracketMs: 20, newlineMs: 250 }
-  const delays = (text: string, atLineStart = false) =>
-    planTyping(text, cadence, atLineStart, Math.random).map((c) => [c.text, c.delay])
+  const delays = (text: string, atLineStart = false) => planTyping(text, cadence, atLineStart, Math.random).map((c) => [c.text, c.delay])
 
   it("pauses as words start, and after punctuation and opening brackets", () => {
     expect(delays("ab c(d, e")).toEqual([

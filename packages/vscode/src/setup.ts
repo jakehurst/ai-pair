@@ -84,9 +84,7 @@ export async function setUpAgent(launcher: string): Promise<void> {
       await agent.setUp(host, launcher)
       done.push(agent.label)
     } catch (e) {
-      void vscode.window.showErrorMessage(
-        `Couldn't set up ${agent.label}: ${e instanceof Error ? e.message : String(e)}`,
-      )
+      void vscode.window.showErrorMessage(`Couldn't set up ${agent.label}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
   if (picked.some((p) => p.id === "other")) {
@@ -97,9 +95,7 @@ export async function setUpAgent(launcher: string): Promise<void> {
     )
   }
   if (done.length) {
-    void vscode.window.showInformationMessage(
-      `Set up ${list(done)}. Restart it, then ask it to pair in a folder that's open here.`,
-    )
+    void vscode.window.showInformationMessage(`Set up ${list(done)}. Restart it, then ask it to pair in a folder that's open here.`)
   }
 }
 
