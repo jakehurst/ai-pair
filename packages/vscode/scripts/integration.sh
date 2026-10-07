@@ -12,7 +12,7 @@ if [ -z "$EXTENSION_PATH" ]; then
   npm run build --silent
   EXTENSION_PATH="$PWD"
 fi
-npx esbuild test/integration.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist-test/integration.js --log-level=warning
+npx esbuild test/integration.ts --bundle --platform=node --format=cjs --target=node22 --external:vscode --outfile=dist-test/integration.js --log-level=warning
 # VSCODE_ARGS: more flags, like the ones a CI machine needs (--no-sandbox).
 # shellcheck disable=SC2086
 "$CODE" $VSCODE_ARGS --user-data-dir="$TMP/user" --extensions-dir="$TMP/extensions" \

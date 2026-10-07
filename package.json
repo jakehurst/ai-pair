@@ -1,6 +1,9 @@
 {
   "name": "ai-pair",
   "private": true,
+  "engines": {
+    "node": ">=22.19"
+  },
   "workspaces": [
     "packages/*"
   ],
@@ -17,7 +20,7 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
+    "@types/node": "~22.19.0",
     "@vitest/coverage-v8": "^4.1.11",
     "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2",

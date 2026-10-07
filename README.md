@@ -102,7 +102,7 @@ The design is written up in:
 
 ## Install
 
-You need **VS Code 1.105 or newer**. Install **AI Pair** from the
+You need **VS Code 1.106 or newer**. Install **AI Pair** from the
 [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair): in the
 Extensions view, search for `@id:michalstrba.ai-pair`, or run:
 
@@ -110,7 +110,7 @@ Extensions view, search for `@id:michalstrba.ai-pair`, or run:
 code --install-extension michalstrba.ai-pair
 ```
 
-To build it from source instead, you also need **Node.js 20 or newer**:
+To build it from source instead, you also need **Node.js 22.19 or newer**:
 
 ```sh
 git clone https://github.com/faiface/ai-pair.git
