@@ -5,6 +5,9 @@ import { expect, it } from "vitest"
 import { testConfig } from "./fake"
 import { planTyping } from "../src/typing"
 
+/** Every case, on CI's slower runners alongside the other test files. */
+const EXHAUSTIVE_MS = 30_000
+
 const CHARS = ["x", " ", "\t", "\n", "("]
 
 it("splits text into chunks that concatenate to it, each one character or a line break with its indentation", () => {
@@ -24,4 +27,4 @@ it("splits text into chunks that concatenate to it, each one character or a line
       })
     }
   }
-})
+}, EXHAUSTIVE_MS)

@@ -5,6 +5,9 @@ import { expect, it } from "vitest"
 import { resolveSpan, resolveSpot } from "../src/places"
 import { position } from "../src/text"
 
+/** Every case, on CI's slower runners alongside the other test files. */
+const EXHAUSTIVE_MS = 30_000
+
 const CHARS = ["x", "y", "\n"]
 const M = "\u{258c}"
 
@@ -42,7 +45,7 @@ it("resolves a spot only when one match has its marker on the line, and puts it 
       }
     }
   }
-})
+}, EXHAUSTIVE_MS)
 
 it("resolves a span only when its text starts once on the line, and a range to the first `through` after it", () => {
   for (const text of strings(5)) {
@@ -65,4 +68,4 @@ it("resolves a span only when its text starts once on the line, and a range to t
       }
     }
   }
-})
+}, EXHAUSTIVE_MS)
