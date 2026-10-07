@@ -46,6 +46,35 @@ export function actionKinds(value: object): string[] {
   return Object.keys(value).filter((k) => (ACTION_KINDS as readonly string[]).includes(k))
 }
 
+const MOVE_FIELDS = ["file", "line", "at", "to"]
+const SPAN_FIELDS = ["file", "line", "text", "from", "through"]
+const fieldList = (fields: string[]) => fields.map((f) => `\`${f}\``).join(", ")
+
+/**
+ * What's wrong with an action's fields, if anything: the fields the relay's schema allows, a
+ * `delete` that is `true`, and a `wait` that is a number. The player checks this too, so an action
+ * that skipped the schema is held to it all the same (#45).
+ */
+export function fieldsProblem(action: object): string | undefined {
+  const kind = actionKinds(action)[0]
+  if (kind === undefined) return undefined
+  const allowed = kind === "run" ? ["run", "wait"] : [kind]
+  const extra = Object.keys(action).filter((k) => !allowed.includes(k))
+  if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`
+  if ("delete" in action && action.delete !== true) return "`delete` is `true`: it deletes the current selection."
+  if ("wait" in action && action.wait !== undefined && typeof action.wait !== "number") return "`wait` is a number: the seconds to wait."
+  const place: unknown = "move" in action ? action.move : "select" in action ? action.select : "point" in action ? action.point : undefined
+  if (typeof place === "object" && place !== null) {
+    // The place's own check first: it knows what a mistaken field was meant to be.
+    const problem = kind === "move" ? moveProblem(place) : spanProblem(place)
+    if (problem) return problem
+    const fields = kind === "move" ? MOVE_FIELDS : SPAN_FIELDS
+    const unknown = Object.keys(place).filter((k) => !fields.includes(k))
+    if (unknown.length > 0) return `Unknown field ${fieldList(unknown)} in \`${kind}\`: it takes ${fieldList(fields)}.`
+  }
+  return undefined
+}
+
 /** What's wrong with a place's `line`, if anything. */
 function lineProblem(line: unknown): string | undefined {
   if (line === undefined || (typeof line === "number" && Number.isInteger(line) && line >= 1)) return undefined
