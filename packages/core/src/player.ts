@@ -5,7 +5,7 @@ import type { Action, BatchResult, Candidate, Code, ErrorKind, RunResult, SpanTa
 import * as nodePath from "node:path"
 import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, typeProblem, withinFolder } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from "./places"
-import type { Config } from "./controller"
+import type { Config } from "./config"
 import type { LineIds, Sighting } from "./lines"
 import type { Change, EditorPort, Focus, PanelPort } from "./ports"
 import { fileLines, isLineStart, lineEnd, lineText, position } from "./text"

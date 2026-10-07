@@ -1,7 +1,8 @@
 import * as nodePath from "node:path"
 import { vi } from "vitest"
 import { withinFolder } from "@ai-pair/protocol"
-import { Controller, defaultConfig, type Config } from "../src/controller"
+import { defaultConfig, type Config } from "../src/config"
+import { Controller } from "../src/controller"
 import type {
   AgentState,
   CommandOutcome,

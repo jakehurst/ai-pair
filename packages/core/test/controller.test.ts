@@ -1209,6 +1209,10 @@ describe("sessions", () => {
   it("rejects tools outside a session and a second start", async () => {
     const { controller } = setup()
     await expect(controller.step([])).rejects.toMatchObject({ code: "no_session" })
+    // `read` too rejects, rather than throwing before it returns (#12).
+    let reading: Promise<unknown> | undefined
+    expect(() => (reading = controller.read("a.ts"))).not.toThrow()
+    await expect(reading).rejects.toMatchObject({ code: "no_session" })
     await controller.start()
     await expect(controller.start()).rejects.toMatchObject({ code: "session_active" })
   })

@@ -3,7 +3,7 @@
 // player as real playback, on a stage that plays in a copy of the editor, instantly and silently.
 
 import type { Action, BatchResult } from "@ai-pair/protocol"
-import type { Config } from "./controller"
+import type { Config } from "./config"
 import type { LineIds, Sighting } from "./lines"
 import { Player, transformScene, type Scene } from "./player"
 import type { Change, CommandOutcome, EditorPort, PanelPort } from "./ports"
