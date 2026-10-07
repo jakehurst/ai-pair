@@ -793,6 +793,43 @@ describe("reports", () => {
       code: { file: "a.ts", lines: [{ number: 1, text: "xy▌" }] },
     })
   })
+
+  it("looks in the file its batch named for an action without `file`, not the cursor's", async () => {
+    const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\nsecond\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.read("b.ts")
+    await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }]))
+    const pointed = await until(controller.step([{ point: { file: "b.ts", line: 1, text: "b" } }, { point: { line: 2, text: "second" } }]))
+    expect(pointed.rejected).toBeUndefined()
+    await until(controller.step([]))
+    expect(editor.point).toMatchObject({ file: editor.resolvePath("b.ts") })
+    const selected = await until(controller.step([{ point: { file: "b.ts", line: 1, text: "b" } }, { select: { line: 2, text: "second" } }]))
+    expect(selected.rejected).toBeUndefined()
+  })
+
+  it("looks in the file its batch named before the agent's cursor is in any file", async () => {
+    const { controller } = setup({ "b.ts": "b\nsecond\n" })
+    await controller.start()
+    await controller.read("b.ts")
+    const report = await until(controller.step([{ point: { file: "b.ts", line: 1, text: "b" } }, { point: { line: 2, text: "second" } }]))
+    expect(report.rejected).toBeUndefined()
+  })
+
+  it("rejects a type or delete with the cursor outside the file its batch named, editing nothing", async () => {
+    const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.read("b.ts")
+    await until(controller.step([{ select: { file: "a.ts", line: 1, text: "a" } }]))
+    for (const edit of [{ type: "y▌" }, { delete: true }] as Action[]) {
+      const report = await until(controller.step([{ point: { file: "b.ts", line: 1, text: "b" } }, edit]))
+      expect(report.rejected).toMatchObject({ index: 2, error: { kind: "invalid_action", message: expect.stringContaining("b.ts") } })
+    }
+    await until(controller.step([]))
+    expect(editor.text("a.ts")).toBe("a\n")
+    expect(editor.text("b.ts")).toBe("b\n")
+  })
 })
 
 describe("interruptions", () => {

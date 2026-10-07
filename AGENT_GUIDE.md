@@ -263,6 +263,9 @@ type_fast ";▌"
   Small batches keep the programmer able to steer.
 - **One file per batch.** Name the file in the batch's first `move`,
   `select` or `point`; to continue in another file, start a new batch.
+  Actions after that without `file` act in the file the batch named. A
+  `point` doesn't move your cursor, so `type` and `delete` need a `move` or
+  `select` into that file first.
 - `step` returns the report of the *previous* batch. Plan the next batch while
   the current one plays.
 - **Check the code in each report.** It shows what each batch produced, with
