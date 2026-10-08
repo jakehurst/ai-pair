@@ -105,6 +105,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private readonly viewportLines = new Map<vscode.ViewColumn | undefined, number>()
   /** Our own scroll is under way: until it finishes, the visible ranges are the ones from before it. */
   private scrolling = false
+  /** A scroll stopped short, as the state stopped following: a command ran (specs/Scroll.tla). */
+  private cut = false
   private readonly disposables: vscode.Disposable[] = []
   private readonly cursorTypes: Record<string, vscode.TextEditorDecorationType>
   private labelTypes: Record<string, vscode.TextEditorDecorationType> = {}
@@ -259,11 +261,20 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   renderCursor(cursor: CursorView | null, state: AgentState, focus: Focus): void {
     this.cursor = cursor
     this.focus = focus
-    if (state !== this.state) {
+    const changed = state !== this.state
+    if (changed) {
       this.state = state
       this.updatePulse()
     }
     this.redraw()
+    if (!changed) return
+    // A scroll a command cut short goes on once it's done; a pause's end reveals the target anyway,
+    // and the programmer's turn is theirs to look where they like (specs/Scroll.tla).
+    if (state === "navigator") this.cut = false
+    else if (this.cut && FOLLOWING.has(state)) {
+      this.cut = false
+      this.follow()
+    }
   }
 
   renderPoint(point: { file: string; start: number; end: number } | null): void {
@@ -435,6 +446,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
           this.viewportLines.set(editor.viewColumn, height)
         }
         const target = this.target()
+        if (!FOLLOWING.has(this.state)) this.cut = true
         if (height === undefined || target?.file !== editor.document.uri.fsPath || !FOLLOWING.has(this.state)) return
         line = editor.document.positionAt(target.offset).line
       }
@@ -459,7 +471,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     let top = from
     while (top !== to) {
       await new Promise((resolve) => setTimeout(resolve, FRAME_MS))
-      if (!FOLLOWING.has(this.state)) return
+      if (!FOLLOWING.has(this.state)) {
+        this.cut = true
+        return
+      }
       const t = Math.min(1, (Date.now() - started) / GLIDE_MS)
       const next = glideTop(from, to, t)
       if (next === top) continue

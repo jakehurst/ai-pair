@@ -6,6 +6,8 @@ Models of the code's state machines, checked with TLC (issue #19). Run them all 
 specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 ```
 
+[COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the spec that models it, or says why it has none.
+
 CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. `Spec_<commit>[_<issue>].cfg` models the code at that commit, before a fix, and has to find a violation: it is how each spec was validated, by reproducing a known bug. Where no known bug lived, `Spec_mutation.cfg` switches off the code's defenses instead, and has to find a violation the same way.
 
 ## Results
@@ -47,6 +49,12 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Outside_every.cfg` | same, marking every watcher event | `NoFalseMark` violated (validation by mutation) | 12 |
 | `Outside_afterSave.cfg` | same, skipping an event after a save | `NoFalseMark` violated (validation by mutation) | 12 |
 | `Outside_unsettled.cfg` | same, deciding before VS Code tells of its save | `NoFalseMark` violated (validation by mutation) | 53 |
+| `Navigator.cfg` | `Edits = 3` | holds | 44 |
+| `Navigator_1442c5a.cfg` | same | `NotWhileTyping` violated (found in the #19 sweep) | 43 |
+| `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
+| `EditEvents_1442c5a.cfg` | same | `Explained` violated (found in the #19 sweep) | 60 |
+| `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2` | holds | 2,952 |
+| `Scroll_1442c5a.cfg` | same | `Settles` violated (found in the #19 sweep) | 3,342 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
@@ -102,7 +110,7 @@ Each violation's trace was checked against the code step by step before it was r
 
 ### `Panel`: the history
 
-`packages/vscode/src/panelHtml.ts`. `Fix = 1` is the code since #18.
+The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #18.
 
 | Spec | Code |
 |---|---|
@@ -224,7 +232,7 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 
 ### `Draft`: the reply box's pause, across the view's page
 
-`packages/vscode/src/panelHtml.ts` (`syncDraft`, `takeDraft`) and `panel.ts` (`draft`, `reply`, `ready`, `onDidDispose`), with `Controller.pause` and `resume`. A draft in the reply box pauses playback for the reason "reply". `ClearOnReady` is the fix for #69: a new page (`ready`) and a disposed view have no draft, so they remove that reason.
+`packages/vscode/src/webview/panel.ts` (`syncDraft`, `takeDraft`) and `panel.ts` (`draft`, `reply`, `ready`, `onDidDispose`), with `Controller.pause` and `resume`. A draft in the reply box pauses playback for the reason "reply". `ClearOnReady` is the fix for #69: a new page (`ready`) and a disposed view have no draft, so they remove that reason.
 
 | Spec | Code |
 |---|---|
@@ -234,7 +242,7 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 
 ### `RunBox`: the panel's run box
 
-One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and the page's `case "run"` and `setActive` in `panelHtml.ts`. Every way a run ends posts a phase other than `confirm` and `running`, which clears the box: skipped or interrupted at the confirmation (`declined`), a command that never started or threw (`declined`), and one that ran (`done`, `background`). A session ending clears it too.
+One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and the page's `case "run"` and `setActive` in `webview/panel.ts`. Every way a run ends posts a phase other than `confirm` and `running`, which clears the box: skipped or interrupted at the confirmation (`declined`), a command that never started or threw (`declined`), and one that ran (`done`, `background`). A session ending clears it too.
 
 | Spec | Code |
 |---|---|
@@ -269,6 +277,35 @@ The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts
 ### `ProjectGuide`: which project guides `start` reads
 
 The feature of #23, specified before its code: `projectGuides` in `packages/relay/src/guide.ts`. Checked over every small tree, as `ASSUME`s: walking up from the working directory to the workspace folder gives exactly the guides on that path that git doesn't ignore, outer first, and none above the folder. Walking past the folder, or reading an ignored guide, is caught.
+
+### `Navigator`: the programmer's edits, reported when they pause
+
+`userEdit`, the navigator timer, `ready` for `listen`, and `snapshot` in `packages/core/src/controller.ts`. During the programmer's turn, a `listen` returns for their edits only once they pause typing (`navigatorIdleMs` after their last edit), so the agent comments on a whole thought. `ResetReady` is the fix: an edit takes back `navigatorReady`, which a pause before it set, so a `listen` made after the programmer resumes typing waits for their next pause.
+
+| Spec | Code |
+|---|---|
+| `Edit` | `userEdit` in the programmer's turn: `recordEdit`, `navigatorReady = false`, the timer started again |
+| `Pause`, `Fire` | `navigatorIdleMs` without an edit; the timer setting `navigatorReady` and calling `pump()` |
+| `Listen`, `Return`, `Timeout` | `listen`; `ready` holding, and `snapshot` clearing `navigatorReady`; `maxBlockMs` |
+
+### `EditEvents`: an edit undone, in the report
+
+`recordEdit`, `otherEdit`, and `snapshot` in `packages/core/src/controller.ts`, for one file. A report has one edit event per file, its diff from the file's text at the first edit since the last report. An edit that interrupts (the programmer's, or a tool's to a file the queued batches edit) discards the agent's batches. `KeepInterrupts` is the fix: such an edit is reported even when the file ends up as it was, with an empty diff, so the agent knows why its batches were discarded. A tool's net-zero edit that interrupted nothing is still left out.
+
+| Spec | Code |
+|---|---|
+| `Programmer`, `Other` | `userEdit` and `otherEdit` → `recordEdit`: the baseline, `by`, `interrupted` |
+| `Report` | `snapshot`: the event, unless the file is unchanged and the edit didn't interrupt |
+
+### `Scroll`: follow mode's scrolling
+
+`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in `packages/vscode/src/editor.ts`, with `comfortable` and `landing` from `view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when the state stops following: a pause, or a command running. A pause ends in `resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut short goes on once the command is done, from `renderCursor`; before it, the view stayed where the glide stopped, with the target possibly out of view. The programmer's turn drops it.
+
+| Spec | Code |
+|---|---|
+| `Move` | an action moving the target, and the player's `follow()`; no action plays while a command runs |
+| `Leave`, `Return` | the state leaving the following states (`paused`, `running`) and coming back: `renderCursor` |
+| `Frame` | `glide`'s frames; `scroll`'s `finally` and its follow if the target moved |
 
 ### `Turns`: only talk during the programmer's turn
 

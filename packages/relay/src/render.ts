@@ -38,6 +38,10 @@ function renderEvent(e: Event): string {
     case "message":
       return `The programmer said:\n${quote(e.text)}${e.selection ? `\n${renderExcerpt(e.selection)}` : ""}`
     case "edit":
+      if (e.diff === "") {
+        const who = e.by === "other" ? "A tool, a formatter, or something on disk" : "The programmer"
+        return `${who} edited ${e.file}, then changed it back: no net change.`
+      }
       if (e.by === "other") return `${e.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${e.diff}`
       return `The programmer edited ${e.file}:\n${e.diff}`
     case "interrupt":
