@@ -150,6 +150,9 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
 
   #now { display: none; margin-top: 8px; }
   body.active #now { display: block; }
+  body.calibrating #now { display: block; }
+  #passage { margin-top: 10px; line-height: 1.6; max-height: 60vh; overflow: auto; }
+  #passage-notice { margin-top: 8px; font-size: 0.85em; color: var(--muted); }
   #now-text { font-size: calc(var(--vscode-editor-font-size, 13px) * 1.3); line-height: 1.5; overflow-wrap: anywhere; }
   #now-text.empty { font-size: inherit; color: var(--muted); }
   #now-text code { font-size: 0.85em; padding: 1px 3px; border-radius: 3px; }
@@ -267,6 +270,7 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
       <div id="now">
         <div id="now-text" class="empty" aria-live="polite"></div>
         <div id="now-ref"></div>
+        <div id="passage" hidden><div id="passage-text"></div><div id="passage-notice"></div></div>
         <div id="run">
           <div id="run-label"></div>
           <div id="run-cmd"></div>

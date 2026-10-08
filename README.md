@@ -145,12 +145,22 @@ code --install-extension ai-pair-*.vsix
    the `pair` server itself.
 3. **Restart your agent** so it picks up the new server.
 
+## Calibrate your reading speed
+
+The pause after each of the agent's messages is sized to the message, at a
+rate per character. To set that rate to your own pace, run *AI Pair: Calibrate
+Reading Speed*: the Pair panel shows a passage when you type `go`, you read it,
+and you type `x` the moment you finish. The rate goes into `aiPair.timing` in your
+settings. Asking the agent for another passage ("use the Rainbow Passage")
+has it fetch the text and start the calibration with it.
+
 ## Settings
 
 | Setting | |
 |---|---|
 | `aiPair.speed` | Overall playback speed (the panel's speed menu offers 0.4× to 3.0×). |
 | `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |
+| `aiPair.calibrationPassage` | The passage *AI Pair: Calibrate Reading Speed* times you on, as `{ "title": ..., "text": ..., "notice": ... }`; empty, the built-in one. The agent's `calibrate` tool writes it. |
 | `aiPair.agentName` | The name on the agent's cursor. |
 | `aiPair.timing` | Fine-tune any typing or pause duration, e.g. `{ "afterSelectMs": 900, "type": { "wordStartMs": 140 } }`. Every key is in [`timing.ts`](packages/core/src/timing.ts). |
 | `aiPair.confirmCommands` | Ask before each command the agent runs in the terminal (default on). Turned off, the agent's commands run without any prompt, not even its own. |

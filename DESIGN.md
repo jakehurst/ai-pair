@@ -187,6 +187,13 @@ It's the `aiPair.speed` setting, which takes any value from 0.25 to 4. The
 reading menu next to it scales only the reading pause: `aiPair.readingSpeed`,
 with the same range (#109).
 
+**Calibration.** *AI Pair: Calibrate Reading Speed* (or the agent's
+`calibrate` tool, with a passage of its own) announces a passage in the panel; `go`
+shows it and starts the clock, `x` stops it. The rate, elapsed time over the
+passage's characters, is written to `aiPair.timing` in the user settings, and
+playback, held while the passage is read, resumes only once the player has the
+new rate (specs/Calibration.tla). Any other reply cancels (#109).
+
 ### Undo
 
 Each editing action is one undo stop: characters are applied as successive

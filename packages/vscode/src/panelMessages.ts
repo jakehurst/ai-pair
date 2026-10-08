@@ -1,6 +1,7 @@
 // The messages between the narration panel's page (webview/panel.ts) and the extension (panel.ts).
 
 import type { PanelEvent, Ref } from "@ai-pair/core"
+import type { CalibrationView } from "./calibration"
 
 /** Messages from the page. */
 export type FromPanel =
@@ -34,3 +35,5 @@ export type ToPanel =
   | { type: "focusReply" }
   | { type: "speed"; value: number }
   | { type: "readingSpeed"; value: number }
+  /** The reading speed calibration's state, for the band (#109). */
+  | { type: "calibration"; view: CalibrationView }

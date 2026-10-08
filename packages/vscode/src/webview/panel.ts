@@ -3,6 +3,7 @@
 
 import type { AgentState, PanelEvent, Ref } from "@ai-pair/core"
 import type { FromPanel, ToPanel } from "../panelMessages"
+import type { CalibrationView } from "../calibration"
 
 declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void }
 
@@ -27,6 +28,9 @@ const ui = {
   speedMenu: $("speed-menu", HTMLElement),
   readingSpeed: $("reading-speed", HTMLButtonElement),
   readingMenu: $("reading-menu", HTMLElement),
+  passage: $("passage", HTMLElement),
+  passageText: $("passage-text", HTMLElement),
+  passageNotice: $("passage-notice", HTMLElement),
   end: $("end", HTMLButtonElement),
   now: $("now-text", HTMLElement),
   ref: $("now-ref", HTMLElement),
@@ -49,6 +53,7 @@ const ui = {
 }
 
 let active = false
+let calibrating = false
 let turn = "agent"
 let paused = false
 let replaying = false
@@ -212,6 +217,40 @@ function setNow(text: string): void {
   arrive(ui.now)
 }
 
+// The reading speed calibration (#109): its instructions in the band, the passage under them.
+function showCalibration(view: CalibrationView): void {
+  calibrating = view.phase === "armed" || view.phase === "reading"
+  document.body.classList.toggle("calibrating", calibrating)
+  ui.reply.disabled = !active && !calibrating
+  ui.passage.hidden = view.phase !== "reading"
+  switch (view.phase) {
+    case "armed":
+      setNow(
+        "Reading speed calibration. When you type go, the passage appears: " +
+          view.title +
+          ". Read it at the pace at which you read and understand it, and the moment you finish, type x.",
+      )
+      return
+    case "reading":
+      ui.passageText.textContent = view.text
+      ui.passageNotice.textContent = view.notice ?? ""
+      setNow(view.title + ". Type x the moment you finish.")
+      return
+    case "done":
+      setNow(
+        "Measured " +
+          Math.round(view.msPerChar) +
+          " ms per character, about " +
+          view.wordsPerMinute +
+          " words a minute. Saved to your settings: every message now gets its own time at that pace.",
+      )
+      return
+    case "idle":
+      setNow("Calibration canceled; the reading speed is unchanged.")
+      return
+  }
+}
+
 // The reading pause fills a ring around the status dot.
 function startReading(ms: number): void {
   if (replaying) return
@@ -296,7 +335,7 @@ function clearRun(): void {
 function setActive(on: boolean): void {
   active = on
   document.body.classList.toggle("active", on)
-  ui.reply.disabled = !on
+  ui.reply.disabled = !on && !calibrating
   if (!on) {
     suspended = false
     reading = null
@@ -414,6 +453,9 @@ function handle(e: ToPanel): void {
       return
     case "readingSpeed":
       showSpeed(ui.readingSpeed, ui.readingMenu, "Reading speed", "read ", e.value)
+      return
+    case "calibration":
+      showCalibration(e.view)
       return
     default:
       throw new Error(`Unknown panel message: ${JSON.stringify(e satisfies never)}`)

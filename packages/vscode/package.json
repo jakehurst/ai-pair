@@ -65,6 +65,11 @@
         "category": "AI Pair"
       },
       {
+        "command": "aiPair.calibrate",
+        "title": "Calibrate Reading Speed",
+        "category": "AI Pair"
+      },
+      {
         "command": "aiPair.togglePause",
         "title": "Pause / Resume",
         "category": "AI Pair"
@@ -126,6 +131,11 @@
           "minimum": 0.25,
           "maximum": 4,
           "description": "Reading speed: divides only the pause after each of the agent's messages. The panel's reading menu offers 0.4x to 3x."
+        },
+        "aiPair.calibrationPassage": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "The passage read to calibrate the reading speed: `{ \"title\": ..., \"text\": ..., \"notice\": ... }`. Empty, the built-in one, Comma Gets a Cure. The agent's `calibrate` tool writes it."
         },
         "aiPair.agentName": {
           "type": "string",

@@ -68,6 +68,10 @@ pair on…"). In Claude Code you can also run `/mcp__pair__start`.
   brings you back.
 - **My turn / Hand back:** write a part yourself while the agent navigates.
 - **The speed menu (1.0×):** the pace, from 0.4× to 3.0×.
+- **The reading menu (read 1.0x):** the pause after each message, from 0.4x
+  to 3.0x.
+- **AI Pair: Calibrate Reading Speed** times you on a passage and sets the
+  pause after each message to your own pace.
 
 **AI Pair: Play Demo Session** shows what it's like without an agent.
 
@@ -75,6 +79,8 @@ pair on…"). In Claude Code you can also run `/mcp__pair__start`.
 
 - `aiPair.speed`: overall playback speed.
 - `aiPair.readingSpeed`: reading speed, for the pause after each message.
+- `aiPair.calibrationPassage`: the passage the calibration times you on; empty, the
+  built-in one.
 - `aiPair.agentName`: the name on the agent's cursor.
 - `aiPair.timing`: fine-tune any typing or pause duration.
 - `aiPair.confirmCommands`: ask before each command the agent runs in the

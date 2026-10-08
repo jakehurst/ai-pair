@@ -4,6 +4,9 @@
 
 - A reading menu sets the pause after each message on its own, from 0.4x to
   3.0x; the pause grows with the message's length, with no cap.
+- **AI Pair: Calibrate Reading Speed** times you on a passage and sets the
+  pause after each message to your own pace. The agent can supply another
+  passage with its `calibrate` tool.
 
 ## 0.1.0
 
