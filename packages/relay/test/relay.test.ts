@@ -107,6 +107,14 @@ describe("relay", () => {
     expect(second.text).toContain("calibration_busy")
   })
 
+  it("types a backslash-u sequence as its six characters, not as the character it names", async () => {
+    const client = await connect()
+    await call(client, "start")
+    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "\\u0041\u{258c}" }] })
+    await call(client, "step", { actions: [] })
+    expect(editor.text("src/a.ts")).toBe("\\u0041")
+  })
+
   it("runs a session: start with the guide, pipelined steps, read, end", async () => {
     const client = await connect()
     const started = await call(client, "start", { task: "test" })
