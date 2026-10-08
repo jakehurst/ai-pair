@@ -6,84 +6,108 @@ EXTENDS Naturals
 
 CONSTANTS
     T,      \* how many terminals there can be
-    Runs    \* how many run() calls in a run
+    Runs,   \* how many run() calls in a run
+    Dirs    \* the directories a run may ask for
 
 Terms == 1..T
 
 VARIABLES
-    state,    \* each terminal: "unused", "open", "closed" (by the programmer)
+    state,    \* each terminal: "unused", "open", "exited" (its shell), "closed" (by the programmer)
     busy,     \* Owned.busy
-    cmd,      \* each terminal's command: "none", "running", "ended"
+    cmd,      \* each terminal's command: "none", "running", "ended", "untracked" (typed in)
     call,     \* the run() call: "idle", "integration", "running", "returned"
     at,       \* the terminal the call has, or 0
     aborted,  \* the playback signal fired
     runs,     \* how many run() calls have started
-    reused    \* a call took a terminal that was busy
+    reused,   \* a call took a terminal that was busy
+    dir       \* each terminal's directory (Owned.cwd, or where its shell is)
 
-vars == <<state, busy, cmd, call, at, aborted, runs, reused>>
+vars == <<state, busy, cmd, call, at, aborted, runs, reused, dir>>
 
 Init ==
     /\ state = [t \in Terms |-> "unused"] /\ busy = [t \in Terms |-> FALSE] /\ cmd = [t \in Terms |-> "none"]
     /\ call = "idle" /\ at = 0 /\ aborted = FALSE /\ runs = 0 /\ reused = FALSE
+    /\ dir = [t \in Terms |-> CHOOSE d \in Dirs : TRUE]
 
 Set(f, x, v) == [f EXCEPT ![x] = v]
 
-\* acquire(): an open terminal that isn't busy, else a new one (createTerminal); then busy = true.
-\* Its signal is the one confirm() checked, synchronously, so it hasn't fired yet.
+\* acquire(): a terminal that isn't busy, whose shell is alive, in the run's directory, else a new
+\* one there (createTerminal); then busy = true. The signal may have fired already: an interrupt
+\* during the save before it, with confirmation off.
 Start ==
     /\ call \in {"idle", "returned"} /\ runs < Runs
-    /\ \E t \in Terms :
-          /\ \/ state[t] = "open" /\ ~busy[t]
-             \/ state[t] = "unused" /\ ~\E u \in Terms : state[u] = "open" /\ ~busy[u]
+    /\ \E d \in Dirs, t \in Terms :
+          /\ \/ state[t] = "open" /\ ~busy[t] /\ dir[t] = d
+             \/ state[t] = "unused" /\ ~\E u \in Terms : state[u] = "open" /\ ~busy[u] /\ dir[u] = d
           /\ reused' = (reused \/ busy[t])
           /\ state' = Set(state, t, "open") /\ busy' = Set(busy, t, TRUE) /\ cmd' = Set(cmd, t, "none")
-          /\ at' = t
-    /\ call' = "integration" /\ aborted' = FALSE /\ runs' = runs + 1
+          /\ dir' = Set(dir, t, d) /\ at' = t
+    /\ call' = "integration" /\ aborted' \in BOOLEAN /\ runs' = runs + 1
 
 \* Shell integration arrives, or its 5 s timer fires with it present: the command starts.
 Integrated ==
-    /\ call = "integration" /\ state[at] = "open"
+    /\ call = "integration" /\ state[at] = "open" /\ ~aborted
     /\ call' = "running" /\ cmd' = Set(cmd, at, "running")
-    /\ UNCHANGED <<state, busy, at, aborted, runs, reused>>
+    /\ UNCHANGED <<state, busy, at, aborted, runs, reused, dir>>
+
+\* The 5 s timer fires without integration: the command is typed in, and run() returns. Nothing
+\* tells when it ends, so the terminal stays busy, and is never reused.
+NoIntegration ==
+    /\ call = "integration" /\ ~aborted /\ state[at] = "open"
+    /\ call' = "returned" /\ cmd' = Set(cmd, at, "untracked")
+    /\ UNCHANGED <<state, busy, at, aborted, runs, reused, dir>>
 
 \* Interrupted while waiting for integration: run() returns notStarted, and the terminal is free.
 AbortBeforeStart ==
     /\ call = "integration" /\ ~aborted
     /\ aborted' = TRUE /\ call' = "returned" /\ busy' = Set(busy, at, FALSE)
-    /\ UNCHANGED <<state, cmd, at, runs, reused>>
+    /\ UNCHANGED <<state, cmd, at, runs, reused, dir>>
+
+\* The signal fired before the run: shellIntegration() returns at once, and run() returns notStarted.
+AlreadyAborted ==
+    /\ call = "integration" /\ aborted
+    /\ call' = "returned" /\ busy' = Set(busy, at, FALSE)
+    /\ UNCHANGED <<state, cmd, at, aborted, runs, reused, dir>>
 
 \* A command ends (onDidEndTerminalShellExecution): `ended` frees its terminal.
 End(t) ==
     /\ cmd[t] = "running" /\ cmd' = Set(cmd, t, "ended") /\ busy' = Set(busy, t, FALSE)
     /\ call' = IF call = "running" /\ at = t THEN "returned" ELSE call
-    /\ UNCHANGED <<state, at, aborted, runs, reused>>
+    /\ UNCHANGED <<state, at, aborted, runs, reused, dir>>
 
 \* stopWaiting: the wait elapses, or playback is interrupted; run() returns with the command running.
 StopWaiting ==
     /\ call = "running" /\ cmd[at] = "running"
     /\ call' = "returned" /\ \E a \in BOOLEAN : aborted' = (aborted \/ a)
-    /\ UNCHANGED <<state, busy, cmd, at, runs, reused>>
+    /\ UNCHANGED <<state, busy, cmd, at, runs, reused, dir>>
 
 \* The programmer closes a terminal: onDidCloseTerminal forgets it and ends the call's wait.
 Close(t) ==
-    /\ state[t] = "open" /\ state' = Set(state, t, "closed") /\ busy' = Set(busy, t, FALSE)
+    /\ state[t] \in {"open", "exited"} /\ state' = Set(state, t, "closed") /\ busy' = Set(busy, t, FALSE)
     /\ cmd' = IF cmd[t] = "running" THEN Set(cmd, t, "ended") ELSE cmd
     /\ call' = IF call = "running" /\ at = t THEN "returned" ELSE call
-    /\ UNCHANGED <<at, aborted, runs, reused>>
+    /\ UNCHANGED <<at, aborted, runs, reused, dir>>
+
+\* The shell exits (`exit` typed in it): the terminal stays open, but isn't reused (exitStatus).
+\* Not while its command runs, or while a run waits for its integration.
+Exit(t) ==
+    /\ state[t] = "open" /\ cmd[t] # "running" /\ ~(call = "integration" /\ at = t)
+    /\ state' = Set(state, t, "exited")
+    /\ UNCHANGED <<busy, cmd, call, at, aborted, runs, reused, dir>>
 
 \* Closed while waiting for integration: the timer fires with none, the text goes to a closed
 \* terminal, VS Code throws, and run() rejects, which the player reports as the action's error.
 ClosedWhileWaiting ==
-    /\ call = "integration" /\ state[at] = "closed"
+    /\ call = "integration" /\ state[at] = "closed" /\ ~aborted
     /\ call' = "returned"
-    /\ UNCHANGED <<state, busy, cmd, at, aborted, runs, reused>>
+    /\ UNCHANGED <<state, busy, cmd, at, aborted, runs, reused, dir>>
 
 Next ==
-    \/ Start \/ Integrated \/ AbortBeforeStart \/ StopWaiting \/ ClosedWhileWaiting
-    \/ \E t \in Terms : End(t) \/ Close(t)
+    \/ Start \/ Integrated \/ NoIntegration \/ AbortBeforeStart \/ AlreadyAborted \/ StopWaiting \/ ClosedWhileWaiting
+    \/ \E t \in Terms : End(t) \/ Close(t) \/ Exit(t)
 
 \* Integration or its timer comes, commands end, and waits elapse.
-Spec == Init /\ [][Next]_vars /\ WF_vars(Integrated \/ ClosedWhileWaiting) /\ WF_vars(StopWaiting)
+Spec == Init /\ [][Next]_vars /\ WF_vars(Integrated \/ NoIntegration \/ AlreadyAborted \/ ClosedWhileWaiting) /\ WF_vars(StopWaiting)
         /\ \A t \in Terms : WF_vars(End(t))
 
 \* A busy terminal is never given to another command.

@@ -14,7 +14,7 @@ CONSTANTS
     RestOnly,    \* TRUE: a `type` cut after a chunk returns only what's left of it
     ConsumeRun   \* TRUE: a `run` interrupted while its command runs counts as played
 
-Kinds == {"say", "move", "select", "point", "type", "delete", "run"}
+Kinds == {"say", "move", "select", "point", "type", "type0", "delete", "run"}
 
 Steps(k) ==
     CASE k = "say"    -> <<"effect", "await">>
@@ -23,6 +23,8 @@ Steps(k) ==
       [] k = "point"  -> <<"await", "await", "effect", "await">>
       \* Two chunks: show, getText, eol; then a delay before each chunk.
       [] k = "type"   -> <<"await", "await", "await", "await", "check", "effect", "await", "check", "effect">>
+      \* Nothing to type (only the cursor marker, no selection): show, getText, eol, and no chunks.
+      [] k = "type0"  -> <<"await", "await", "await">>
       [] k = "delete" -> <<"await", "await", "check", "effect", "await">>
       \* save, confirm, shellIntegration (`notStarted`), the command, then still running.
       [] k = "run"    -> <<"await", "await", "check", "await", "check", "effect", "await", "consumed">>
@@ -49,9 +51,10 @@ Init ==
 
 Any(n) == \E j \in 1..n : effects[j] > 0
 
-\* stopped(id, unplayed, effect): discarded if nothing took effect before the unplayed ones.
-Stopped(from, rest) ==
-    result' = [status |-> IF Any(Len(batch)) THEN "interrupted" ELSE "discarded", from |-> from, rest |-> rest]
+\* stopped(id, unplayed, effect). `effect`: an earlier action changed something on screen, or this
+\* one typed some of its text, or left its command running.
+Stopped(from, rest, effect) ==
+    result' = [status |-> IF effect THEN "interrupted" ELSE "discarded", from |-> from, rest |-> rest]
 
 Next1 ==
     /\ result = Playing
@@ -60,7 +63,7 @@ Next1 ==
                /\ UNCHANGED <<i, pc, effects>>
        \* The loop checks for an interrupt before each action.
        ELSE IF pc = 1 /\ interrupted
-          THEN Stopped(i, 0) /\ UNCHANGED <<i, pc, effects>>
+          THEN Stopped(i, 0, Any(i - 1)) /\ UNCHANGED <<i, pc, effects>>
        ELSE IF pc > Len(Steps(batch[i]))
           THEN i' = i + 1 /\ pc' = 1 /\ UNCHANGED <<effects, result>>
        ELSE LET step == Steps(batch[i])[pc] IN
@@ -68,10 +71,10 @@ Next1 ==
                  effects' = [effects EXCEPT ![i] = @ + 1] /\ pc' = pc + 1 /\ UNCHANGED <<i, result>>
             [] step = "check" /\ interrupted ->
                  \* With something typed: what's left, or (mutation) all of it.
-                 /\ IF effects[i] > 0 /\ RestOnly THEN Stopped(i, Full(batch[i]) - effects[i]) ELSE Stopped(i, 0)
+                 /\ IF effects[i] > 0 /\ RestOnly THEN Stopped(i, Full(batch[i]) - effects[i], TRUE) ELSE Stopped(i, 0, Any(i - 1))
                  /\ UNCHANGED <<i, pc, effects>>
             [] step = "consumed" /\ interrupted ->
-                 /\ IF ConsumeRun THEN Stopped(i + 1, 0) ELSE Stopped(i, 0)
+                 /\ IF ConsumeRun THEN Stopped(i + 1, 0, TRUE) ELSE Stopped(i, 0, Any(i - 1))
                  /\ UNCHANGED <<i, pc, effects>>
             [] OTHER -> pc' = pc + 1 /\ UNCHANGED <<i, effects, result>>
     /\ UNCHANGED <<batch, interrupted>>
@@ -95,7 +98,7 @@ PlaysNothingTwice ==
                  THEN effects[j] + result.rest = Full(batch[j])
                  ELSE effects[j] = 0
 
-\* Discarded exactly when nothing the programmer could see took place.
-DiscardedMeansNothing == Done => ((result.status = "discarded") = (\A j \in 1..Len(batch) : effects[j] = 0))
+\* A stopped batch is discarded exactly when nothing the programmer could see took place.
+DiscardedMeansNothing == Done /\ result.status # "completed" => ((result.status = "discarded") = (\A j \in 1..Len(batch) : effects[j] = 0))
 
 =============================================================================

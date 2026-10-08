@@ -840,6 +840,25 @@ describe("reports", () => {
 })
 
 describe("interruptions", () => {
+  it("discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla)", async () => {
+    const { editor, controller } = setup({ "a.ts": "x\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
+    await until(controller.step([]))
+    // The programmer interrupts while the type reads the file's line ending: the second time, as
+    // the rehearsal reads it first.
+    const eol = editor.eol.bind(editor)
+    let calls = 0
+    editor.eol = async (file) => {
+      if (++calls === 2) controller.userInterrupt()
+      return eol(file)
+    }
+    await controller.step([{ type: "\u{258c}" }, { say: "Typed." }])
+    const report = await until(controller.listen())
+    expect(report.batches).toMatchObject([{ status: "discarded", unplayed: [{ say: "Typed." }] }])
+  })
+
   it("stops a delete when the programmer takes the turn while it starts, and deletes nothing", async () => {
     const { editor, controller } = setup({ "a.ts": "keep DELETE keep\n" })
     await controller.start()
