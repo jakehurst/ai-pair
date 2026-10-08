@@ -29,13 +29,14 @@ Init ==
 
 \* findWindows reads it: a file being written doesn't parse, and is skipped.
 Alive(w) == win[w] \in {"open", "reused"}
-Running(w) == win[w] \in {"open", "writing"}
+Running(w) == win[w] \in {"open", "writing", "unlisted"}
+WithFile(w) == win[w] \in {"open", "writing"}
 
 \* A window starts, or reopens with a new pid: writeDiscovery.
-OpenW(w) == win[w] \in {"none", "closed"} /\ win' = Set(win, w, "open") /\ UNCHANGED <<relay, tries, conn>>
+OpenW(w) == win[w] \in {"none", "closed"} /\ \E s \in {"open", "unlisted"} : win' = Set(win, w, s) /\ UNCHANGED <<relay, tries, conn>>
 
 \* A clean close: dispose() removes the file.
-CloseW(w) == win[w] = "open" /\ win' = Set(win, w, "closed") /\ UNCHANGED <<relay, tries, conn>>
+CloseW(w) == win[w] \in {"open", "unlisted"} /\ win' = Set(win, w, "closed") /\ UNCHANGED <<relay, tries, conn>>
 
 \* The window gains focus: focused() → writeDiscovery. writeFileSync truncates the file, then
 \* writes it; a rename replaces it whole.
@@ -43,6 +44,9 @@ Focus(w) ==
     /\ win[w] = "open" /\ ~AtomicWrite /\ win' = Set(win, w, "writing")
     /\ UNCHANGED <<relay, tries, conn>>
 Written(w) == win[w] = "writing" /\ win' = Set(win, w, "open") /\ UNCHANGED <<relay, tries, conn>>
+
+\* A later focus writes the file of a window that has none, and this time the write succeeds.
+Listed(w) == win[w] = "unlisted" /\ win' = Set(win, w, "open") /\ UNCHANGED <<relay, tries, conn>>
 
 \* A crash: the file stays behind, and its pid is dead.
 Crash(w) == win[w] = "open" /\ win' = Set(win, w, "crashed") /\ UNCHANGED <<relay, tries, conn>>
@@ -74,7 +78,7 @@ Disconnect ==
     /\ UNCHANGED <<win, tries>>
 
 Next ==
-    \/ \E w \in Windows : OpenW(w) \/ CloseW(w) \/ Crash(w) \/ Reuse(w) \/ Try(w) \/ Focus(w) \/ Written(w)
+    \/ \E w \in Windows : OpenW(w) \/ CloseW(w) \/ Crash(w) \/ Reuse(w) \/ Try(w) \/ Focus(w) \/ Written(w) \/ Listed(w)
     \/ Start \/ Disconnect
 
 Fairness ==
@@ -85,8 +89,9 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 \* #31: looking up the windows never throws.
 NoInternal == relay # "internal"
 
-\* A window that is running is found: findWindows never says there is none while one runs.
-FindsRunning == [][Start /\ relay' = "no_editor" => ~\E w \in Windows : Running(w)]_vars
+\* A window that is running is found: findWindows never says there is none while one with a file
+\* runs. One without (its write failed) can't be; the code tells the programmer so (`failed`).
+FindsRunning == [][Start /\ relay' = "no_editor" => ~\E w \in Windows : WithFile(w)]_vars
 
 \* The relay connects only to a window that answered: one that was open.
 ConnectedToOpen == relay = "connected" => conn # 0

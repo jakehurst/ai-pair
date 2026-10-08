@@ -53,8 +53,8 @@ type Session = {
   events: PendingEvent[]
   /** An unreported interruption or failure: new batches are discarded. */
   stale: boolean
-  /** Rejections handed back by `restore`, to be reported again, one per report (#28). */
-  held: NonNullable<Report["rejected"]>[]
+  /** Rejections handed back by `restore`, to be reported again, one per report (#28), each marked if the agent may have seen it. */
+  held: { rejected: NonNullable<Report["rejected"]>; mayRepeat: boolean }[]
   /** A report restored may have reached the agent already: the next report says so (#67). */
   mayRepeat: boolean
   /** Text of each file edited by the programmer, as of the last report. */
@@ -258,7 +258,7 @@ export class Controller {
     if (report.events.some(interrupting) || report.batches.some((b) => b.status !== "completed")) s.stale = true
     // A step that never queued its batch: its rejection is the only report of it.
     if (report.rejected) {
-      s.held.push(report.rejected)
+      s.held.push({ rejected: report.rejected, mayRepeat })
       s.stale = true
     }
     this.update()
@@ -315,8 +315,8 @@ export class Controller {
     // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
     const changes = lineChanges(before, reported)
     const planned = s.queue.some((b) => b.after?.edits.has(file))
-    // Before recordEdit moves the editor's line identities, which the rehearsals' start from.
-    if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, before, after, changes)
+    // The queued rehearsals follow it, reading the file's line identities from the editor.
+    if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, after, changes)
     this.recordEdit(s, file, before, after, changes, "other")
     if (planned) {
       const e = s.events.find((p): p is EditEvent => p.kind === "edit" && p.file === file && p.diff === undefined)
@@ -574,8 +574,10 @@ export class Controller {
       call.reject(new ToolError("no_session", "The session has ended."))
       return
     }
-    const closing = s.ended || call.kind === "end"
-    const report = this.snapshot(s, call.batch, timedOut && !closing)
+    // Nothing more to wait for once the session is ending.
+    const report = this.snapshot(s, call.batch, timedOut && !s.ended && call.kind !== "end")
+    // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, DrainHeld).
+    const closing = (s.ended && s.held.length === 0) || call.kind === "end"
     if (closing) {
       this.close(s)
       this.closed = s
@@ -654,7 +656,9 @@ export class Controller {
     s.mayRepeat = false
     // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
     const held = s.held.shift()
-    if (held) report.rejected = held
+    if (held) report.rejected = held.rejected
+    // Its own mark: a report before it may have taken s.mayRepeat (specs/Controller.tla, MarkHeld).
+    if (held?.mayRepeat) report.repeated = true
     if (s.held.length > 0) s.stale = true
     return report
   }

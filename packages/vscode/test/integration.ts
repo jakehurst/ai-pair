@@ -437,6 +437,25 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a batch interrupted after a type with nothing to type is discarded")
 
+  // A line a tool inserts, read while a queued batch edits other files, is accepted (specs/Rehearsal.tla).
+  fs.writeFileSync(file("inserted.txt"), "hello\n")
+  const inserted = await vscode.workspace.openTextDocument(file("inserted.txt"))
+  await vscode.window.showTextDocument(inserted)
+  await c.start("inserted")
+  await c.read("inserted.txt")
+  await c.step([{ say: Array.from({ length: 25 }, (_, i) => `word${i}`).join(" ") }])
+  fs.writeFileSync(file("inserted.txt"), "XX\nhello\n")
+  await until(() => inserted.getText() === "XX\nhello\n")
+  assert.deepEqual(
+    (await c.read("inserted.txt")).lines.map((l) => l.text),
+    ["XX", "hello"],
+  )
+  const movedThere = await c.step([{ move: { file: "inserted.txt", line: 1, to: "line_end" } }])
+  assert.equal(movedThere.rejected, undefined, JSON.stringify(movedThere.rejected))
+  await c.step([])
+  await c.end()
+  console.log("a line a tool inserted, read while a queued batch edits other files, is accepted")
+
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })
   fs.writeFileSync(file("..cache/x.txt"), "a\n")
@@ -582,6 +601,32 @@ export async function run(): Promise<void> {
   assert.match(repeated, /may repeat/)
   console.log("a report canceled after it was taken comes again, marked")
   await tool("end", { summary: "Bye." })
+  // Two rejections cancelled after the agent took them come back, each in a report marked as one
+  // that may repeat, and a session the programmer ends stays until both are out (specs/Controller.tla).
+  await toolAll("start", { task: "held" })
+  const rejectedOnce = async (line: number) => {
+    const abort = new AbortController()
+    const actions = [{ move: { file: "relay.txt", line, to: "line_end" } }]
+    const result = await agent.callTool({ name: "step", arguments: { actions } }, undefined, { signal: abort.signal })
+    // The relay answers with text parts only.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    assert.match((result.content as { text: string }[])[0]!.text, /rejected/)
+    return abort
+  }
+  const one = await rejectedOnce(5)
+  const two = await rejectedOnce(6)
+  one.abort()
+  two.abort()
+  // The cancels reach the relay, and its returns the editor, before anything else happens.
+  await sleep(300)
+  c.endSession()
+  const backs = [await toolAll("listen"), await toolAll("listen")]
+  for (const [i, back] of backs.entries()) {
+    assert.match(back, /may repeat/)
+    assert.match(back, new RegExp(`"line":${i + 5}`))
+  }
+  assert.ok((await agent.callTool({ name: "listen", arguments: {} })).isError, "the ended session is still open")
+  console.log("rejections handed back after their answers each come again, marked, before an ended session closes")
   await agent.close()
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, "..", "user", "logs")
