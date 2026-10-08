@@ -29,15 +29,15 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Outside.cfg` | one file, 5 contents | holds | 564 |
 | `Navigator.cfg` | `Edits = 3` | holds | 44 |
 | `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
-| `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2` | holds | 2,952 |
+| `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
-| `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
+| `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
 | `Reload.cfg` | `N = 5` lines, any of them changed on disk | holds | 160 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
-| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 1,859 |
+| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
@@ -175,9 +175,9 @@ S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is 
 
 | Spec | Code |
 |---|---|
-| `Steps(k)` | each action's awaits, checks, and effects; `type` with two chunks |
+| `Steps(k)` | each action's awaits, checks, and effects; `type` with two chunks; `type0`, a `type` with nothing to type, which returns `nothing` |
 | `Next1` | the loop in `actions` checking `isInterrupted` before each action, then the action's steps |
-| `Stopped` | `stopped(id, unplayed, effect)`: `discarded` if nothing took effect |
+| `Stopped` | `stopped(id, unplayed, effect)`: `discarded` unless an earlier action changed the screen (the `effect` flag in `actions`), or this one typed part of its text or left its command running |
 | `Interrupt` | the timeline interrupted, by an edit, a message, a turn change |
 
 ### `Player`: a delete while the programmer edits
@@ -268,7 +268,7 @@ The feature of #23, specified before its code: `projectGuides` in `packages/rela
 
 ### `Scroll`: follow mode's scrolling
 
-`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in `packages/vscode/src/editor.ts`, with `comfortable` and `landing` from `view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when the state stops following: a pause, or a command running. A pause ends in `resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut short goes on once the command is done, from `renderCursor`; before it, the view stayed where the glide stopped, with the target possibly out of view. The programmer's turn drops it.
+`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in `packages/vscode/src/editor.ts`, with `comfortable` and `landing` from `view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when the state stops following: a pause, or a command running. A pause ends in `resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut short goes on once the command is done, from `renderCursor`; before it, the view stayed where the glide stopped, with the target possibly out of view. The programmer's turn drops it. `beyond` is `editor.scrollBeyondLastLine`, either way: with it on (the default), the last line can scroll to the top.
 
 | Spec | Code |
 |---|---|
@@ -314,9 +314,12 @@ S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player'
 
 | Spec | Code |
 |---|---|
-| `Start` | `acquire()`: an open terminal that isn't busy, or a new one; `busy = true`. A signal that fired before (an interrupt during the save) ends `shellIntegration()` at once; the spec starts each run with the signal unfired |
+| `Start` | `acquire()`: a terminal that isn't busy, whose shell is alive, in the run's directory, or a new one there; `busy = true`. The signal may have fired before (an interrupt during the save) |
 | `Integrated`, `AbortBeforeStart`, `ClosedWhileWaiting` | `shellIntegration()`: integration or its timer; the signal; a terminal closed meanwhile (VS Code throws for its `sendText`) |
 | `End`, `StopWaiting`, `Close` | `onDidEndTerminalShellExecution`; `stopWaiting` (the wait or an interrupt); `onDidCloseTerminal` |
+| `NoIntegration` | the timer fires with no integration: the command is typed in (`sendText`), and the terminal stays busy for good |
+| `AlreadyAborted` | a signal that fired before the run: `shellIntegration()` returns at once, and `run()` reports `notStarted` |
+| `Exit` | the shell exits (`exitStatus`); the terminal stays open, and `acquire()` won't reuse it |
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`
 

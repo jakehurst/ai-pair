@@ -53,9 +53,10 @@ type Range = { file: string; start: number; end: number }
 /**
  * `consumed`: the action took effect, so it counts as played and isn't returned as unplayed.
  * `rest`: the action took effect in part; this is what's left of it.
+ * `nothing`: the action played, but changed nothing the programmer sees (specs/Actions.tla, `type0`).
  */
 type Outcome =
-  | { kind: "ok" }
+  | { kind: "ok"; nothing?: true }
   | { kind: "interrupted"; rest?: Action; consumed?: boolean }
   | { kind: "error"; error: ErrorKind; message: string; candidates?: Candidate[]; consumed?: boolean; sighting?: Sighting }
 
@@ -80,6 +81,7 @@ const MAX_CODE_LINES = 40
 const CONTEXT_LINES = 3
 
 const ok: Outcome = { kind: "ok" }
+const nothing: Outcome = { kind: "ok", nothing: true }
 
 /** Shared by all players, so the panel never sees two commands with one id. */
 let nextRunId = 1
@@ -214,8 +216,10 @@ export class Player {
   }
 
   private async actions(id: number, actions: Action[], playing: Playing): Promise<BatchResult> {
+    // An action so far changed something the programmer sees.
+    let effect = false
     for (let i = 0; i < actions.length; i++) {
-      if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), i > 0)
+      if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect)
       let outcome: Outcome
       try {
         outcome = await this.perform(actions[i]!, playing)
@@ -226,7 +230,7 @@ export class Player {
       if (outcome.kind === "interrupted") {
         if (outcome.consumed) return this.stopped(id, rest, true)
         if (outcome.rest) return this.stopped(id, [outcome.rest, ...rest], true)
-        return this.stopped(id, actions.slice(i), i > 0)
+        return this.stopped(id, actions.slice(i), effect)
       }
       if (outcome.kind === "error") {
         if (outcome.sighting) playing.sightings.push(outcome.sighting)
@@ -236,6 +240,7 @@ export class Player {
         if (unplayed.length > 0) result.unplayed = unplayed
         return result
       }
+      if (!outcome.nothing) effect = true
     }
     return { id, status: "completed" }
   }
@@ -551,7 +556,7 @@ export class Player {
       this.follow()
       await this.delay(timing.afterMoveNearMs * scale)
     }
-    return ok
+    return chunks.length === 0 ? nothing : ok
   }
 
   /** Edits a file, which its lines' identities follow. */

@@ -22,19 +22,22 @@ VARIABLES
     from,       \* the target's line when it started
     away,       \* "no": the state follows; "paused", or "running" a command: it doesn't
     cut,        \* a glide stopped short, as the state stopped following
-    moves, changes
+    moves, changes,
+    beyond      \* editor.scrollBeyondLastLine, on by default
 
-vars == <<target, top, scrolling, goal, from, away, cut, moves, changes>>
+vars == <<target, top, scrolling, goal, from, away, cut, moves, changes, beyond>>
 
 Max(a, b) == IF a > b THEN a ELSE b
 Min(a, b) == IF a < b THEN a ELSE b
 
-\* view.ts: comfortable, landing (no scrolling beyond the end).
+\* view.ts: comfortable, landing: as far as the editor scrolls, the last line at the top, or with
+\* scrollBeyondLastLine off, at the bottom.
 Comfortable(t, v) == LET at == t - v IN 4 * at >= H /\ 4 * at < 3 * H
-Landing(t) == Max(0, Min(L - H, t - H \div 3))
+MaxTop == IF beyond THEN L - 1 ELSE L - H
+Landing(t) == Max(0, Min(MaxTop, t - H \div 3))
 
 Init ==
-    /\ target \in 0..(L - 1) /\ top \in 0..(L - H) /\ scrolling = FALSE /\ goal = 0 /\ from = 0
+    /\ target \in 0..(L - 1) /\ beyond \in BOOLEAN /\ top \in 0..MaxTop /\ scrolling = FALSE /\ goal = 0 /\ from = 0
     /\ away = "no" /\ cut = FALSE /\ moves = 0 /\ changes = 0
 
 \* keepInView for target line t: a scroll, unless one is under way or the view is as it should be.
@@ -78,15 +81,15 @@ Frame ==
                      ELSE scrolling' = FALSE /\ UNCHANGED <<goal, from>>
     /\ UNCHANGED <<target, away, moves, changes>>
 
-Next == Move \/ Leave \/ Return \/ Frame
+Next == (Move \/ Leave \/ Return \/ Frame) /\ UNCHANGED beyond
 
-Spec == Init /\ [][Next]_vars /\ WF_vars(Frame)
+Spec == Init /\ [][Next]_vars /\ WF_vars(Frame /\ UNCHANGED beyond)
 
 \* Settled: the target is in the view's middle half, or as near it as the editor scrolls.
 Settled == Comfortable(target, top) \/ Landing(target) = top
 
 \* One scroll at a time, to a landing the editor can reach.
-InRange == top \in 0..(L - H) /\ goal \in 0..(L - H)
+InRange == top \in 0..MaxTop /\ goal \in 0..MaxTop
 
 \* Once the state follows for good, and the target stays, the view settles on it.
 Settles == <>[](away = "no" /\ moves = Moves) => <>[]Settled

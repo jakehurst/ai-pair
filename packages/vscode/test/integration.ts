@@ -415,6 +415,28 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("an interrupt while a run saves stops it, without asking")
 
+  // A batch interrupted after a type with nothing to type changed nothing, so it's discarded (specs/Actions.tla).
+  fs.writeFileSync(file("nothing.txt"), "a\n")
+  await c.start("nothing")
+  await c.read("nothing.txt")
+  await c.step([{ move: { file: "nothing.txt", line: 1, to: "line_end" } }])
+  await c.step([])
+  const eol = api.editor.eol.bind(api.editor)
+  let eols = 0
+  api.editor.eol = async (f) => {
+    if (++eols === 2) c.userInterrupt()
+    return eol(f)
+  }
+  await c.step([{ type: "\u{258c}" }, { say: "Typed." }])
+  const untyped = await c.listen()
+  api.editor.eol = eol
+  assert.deepEqual(
+    untyped.batches.map((b) => b.status),
+    ["discarded"],
+  )
+  await c.end()
+  console.log("a batch interrupted after a type with nothing to type is discarded")
+
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })
   fs.writeFileSync(file("..cache/x.txt"), "a\n")
