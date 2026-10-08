@@ -70,6 +70,13 @@ describe("OutsideChanges", () => {
     expect(outside.isMarked("/p/a.ts")).toBe(false)
   })
 
+  it("doesn't mark a file the programmer saw before its writes settled", async () => {
+    written("/p/a.ts", "x")
+    outside.seen("/p/a.ts", "x")
+    await settle()
+    expect([outside.isMarked("/p/a.ts"), reports]).toEqual([false, []])
+  })
+
   it("groups files written close together into one entry, and skips one gone again", async () => {
     written("/p/a.ts", "1")
     vi.advanceTimersByTime(GROUP_MS - 1)

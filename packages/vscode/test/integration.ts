@@ -312,6 +312,11 @@ export async function run(): Promise<void> {
   assert.equal(api.outside.isMarked(file("outside-new.txt")), false, "the agent's new file was marked")
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("outside-written.txt")))
   await until(() => !api.outside.isMarked(file("outside-written.txt")))
+  // One opened as soon as it's written was seen, though its writes weren't decided yet.
+  fs.writeFileSync(file("outside-opened.txt"), "seen at once\n")
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("outside-opened.txt")))
+  await sleep(2000)
+  assert.equal(api.outside.isMarked(file("outside-opened.txt")), false, "a file seen as soon as it was written was marked")
   await c.end()
   console.log("a file written outside is marked until it's opened; saves and new files aren't")
 

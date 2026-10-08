@@ -23,10 +23,11 @@ export function watchOutside(
   const onDisk = (uri: vscode.Uri) => {
     if (uri.scheme === "file" && controller.isActive && watched(uri.fsPath, folders())) outside.reported(uri.fsPath)
   }
-  // Opening a marked file, or its diff (whose editor is the file's), is seeing it.
+  // Opening a file, or its diff (whose editor is the file's), is seeing it, marked or not: one
+  // written outside may be opened before its writes are decided (specs/Outside.tla, `Open`).
   const opened = async (editorShown: vscode.TextEditor | undefined) => {
     const file = editorShown?.document.uri
-    if (file?.scheme !== "file" || !outside.isMarked(file.fsPath)) return
+    if (file?.scheme !== "file" || !watched(file.fsPath, folders())) return
     const text = await read(file.fsPath)
     if (text !== undefined) outside.seen(file.fsPath, text)
   }
