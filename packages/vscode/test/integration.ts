@@ -315,6 +315,83 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a file written outside is marked until it's opened; saves and new files aren't")
 
+  // During the programmer's turn, a listen made after they resume typing waits for their next pause
+  // (specs/Navigator.tla). The idle time is the default, 3 s.
+  fs.writeFileSync(file("navigator.txt"), "abc\n")
+  const navigator = await vscode.workspace.openTextDocument(file("navigator.txt"))
+  await vscode.window.showTextDocument(navigator)
+  await c.start("navigator")
+  c.takeTurn()
+  await c.listen()
+  await insertAsProgrammer(navigator.uri, new vscode.Position(0, 3), "d")
+  await sleep(3500)
+  await insertAsProgrammer(navigator.uri, new vscode.Position(0, 4), "e")
+  const listenedAt = Date.now()
+  const afterPause = await c.listen()
+  const waited = Date.now() - listenedAt
+  assert.ok(waited > 2000, `listen returned ${waited} ms after the programmer typed`)
+  assert.deepEqual(
+    afterPause.events.map((e) => e.kind === "edit" && e.diff.includes("+abcde")),
+    [true],
+  )
+  await c.end()
+  console.log(`a listen during the programmer's typing waited ${waited} ms for their pause`)
+
+  // An edit the programmer undid still comes with the batches it discarded (specs/EditEvents.tla).
+  fs.writeFileSync(file("undone.txt"), "abc\n")
+  const undone = await vscode.workspace.openTextDocument(file("undone.txt"))
+  await vscode.window.showTextDocument(undone)
+  await c.start("undone")
+  await c.read("undone.txt")
+  // The first step returns at once; nothing waits for a report while the programmer types and undoes.
+  await c.step([{ move: { file: "undone.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(100)}\u{258c}` }])
+  await sleep(800)
+  await insertAsProgrammer(undone.uri, new vscode.Position(0, 0), "#")
+  const undo = new vscode.WorkspaceEdit()
+  undo.delete(undone.uri, new vscode.Range(0, 0, 0, 1))
+  await vscode.workspace.applyEdit(undo)
+  const discardedReport = await c.step([])
+  assert.ok(
+    discardedReport.batches.some((b) => b.status !== "completed"),
+    JSON.stringify(discardedReport.batches),
+  )
+  assert.deepEqual(discardedReport.events, [{ kind: "edit", file: "undone.txt", diff: "", by: "programmer" }])
+  await c.end()
+  console.log("an edit the programmer undid is reported with the batches it discarded")
+
+  // A scroll a command cut short goes on once the command is done (specs/Scroll.tla). The moves
+  // there and back first measure the view, so the last one glides from the top: a glide takes 500 ms,
+  // and at speed 20 the command starts some 50 ms into it.
+  const ai = vscode.workspace.getConfiguration("aiPair")
+  await ai.update("confirmCommands", false, vscode.ConfigurationTarget.Global)
+  fs.writeFileSync(file("glide.txt"), Array.from({ length: 300 }, (_, i) => `line ${i + 1}\n`).join(""))
+  const glide = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("glide.txt")))
+  c.setSpeed(20)
+  await c.start("glide")
+  await c.read("glide.txt")
+  for (const line of [150, 1]) {
+    await c.step([{ move: { file: "glide.txt", line, to: "line_end" } }])
+    await c.step([])
+    await sleep(800)
+  }
+  assert.equal(glide.visibleRanges[0]?.start.line, 0)
+  await c.step([{ move: { file: "glide.txt", line: 250, to: "line_end" } }, { run: "sleep 1" }])
+  const ran = await c.step([])
+  assert.deepEqual(
+    ran.batches.map((b) => b.status),
+    ["completed"],
+  )
+  await sleep(800)
+  const shown = glide.visibleRanges.map((r) => `${r.start.line + 1}-${r.end.line + 1}`)
+  assert.ok(
+    glide.visibleRanges.some((r) => r.start.line <= 249 && 249 <= r.end.line),
+    `line 250 not in view: ${shown.join(", ")}`,
+  )
+  c.setSpeed(1)
+  await c.end()
+  await ai.update("confirmCommands", undefined, vscode.ConfigurationTarget.Global)
+  console.log(`a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
+
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })
   fs.writeFileSync(file("..cache/x.txt"), "a\n")

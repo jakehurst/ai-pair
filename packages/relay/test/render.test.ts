@@ -184,3 +184,19 @@ describe("saving", () => {
     expect(text).toMatch(/file on disk doesn't/)
   })
 })
+
+describe("edits with no net change", () => {
+  it("says who edited the file and changed it back (specs/EditEvents.tla)", () => {
+    const undone: Report = {
+      batches: [],
+      events: [
+        { kind: "edit", file: "a.ts", diff: "", by: "programmer" },
+        { kind: "edit", file: "b.ts", diff: "", by: "other" },
+      ],
+      turn: "agent",
+    }
+    expect(renderReport(undone, "listen")).toBe(
+      "The programmer edited a.ts, then changed it back: no net change.\n\nA tool, a formatter, or something on disk edited b.ts, then changed it back: no net change.",
+    )
+  })
+})

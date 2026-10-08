@@ -293,6 +293,8 @@ export class Controller {
     if (s.scene.turn === "agent") {
       this.interrupt(s)
     } else {
+      // Typing again: the pause the timer marked is over, so wait for the next (specs/Navigator.tla).
+      s.navigatorReady = false
       clearTimeout(s.navigatorTimer)
       s.navigatorTimer = setTimeout(() => {
         s.navigatorReady = true
@@ -629,9 +631,11 @@ export class Controller {
       }
       const before = s.baselines.get(e.file) ?? ""
       const after = s.latest.get(e.file) ?? before
-      if (before === after) continue
+      // An edit that interrupted stays, with no diff, though it was undone: the agent has to know
+      // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla).
+      if (before === after && !interrupting(e)) continue
       const file = this.displayPath(s, e.file)
-      events.push({ kind: "edit", file, diff: fileDiff(file, before, after), by: e.by })
+      events.push({ kind: "edit", file, diff: before === after ? "" : fileDiff(file, before, after), by: e.by })
     }
     s.finished = []
     s.events = []

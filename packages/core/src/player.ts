@@ -678,7 +678,6 @@ export class Player {
     this.stage.editor.renderPoint(null)
   }
 
-  /** Records an edit of the batch: the file to save, and the text it changed for the report. */
   /** Records a change the batch makes: the file it touched, and the span of its edits so far, moved through it. */
   private touch(p: Playing, file: string, change: Change): void {
     p.touched.add(file)

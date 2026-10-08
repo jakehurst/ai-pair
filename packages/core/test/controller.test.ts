@@ -1036,7 +1036,50 @@ describe("interruptions", () => {
   })
 })
 
+describe("edits with no net change", () => {
+  it("reports an interrupting edit the programmer undid, so the agent knows why its batches were discarded (specs/EditEvents.tla)", async () => {
+    const { editor, controller } = setup({ "a.ts": "abc\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+    const queued = controller.step([{ type: "y\u{258c}" }])
+    editor.userEdit("a.ts", 0, 0, "#")
+    editor.userEdit("a.ts", 0, 1, "")
+    const report = await until(queued)
+    expect(report.batches.map((b) => b.status)).toContain("discarded")
+    expect(report.events).toEqual([{ kind: "edit", file: "a.ts", diff: "", by: "programmer" }])
+  })
+
+  it("leaves out a tool's edit with no net change that interrupted nothing", async () => {
+    const { editor, controller } = setup({ "a.ts": "abc\n", "b.ts": "b\n" })
+    await controller.start()
+    editor.otherEdit("b.ts", 0, 0, "#")
+    editor.otherEdit("b.ts", 0, 1, "")
+    controller.userMessage("hi")
+    const report = await until(controller.listen())
+    expect(report.events.map((e) => e.kind)).toEqual(["message"])
+  })
+})
+
 describe("turns", () => {
+  it("waits for the programmer to pause again when they resume typing before the agent listens (specs/Navigator.tla)", async () => {
+    const { editor, controller } = setup({ "a.ts": "abc\n" })
+    await controller.start()
+    controller.takeTurn()
+    await until(controller.listen())
+    editor.userEdit("a.ts", 3, 0, "d")
+    // A pause, with no listen waiting: the timer fires.
+    await advance(1100)
+    // Typing again, then the agent listens: not mid-word.
+    editor.userEdit("a.ts", 4, 0, "e")
+    const following = track(controller.listen())
+    await advance(500)
+    expect(following.done).toBe(false)
+    await advance(600)
+    expect(following.done).toBe(true)
+    expect(following.value!.events).toEqual([{ kind: "edit", file: "a.ts", diff: expect.stringContaining("+abcde"), by: "programmer" }])
+  })
+
   it("lets the agent only comment during the programmer's turn", async () => {
     const { editor, controller } = setup({ "a.ts": "for (i <= n)\n" })
     await controller.start()
