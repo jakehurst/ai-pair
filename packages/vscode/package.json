@@ -135,6 +135,11 @@
           "default": true,
           "scope": "application",
           "markdownDescription": "Ask in the Pair panel before running each command the agent plays in the terminal (`run`). Turning this off lets the agent run commands without Claude Code's own permission prompt."
+        },
+        "aiPair.trace": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Log every frame between the editor and the agent, and every panel message, to the **AI Pair** output at the Info level, which VS Code shows by default. Without it they're at Trace, hidden unless **Developer: Set Log Level** sets it, which a reinstall resets."
         }
       }
     },

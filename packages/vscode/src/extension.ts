@@ -31,9 +31,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => settingSpeed(config().get<unknown>("speed", 1)),
     set: (value: number) => void config().update("speed", value, vscode.ConfigurationTarget.Global),
   }
-  // Frames and panel messages at the Trace level, which VS Code hides unless it is set (#27).
+  // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
+  // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
   const log = vscode.window.createOutputChannel("AI Pair", { log: true })
-  const trace = (line: string) => log.trace(line)
+  const trace = (line: string) => (config().get("trace", false) ? log.info(line) : log.trace(line))
   const panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
