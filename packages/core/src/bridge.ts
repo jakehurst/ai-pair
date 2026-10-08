@@ -202,7 +202,7 @@ export class Bridge {
       if (c.isActive && this.owner !== ws) {
         throw new ToolError("session_active", "Another agent is already pairing in this editor window.")
       }
-      const report = await c.start(optionalString(args.task), optionalString(args.cwd))
+      const report = await c.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules))
       // The socket may have closed while the session started, when its close handler didn't own it yet:
       // close the session again rather than leave it to no one (#42). From here to `owner`, nothing awaits.
       if (ws.readyState !== ws.OPEN) {
@@ -243,6 +243,10 @@ export class Bridge {
 
 function optionalString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined
+}
+
+function optionalStrings(v: unknown): string[] | undefined {
+  return Array.isArray(v) && v.every((s) => typeof s === "string") ? v : undefined
 }
 
 function optionalNumber(v: unknown): number | undefined {

@@ -47,6 +47,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Outside_every.cfg` | same, marking every watcher event | `NoFalseMark` violated (validation by mutation) | 12 |
 | `Outside_afterSave.cfg` | same, skipping an event after a save | `NoFalseMark` violated (validation by mutation) | 12 |
 | `Outside_unsettled.cfg` | same, deciding before VS Code tells of its save | `NoFalseMark` violated (validation by mutation) | 53 |
+| `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -264,6 +265,10 @@ The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts
 | `Write` | anything else writing the file; an open document without unsaved changes reloads |
 | `Report` | the watcher's events → `reported`; the group settles → `settle` reads and compares |
 | `Open` | opening the file or its diff → `seen` |
+
+### `ProjectGuide`: which project guides `start` reads
+
+The feature of #23, specified before its code: `projectGuides` in `packages/relay/src/guide.ts`. Checked over every small tree, as `ASSUME`s: walking up from the working directory to the workspace folder gives exactly the guides on that path that git doesn't ignore, outer first, and none above the folder. Walking past the folder, or reading an ignored guide, is caught.
 
 ### `Turns`: only talk during the programmer's turn
 

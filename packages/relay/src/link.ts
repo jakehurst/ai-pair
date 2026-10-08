@@ -143,6 +143,17 @@ export class EditorLink {
     return folder
   }
 
+  /**
+   * `folder`, and the workspace folder of the window for it that holds it, both as real paths:
+   * where a project's guides are looked for, and where that stops (#23).
+   */
+  workspace(folder: string): { folder: string; root: string } {
+    const here = realpath(folder)
+    const { windows } = findWindows([folder], this.dir)
+    const roots = (windows[0]?.workspaceFolders ?? []).map(realpath).filter((f) => contains(f, here))
+    return { folder: here, root: roots.toSorted((a, b) => b.length - a.length)[0] ?? here }
+  }
+
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     // A cancelled call's report may be on its way back, to be handed back with `return`. This call
     // goes out after it, so the editor restores the report before it takes this call (#59). The socket

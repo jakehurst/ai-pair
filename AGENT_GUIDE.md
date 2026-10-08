@@ -14,6 +14,10 @@ It's the source text for teaching the agent:
 - **Tool descriptions**: the rules that matter at the point of use, repeated.
 - **The `start` prompt**: just kicks a session off (in Claude Code:
   `/mcp__pair__start`).
+- **Project rules**: the programmer's `~/.ai-pair/GUIDE.md`, then every
+  `.ai-pair/GUIDE.md` from the workspace folder down to the agent's working
+  directory that git doesn't ignore, returned after the guide by `start`. They
+  take precedence over it, a later one over an earlier one.
 
 Everything below the line is written to the agent.
 

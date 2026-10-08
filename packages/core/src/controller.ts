@@ -106,7 +106,8 @@ export class Controller {
 
   // ---- Tools -------------------------------------------------------------
 
-  start(task?: string, root?: string): Promise<Report> {
+  /** `rules`: the project guides the relay read for the agent, named for the panel (#23). */
+  start(task?: string, root?: string, rules?: string[]): Promise<Report> {
     return this.serialize(undefined, async () => {
       if (this.session && !this.session.ended) {
         throw new ToolError("session_active", "A pairing session is already active in this window.")
@@ -155,7 +156,7 @@ export class Controller {
       this.session = s
       this.closed = null
       this.lastPosted = ""
-      this.panel.post({ type: "session", active: true, task })
+      this.panel.post({ type: "session", active: true, task, ...(rules?.length ? { rules } : {}) })
       this.render()
       return { batches: [], events: [], turn: scene.turn }
     })

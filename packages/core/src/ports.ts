@@ -79,7 +79,8 @@ export interface EditorPort {
 }
 
 export type PanelEvent =
-  | { type: "session"; active: true; task?: string }
+  /** `rules`: the project guides the agent was given (#23). */
+  | { type: "session"; active: true; task?: string; rules?: string[] }
   | { type: "session"; active: false; reason: "agent" | "user" | "disconnected"; summary?: string }
   | { type: "say"; text: string }
   | { type: "reading"; ms: number }

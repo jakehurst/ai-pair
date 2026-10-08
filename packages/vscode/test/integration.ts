@@ -416,6 +416,13 @@ export async function run(): Promise<void> {
   await agent.connect(transport)
   const tools = await agent.listTools()
   assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ["end", "listen", "read", "start", "step"])
+  // Every text part of a tool's result, joined.
+  const toolAll = async (name: string, args: Record<string, unknown> = {}) => {
+    const result = await agent.callTool({ name, arguments: args })
+    // The relay answers with text parts only.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (result.content as { text: string }[]).map((part) => part.text).join("\n\n")
+  }
   const tool = async (name: string, args: Record<string, unknown> = {}) => {
     const result = await agent.callTool({ name, arguments: args })
     // The relay answers with text parts only.
@@ -425,7 +432,11 @@ export async function run(): Promise<void> {
     return content[0]!.text
   }
   c.setSpeed(20)
-  await tool("start", { task: "relay test" })
+  // The project's guide reaches the agent with the pairing guide (#23).
+  fs.mkdirSync(file(".ai-pair"), { recursive: true })
+  fs.writeFileSync(file(".ai-pair/GUIDE.md"), "Name every test after the issue it covers.\n")
+  const startText = await toolAll("start", { task: "relay test" })
+  assert.match(startText, /# Project rules[\s\S]*\.ai-pair\/GUIDE\.md\n\nName every test after the issue it covers\./)
   await tool("step", {
     actions: [{ say: "Hello from the relay." }, { move: { file: "relay.txt", line: 1, to: "line_end" } }, { type: "typed via the relay▌" }],
   })
@@ -448,5 +459,5 @@ export async function run(): Promise<void> {
   console.log("a report canceled after it was taken comes again, marked")
   await tool("end", { summary: "Bye." })
   await agent.close()
-  console.log("relay session OK")
+  console.log("relay session OK, with the project's guide")
 }

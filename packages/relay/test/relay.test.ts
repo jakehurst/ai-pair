@@ -6,7 +6,7 @@ import * as path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { WebSocket } from "ws"
 import { Bridge, Controller } from "@ai-pair/core"
 import { PROTOCOL_VERSION } from "@ai-pair/protocol"
@@ -113,6 +113,22 @@ describe("relay", () => {
     expect(ended.text).toMatch(/ended/)
     expect(panel.events).toContainEqual({ type: "session", active: false, reason: "agent", summary: "Done." })
     expect((await call(client, "listen")).text).toMatch(/^no_session:/)
+  })
+
+  it("gives the agent the user's guide after the pairing guide, and names it in the panel (#23)", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "ai-pair-home-"))
+    fs.writeFileSync(path.join(home, "GUIDE.md"), "Always say hello.\n")
+    vi.stubEnv("AI_PAIR_HOME", home)
+    try {
+      const client = await connect()
+      const started = await call(client, "start")
+      expect(started.content[2]!.text).toMatch(/^# Project rules\n/)
+      expect(started.content[2]!.text).toContain(`## From ${path.join(home, "GUIDE.md")}\n\nAlways say hello.`)
+      expect(panel.events).toContainEqual({ type: "session", active: true, rules: [path.join(home, "GUIDE.md")] })
+    } finally {
+      vi.unstubAllEnvs()
+      fs.rmSync(home, { recursive: true, force: true })
+    }
   })
 
   it("rejects malformed actions before they reach the editor", async () => {
