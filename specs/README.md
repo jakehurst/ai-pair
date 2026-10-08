@@ -45,6 +45,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
+| `PointFocus.cfg` | a point, a look-away, 2 replies, `DropStaleFocus = TRUE` | holds | 29 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
@@ -199,6 +200,16 @@ The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, t
 | `Stored` | the configuration change applying the new timing, which also removes the pause |
 | `Cancel` | any other reply, the view disposed, the session ending |
 | `SayStart` | the reading time computed in the player from the timing in force at that moment |
+
+### `PointFocus`: a stale point on a reply
+
+`resume` in `packages/core/src/controller.ts`, with the scene's `focus` from `player.ts` and the away pause from `editor.ts`. Found while working on #109: the view followed a point until the next cursor action, so a reply after the programmer had looked away revealed a point from long ago, reopening a file they had closed. `DropStaleFocus` switches the fix; with `FALSE`, TLC violates `NoStaleReveal` in three steps: `Point`, `LookAway`, `Reply`.
+
+| Spec | Code |
+|---|---|
+| `Point`, `CursorAction` | a `point` action setting the focus; the next cursor action taking it back |
+| `LookAway` | `onActiveEditor` away from the target: `pause("away")` |
+| `Reply` | `resume()` with no reason: with an away pause among the reasons and the focus on a point, the focus returns to the cursor and the editor is rendered before `reveal` |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 

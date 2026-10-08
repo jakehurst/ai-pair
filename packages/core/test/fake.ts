@@ -74,8 +74,11 @@ export class FakeEditor implements EditorPort {
     this.point = point
   }
   reveals = 0
+  /** What the view was following at the last reveal. */
+  revealedFocus: Focus | null = null
   reveal(): void {
     this.reveals++
+    this.revealedFocus = this.focus
   }
   follows = 0
   follow(): void {

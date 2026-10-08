@@ -511,11 +511,18 @@ export class Controller {
   /** Removes one pause reason, or all of them. Playback continues when none are left. */
   resume(reason?: string): void {
     if (this.pauseReasons.size === 0) return
+    const lookedAway = this.pauseReasons.has("away")
     if (reason === undefined) this.pauseReasons.clear()
     else this.pauseReasons.delete(reason)
     if (this.pauseReasons.size > 0) return
     const s = this.session
     if (s) {
+      // A point the programmer looked away from is stale: a reply brings the view back to the
+      // cursor, not to it (specs/PointFocus.tla). The editor is told before the reveal targets it.
+      if (lookedAway && s.scene.focus === "point") {
+        s.scene.focus = "cursor"
+        this.render()
+      }
       if (s.scene.turn === "agent" && (s.scene.cursor || s.scene.point)) this.editor.reveal()
       s.timeline.resume()
     }

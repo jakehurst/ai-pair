@@ -26,7 +26,7 @@ Code goes without a spec for one of these reasons:
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`Other`) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
-| `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll` |
+| `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, and a stale point: `PointFocus` |
 | `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
 | `confirm`, `decideRun` | `RunBox` (`Decided`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |

@@ -7,6 +7,8 @@
 - **AI Pair: Calibrate Reading Speed** times you on a passage and sets the
   pause after each message to your own pace. The agent can supply another
   passage with its `calibrate` tool.
+- A reply after you looked away no longer reopens a file the agent pointed at
+  earlier; the view comes back to the agent's cursor instead.
 
 ## 0.1.0
 

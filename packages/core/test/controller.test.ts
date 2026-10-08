@@ -629,6 +629,21 @@ describe("pointing", () => {
     expect(editor.text("a.ts")).toBe("ax\n")
   })
 
+  it("brings a reply back to the cursor, not to a point the programmer looked away from", async () => {
+    const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.read("b.ts")
+    await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }]))
+    await until(controller.step([{ point: { file: "b.ts", line: 1, text: "b" } }, { say: "Over there." }]))
+    await until(controller.step([]))
+    expect(editor.focus).toBe("point")
+    controller.pause("away")
+    controller.resume()
+    expect(editor.revealedFocus).toBe("cursor")
+    expect(editor.focus).toBe("cursor")
+  })
+
   it("leaves the view alone during the programmer's turn", async () => {
     const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
     await controller.start()
