@@ -109,7 +109,7 @@ type Pending = {
 /** A port a stale window file points at may now belong to something that never answers. */
 const HANDSHAKE_MS = 5000
 
-/** Tools whose results are reports, which must be delivered exactly once. */
+/** Tools whose results are reports, which must be delivered at least once (#67). */
 const REPORTING: ReadonlySet<ToolName> = new Set(["step", "listen", "end"])
 
 /** A lazily (re)connected link to the editor window for the agent's folder, `cwd` until `locate` says otherwise. */

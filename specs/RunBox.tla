@@ -1,6 +1,6 @@
 -------------------------------- MODULE RunBox --------------------------------
 \* The panel's run box, for one `run`: what `runCommand` in packages/core/src/player.ts posts,
-\* and how the page in packages/vscode/src/panelHtml.ts shows it (`case "run"`, `setActive`).
+\* and how the page in packages/vscode/src/webview/panel.ts shows it (`case "run"`, `setActive`).
 \* The box shows "confirm" or "running" for the command waiting; every way the run ends posts a
 \* phase that clears it, or the session ends, which clears it too.
 EXTENDS Naturals

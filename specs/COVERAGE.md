@@ -58,7 +58,8 @@ Code goes without a spec for one of these reasons:
 | | `describe`, `reported` | Format: trace lines |
 | `lines.ts` | `applyChange`, `apply` | `LineIdentity` |
 | | `fork`, `adopt`, `fresh`, `of`, `editor`, `version`, `newlines` | `Rehearsal` |
-| `rehearsal.ts` | `rehearse`, `followChange`, the in-memory editor | `Rehearsal` (`Submit`) |
+| `rehearsal.ts` | `rehearse`, the in-memory editor | `Rehearsal` (`Submit`) |
+| | `followChange` | Not modeled yet: `Rehearsal`'s batches all edit the file, so a change to one no batch edits never comes up |
 | `timeline.ts` | all | `Timeline` |
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |
