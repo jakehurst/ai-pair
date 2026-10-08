@@ -228,6 +228,14 @@ export class Bridge {
       case "read":
         if (typeof args.file !== "string") throw new ToolError("invalid_arguments", "`file` must be a string.")
         return c.read(args.file, optionalNumber(args.from_line), optionalNumber(args.to_line))
+      case "calibrate": {
+        if (typeof args.title !== "string" || typeof args.file !== "string") {
+          throw new ToolError("invalid_arguments", "`title` and `file` must be strings.")
+        }
+        const notice = optionalString(args.notice)
+        const text = fs.readFileSync(c.resolveFile(args.file), "utf8")
+        return c.calibrate({ title: args.title, text, ...(notice ? { notice } : {}) })
+      }
       default:
         throw new ToolError("invalid_arguments", `Unknown tool: ${String(tool)}`)
     }

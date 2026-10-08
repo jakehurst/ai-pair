@@ -90,6 +90,11 @@ export function activate(context: vscode.ExtensionContext): Api {
     passage(),
   )
   panel.calibration = calibration
+  controller.onCalibrate = (chosen) => {
+    if (!calibration.arm(chosen)) return false
+    void config().update("calibrationPassage", chosen, vscode.ConfigurationTarget.Global)
+    return true
+  }
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
   // specs/Resume.tla): saved shortly after each change, and once more as the window goes.

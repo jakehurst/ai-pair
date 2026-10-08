@@ -35,6 +35,7 @@ Code goes without a spec for one of these reasons:
 | `state`, `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
 | `setSpeed`, `setTiming`, `setConfirmCommands` | Glue: settings |
+| `calibrate`, `onCalibrate`, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
 
 ### `player.ts`
 

@@ -26,7 +26,7 @@ export function discoveryDir(): string {
   return path.join(aiPairHome(), "windows")
 }
 
-export type ToolName = "start" | "step" | "listen" | "end" | "read"
+export type ToolName = "start" | "step" | "listen" | "end" | "read" | "calibrate"
 
 export type RelayMessage =
   | { type: "hello"; token: string; protocolVersion: number }

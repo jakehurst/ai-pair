@@ -6,12 +6,8 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-export type Passage = {
-  title: string
-  text: string
-  /** Shown with the passage, outside the timed text: a license notice, or where it is from. */
-  notice?: string
-}
+import type { Passage } from "@ai-pair/protocol"
+export type { Passage }
 
 /** The built-in passage, from the extension's media folder: data files, so no source file holds the text. */
 export function builtInPassage(extensionPath: string): Passage {

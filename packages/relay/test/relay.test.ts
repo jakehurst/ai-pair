@@ -84,10 +84,27 @@ describe("relay", () => {
   it("lists the tools and the prompt, with short instructions", async () => {
     const client = await connect()
     const tools = await client.listTools()
-    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(["end", "listen", "read", "start", "step"])
+    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(["calibrate", "end", "listen", "read", "start", "step"])
     expect(client.getInstructions()).toContain("`start`")
     const prompt = await client.getPrompt({ name: "start", arguments: { task: "add a todos API" } })
     expect(JSON.stringify(prompt.messages)).toContain("The task: add a todos API")
+  })
+
+  it("starts a calibration from a passage file, and refuses a second one", async () => {
+    const client = await connect()
+    await call(client, "start")
+    const passages: string[] = []
+    // The first passage is taken; the hook refuses the next, as the calibration does while one runs.
+    controller.onCalibrate = (p) => passages.push(`${p.title}: ${p.text}`) === 1
+    const file = path.join(dir, "passage.txt")
+    fs.writeFileSync(file, "one two three")
+    const first = await call(client, "calibrate", { title: "Sample", file })
+    expect(first.error).toBe(false)
+    expect(first.text).toContain("under way")
+    expect(passages).toEqual(["Sample: one two three"])
+    const second = await call(client, "calibrate", { title: "Again", file })
+    expect(second.error).toBe(true)
+    expect(second.text).toContain("calibration_busy")
   })
 
   it("runs a session: start with the guide, pipelined steps, read, end", async () => {

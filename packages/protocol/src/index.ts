@@ -219,6 +219,14 @@ export type Excerpt = {
   truncated?: true
 }
 
+/** A passage for the reading speed calibration (#109): the agent's `calibrate` tool, the extension's setting. */
+export type Passage = {
+  title: string
+  text: string
+  /** Shown with the passage, outside the timed text: a license notice, or where it is from. */
+  notice?: string
+}
+
 export type Event =
   | { kind: "message"; text: string; selection?: Excerpt }
   /** `other`: not by the programmer, but by a tool, a formatter, or on disk. Only the programmer's interrupt. */
@@ -256,7 +264,7 @@ export type FileContent = {
   end?: { final_newline: boolean }
 }
 
-export type ToolErrorCode = "no_session" | "session_active" | "no_editor" | "cancelled" | "invalid_arguments"
+export type ToolErrorCode = "no_session" | "session_active" | "no_editor" | "cancelled" | "invalid_arguments" | "calibration_busy"
 
 export class ToolError extends Error {
   constructor(

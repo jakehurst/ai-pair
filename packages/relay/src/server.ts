@@ -104,6 +104,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   server.registerTool("listen", TOOLS.listen, (args, extra) => run("listen", args, extra))
   server.registerTool("end", TOOLS.end, (args, extra) => run("end", args, extra))
   server.registerTool("read", TOOLS.read, (args, extra) => run("read", args, extra))
+  server.registerTool("calibrate", TOOLS.calibrate, (args, extra) => run("calibrate", args, extra))
 
   // A cancel for a request the relay already answered: the SDK ignores it, and the agent's client
   // dropped the answer, unless it had taken it first (its abort listener sends a cancel either way).

@@ -3,7 +3,7 @@
 
 import type { BatchError, BatchResult, Code, Event, Excerpt, FileContent, Report, RunResult } from "@ai-pair/protocol"
 
-export type ReportingTool = "start" | "step" | "listen" | "end"
+export type ReportingTool = "start" | "step" | "listen" | "end" | "calibrate"
 
 export function renderReport(report: Report, tool: ReportingTool): string {
   const sections: string[] = []
@@ -12,6 +12,11 @@ export function renderReport(report: Report, tool: ReportingTool): string {
       report.resumed
         ? "The session has resumed: the programmer's window kept it while you were away, with its turn, your cursor, and its history. Read the files you were working in again before you give a line number: the programmer may have edited them meanwhile."
         : "The session has started.",
+    )
+  }
+  if (tool === "calibrate") {
+    sections.push(
+      "The calibration is under way in the Pair panel: playback is held while the programmer reads the passage. Call `listen`; their next message comes once it ends.",
     )
   }
   if (report.repeated) {

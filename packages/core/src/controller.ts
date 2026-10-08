@@ -1,7 +1,7 @@
 // The protocol state machine: sessions, the batch queue, and reports. Playing a batch is player.ts.
 // See PROTOCOL.md for the rules implemented here.
 
-import type { Action, BatchResult, Event, Excerpt, FileContent, Report, Turn } from "@ai-pair/protocol"
+import type { Action, BatchResult, Event, Excerpt, FileContent, Passage, Report, Turn } from "@ai-pair/protocol"
 import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
 import { fileDiff, lineChanges } from "./diff"
 import { LineIds, type Sighting } from "./lines"
@@ -532,6 +532,22 @@ export class Controller {
 
   setConfirmCommands(confirm: boolean): void {
     this.config = { ...this.config, confirmCommands: confirm }
+  }
+
+  /** A path the agent gave, against the session's root: for a file the bridge reads itself. */
+  resolveFile(file: string): string {
+    return this.resolvePath(this.requireSession(), file)
+  }
+
+  /** The extension's reading speed calibration: false while one is under way (#109, specs/Calibration.tla). */
+  onCalibrate?: (passage: Passage) => boolean
+
+  /** The agent's `calibrate` tool: a passage of its own, handed to the calibration. */
+  calibrate(passage: Passage): Report {
+    const s = this.requireSession()
+    if (!this.onCalibrate) throw new ToolError("no_editor", "This editor has no reading speed calibration.")
+    if (!this.onCalibrate(passage)) throw new ToolError("calibration_busy", "A calibration is already under way in the Pair panel.")
+    return { batches: [], events: [], turn: s.scene.turn }
   }
 
   /**
