@@ -435,6 +435,8 @@ export class Controller {
   /** Waits for the programmer's answer to a `run`, or an interruption. */
   private confirm(s: Session, id: number, command: string): Promise<boolean> {
     const signal = s.timeline.signal
+    // An interrupt during the save before it: the abort event has fired already.
+    if (signal.aborted) return Promise.resolve(false)
     return new Promise<boolean>((resolve) => {
       const abort = () => resolve(false)
       s.confirming = {
