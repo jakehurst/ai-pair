@@ -199,12 +199,12 @@ export class Bridge {
   private async dispatch(ws: WebSocket, tool: ToolName, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
     const c = this.controller
     if (tool === "start") {
-      if (c.isActive && this.owner !== ws) {
+      if (c.isActive && !c.isSuspended && this.owner !== ws) {
         throw new ToolError("session_active", "Another agent is already pairing in this editor window.")
       }
       const report = await c.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules))
       // The socket may have closed while the session started, when its close handler didn't own it yet:
-      // close the session again rather than leave it to no one (#42). From here to `owner`, nothing awaits.
+      // suspend the session rather than leave it to no one (#42, #25). From here to `owner`, nothing awaits.
       if (ws.readyState !== ws.OPEN) {
         c.disconnect()
         throw new ToolError("no_session", "The connection closed while the session started.")

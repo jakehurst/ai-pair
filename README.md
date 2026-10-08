@@ -181,7 +181,8 @@ file goes into the agent's instructions, the same trust an agent's own
   Claude Code, `claude mcp list` should show `pair`. With Copilot, `pair`
   should be in *MCP: List Servers*; start it there if it isn't running.
 - **After updating the extension,** reload the VS Code window and restart the
-  agent.
+  agent. A session in progress waits, suspended, and the agent's next
+  `start` from the same folder resumes it.
 
 ## Development
 

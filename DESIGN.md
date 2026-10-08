@@ -78,7 +78,10 @@ Layout, top to bottom:
 
 Without a session, the band has no header: it says there's no session and
 how to start one, and after a session, how it ended, with the agent's
-summary. In every message, code spans that name a file (`game.ts`,
+summary. While a session is suspended (its agent disconnected,
+or the window reloaded), the band keeps its history, a divider says so, and
+the status reads *Suspended: waiting for the agent* until the agent's `start`
+resumes it. In every message, code spans that name a file (`game.ts`,
 `src/server.ts`) open it, found by name if it isn't a path from the
 workspace's root, and URLs open in the browser. File and code references are
 mono and quietly underlined, taking the link color only on hover.
