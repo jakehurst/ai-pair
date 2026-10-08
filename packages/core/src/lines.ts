@@ -86,6 +86,11 @@ export class LineIds {
     return this.base ? new LineIds(this.base, new Map(this.versions)) : new LineIds(this, new Map())
   }
 
+  /** Drops this copy's own identities for a file, so it reads the ones it was forked from again. */
+  forget(file: string): void {
+    this.versions.delete(file)
+  }
+
   /**
    * Takes the identities from a copy where batches played in memory, for the files that now read
    * as they did there: so the lines those batches typed are the same lines in both.

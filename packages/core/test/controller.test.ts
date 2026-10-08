@@ -1238,6 +1238,34 @@ describe("cancellation", () => {
     expect((await until(controller.listen())).repeated).toBeUndefined()
   })
 
+  it("marks each report that carries a returned rejection the agent may have seen (specs/Controller.tla)", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const seen = await controller.step([{ move: { file: "a.ts", line: 5, to: "line_end" } }])
+    const unseen = await controller.step([{ move: { file: "a.ts", line: 6, to: "line_end" } }])
+    // A cancel before the second step's answer, then one after the first's, which the agent took.
+    controller.restore(unseen)
+    controller.restore(seen, true)
+    const first = await until(controller.listen())
+    const second = await until(controller.listen())
+    expect([first.rejected, second.rejected]).toEqual([unseen.rejected, seen.rejected])
+    expect(second.repeated).toBe(true)
+  })
+
+  it("keeps an ended session until its returned rejections are reported, one per call (specs/Controller.tla)", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const seen = await controller.step([{ move: { file: "a.ts", line: 5, to: "line_end" } }])
+    const unseen = await controller.step([{ move: { file: "a.ts", line: 6, to: "line_end" } }])
+    controller.restore(unseen)
+    controller.restore(seen, true)
+    controller.endSession()
+    const ending = await until(controller.listen())
+    expect([ending.events.map((e) => e.kind), ending.rejected]).toEqual([["end"], unseen.rejected])
+    expect((await until(controller.listen())).rejected).toEqual(seen.rejected)
+    await expect(controller.listen()).rejects.toMatchObject({ code: "no_session" })
+  })
+
   it("says a file to read doesn't exist, and that a move creates it (#89)", async () => {
     const { controller } = setup({ "a.ts": "" })
     await controller.start()
@@ -1656,6 +1684,18 @@ describe("changes by others, while batches are queued", () => {
     const done = await until(controller.step([]))
     expect([...typed.batches, ...done.batches].map((b) => b.status)).toEqual(["completed", "completed"])
     expect(editor.text("a.ts")).toBe("XX\nhello\n!world\n")
+  })
+
+  it("accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla)", async () => {
+    const { editor, controller } = setup({ "a.ts": "hello\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.step([{ say: "one two three four five six seven eight nine ten" }])
+    await advance(300)
+    editor.otherEdit("a.ts", 0, 0, "XX\n")
+    expect((await controller.read("a.ts")).lines.map((l) => l.text)).toEqual(["XX", "hello"])
+    const moved = await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }]))
+    expect(moved.rejected).toBeUndefined()
   })
 
   it("doesn't interrupt for a change to a file only a finished batch edited", async () => {

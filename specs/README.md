@@ -14,15 +14,15 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
-| `Serialize.cfg` | `N = 2` calls | holds | 163 |
+| `Serialize.cfg` | `N = 2` calls, each empty or not | holds | 709 |
 | `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
 | `Panel.cfg` | `N = 5` events | holds | 21 |
 | `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
-| `Controller.cfg` | `B = 2` batches, `E = 1` event, `MaxCancels = 1` | holds | 3,937 |
-| `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
+| `Controller.cfg` | `B = 2` batches, `E = 1` event, `Q = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
+| `Discovery.cfg` | `W = 2` windows, one junk file, a write that may fail | holds | 217 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
 | `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
-| `Bridge.cfg` | `S = 2` sockets | holds | 64 |
+| `Bridge.cfg` | `S = 2` sockets | holds | 68 |
 | `Draft.cfg` | `Views = 3` pages | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
@@ -35,7 +35,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
 | `Reload.cfg` | `N = 5` lines, any of them changed on disk | holds | 160 |
-| `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
+| `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches, up to 2 queued | holds | 34,939 |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
@@ -43,7 +43,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 
-`Controller.tla` also passes at `B = 3, MaxCancels = 2` (35,336 states) and `B = 3, E = 2, MaxCancels = 3` (216,195 states).
+`Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
 Each violation TLC found was checked against the code step by step before it was reported. The traces are in the issues.
 
@@ -56,7 +56,8 @@ Each violation TLC found was checked against the code step by step before it was
 | Spec | Code |
 |---|---|
 | `Guard` | `serialize`: `guarded` checks `signal.aborted` once the call before has settled |
-| `Rehearsed` | `step`: `await this.rehearse(...)`, the batch pushed onto the queue, then `block()` |
+| `Rehearsed` | `step`: an empty step blocks with no batch; else `await this.rehearse(...)`, the batch pushed onto the queue, or discarded when `stale` or ended, then `block()` |
+| `RehearseFails` | `rejectBatch`: the call answers with the rejection at once; an abort meanwhile ends it with that, not `cancelled` |
 | `Abort` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Play` | the player finishing batches in queue order |
 | `Ready`, `Timeout`, `Commit` | `finishCall` from `ready()` or the `maxBlockMs` timer; clears `this.call` |
@@ -99,7 +100,7 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 
 ### `Controller`: what reaches the agent
 
-`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, S2 (`PlaysKnowingEvents`), S3 (`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the relay sending a call only once every cancelled call on the socket has settled, so a `return` reaches the editor before the next call. `RestoreEnded` is the fix for #60: `restore()` working on a session the programmer ended, and putting a closed one back.
+`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, at least once since #67: nothing reaches the agent twice in a report not marked `repeated` (`NoUnmarkedRepeat`), and everything reaches it (`BatchesDelivered`, `EventsDelivered`, `QuietDelivered`). S2 (`PlaysKnowingEvents`), S3 (`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the relay sending a call only once every cancelled call on the socket has settled, so a `return` reaches the editor before the next call. `RestoreEnded` is the fix for #60: `restore()` working on a session the programmer ended, and putting a closed one back. `MarkHeld` and `DrainHeld` fix two bugs this spec found, each needing two rejections held at once, which a cancel after an answer allows. Each held rejection now keeps its own repeat mark, where before only the first report after them was marked. And a session the programmer ended stays open until its held rejections are out, one per report, where before it closed with the first.
 
 | Spec | Code |
 |---|---|
@@ -107,10 +108,12 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 | `EndSession` | `endSession()`: `ended`, the `end` event, `interrupt()` |
 | `RehearseFails`, `RehearseOk` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
-| `Programmer` | an interrupting event: `interrupt()` discards what is queued and sets `stale` |
+| `Programmer` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
 | `Commit` | `finishCall` → `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
 | `Cancel` | the agent cancelling a call |
 | `Answer`, `Bounce`, `Restore` | the report reaching the agent; the relay's `return`; `restore()` |
+| `LateBounce` | the agent's cancel coming after it took the answer: the relay's `handBack` with `mayRepeat`, and `restore()` setting `s.mayRepeat`, so the next report is marked `repeated` (#67) |
+| `QuietEdit` | `userEdit` in the programmer's turn: recorded, interrupting nothing |
 
 ### `Discovery`: finding a window
 
@@ -120,6 +123,7 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 |---|---|
 | `OpenW`, `CloseW`, `Crash`, `Reuse` | a window writing its file; `dispose()` removing it; a crash leaving it; its `pid` reused |
 | `Focus`, `Written` | `focused()` → `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
+| `OpenW` unlisted, `Listed` | the write failing (`failed`): the window runs, and no relay finds it; a later focus writing it |
 | `Start` | `locate` → `findWindows`: files that hold a `Discovery` with a live `pid`, and parse |
 | `Try` | `openWindow` on one candidate, best first |
 | `Disconnect` | the socket closing, so the next call opens again |
@@ -153,9 +157,10 @@ A keystroke made while the save participants run can't be told from their edits,
 
 | Spec | Code |
 |---|---|
-| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active; `controller.start()`; `this.owner = ws` |
+| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active; `controller.start()`; `this.owner = ws`, or on a socket that closed meanwhile, `disconnect()`, which closes the session it started |
 | `Close` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session |
-| `EndSession`, `Closed` | the programmer ending the session from the panel; its last report closing it |
+| `EndSession`, `Closed`, `AgentEnd` | the programmer ending the session from the panel, and its last report closing it; the agent's `end` |
+| `Restore` | a `return` from the owner's socket: `restore()` puts a session its last report closed back, as ended (#60); `recent` is `this.closed` |
 
 ### `Timeline`: pausing
 
@@ -298,15 +303,15 @@ S10 and S11 for `otherEdit` and `recordEdit` in `packages/core/src/controller.ts
 
 ### `Rehearsal`: line identities across a rehearsal
 
-S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player's `knows`. Each line has a ghost, which line it really is, next to the tracker's id, and changes are whole lines inserted or deleted or an edit within a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change by others to a file the queue edits interrupts it (`OtherInterrupts`), and `adopt` takes the fork's ids only for a text that reads as in the fork (`AdoptChecksText`). Either one alone is enough at these bounds.
+S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player's `knows`. Each line has a ghost, which line it really is, next to the tracker's id, and changes are whole lines inserted or deleted or an edit within a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change by others to a file the queue edits interrupts it (`OtherInterrupts`), and `adopt` takes the fork's ids only for a text that reads as in the fork (`AdoptChecksText`). Up to two batches are queued, each rehearsed from the one before. `ReadIsStart`: right after a read, the agent's next batch is checked against what it was shown. `ShareIds` is the fix for a bug this spec found: `followChange` gave a queued batch's fork its own id for a line a tool inserted, unlike the editor's id the agent was shown, so a line the agent had just read was refused. Now the fork drops its copy of the file's ids, and reads the editor's.
 
 | Spec | Code |
 |---|---|
-| `ReadEditor`, `ReadPlanned` | `read`: `saw` with the editor's lines, or with the queue's `after.lines` |
-| `Submit` | `step`'s rehearsal: `fork()`, the batch played in memory |
-| `Play`, `PlayFails` | the batch playing, the editor tracking its edits, `adopt` |
-| `Other` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted |
-| `Accept` | the player's `knows` in `unseen`: the id seen at a number is the editor's id there now, or with a batch queued, the id the queued batches leave there (the rehearsal starts from their fork) |
+| `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), else the editor's |
+| `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Start`), the batch played in memory |
+| `Play`, `PlayFails` | the oldest batch playing, the editor tracking its edits, `adopt`; a failure interrupts the queue |
+| `Other` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file, else each rehearsal follows it (`followChange`) |
+| `Accept` | the rehearsal's `knows` in `unseen`: the id the agent was shown at a number is the id there where the rehearsal starts |
 
 ### `Terminals`: running commands
 

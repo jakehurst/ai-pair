@@ -47,13 +47,14 @@ export async function rehearse(
   return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } }
 }
 
-/** Follows a change by others to a file no queued batch edits, so its rehearsed text is the editor's. */
-export function followChange(r: Rehearsal, file: string, before: string, after: string, changes: Change[]): void {
-  r.lines.of(file, before)
-  for (const change of changes) {
-    transformScene(r.scene, file, change)
-    r.lines.apply(file, change)
-  }
+/**
+ * Follows a change by others to a file no queued batch edits, so its rehearsed text is the editor's.
+ * Its line identities are the editor's too: a copy of its own would give a line the change inserts
+ * an identity of its own, unlike the one the agent is shown (specs/Rehearsal.tla, `ShareIds`).
+ */
+export function followChange(r: Rehearsal, file: string, after: string, changes: Change[]): void {
+  for (const change of changes) transformScene(r.scene, file, change)
+  r.lines.forget(file)
   if (r.texts.has(file)) r.texts.set(file, after)
 }
 
