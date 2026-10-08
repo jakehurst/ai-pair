@@ -19,7 +19,7 @@ const fast = {
   timing: {
     ...testConfig.timing,
     type: { ...testConfig.timing.type, charMs: 0.5 },
-    reading: { msPerWord: 1, minMs: 5, maxMs: 5 },
+    reading: { msPerChar: 0, minMs: 5 },
     beforeMoveMs: 5,
     beforeSelectMs: 5,
   },

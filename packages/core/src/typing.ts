@@ -60,7 +60,13 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   return chunks
 }
 
+/** The characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
+export function readingChars(text: string): number {
+  return text.trim().replace(/\s+/g, " ").length
+}
+
+/** How long a say pauses: per character of its text, at least the floor, so each message gets its own time. */
 export function readingTime(text: string, reading: Reading): number {
-  const words = text.split(/\s+/).filter(Boolean).length
-  return Math.min(reading.maxMs, Math.max(reading.minMs, words * reading.msPerWord))
+  const chars = readingChars(text)
+  return Math.max(reading.minMs, chars * reading.msPerChar)
 }

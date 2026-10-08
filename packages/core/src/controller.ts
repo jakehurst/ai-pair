@@ -120,6 +120,7 @@ export class Controller {
   private nextBatchId = 1
   private pauseReasons = new Set<string>()
   private speed = 1
+  private readingSpeed = 1
   private lastPosted = ""
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void
@@ -189,6 +190,7 @@ export class Controller {
         pacing: timeline,
         config: () => this.config,
         speed: () => this.speed,
+        readingSpeed: () => this.readingSpeed,
         render: () => this.render(),
         confirm: (id, command) => this.confirm(s, id, command),
         lines,
@@ -522,6 +524,10 @@ export class Controller {
 
   setSpeed(speed: number): void {
     this.speed = speed
+  }
+
+  setReadingSpeed(speed: number): void {
+    this.readingSpeed = speed
   }
 
   setConfirmCommands(confirm: boolean): void {

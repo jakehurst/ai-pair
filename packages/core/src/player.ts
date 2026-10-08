@@ -35,6 +35,8 @@ export type Stage = {
   pacing: Pacing
   config(): Config
   speed(): number
+  /** Divides only a say's reading pause; `speed` paces everything else. */
+  readingSpeed(): number
   /** Shows the agent cursor and state after a change. */
   render(): void
   /** Waits for the programmer to allow or decline a command. */
@@ -306,7 +308,7 @@ export class Player {
 
     if ("say" in action) {
       panel.post({ type: "say", text: action.say })
-      const ms = readingTime(action.say, timing.reading) / this.stage.speed()
+      const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed()
       this.reading = true
       panel.post({ type: "reading", ms })
       this.stage.render()

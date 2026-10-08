@@ -26,6 +26,12 @@ it("offers the speeds with one decimal, so they line up", () => {
   for (const s of SPEEDS) expect(html).toContain(`data-speed="${s}">${s.toFixed(1)}×</button>`)
 })
 
+it("offers the same speeds for reading, in a menu of its own", () => {
+  const html = panelHtml("vscode-resource:", "panel.js")
+  const page = new window.DOMParser().parseFromString(html, "text/html")
+  expect(page.querySelectorAll("#reading-menu [data-speed]")).toHaveLength(SPEEDS.length)
+})
+
 it("gives controls the panel's own tooltips, since native ones show unreliably in a webview", () => {
   const html = panelHtml("vscode-resource:", "panel.js")
   expect(html).not.toMatch(/\stitle=|\.title = /)

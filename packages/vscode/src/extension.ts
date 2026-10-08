@@ -39,6 +39,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => settingSpeed(config().get<unknown>("speed", 1)),
     set: (value: number) => void config().update("speed", value, vscode.ConfigurationTarget.Global),
   }
+  const readingSpeed = {
+    get: () => settingSpeed(config().get<unknown>("readingSpeed", 1)),
+    set: (value: number) => void config().update("readingSpeed", value, vscode.ConfigurationTarget.Global),
+  }
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
   // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
   const log = vscode.window.createOutputChannel("AI Pair", { log: true })
@@ -46,6 +50,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
+    readingSpeed,
     {
       current: () => editor.programmerSelection(),
       ref: () => editor.selectionRef(),
@@ -58,6 +63,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   editor.onSelection = (ref) => panel.showSelection(ref)
   panel.controller = controller
   controller.setSpeed(speed.get())
+  controller.setReadingSpeed(readingSpeed.get())
   controller.setTiming(config().get("timing", {}))
   controller.setConfirmCommands(config().get("confirmCommands", true))
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
@@ -112,6 +118,10 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (e.affectsConfiguration("aiPair.speed")) {
         controller.setSpeed(speed.get())
         panel.showSpeed(speed.get())
+      }
+      if (e.affectsConfiguration("aiPair.readingSpeed")) {
+        controller.setReadingSpeed(readingSpeed.get())
+        panel.showReadingSpeed(readingSpeed.get())
       }
       if (e.affectsConfiguration("aiPair.timing")) controller.setTiming(config().get("timing", {}))
       if (e.affectsConfiguration("aiPair.agentName")) editor.setAgentName(config().get("agentName", "Agent"))

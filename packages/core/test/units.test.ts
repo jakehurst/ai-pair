@@ -177,10 +177,11 @@ describe("typing", () => {
     expect(planTyping("a b", cadence, false, Math.random, 0.5).map((c) => c.delay)).toEqual([50, 50, 75])
   })
 
-  it("scales reading time with the word count, within bounds", () => {
-    const reading = { msPerWord: 180, minMs: 1000, maxMs: 6000 }
-    expect(readingTime("Hi.", reading)).toBe(1000)
-    expect(readingTime(Array(10).fill("word").join(" "), reading)).toBe(1800)
-    expect(readingTime(Array(100).fill("word").join(" "), reading)).toBe(6000)
+  it("scales reading time with the character count, above a floor", () => {
+    const reading = { msPerChar: 10, minMs: 10 }
+    expect(readingTime("", reading)).toBe(10)
+    expect(readingTime("Hi.", reading)).toBe(30)
+    expect(readingTime(Array(100).fill("word").join(" "), reading)).toBe(4990)
+    expect(readingTime("word\n\n  word", reading)).toBe(90)
   })
 })

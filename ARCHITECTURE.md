@@ -5,7 +5,7 @@ pairing session starts and ends. The agent-facing contract is in
 [PROTOCOL.md](PROTOCOL.md); the programmer-facing design is in
 [DESIGN.md](DESIGN.md).
 
-Status: describes 0.1.0.
+Status: describes 0.2.0.
 
 ## Components
 

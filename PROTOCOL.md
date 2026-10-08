@@ -9,7 +9,7 @@ This document covers only what the agent can do and observe. How the extension
 presents it to the programmer is in [DESIGN.md](DESIGN.md), and how the tool is
 built and connected is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Status: describes 0.1.0. Numbers marked *tunable* are initial guesses to be adjusted
+Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be adjusted
 by feel.
 
 ## Goals

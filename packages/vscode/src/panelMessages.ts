@@ -21,6 +21,7 @@ export type FromPanel =
   /** A command the intro offers, like Set Up Agent. */
   | { type: "command"; command: string }
   | { type: "speed"; value: number }
+  | { type: "readingSpeed"; value: number }
   | { type: "runDecision"; id: number; run: boolean; remember?: boolean }
 
 /** Messages to the page: the session's events, and the panel's own. */
@@ -32,3 +33,4 @@ export type ToPanel =
   | { type: "selection"; ref: Ref | undefined }
   | { type: "focusReply" }
   | { type: "speed"; value: number }
+  | { type: "readingSpeed"; value: number }

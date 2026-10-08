@@ -134,19 +134,19 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
   #turn-label { display: none; }
   body.user-turn #turn-label { display: inline; }
   #end { margin-left: 2px; }
-  #speed-wrap { position: relative; }
-  #speed { font-variant-numeric: tabular-nums; }
-  #speed-menu {
+  .speed-wrap { position: relative; }
+  .speed { font-variant-numeric: tabular-nums; }
+  .speed-menu {
     position: absolute; right: 0; top: 28px; z-index: 10; padding: 4px; border-radius: 6px;
     display: flex; flex-direction: column; background: var(--vscode-menu-background, var(--surface));
     color: var(--vscode-menu-foreground, var(--fg));
     border: 1px solid var(--vscode-menu-border, var(--border));
     box-shadow: 0 4px 14px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.18));
   }
-  #speed-menu[hidden] { display: none; }
-  #speed-menu button { justify-content: flex-start; height: 24px; padding: 0 8px; color: inherit; font-variant-numeric: tabular-nums; }
-  #speed-menu button[aria-checked="true"] { background: var(--soft-hover); }
-  #speed-menu button:hover { background: var(--vscode-menu-selectionBackground, var(--soft)); color: var(--vscode-menu-selectionForeground, inherit); }
+  .speed-menu[hidden] { display: none; }
+  .speed-menu button { justify-content: flex-start; height: 24px; padding: 0 8px; color: inherit; font-variant-numeric: tabular-nums; }
+  .speed-menu button[aria-checked="true"] { background: var(--soft-hover); }
+  .speed-menu button:hover { background: var(--vscode-menu-selectionBackground, var(--soft)); color: var(--vscode-menu-selectionForeground, inherit); }
 
   #now { display: none; margin-top: 8px; }
   body.active #now { display: block; }
@@ -253,9 +253,13 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
           <button id="pause" class="quiet" aria-label="Pause" data-tip="Pause (Space)" aria-keyshortcuts="Space">${ICONS.pause}${ICONS.resume}</button>
           <button id="interrupt" class="quiet" aria-label="Interrupt" data-tip="Interrupt">${ICONS.stop}</button>
           <button id="turn" class="quiet" aria-label="My turn" data-tip="Take the turn: you drive, the agent navigates">${ICONS.swap}<span id="turn-label">My turn</span></button>
-          <div id="speed-wrap">
-            <button id="speed" class="quiet" aria-haspopup="menu" aria-expanded="false" data-tip="Playback speed">1.0×</button>
-            <div id="speed-menu" role="menu" aria-label="Playback speed" hidden>${speeds}</div>
+          <div id="speed-wrap" class="speed-wrap">
+            <button id="speed" class="quiet speed" aria-haspopup="menu" aria-expanded="false" data-tip="Playback speed">1.0×</button>
+            <div id="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>${speeds}</div>
+          </div>
+          <div id="reading-wrap" class="speed-wrap">
+            <button id="reading-speed" class="quiet speed" aria-haspopup="menu" aria-expanded="false" data-tip="Reading speed: the pause after each message">read 1.0&times;</button>
+            <div id="reading-menu" class="speed-menu" role="menu" aria-label="Reading speed" hidden>${speeds}</div>
           </div>
           <button id="end" class="quiet" aria-label="End the session" data-tip="End the session">${ICONS.exit}</button>
         </div>

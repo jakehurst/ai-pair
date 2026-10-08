@@ -44,6 +44,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
+| `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
@@ -186,6 +187,18 @@ A pause lasts until a resume, as PROTOCOL.md says: looking back at the code does
 | `Discard` | a report with a batch not completed sets `anchorNeeded` |
 | `Anchored` | a batch whose first action at the cursor is a `move` or `select` with `file` and `line`: accepted, and the flag cleared |
 | `Unanchored` | any other action at the cursor first: refused with `unanchored` while the flag holds |
+
+### `Calibration`: calibrating the reading speed
+
+The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, the `calibrate` pair tool in `bridge.ts`, the setting the rate is stored in, written by `extension.ts`, and the `say` pause that reads it in `player.ts`. Issue #109. The constant `AwaitStore` switches whether playback resumes before or after the stored rate has been applied; with `FALSE`, TLC violates `FreshRate` in five steps: `Supply`, `Go`, `Finish`, then a `SayStart` timed with the default rate.
+
+| Spec | Code |
+|---|---|
+| `Arm`, `Supply` | the Calibrate Reading Speed command, or the calibrate tool, which the bridge refuses unless idle; both add the calibrate pause reason |
+| `Go`, `Finish` | the programmer typing go and x in the panel; the extension timestamps both |
+| `Stored` | the configuration change applying the new timing, which also removes the pause |
+| `Cancel` | any other reply, the view disposed, the session ending |
+| `SayStart` | the reading time computed in the player from the timing in force at that moment |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 

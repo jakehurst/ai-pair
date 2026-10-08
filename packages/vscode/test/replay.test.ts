@@ -35,7 +35,12 @@ function replay(panel: NarrationPanel): PanelEvent[] {
 }
 
 it("keeps the session's start in the log however many events follow it", () => {
-  const panel = new NarrationPanel((f) => f, { get: () => 1, set: () => {} }, { current: () => undefined, ref: () => undefined })
+  const panel = new NarrationPanel(
+    (f) => f,
+    { get: () => 1, set: () => {} },
+    { get: () => 1, set: () => {} },
+    { current: () => undefined, ref: () => undefined },
+  )
   panel.post({ type: "session", active: true, task: "long" })
   for (let i = 0; i < 1000; i++) panel.post({ type: "say", text: `message ${i}` })
   const events = replay(panel)
@@ -45,7 +50,12 @@ it("keeps the session's start in the log however many events follow it", () => {
 })
 
 it("replays the session's end when that is the last session event", () => {
-  const panel = new NarrationPanel((f) => f, { get: () => 1, set: () => {} }, { current: () => undefined, ref: () => undefined })
+  const panel = new NarrationPanel(
+    (f) => f,
+    { get: () => 1, set: () => {} },
+    { get: () => 1, set: () => {} },
+    { current: () => undefined, ref: () => undefined },
+  )
   panel.post({ type: "session", active: true })
   panel.post({ type: "session", active: false, reason: "user" })
   for (let i = 0; i < 1000; i++) panel.post({ type: "say", text: `message ${i}` })

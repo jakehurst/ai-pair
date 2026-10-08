@@ -150,6 +150,7 @@ code --install-extension ai-pair-*.vsix
 | Setting | |
 |---|---|
 | `aiPair.speed` | Overall playback speed (the panel's speed menu offers 0.4× to 3.0×). |
+| `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |
 | `aiPair.agentName` | The name on the agent's cursor. |
 | `aiPair.timing` | Fine-tune any typing or pause duration, e.g. `{ "afterSelectMs": 900, "type": { "wordStartMs": 140 } }`. Every key is in [`timing.ts`](packages/core/src/timing.ts). |
 | `aiPair.confirmCommands` | Ask before each command the agent runs in the terminal (default on). Turned off, the agent's commands run without any prompt, not even its own. |

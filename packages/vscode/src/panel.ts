@@ -27,6 +27,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   constructor(
     private readonly resolvePath: (file: string) => string,
     private readonly speed: { get: () => number; set: (value: number) => void },
+    private readonly readingSpeed: { get: () => number; set: (value: number) => void },
     private readonly selection: { current: () => SharedSelection | undefined; ref: () => Ref | undefined },
     /** Called with a line for each message from the page, for diagnosing deliveries (#27). */
     private readonly trace?: (line: string) => void,
@@ -47,6 +48,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** The speed setting changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
     this.send({ type: "speed", value })
+  }
+
+  showReadingSpeed(value: number): void {
+    this.send({ type: "readingSpeed", value })
   }
 
   post(event: PanelEvent): void {
@@ -107,11 +112,15 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         c?.resume("reply")
         this.send({ type: "replay", events: this.log })
         this.showSpeed(this.speed.get())
+        this.showReadingSpeed(this.readingSpeed.get())
         this.showSelection(this.selection.ref())
         return
       case "speed":
         // Only the menu's speeds: the page sends no others (#17).
         if (SPEEDS.includes(m.value)) this.speed.set(m.value)
+        return
+      case "readingSpeed":
+        if (SPEEDS.includes(m.value)) this.readingSpeed.set(m.value)
         return
       case "reply":
         // Replying means "go on with this", so any pause ends.

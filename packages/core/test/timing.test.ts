@@ -9,8 +9,8 @@ import { defaultTiming, withOverrides, type TimingOverrides } from "../src/timin
 const settings = (value: unknown) => value as TimingOverrides
 
 it("takes overrides that are numbers of zero or more, at either level", () => {
-  const timing = withOverrides(defaultTiming, { afterSelectMs: 0, type: { charMs: 80 }, reading: { maxMs: 4000 } })
-  expect([timing.afterSelectMs, timing.type.charMs, timing.reading.maxMs]).toEqual([0, 80, 4000])
+  const timing = withOverrides(defaultTiming, { afterSelectMs: 0, type: { charMs: 80 }, reading: { minMs: 4000 } })
+  expect([timing.afterSelectMs, timing.type.charMs, timing.reading.minMs]).toEqual([0, 80, 4000])
   expect(timing.type.newlineMs).toBe(defaultTiming.type.newlineMs)
 })
 

@@ -79,6 +79,17 @@ describe("timing", () => {
     expect(await elapsed([{ move: { line: 6, at: "line 5\n▌" } }])).toBeLessThan(1000) // 3 lines down
     expect(await elapsed([{ move: { line: 36, at: "line 35\n▌" } }])).toBeGreaterThanOrEqual(1000) // 30 lines down
   })
+
+  it("times a say's pause by the reading speed, not the playback speed", async () => {
+    const { panel, controller } = setup({ "a.ts": "" })
+    await controller.start()
+    controller.setSpeed(4)
+    controller.setReadingSpeed(2)
+    await controller.step([{ say: "Hi." }])
+    await until(controller.step([]))
+    // The fake timing reads at 20 ms per character with a 500 ms floor: 500 ms, halved by the reading speed.
+    expect(panel.events.find((e) => e.type === "reading")).toEqual({ type: "reading", ms: 250 })
+  })
 })
 
 describe("editing", () => {
