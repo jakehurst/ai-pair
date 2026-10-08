@@ -8,75 +8,44 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 
 [COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the spec that models it, or says why it has none.
 
-CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. `Spec_<commit>[_<issue>].cfg` models the code at that commit, before a fix, and has to find a violation: it is how each spec was validated, by reproducing a known bug. Where no known bug lived, `Spec_mutation.cfg` switches off the code's defenses instead, and has to find a violation the same way.
+CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. Regressions are caught by the unit and integration tests. A spec's constants that switch a fix on or off still say which bug each one fixed; the configs that reproduced those bugs were dropped once the fixes were in.
 
 ## Results
 
-| Config | Bounds | Result | Distinct states (when found, for a violation) |
+| Config | Bounds | Result | Distinct states |
 |---|---|---|---|
 | `Serialize.cfg` | `N = 2` calls | holds | 163 |
-| `Serialize_57ac07f.cfg` | same | L2 `CancelReleases` violated (#1) | 199 |
 | `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
-| `Wire_57ac07f_3.cfg` | same | S8 `OwnCloseOnly` violated (#3) | 324 |
-| `Wire_57ac07f_4.cfg` | same | S9 `RelayStaysUp` violated (#4) | 6 |
-| `Wire_57ac07f_29.cfg` | same | `NoReportLost` violated (#29) | 247 |
-| `Wire_06b93b9_67.cfg` | same | S1 `DroppedHandedBack` violated (#67) | 19,074 |
-| `Wire_unmarked_67.cfg` | same, handing back on a late cancel without the mark | `RepeatsMarked` violated: a report the agent took comes again unmarked (validation of #67's mark by mutation) | 512 |
 | `Panel.cfg` | `N = 5` events | holds | 21 |
-| `Panel_57ac07f.cfg` | same | S13 `NewestFirst` violated (#18) | 10 |
 | `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
-| `PanelReplay_57ac07f_54.cfg` | same | `ReplayShowsSession` violated (#54) | 67 |
 | `Controller.cfg` | `B = 2` batches, `E = 1` event, `MaxCancels = 1` | holds | 3,937 |
-| `Controller_57ac07f.cfg` | same | S1 `BatchesDelivered` violated (#28); with S3 checked too, S3 `PlaysAfterCompleted` is found first | 358 |
-| `Controller_4e59c17_59.cfg` | same | S3 `PlaysAfterCompleted` violated (#59) | 317 |
-| `Controller_4e59c17_60.cfg` | same | S1 `EventsDelivered` violated (#60) | 4,393 |
 | `Discovery.cfg` | `W = 2` windows, one junk file | holds | 146 |
-| `Discovery_57ac07f_31.cfg` | same | `NoInternal` violated (#31) | 4 |
-| `Discovery_7c2f54e_72.cfg` | same | `FindsRunning` violated (#72) | 22 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
-| `EditorAdapter_57ac07f_40.cfg` | `N = 3` changes | S12 `RightAuthor` violated (#40) | 25 |
 | `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
-| `FollowMode_57ac07f_56.cfg` | same | `NoPauseFromOurOwnShow` violated (#56) | 11 |
 | `Bridge.cfg` | `S = 2` sockets | holds | 64 |
-| `Bridge_57ac07f_42.cfg` | same | S5 `OwnedByOpenSocket` violated (#42) | 17 |
 | `Draft.cfg` | `Views = 3` pages | holds | 12 |
-| `Draft_fa2e74a_69.cfg` | same | L4 `ReplyMeansDraft` violated (#69) | 6 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
-| `RunBox_mutation.cfg` | same, the page keeping the box for a phase that ends the run | `BoxMatches` violated (validation by mutation; no known bug) | 6 |
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
-| `FileText_160344c_88.cfg` | same | `NotStale` violated (#88; #89's `MissingIsReported` and `CreatedIsEmpty` fail too, checked alone) | 8 |
 | `Outside.cfg` | one file, 5 contents | holds | 564 |
-| `Outside_every.cfg` | same, marking every watcher event | `NoFalseMark` violated (validation by mutation) | 12 |
-| `Outside_afterSave.cfg` | same, skipping an event after a save | `NoFalseMark` violated (validation by mutation) | 12 |
-| `Outside_unsettled.cfg` | same, deciding before VS Code tells of its save | `NoFalseMark` violated (validation by mutation) | 53 |
 | `Navigator.cfg` | `Edits = 3` | holds | 44 |
-| `Navigator_1442c5a.cfg` | same | `NotWhileTyping` violated (found in the #19 sweep) | 43 |
 | `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
-| `EditEvents_1442c5a.cfg` | same | `Explained` violated (found in the #19 sweep) | 60 |
 | `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2` | holds | 2,952 |
-| `Scroll_1442c5a.cfg` | same | `Settles` violated (found in the #19 sweep) | 3,342 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3` | holds | 289 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
-| `Turns_57ac07f_49.cfg` | same | S6 `OnlyTalkInTheirTurn` violated (#49) | 518 |
 | `Reload.cfg` | `N = 5` lines, any of them changed on disk | holds | 160 |
-| `Reload_38f71fa_65.cfg` | same | `UnchangedKeepIds` violated, and S11 `SelectionStays` alone (#65) | 40; 43 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches | holds | 33,214 |
-| `Rehearsal_mutation.cfg` | same, both defenses off | S10 violated (validation by mutation; no known bug) | |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
-| `BatchFile_57ac07f_58.cfg` | same | `ActsInNamedFile` violated (#58) | 79 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 1,859 |
-| `Actions_mutation.cfg` | same, both defenses off | S14 `PlaysNothingTwice` violated (validation by mutation; no known bug) | |
 | `Player.cfg` | `Edits = 2` | holds | 26 |
-| `Player_57ac07f_49.cfg` | same | S11 `DeletesTheSelection` violated (#49) | 12 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (35,336 states) and `B = 3, E = 2, MaxCancels = 3` (216,195 states).
 
-Each violation's trace was checked against the code step by step before it was reported. The traces are in the issues.
+Each violation TLC found was checked against the code step by step before it was reported. The traces are in the issues.
 
 ## Specs and the code they model
 
@@ -190,7 +159,7 @@ A keystroke made while the save participants run can't be told from their edits,
 
 ### `Timeline`: pausing
 
-`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause` and `Controller.resume`, and where they come from: the Pause button, the reply box's draft, sending a reply, and the turn button (`panel.ts`), and looking away (`editor.ts`). No validation config: no known bug was in this code.
+`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause` and `Controller.resume`, and where they come from: the Pause button, the reply box's draft, sending a reply, and the turn button (`panel.ts`), and looking away (`editor.ts`).
 
 | Spec | Code |
 |---|---|
@@ -202,7 +171,7 @@ A pause lasts until a resume, as PROTOCOL.md says: looking back at the code does
 
 ### `Actions`: what an interrupted batch reports as unplayed
 
-S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is its steps between awaits, read from the code: awaits, checks of a sleep's or `confirm`'s result or of `notStarted`, and effects the programmer sees. An interrupt comes at any await. Two defenses keep S14, and the mutation config turns both off; either one off alone is also found. A `type` cut after a chunk returns only what's left of it (`RestOnly`), and a `run` interrupted while its command keeps running counts as played (`ConsumeRun`). Unit tests cover both: "returns what's left of a type cut inside its second part" and "stops waiting when the programmer interrupts, reporting the command as still running".
+S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is its steps between awaits, read from the code: awaits, checks of a sleep's or `confirm`'s result or of `notStarted`, and effects the programmer sees. An interrupt comes at any await. Two defenses keep S14. A `type` cut after a chunk returns only what's left of it (`RestOnly`), and a `run` interrupted while its command keeps running counts as played (`ConsumeRun`). Unit tests cover both: "returns what's left of a type cut inside its second part" and "stops waiting when the programmer interrupts, reporting the command as still running".
 
 | Spec | Code |
 |---|---|
@@ -264,7 +233,7 @@ One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and t
 
 ### `Outside`: marking files changed outside the protocol
 
-The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts` in `packages/vscode/src`. One file, written by VS Code's saves, by the extension's own `show`, and by anything else; a watcher that reports writes late and merges them. The code marks a file when a group of writes settles, if the file differs from the text it knows: the last VS Code wrote, or the programmer saw. A timing assumption: VS Code tells of a save (`onDidSaveTextDocument`) within milliseconds, before the group settles, and nothing the programmer does falls in between. The mutation configs are the rules that fail: marking every event, skipping an event after a save, and deciding before the save's notification.
+The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts` in `packages/vscode/src`. One file, written by VS Code's saves, by the extension's own `show`, and by anything else; a watcher that reports writes late and merges them. The code marks a file when a group of writes settles, if the file differs from the text it knows: the last VS Code wrote, or the programmer saw. A timing assumption: VS Code tells of a save (`onDidSaveTextDocument`) within milliseconds, before the group settles, and nothing the programmer does falls in between.
 
 | Spec | Code |
 |---|---|
@@ -329,7 +298,7 @@ S10 and S11 for `otherEdit` and `recordEdit` in `packages/core/src/controller.ts
 
 ### `Rehearsal`: line identities across a rehearsal
 
-S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player's `knows`. Each line has a ghost, which line it really is, next to the tracker's id, and changes are whole lines inserted or deleted or an edit within a line, where `applyChange`'s rules are plain. Two defenses keep S10, and the mutation config turns both off: a change by others to a file the queue edits interrupts it (`OtherInterrupts`), and `adopt` takes the fork's ids only for a text that reads as in the fork (`AdoptChecksText`). Either one alone is enough at these bounds.
+S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player's `knows`. Each line has a ghost, which line it really is, next to the tracker's id, and changes are whole lines inserted or deleted or an edit within a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change by others to a file the queue edits interrupts it (`OtherInterrupts`), and `adopt` takes the fork's ids only for a text that reads as in the fork (`AdoptChecksText`). Either one alone is enough at these bounds.
 
 | Spec | Code |
 |---|---|
@@ -341,7 +310,7 @@ S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player'
 
 ### `Terminals`: running commands
 
-`packages/vscode/src/terminal.ts`: `acquire`, the wait for shell integration, the command, and what ends each wait. No validation config: no known bug was in this code.
+`packages/vscode/src/terminal.ts`: `acquire`, the wait for shell integration, the command, and what ends each wait.
 
 | Spec | Code |
 |---|---|

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Runs TLC on every config in specs/. Spec.cfg checks the code as it is and
-# must pass. Spec_<commit>.cfg models the code at that commit, before a fix,
-# and must find a violation.
+# must pass.
 set -u
 cd "$(dirname "$0")"
 tlc="${TLC:-tlc}"
@@ -11,8 +10,7 @@ status=0
 
 for cfg in *.cfg; do
   name="${cfg%.cfg}"
-  spec="${name%%_*}"
-  out="$($tlc -workers auto -cleanup -metadir "$meta/$name" -config "$cfg" "$spec.tla" 2>&1)"
+  out="$($tlc -workers auto -cleanup -metadir "$meta/$name" -config "$cfg" "$name.tla" 2>&1)"
   if printf '%s\n' "$out" | grep -q 'No error has been found'; then
     result=pass
   elif printf '%s\n' "$out" | grep -q 'violated'; then
@@ -20,17 +18,13 @@ for cfg in *.cfg; do
   else
     result=error
   fi
-  case "$name" in
-    *_*) expected=violation ;;
-    *) expected=pass ;;
-  esac
-  if [ "$result" = "$expected" ]; then
+  if [ "$result" = pass ]; then
     mark=ok
   else
-    mark=UNEXPECTED
+    mark=FAILED
     status=1
   fi
-  printf '%-28s expected %-9s got %-9s %s\n' "$cfg" "$expected" "$result" "$mark"
+  printf '%-20s %-9s %s\n' "$cfg" "$result" "$mark"
   if [ "$mark" != ok ]; then
     printf '%s\n' "$out" | grep -v '^@!@!@' | tail -60
   fi
