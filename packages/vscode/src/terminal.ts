@@ -93,6 +93,8 @@ export class PairTerminals implements vscode.Disposable {
 }
 
 function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promise<vscode.TerminalShellIntegration | undefined> {
+  // An interrupt before it (during the save): the abort event has fired already.
+  if (signal.aborted) return Promise.resolve(undefined)
   if (terminal.shellIntegration) return Promise.resolve(terminal.shellIntegration)
   return new Promise((resolve) => {
     const done = (value: vscode.TerminalShellIntegration | undefined) => {

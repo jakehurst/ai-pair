@@ -392,6 +392,24 @@ export async function run(): Promise<void> {
   await ai.update("confirmCommands", undefined, vscode.ConfigurationTarget.Global)
   console.log(`a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
 
+  // An interrupt while a `run` saves its files stops it, without waiting to ask the programmer.
+  fs.writeFileSync(file("asked.txt"), "a\n")
+  await c.start("asked")
+  await c.read("asked.txt")
+  const interrupting = vscode.workspace.onWillSaveTextDocument(() => c.userInterrupt())
+  c.setSpeed(20)
+  await c.step([{ move: { file: "asked.txt", line: 1, to: "line_end" } }, { type: "b\u{258c}" }, { run: "true" }])
+  const asked = await Promise.race([c.listen(), sleep(3000).then(() => undefined)])
+  interrupting.dispose()
+  assert.ok(asked, "listen is still waiting")
+  assert.deepEqual(
+    asked.batches.map((b) => b.status),
+    ["interrupted"],
+  )
+  c.setSpeed(1)
+  await c.end()
+  console.log("an interrupt while a run saves stops it, without asking")
+
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })
   fs.writeFileSync(file("..cache/x.txt"), "a\n")

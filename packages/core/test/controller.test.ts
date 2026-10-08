@@ -1536,6 +1536,21 @@ describe("run", () => {
     expect(editor.commands.map((c) => c.command)).toEqual(["npm test"])
   })
 
+  it("stops at once when the programmer interrupts while it saves, before it asks", async () => {
+    const { editor, controller } = setup({ "a.ts": "x\n" })
+    const save = editor.save.bind(editor)
+    editor.save = async (file) => {
+      await save(file)
+      controller.userInterrupt()
+    }
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "y\u{258c}" }, { run: "npm test" }])
+    const report = await until(controller.listen(), 1000)
+    expect(report.batches).toMatchObject([{ id: 1, status: "interrupted" }])
+    expect(editor.commands).toEqual([])
+  })
+
   it("is not allowed during the programmer's turn", async () => {
     const { editor, controller } = setup({}, { confirmCommands: false })
     await controller.start()
