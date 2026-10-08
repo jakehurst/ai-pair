@@ -1,3 +1,4 @@
 {
-  "cSpell.ignoreWords": ["subseteq"]
+  "cSpell.ignoreWords": ["subseteq"],
+  "aiPair.trace": true
 }

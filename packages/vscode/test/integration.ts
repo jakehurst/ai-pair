@@ -484,6 +484,8 @@ export async function run(): Promise<void> {
 
   // An agent connecting the way a harness does: the launcher, over stdio, from the project folder.
   await api.ready
+  // Its frames at Info, with `aiPair.trace` (#27): checked in the log once it's done.
+  await vscode.workspace.getConfiguration("aiPair").update("trace", true, vscode.ConfigurationTarget.Global)
   const transport = new StdioClientTransport({
     command: api.launcher,
     cwd: root,
@@ -536,5 +538,15 @@ export async function run(): Promise<void> {
   console.log("a report canceled after it was taken comes again, marked")
   await tool("end", { summary: "Bye." })
   await agent.close()
+  // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
+  const logs = path.join(root, "..", "user", "logs")
+  const traced = () =>
+    fs
+      .readdirSync(logs, { recursive: true, encoding: "utf8" })
+      .filter((f) => path.basename(f) === "AI Pair.log")
+      .map((f) => fs.readFileSync(path.join(logs, f), "utf8"))
+      .join("")
+  await until(() => /\[info\] socket \d+ ← call \d+ start/.test(traced()))
+  await vscode.workspace.getConfiguration("aiPair").update("trace", undefined, vscode.ConfigurationTarget.Global)
   console.log("relay session OK, with the project's guide")
 }
