@@ -133,18 +133,28 @@ A **session**:
 - **ends** when:
   - the programmer presses End session in the panel, or
   - the agent calls `end` (e.g. the programmer said they're done), or
-  - the relay disconnects (the harness exited), or
+  - the agent's `start` from another directory replaces a suspended one, or
   - the window closes.
+- **is suspended**, not ended, when the relay disconnects (the harness exited)
+  or the window reloads (#25). It keeps its turn, the agent's cursor and
+  selection, its directory, and the panel's history, in memory and in the
+  workspace's storage, until the programmer ends it, or the agent's `start`
+  from the same directory resumes it. Messages the programmer sends meanwhile
+  reach the agent when it's back. Nothing plays meanwhile: what was queued is
+  discarded, and reported then.
 - **belongs to one window**, and a window has at most one session at a time. A
   `start` while another session is active in that window is rejected.
 
 Outside a session, pair tools other than `start` fail with `no_session`, so an
 agent can't accidentally drive the editor when the programmer isn't pairing.
 The programmer's edits between sessions aren't tracked. A new session starts
-fresh, and the agent should re-read what it needs.
+fresh, and the agent should re-read what it needs. So does an agent whose
+session resumes: it may be a new conversation, so it has seen no lines, and it
+reads them again before it gives a line number.
 
 The panel keeps each session's narration history. Between sessions it shows
-"No active session", and how to start one.
+"No active session", and how to start one. While a session is suspended, it
+keeps its history, and its status says it's waiting for the agent.
 
 ## Starting a session
 

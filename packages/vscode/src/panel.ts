@@ -16,6 +16,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private view?: vscode.WebviewView
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = []
+  /** After each post: the window saves the history with a session, for a reload (#25). */
+  onPost?: () => void
+
+  /** Everything posted so far, as the window saves it. */
+  get history(): readonly PanelEvent[] {
+    return this.log
+  }
 
   constructor(
     private readonly resolvePath: (file: string) => string,
@@ -56,6 +63,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       void vscode.commands.executeCommand("setContext", "aiPair.active", event.active)
       if (event.active) this.reveal()
     }
+    this.onPost?.()
+  }
+
+  /** After a reload: the history the window saved with its session, for the view to replay (#25). */
+  restoreHistory(events: readonly PanelEvent[]): void {
+    this.log.splice(0, this.log.length, ...events)
+    void vscode.commands.executeCommand("setContext", "aiPair.active", true)
   }
 
   focusReply(): void {

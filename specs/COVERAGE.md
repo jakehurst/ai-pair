@@ -28,7 +28,8 @@ Code goes without a spec for one of these reasons:
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll` |
 | `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
 | `confirm`, `decideRun` | `RunBox` (`Decided`) |
-| `start`, `disconnect` | `Bridge` |
+| `start`, `disconnect` | `Bridge`, `Resume` |
+| `resumeSession`, `open`, `saved`, `revive`, `isSuspended`, `onChange` | `Resume` |
 | `textOrMissing` | `FileText` (`MissingFile`) |
 | `state`, `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
@@ -115,6 +116,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
+| | `history`, `restoreHistory`, `onPost` | `Resume` (`Save`, `Reload`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft` |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
@@ -131,7 +133,8 @@ Code goes without a spec for one of these reasons:
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
 | `agents.ts` | all | Pure, Glue: agents' config files; `setup.properties.test.ts` |
 | `setup.ts` | all | Glue |
-| `extension.ts` | all | Glue |
+| `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
+| | the rest | Glue |
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |
 | `panelHtml.ts` | `panelHtml`, `settingSpeed` | Format |
 | `panelMessages.ts` | | Types |

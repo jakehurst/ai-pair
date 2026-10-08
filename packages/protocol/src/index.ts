@@ -241,6 +241,8 @@ export type Report = {
   waiting?: true
   /** Some of it may repeat a report the agent already saw: a call it canceled came back after its answer (#67). */
   repeated?: true
+  /** `start` resumed a session its agent had disconnected from, or the window had reloaded with (#25). */
+  resumed?: true
 }
 
 export type FileContent = {

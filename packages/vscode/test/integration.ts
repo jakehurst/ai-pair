@@ -456,6 +456,26 @@ export async function run(): Promise<void> {
   await c.end()
   console.log("a line a tool inserted, read while a queued batch edits other files, is accepted")
 
+  // A session the agent disconnects from waits, suspended, saved in the workspace's storage; one
+  // brought back from it, as after a reload, resumes on a start from its folder (#25, specs/Resume.tla).
+  fs.writeFileSync(file("kept.txt"), "one\ntwo\n")
+  await c.start("kept")
+  await c.read("kept.txt")
+  await c.step([{ move: { file: "kept.txt", line: 2, to: "line_end" } }])
+  await c.step([])
+  c.disconnect()
+  assert.equal(c.isSuspended, true)
+  await sleep(500)
+  const kept = api.saved()
+  assert.ok(kept?.scene.cursor, "the suspended session wasn't saved")
+  c.endSession()
+  c.revive(kept)
+  const revived = await c.start("kept")
+  assert.equal(revived.resumed, true)
+  assert.match(revived.cursor?.lines.find((l) => l.text.includes("\u{258c}"))?.text ?? "", /two/)
+  await c.end()
+  console.log("a session saved while suspended resumes, with its cursor")
+
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file("..cache"), { recursive: true })
   fs.writeFileSync(file("..cache/x.txt"), "a\n")

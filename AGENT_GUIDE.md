@@ -349,6 +349,10 @@ type_fast ";▌"
   directory, as an absolute path. A session starts fresh: re-read any files
   you need, even if you read them earlier in the conversation, because the
   programmer may have changed them since.
+- **If `start` says the session resumed,** the programmer's window kept it
+  while you were away: its turn, your cursor, and its history are as they
+  were, and the report says what happened meanwhile. Carry on from there, but
+  read the files you were working in again before you give a line number.
 - **When the task is done,** say so in a short summary and call `listen`. The
   programmer may have more for you. If they say they're done, call `end`.
 - **When you receive an `end` event,** the session is over. Stop using the

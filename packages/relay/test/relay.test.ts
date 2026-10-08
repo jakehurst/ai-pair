@@ -332,7 +332,7 @@ describe("relay", () => {
     expect((await call(client, "start")).error).toBe(false)
   })
 
-  it("ends the session when the agent's harness goes away", async () => {
+  it("suspends the session when the agent's harness goes away, and resumes it for the next agent (#25)", async () => {
     const client = await connect()
     await call(client, "start")
     await client.close()
@@ -341,8 +341,11 @@ describe("relay", () => {
     // does. Simulate that by disposing of every relay connection.
     for (const c of bridge["server"]?.clients ?? []) c.close()
     await new Promise((r) => setTimeout(r, 50))
-    expect(controller.isActive).toBe(false)
-    expect(panel.events).toContainEqual({ type: "session", active: false, reason: "disconnected" })
+    expect(controller.isActive).toBe(true)
+    expect(panel.events).toContainEqual({ type: "session", active: true, suspended: true })
+    const next = await call(await connect(), "start")
+    expect(next.error).toBe(false)
+    expect(next.text).toMatch(/resumed[\s\S]*Read the files/)
   })
 
   it("explains when no editor has the project open", async () => {

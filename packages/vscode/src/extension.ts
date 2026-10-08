@@ -1,6 +1,6 @@
 import * as os from "node:os"
 import * as vscode from "vscode"
-import { Bridge, Controller } from "@ai-pair/core"
+import { Bridge, Controller, type PanelEvent, type SavedSession } from "@ai-pair/core"
 import { discoveryDir } from "@ai-pair/protocol"
 import { playDemo } from "./demo"
 import { VsCodeEditor } from "./editor"
@@ -19,9 +19,17 @@ export type Api = {
   playDemo: () => Promise<void>
   launcher: string
   ready: Promise<void>
+  /** The session as the workspace's storage holds it. */
+  saved: () => SavedSession | undefined
 }
 
 const config = () => vscode.workspace.getConfiguration("aiPair")
+
+/** Where a session and its panel history wait across a reload, in the workspace's storage (#25). */
+const SAVED_SESSION = "aiPair.session"
+const SAVED_HISTORY = "aiPair.history"
+/** How long after a change the session is saved: changes come a keystroke at a time. */
+const SAVE_MS = 200
 
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir()
@@ -53,6 +61,24 @@ export function activate(context: vscode.ExtensionContext): Api {
   controller.setTiming(config().get("timing", {}))
   controller.setConfirmCommands(config().get("confirmCommands", true))
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
+  // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
+  // specs/Resume.tla): saved shortly after each change, and once more as the window goes.
+  const saved = context.workspaceState.get<SavedSession>(SAVED_SESSION)
+  if (saved) {
+    panel.restoreHistory(context.workspaceState.get<PanelEvent[]>(SAVED_HISTORY) ?? [])
+    controller.revive(saved)
+  }
+  let saving: ReturnType<typeof setTimeout> | undefined
+  const save = () => {
+    clearTimeout(saving)
+    const session = controller.saved
+    void context.workspaceState.update(SAVED_SESSION, session)
+    void context.workspaceState.update(SAVED_HISTORY, session ? panel.history : undefined)
+  }
+  controller.onChange = panel.onPost = () => {
+    clearTimeout(saving)
+    saving = setTimeout(save, SAVE_MS)
+  }
 
   const bridge = new Bridge(controller, {
     dir: discoveryDir(),
@@ -113,6 +139,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     vscode.commands.registerCommand("aiPair.focusReply", () => panel.focusReply()),
     vscode.commands.registerCommand("aiPair.askAboutSelection", () => panel.focusReply()),
     { dispose: () => controller.disconnect() },
+    { dispose: save },
   )
   if (!context.globalState.get("aiPair.offeredSetup")) {
     void context.globalState.update("aiPair.offeredSetup", true)
@@ -121,7 +148,16 @@ export function activate(context: vscode.ExtensionContext): Api {
       .then((answer) => answer && setUpAgent(launcher))
   }
 
-  return { controller, editor, bridge, outside, playDemo: () => playDemo(controller, root), launcher, ready }
+  return {
+    controller,
+    editor,
+    bridge,
+    outside,
+    playDemo: () => playDemo(controller, root),
+    launcher,
+    ready,
+    saved: () => context.workspaceState.get<SavedSession>(SAVED_SESSION),
+  }
 }
 
 export function deactivate(): void {}

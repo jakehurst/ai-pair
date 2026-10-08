@@ -155,7 +155,7 @@ short description shown in the narration panel. `cwd` is the agent's working
 directory, absolute: the agent should always give it, since not every harness
 starts the MCP server there. Without it, or if no editor window has it open,
 the harness's MCP roots and then the server's own working directory are tried.
-Fails if a session is already active in that window, or if no editor window
+Fails if a session is already active in that window (not suspended), or if no editor window
 has the project open.
 
 Besides the report, the result includes the [agent guide](AGENT_GUIDE.md),
@@ -163,6 +163,14 @@ which the agent follows for the whole session.
 
 File paths given to and returned by all tools are relative to the agent's
 working directory (absolute paths work too).
+
+A session the agent disconnected from, or that the window reloaded with, is
+suspended until its agent comes back (#25). A `start` from the same directory
+resumes it, rather than failing: the report has `resumed: true`, what happened
+while it waited (the programmer's messages, the batches it discarded), its turn,
+and the agent's cursor. The agent has seen no lines yet, so it reads them again
+before it gives a line number. A `start` from another directory ends the
+suspended session, and starts a new one.
 
 The session starts in the agent's turn, with no agent cursor until the first
 `move`.
@@ -494,6 +502,8 @@ type Report = {
   turn: "agent" | "user"
   cursor?: Code               // only when it isn't where the agent last saw it
   waiting?: true              // returned due to MAX_BLOCK
+  repeated?: true             // part of it may repeat a report the agent saw: a call it canceled had returned (#67)
+  resumed?: true              // start only: it resumed a suspended session (#25)
 }
 
 type BatchResult = {

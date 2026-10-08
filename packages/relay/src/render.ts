@@ -7,7 +7,13 @@ export type ReportingTool = "start" | "step" | "listen" | "end"
 
 export function renderReport(report: Report, tool: ReportingTool): string {
   const sections: string[] = []
-  if (tool === "start") sections.push("The session has started.")
+  if (tool === "start") {
+    sections.push(
+      report.resumed
+        ? "The session has resumed: the programmer's window kept it while you were away, with its turn, your cursor, and its history. Read the files you were working in again before you give a line number: the programmer may have edited them meanwhile."
+        : "The session has started.",
+    )
+  }
   if (report.repeated) {
     sections.push("Part of this report may repeat an earlier one: a call you canceled had already returned. Skip what you've already seen.")
   }

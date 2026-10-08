@@ -15,7 +15,7 @@ VARIABLES
     sock,     \* each socket: "open" or "closed"
     starting, \* the sockets whose `start` is awaiting controller.start()
     owner,    \* this.owner: the socket that drives the session, or 0
-    session,  \* the controller's session: "none", "active", "ended" (by the programmer)
+    session,  \* the controller's session: "none", "active", "suspended" (its agent gone), "ended" (by the programmer)
     recent    \* this.closed: the session its last report closed, which a `return` brings back
 
 vars == <<sock, starting, owner, session, recent>>
@@ -37,20 +37,22 @@ FinishStart(s) ==
     /\ IF session = "active"
           THEN UNCHANGED <<owner, session, recent>>
           ELSE IF CheckOpen /\ sock[s] = "closed"
-                  THEN session' = "none" /\ recent' = FALSE /\ UNCHANGED owner   \* started, then disconnect() closes it
+                  THEN session' = "suspended" /\ owner' = 0 /\ recent' = FALSE   \* started, then disconnect() suspends it
                   ELSE owner' = s /\ session' = "active" /\ recent' = FALSE
     /\ UNCHANGED sock
 
-\* A socket closes: its calls are aborted, and if it owns the session, disconnect() closes it.
+\* A socket closes: its calls are aborted, and if it owns the session, disconnect() suspends it (#25).
 Close(s) ==
     /\ sock[s] = "open"
     /\ sock' = [sock EXCEPT ![s] = "closed"]
-    /\ IF owner = s THEN owner' = 0 /\ session' = "none" /\ recent' = FALSE ELSE UNCHANGED <<owner, session, recent>>
+    /\ IF owner = s THEN owner' = 0 /\ session' = (IF session = "active" THEN "suspended" ELSE "none") /\ recent' = FALSE ELSE UNCHANGED <<owner, session, recent>>
     /\ UNCHANGED starting
 
 \* The programmer ends the session from the panel; then its last report closes it.
 EndSession == session = "active" /\ session' = "ended" /\ UNCHANGED <<sock, starting, owner, recent>>
 Closed == session = "ended" /\ session' = "none" /\ recent' = TRUE /\ UNCHANGED <<sock, starting, owner>>
+\* A suspended session: no agent is there to tell, so it closes at once.
+EndSuspended == session = "suspended" /\ session' = "none" /\ UNCHANGED <<sock, starting, owner, recent>>
 
 \* The agent ends the session (`end`): its report closes it.
 AgentEnd == session = "active" /\ session' = "none" /\ recent' = TRUE /\ UNCHANGED <<sock, starting, owner>>
@@ -63,7 +65,7 @@ Restore(s) ==
 
 Next == \/ \E s \in Sockets : BeginStart(s) \/ FinishStart(s) \/ Close(s)
         \/ \E s \in Sockets : Restore(s)
-        \/ EndSession \/ Closed \/ AgentEnd
+        \/ EndSession \/ EndSuspended \/ Closed \/ AgentEnd
 
 Spec == Init /\ [][Next]_vars
 
@@ -72,5 +74,8 @@ OwnedByOpenSocket == session = "active" => owner # 0 /\ sock[owner] = "open"
 
 \* An ended session has an owner, whose next call takes its report and closes it.
 EndedOwned == session = "ended" => owner # 0
+
+\* A suspended session has no owner: only a `start` takes it up again (#25).
+SuspendedUnowned == session = "suspended" => owner = 0
 
 =============================================================================

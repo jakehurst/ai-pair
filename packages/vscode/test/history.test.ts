@@ -42,3 +42,17 @@ it("names the project guides the agent was given in the session's divider (#23)"
   send({ type: "session", active: true, task: "fix it", rules: ["~/.ai-pair/GUIDE.md", "/p/.ai-pair/GUIDE.md"] })
   expect(history()).toEqual(["Session started: fix it · rules from ~/.ai-pair/GUIDE.md, /p/.ai-pair/GUIDE.md"])
 })
+
+it("keeps a suspended session's history, and says when it waits for the agent and when it's back (#25)", () => {
+  send({ type: "session", active: true })
+  send({ type: "say", text: "A" })
+  send({ type: "session", active: true, suspended: true })
+  expect(document.querySelector("#status-text")?.textContent).toBe("Suspended: waiting for the agent")
+  send({ type: "session", active: true, resumed: true })
+  expect(history()).toEqual([
+    "The agent is back: session resumed",
+    "The agent disconnected: the session waits for it",
+    "A",
+    "Session started",
+  ])
+})

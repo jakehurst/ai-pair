@@ -50,6 +50,8 @@ let active = false
 let turn = "agent"
 let paused = false
 let replaying = false
+/** The session's agent is gone, and the session waits for it to come back (#25). */
+let suspended = false
 /** The agent's state, as the extension last reported it. */
 let state: AgentState | null = null
 /** The programmer's selection, offered with the reply. */
@@ -251,6 +253,11 @@ function syncStatus(): void {
     ui.status.textContent = "No session"
     return
   }
+  if (suspended) {
+    ui.dot.className = "dot off"
+    ui.status.textContent = "Suspended: waiting for the agent"
+    return
+  }
   const [cls, text] = runConfirming ? ["read", "Needs you"] : state ? STATUS[state] : ["", "Session started"]
   ui.dot.className = "dot " + cls
   syncReading()
@@ -289,6 +296,7 @@ function setActive(on: boolean): void {
   document.body.classList.toggle("active", on)
   ui.reply.disabled = !on
   if (!on) {
+    suspended = false
     reading = null
     clearRun()
     closeSpeedMenu()
@@ -309,6 +317,15 @@ function handle(e: ToPanel): void {
       return
     case "session":
       if (e.active) {
+        if (e.suspended || e.resumed) {
+          // The same session: its agent gone, or back (#25).
+          fileCurrent()
+          current = null
+          suspended = e.suspended === true
+          addDivider(suspended ? "The agent disconnected: the session waits for it" : "The agent is back: session resumed")
+          setActive(true)
+          return
+        }
         fileCurrent()
         current = null
         state = null

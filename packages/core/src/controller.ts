@@ -42,6 +42,14 @@ function interrupting(e: PendingEvent): boolean {
   return e.kind !== "edit" || e.by === "programmer" || e.interrupted === true
 }
 
+/** A session as the window saves it across a reload, as JSON: what it needs to carry on (#25). */
+export type SavedSession = {
+  task?: string
+  scene: Pick<Scene, "root" | "turn" | "cursor" | "selection"> & { allowedCommands: string[] }
+  finished: BatchResult[]
+  events: Exclude<Event, { kind: "edit" }>[]
+}
+
 type Session = {
   task?: string
   scene: Scene
@@ -66,6 +74,8 @@ type Session = {
   confirming?: { id: number; command: string; decide: (run: boolean) => void }
   /** Ended by the programmer; the final report hasn't been delivered yet. */
   ended: boolean
+  /** Its agent disconnected, or the window reloaded: it waits for a `start` from its directory (#25). */
+  suspended: boolean
   navigatorReady: boolean
   navigatorTimer?: ReturnType<typeof setTimeout>
   /** The cursor's line as the agent last saw it in a report, so reports only show it when it changed. */
@@ -97,6 +107,8 @@ export class Controller {
   private pauseReasons = new Set<string>()
   private speed = 1
   private lastPosted = ""
+  /** After any change the session's `saved` form may have: the window saves it (#25). */
+  onChange?: () => void
 
   constructor(
     private readonly editor: EditorPort,
@@ -109,12 +121,19 @@ export class Controller {
   /** `rules`: the project guides the relay read for the agent, named for the panel (#23). */
   start(task?: string, root?: string, rules?: string[]): Promise<Report> {
     return this.serialize(undefined, async () => {
-      if (this.session && !this.session.ended) {
+      // In the editor's spelling, so paths inside it are reported relative to it.
+      const at = root && this.editor.resolvePath(root)
+      const waiting = this.session
+      if (waiting?.suspended) {
+        // Its agent is back, from its directory: it carries on where it left off (#25, specs/Resume.tla).
+        if (waiting.scene.root === at) return this.resumeSession(waiting, rules)
+        // Another directory: another session, which ends the one waiting.
+        this.close(waiting)
+      } else if (waiting && !waiting.ended) {
         throw new ToolError("session_active", "A pairing session is already active in this window.")
       }
       const scene: Scene = {
-        // In the editor's spelling, so paths inside it are reported relative to it.
-        root: root && this.editor.resolvePath(root),
+        root: at,
         turn: "agent",
         cursor: null,
         selection: null,
@@ -123,43 +142,97 @@ export class Controller {
         pointFar: false,
         allowedCommands: new Set(),
       }
-      const timeline = new Timeline(this.pauseReasons.size > 0)
-      const lines = LineIds.editor()
-      const s: Session = {
-        task,
-        scene,
-        player: new Player(scene, {
-          editor: this.editor,
-          panel: this.panel,
-          pacing: timeline,
-          config: () => this.config,
-          speed: () => this.speed,
-          render: () => this.render(),
-          confirm: (id, command) => this.confirm(s, id, command),
-          lines,
-        }),
-        queue: [],
-        finished: [],
-        events: [],
-        stale: false,
-        held: [],
-        mayRepeat: false,
-        baselines: new Map(),
-        latest: new Map(),
-        timeline,
-        running: false,
-        ended: false,
-        navigatorReady: false,
-        lines,
-        seen: new Map(),
-      }
-      this.session = s
-      this.closed = null
-      this.lastPosted = ""
+      this.open(task, scene)
       this.panel.post({ type: "session", active: true, task, ...(rules?.length ? { rules } : {}) })
       this.render()
       return { batches: [], events: [], turn: scene.turn }
     })
+  }
+
+  /**
+   * Takes up a suspended session again: its turn, cursor, and history are as they were. The agent may
+   * be a new conversation, so it has seen no lines: it reads them before it gives a line number.
+   */
+  private resumeSession(s: Session, rules?: string[]): Promise<Report> {
+    s.suspended = false
+    s.seen = new Map()
+    s.seenCursor = undefined
+    this.panel.post({ type: "session", active: true, task: s.task, resumed: true, ...(rules?.length ? { rules } : {}) })
+    this.render()
+    return this.withCursor(s, { ...this.snapshot(s, undefined, false), resumed: true })
+  }
+
+  /** A new session, the window's from now on. */
+  private open(task: string | undefined, scene: Scene): Session {
+    const timeline = new Timeline(this.pauseReasons.size > 0)
+    const lines = LineIds.editor()
+    const s: Session = {
+      task,
+      scene,
+      player: new Player(scene, {
+        editor: this.editor,
+        panel: this.panel,
+        pacing: timeline,
+        config: () => this.config,
+        speed: () => this.speed,
+        render: () => this.render(),
+        confirm: (id, command) => this.confirm(s, id, command),
+        lines,
+      }),
+      queue: [],
+      finished: [],
+      events: [],
+      stale: false,
+      held: [],
+      mayRepeat: false,
+      baselines: new Map(),
+      latest: new Map(),
+      timeline,
+      running: false,
+      ended: false,
+      suspended: false,
+      navigatorReady: false,
+      lines,
+      seen: new Map(),
+    }
+    this.session = s
+    this.closed = null
+    this.lastPosted = ""
+    return s
+  }
+
+  /**
+   * The session as the window saves it in the workspace's storage, to bring it back suspended after a
+   * reload (#25, specs/Resume.tla); none once it has ended. Edits aren't kept: their diffs need the
+   * text from before them, and the agent reads its files again when it resumes.
+   */
+  get saved(): SavedSession | undefined {
+    const s = this.session
+    if (!s || s.ended) return undefined
+    const { root, turn, cursor, selection } = s.scene
+    return {
+      task: s.task,
+      scene: { root, turn, cursor, selection, allowedCommands: [...s.scene.allowedCommands] },
+      finished: s.finished,
+      events: s.events.filter((e): e is Exclude<Event, { kind: "edit" }> => e.kind !== "edit"),
+    }
+  }
+
+  /** After a reload: the session the window saved, suspended until its agent's `start` (#25). */
+  revive(saved: SavedSession): void {
+    if (this.session) return
+    const scene: Scene = {
+      ...saved.scene,
+      point: null,
+      focus: "cursor",
+      pointFar: false,
+      allowedCommands: new Set(saved.scene.allowedCommands),
+    }
+    const s = this.open(saved.task, scene)
+    s.suspended = true
+    s.finished = [...saved.finished]
+    s.events = [...saved.events]
+    this.render()
   }
 
   step(actions: Action[], signal?: AbortSignal): Promise<Report> {
@@ -371,6 +444,12 @@ export class Controller {
   endSession(): void {
     const s = this.activeSession()
     if (!s) return
+    if (s.suspended) {
+      // No agent is there to take a final report: it's over now.
+      this.close(s)
+      this.panel.post({ type: "session", active: false, reason: "user" })
+      return
+    }
     s.ended = true
     s.events.push({ kind: "end" })
     this.interrupt(s)
@@ -378,7 +457,10 @@ export class Controller {
     this.update()
   }
 
-  /** The agent is gone (the relay disconnected). */
+  /**
+   * The agent is gone (the relay disconnected). Its session waits, suspended, for a `start` from its
+   * directory, or for the programmer to end it (#25, specs/Resume.tla).
+   */
   disconnect(): void {
     const s = this.session
     this.closed = null
@@ -388,8 +470,15 @@ export class Controller {
       this.call = null
     }
     if (!s) return
-    this.close(s)
-    if (!s.ended) this.panel.post({ type: "session", active: false, reason: "disconnected" })
+    if (s.ended) {
+      this.close(s)
+      return
+    }
+    // Nothing plays without its agent: what's queued is discarded, and reported once it's back.
+    this.interrupt(s)
+    s.suspended = true
+    this.panel.post({ type: "session", active: true, task: s.task, suspended: true })
+    this.update()
   }
 
   pause(reason = "user"): void {
@@ -456,6 +545,11 @@ export class Controller {
   /** Calibration: overrides on top of the default timing. */
   setTiming(overrides: TimingOverrides): void {
     this.config = { ...this.config, timing: withOverrides(defaultTiming, overrides) }
+  }
+
+  /** The session's agent is gone, and a `start` from its directory takes it up again (#25). */
+  get isSuspended(): boolean {
+    return this.session?.suspended === true
   }
 
   get isActive(): boolean {
@@ -768,6 +862,7 @@ export class Controller {
   }
 
   private render(): void {
+    this.onChange?.()
     const s = this.activeSession()
     const state = this.state()
     this.editor.renderCursor(s ? this.cursorView(s) : null, state, s?.scene.focus ?? "cursor")

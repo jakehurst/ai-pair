@@ -1,6 +1,7 @@
 import * as nodePath from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Action } from "@ai-pair/protocol"
+import type { SavedSession } from "../src/controller"
 import { advance, setup, testConfig, track, until } from "./fake"
 
 beforeEach(() => {
@@ -1389,6 +1390,56 @@ describe("sessions", () => {
     expect(editor.shown).toEqual([file])
     expect(editor.cursor).toMatchObject({ file, offset: 5 })
     expect(report.cursor?.file).toBe("a.ts")
+  })
+
+  it("suspends a session the agent disconnects from, and resumes it on a start from its directory (specs/Resume.tla)", async () => {
+    const { controller } = setup({ "a.ts": "a\n" })
+    await controller.start("the task")
+    await controller.read("a.ts")
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
+    await until(controller.step([]))
+    controller.disconnect()
+    expect(controller.isActive).toBe(true)
+    controller.userMessage("still there?")
+    const resumed = await until(controller.start("the task"))
+    expect(resumed).toMatchObject({ resumed: true, events: [{ kind: "message", text: "still there?" }], turn: "agent" })
+    expect(resumed.cursor?.file).toBe("a.ts")
+  })
+
+  it("starts a new session from another directory, ending the suspended one (specs/Resume.tla)", async () => {
+    const { controller } = setup()
+    await controller.start("one", "/a")
+    controller.disconnect()
+    controller.userMessage("for the first")
+    const other = await until(controller.start("two", "/b"))
+    expect(other).toEqual({ batches: [], events: [], turn: "agent" })
+  })
+
+  it("closes a suspended session at once when the programmer ends it (specs/Resume.tla)", async () => {
+    const { controller } = setup()
+    await controller.start()
+    controller.disconnect()
+    controller.endSession()
+    expect(controller.isActive).toBe(false)
+    expect((await until(controller.start())).resumed).toBeUndefined()
+  })
+
+  it("brings back a session the window saved, suspended, after a reload (specs/Resume.tla)", async () => {
+    const before = setup({ "a.ts": "one\ntwo\n" })
+    await before.controller.start("the task")
+    await before.controller.read("a.ts")
+    await before.controller.step([{ move: { file: "a.ts", line: 2, to: "line_end" } }])
+    await until(before.controller.step([]))
+    before.controller.userMessage("still there?")
+    // The controller's own `saved`, through JSON, as the workspace's storage holds it.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const saved = JSON.parse(JSON.stringify(before.controller.saved)) as SavedSession
+    const after = setup({ "a.ts": "one\ntwo\n" })
+    after.controller.revive(saved)
+    expect(after.controller.isSuspended).toBe(true)
+    const resumed = await until(after.controller.start("the task"))
+    expect(resumed).toMatchObject({ resumed: true, events: [{ kind: "message", text: "still there?" }] })
+    expect(resumed.cursor?.lines.find((l) => l.text.includes("\u{258c}"))?.number).toBe(2)
   })
 })
 

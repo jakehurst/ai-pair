@@ -22,7 +22,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Discovery.cfg` | `W = 2` windows, one junk file, a write that may fail | holds | 217 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
 | `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
-| `Bridge.cfg` | `S = 2` sockets | holds | 68 |
+| `Bridge.cfg` | `S = 2` sockets | holds | 76 |
 | `Draft.cfg` | `Views = 3` pages | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
@@ -31,6 +31,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
 | `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
+| `Resume.cfg` | 2 directories, up to 3 sessions | holds | 62 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -157,8 +158,9 @@ A keystroke made while the save participants run can't be told from their edits,
 
 | Spec | Code |
 |---|---|
-| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active; `controller.start()`; `this.owner = ws`, or on a socket that closed meanwhile, `disconnect()`, which closes the session it started |
-| `Close` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session |
+| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active and not suspended; `controller.start()`; `this.owner = ws`, or on a socket that closed meanwhile, `disconnect()`, which suspends the session it started |
+| `Close` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session, which suspends it, unowned (#25) |
+| `EndSuspended` | the programmer ending a suspended session: it closes at once |
 | `EndSession`, `Closed`, `AgentEnd` | the programmer ending the session from the panel, and its last report closing it; the agent's `end` |
 | `Restore` | a `return` from the owner's socket: `restore()` puts a session its last report closed back, as ended (#60); `recent` is `this.closed` |
 
@@ -251,6 +253,19 @@ The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts
 ### `ProjectGuide`: which project guides `start` reads
 
 The feature of #23, specified before its code: `projectGuides` in `packages/relay/src/guide.ts`. Checked over every small tree, as `ASSUME`s: walking up from the working directory to the workspace folder gives exactly the guides on that path that git doesn't ignore, outer first, and none above the folder. Walking past the folder, or reading an ignored guide, is caught.
+
+### `Resume`: a session that waits for its agent
+
+The feature of #25, specified before its code: `disconnect`, `start`, `resumeSession`, `saved`, `revive` and `endSession` in `packages/core/src/controller.ts`, with the extension saving the session in the workspace's storage (`extension.ts`). A session whose agent disconnects, or that the window reloads with, is suspended, not ended, and waits until the programmer ends it or a `start` resumes it. Checked: a `start` from its directory resumes the same session (`ResumesSame`); it leaves the suspended state only to resume, end, or give way to a session from another directory (`Waits`); the storage holds the session as it is (`SavedIsCurrent`); and a message isn't lost while it waits, or across a reload (`NotLost`). The spec saves with every change; the code saves 200 ms after the last one and again as the window goes, so a reload within 200 ms of a change relies on that last save.
+
+| Spec | Code |
+|---|---|
+| `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended |
+| `Reload` | the window reloading: `activate` revives the saved session, suspended (`revive`), with the panel's history |
+| `Start(d)` | `start`: a suspended session from `d` resumes (`resumeSession`); another directory ends it and starts a new one |
+| `ProgrammerEnd`, `AgentEnd` | `endSession`, which closes a suspended session at once; the agent's `end` |
+| `Message`, `Report` | `userMessage`, to an active or a suspended session; the next report, once the agent is back |
+| `Save` | `onChange` and `onPost`: the extension writes `saved` and the panel's history 200 ms after a change, and as the window goes |
 
 ### `Navigator`: the programmer's edits, reported when they pause
 
