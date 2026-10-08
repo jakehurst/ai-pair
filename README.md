@@ -154,6 +154,23 @@ code --install-extension ai-pair-*.vsix
 | `aiPair.timing` | Fine-tune any typing or pause duration, e.g. `{ "afterSelectMs": 900, "type": { "wordStartMs": 140 } }`. Every key is in [`timing.ts`](packages/core/src/timing.ts). |
 | `aiPair.confirmCommands` | Ask before each command the agent runs in the terminal (default on). Turned off, the agent's commands run without any prompt, not even its own. |
 
+## Rules for the agent
+
+Rules you and the agent settle on can live in a file, so you don't repeat them
+every session. When a session starts, the agent gets them after the pairing
+guide, and the panel's "Session started" line names the files it was given:
+
+- `~/.ai-pair/GUIDE.md`: rules for every project.
+- `.ai-pair/GUIDE.md` in a project: rules for that project. Every one from the
+  workspace folder down to the agent's working directory is read, outer first,
+  and none above the workspace folder. One that git ignores is left out; one
+  checked in always counts.
+
+Later files take precedence over earlier ones, and all of them over the
+pairing guide. Each is plain markdown, read up to 20,000 characters. A project's
+file goes into the agent's instructions, the same trust an agent's own
+`CLAUDE.md` or `AGENTS.md` gets.
+
 ## Troubleshooting
 
 - **The agent says `no_editor`.** Its working directory isn't inside a folder

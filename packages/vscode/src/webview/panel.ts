@@ -316,7 +316,7 @@ function handle(e: ToPanel): void {
         ui.now.textContent = "Waiting for the agent…"
         ui.ref.innerHTML = ""
         pointed = null
-        addDivider("Session started" + (e.task ? ": " + e.task : ""))
+        addDivider("Session started" + (e.task ? ": " + e.task : "") + (e.rules ? " · rules from " + e.rules.join(", ") : ""))
         setActive(true)
       } else {
         fileCurrent()

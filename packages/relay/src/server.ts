@@ -1,9 +1,11 @@
+import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { isJSONRPCNotification, type CallToolResult, type RequestId } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
-import type { FileContent, Report, ToolName } from "@ai-pair/protocol"
+import { aiPairHome, type FileContent, type Report, type ToolName } from "@ai-pair/protocol"
+import { readGuides, renderGuides, type Guide } from "./guide"
 import { RelayError, type EditorLink } from "./link"
 import { renderFile, renderReport } from "./render"
 import { TOOLS } from "./tools"
@@ -24,6 +26,12 @@ export function agentGuide(markdown: string): string {
 export function startPrompt(task?: string): string {
   const what = task?.trim() ? `The task: ${task.trim()}` : "Ask me what we're working on, unless it's clear from our conversation."
   return `Let's pair program. ${what}\n\nStart a session with the \`start\` tool of the pair server, then follow the guide it returns.`
+}
+
+/** A guide's path for the agent and the panel: `~` for the home folder. */
+function shownPath(file: string): string {
+  const home = os.homedir()
+  return file.startsWith(home + path.sep) ? `~${file.slice(home.length)}` : file
 }
 
 /** How many answered reports the relay keeps, for a cancel that arrives after its answer (#67). */
@@ -50,6 +58,9 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
     }
   }
 
+  // The guides the last `start` read, for its result (#23).
+  let guides: Guide[] = []
+
   // The reports the relay answered with, by request: a cancel for one may come after its answer (#67).
   const answered = new Map<RequestId, unknown>()
   const run = async (
@@ -71,6 +82,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       const text = tool === "read" ? renderFile(result as FileContent) : renderReport(result as Report, tool)
       const content: CallToolResult["content"] = [{ type: "text", text }]
       if (tool === "start") content.push({ type: "text", text: `# Pairing guide\n\n${guide}` })
+      if (tool === "start" && guides.length > 0) content.push({ type: "text", text: renderGuides(guides, shownPath) })
       return { content }
     } catch (e) {
       const code = e instanceof RelayError ? e.code : "internal"
@@ -82,7 +94,10 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   server.registerTool("start", TOOLS.start, ({ cwd: given, ...args }, extra) =>
     run("start", args, extra, async () => {
       const folders = [...(given && path.isAbsolute(given) ? [given] : []), ...(await roots()), cwd]
-      return { cwd: link.locate(folders) }
+      const located = link.locate(folders)
+      const { folder, root } = link.workspace(located)
+      guides = readGuides(aiPairHome(), folder, root)
+      return { cwd: located, rules: guides.map((g) => shownPath(g.file)) }
     }),
   )
   server.registerTool("step", TOOLS.step, (args, extra) => run("step", args, extra))

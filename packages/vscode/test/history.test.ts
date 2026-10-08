@@ -37,3 +37,8 @@ it("files the current message once, before anything added while it was current",
   send({ type: "session", active: false, reason: "agent" })
   expect(history()).toEqual(["The agent ended the session", "You interrupted", "R", "A", "Session started"])
 })
+
+it("names the project guides the agent was given in the session's divider (#23)", () => {
+  send({ type: "session", active: true, task: "fix it", rules: ["~/.ai-pair/GUIDE.md", "/p/.ai-pair/GUIDE.md"] })
+  expect(history()).toEqual(["Session started: fix it · rules from ~/.ai-pair/GUIDE.md, /p/.ai-pair/GUIDE.md"])
+})
