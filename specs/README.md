@@ -84,7 +84,7 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 | Spec | Code |
 |---|---|
 | `Say` | `setNow` |
-| `Entry` | `addYou`, `addRun`, the interrupt and turn dividers: `add()` |
+| `Entry` | `addYou`, `addRun`, `addOutside`, the interrupt and turn dividers: `add()` |
 | `Edge` | the `session` event, start and end |
 | `band`, `flag`, `Flushed` | `current`, `filed`, `fileCurrent()` |
 
@@ -105,7 +105,7 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 |---|---|
 | `Submit`, `Listen` | `step` with a batch; `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
 | `EndSession` | `endSession()`: `ended`, the `end` event, `interrupt()` |
-| `RehearseFails`, `RehearseOk` | `reject()`; the batch queued, or discarded when `stale`, then `block()` |
+| `RehearseFails`, `RehearseOk` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
 | `Programmer` | an interrupting event: `interrupt()` discards what is queued and sets `stale` |
 | `Commit` | `finishCall` → `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
@@ -159,7 +159,7 @@ A keystroke made while the save participants run can't be told from their edits,
 
 ### `Timeline`: pausing
 
-`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause` and `Controller.resume`, and where they come from: the Pause button, the reply box's draft, sending a reply, and the turn button (`panel.ts`), and looking away (`editor.ts`).
+`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause` and `Controller.resume`, and where they come from: the Pause button, the reply box's draft, sending a reply, and the turn button (`panel.ts`), the Toggle Pause command (`extension.ts`), and looking away (`editor.ts`).
 
 | Spec | Code |
 |---|---|
@@ -206,7 +206,7 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 | Spec | Code |
 |---|---|
 | `Type`, `Clear` | `syncDraft` posting `draft` when the box's emptiness changes; `takeDraft` on sending or handing the turn back |
-| `ResumeAll` | the Resume button, or sending a reply: `resume()` with no reason |
+| `ResumeAll` | the Resume button, sending a reply, or the turn button: `resume()` with no reason |
 | `Dispose`, `Ready` | `onDidDispose`; a page loaded, in a new view or by "Reload Webviews", posting `ready` |
 
 ### `RunBox`: the panel's run box
@@ -306,7 +306,7 @@ S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player'
 | `Submit` | `step`'s rehearsal: `fork()`, the batch played in memory |
 | `Play`, `PlayFails` | the batch playing, the editor tracking its edits, `adopt` |
 | `Other` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted |
-| `Accept` | the player's `knows` in `unseen`: the id seen at a number is the editor's id there now |
+| `Accept` | the player's `knows` in `unseen`: the id seen at a number is the editor's id there now, or with a batch queued, the id the queued batches leave there (the rehearsal starts from their fork) |
 
 ### `Terminals`: running commands
 
@@ -314,7 +314,7 @@ S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player'
 
 | Spec | Code |
 |---|---|
-| `Start` | `acquire()`: an open terminal that isn't busy, or a new one; `busy = true`. The signal is the one `confirm()` checked, synchronously, so it hasn't fired |
+| `Start` | `acquire()`: an open terminal that isn't busy, or a new one; `busy = true`. A signal that fired before (an interrupt during the save) ends `shellIntegration()` at once; the spec starts each run with the signal unfired |
 | `Integrated`, `AbortBeforeStart`, `ClosedWhileWaiting` | `shellIntegration()`: integration or its timer; the signal; a terminal closed meanwhile (VS Code throws for its `sendText`) |
 | `End`, `StopWaiting`, `Close` | `onDidEndTerminalShellExecution`; `stopWaiting` (the wait or an interrupt); `onDidCloseTerminal` |
 
@@ -325,8 +325,8 @@ These have no state or concurrency, so each spec is a model of the function and 
 | Spec | Code | Contract | Test |
 |---|---|---|---|
 | `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.exhaustive.test.ts` |
-| `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts` |
-| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts` |
+| `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts`, with `through` up to 2 characters (the spec: 3) |
+| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts`, texts up to 5 characters (the spec: 7) |
 
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 

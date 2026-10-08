@@ -1,5 +1,5 @@
 -------------------------------- MODULE Panel --------------------------------
-\* The panel's history in packages/vscode/src/panelHtml.ts, newest first. Issue #18.
+\* The panel's history in packages/vscode/src/webview/panel.ts, newest first. Issue #18.
 \* Each event is stamped with the time it happened: 1, 2, 3, ...
 EXTENDS Naturals, Sequences
 

@@ -1,7 +1,7 @@
 ----------------------------- MODULE PanelReplay -----------------------------
 \* The panel's event log and its replay: `post` and `ready` in packages/vscode/src/panel.ts, and
 \* how the page sets its session state from them (`setActive` for a `session` event, in
-\* panelHtml.ts). Panel in #19: a view created afterwards shows what the live view did.
+\* webview/panel.ts). Panel in #19: a view created afterwards shows what the live view did.
 \* Events are a session starting, a session ending, or anything else (say, state, a reply...).
 EXTENDS Naturals, Sequences
 

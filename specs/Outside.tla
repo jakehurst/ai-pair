@@ -1,6 +1,6 @@
 -------------------------------- MODULE Outside --------------------------------
 \* Marking a file changed on disk outside the protocol, for #15: DESIGN.md "Changes outside the
-\* protocol", in packages/vscode/src/outside.ts and its wiring in extension.ts. One file. VS Code
+\* protocol", in packages/vscode/src/outside.ts and its wiring in outsideWatch.ts. One file. VS Code
 \* writes it when a document is saved (by the player after a batch, or by the programmer); the
 \* extension writes it when `show` creates it; and anything else may write it: the agent's own
 \* tools, git, a formatter run in a terminal. A file watcher reports writes late, and may report
