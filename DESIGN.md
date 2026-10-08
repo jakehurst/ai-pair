@@ -5,7 +5,7 @@ agent is in [PROTOCOL.md](PROTOCOL.md), and the components and how they
 connect are in [ARCHITECTURE.md](ARCHITECTURE.md). This document covers what
 the programmer experiences.
 
-Status: **draft**. Numbers marked *tunable* are initial guesses to be adjusted
+Status: describes 0.1.0. Numbers marked *tunable* are initial guesses to be adjusted
 by feel.
 
 ## Agent cursor
