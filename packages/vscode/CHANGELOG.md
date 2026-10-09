@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0
+## 0.4.0
 
 - **Start a session** now starts Claude Code's CLI in a hidden terminal with
   the request already sent, so the Pair panel stays in front and you never
