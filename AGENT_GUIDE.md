@@ -325,6 +325,11 @@ type_fast ";▌"
   `from` a text on the line `through` the first match of another after it:
   `{ line: 12, from: "function update(", through: "\n}" }` is the whole
   function.
+- **After a report says a batch was interrupted or discarded, anchor the
+  cursor.** It is where that batch stopped, not where it would have ended:
+  `read`, then start the next batch with a `move` or `select` that gives both
+  `file` and `line`. A batch that types or moves without them first is
+  refused with `unanchored`; a batch of only `say` or `run` passes.
 
 ### When the programmer steps in
 

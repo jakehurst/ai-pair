@@ -42,6 +42,18 @@ function interrupting(e: PendingEvent): boolean {
   return e.kind !== "edit" || e.by === "programmer" || e.interrupted === true
 }
 
+const UNANCHORED =
+  "Your previous batch was interrupted or discarded, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`."
+
+/** The first action at the cursor, and whether it anchors the cursor: a `move` or `select` giving both `file` and `line` (#112). */
+function cursorAnchor(actions: Action[]): { index: number; anchored: boolean } | undefined {
+  const i = actions.findIndex((a) => !("say" in a || "run" in a || "point" in a))
+  if (i === -1) return undefined
+  const action = actions[i]!
+  const place = "move" in action ? action.move : "select" in action ? action.select : undefined
+  return { index: i + 1, anchored: place?.file !== undefined && place?.line !== undefined }
+}
+
 /** A session as the window saves it across a reload, as JSON: what it needs to carry on (#25). */
 export type SavedSession = {
   task?: string
@@ -61,6 +73,8 @@ type Session = {
   events: PendingEvent[]
   /** An unreported interruption or failure: new batches are discarded. */
   stale: boolean
+  /** A report told the agent a batch stopped short: the next batch must anchor the cursor with a file and line (#112). */
+  anchorNeeded: boolean
   /** Rejections handed back by `restore`, to be reported again, one per report (#28), each marked if the agent may have seen it. */
   held: { rejected: NonNullable<Report["rejected"]>; mayRepeat: boolean }[]
   /** A report restored may have reached the agent already: the next report says so (#67). */
@@ -183,6 +197,7 @@ export class Controller {
       finished: [],
       events: [],
       stale: false,
+      anchorNeeded: false,
       held: [],
       mayRepeat: false,
       baselines: new Map(),
@@ -240,6 +255,9 @@ export class Controller {
       const s = this.requireSession()
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block("step", {}, signal)
+      // After a report said a batch stopped short, the first action at the cursor must anchor it (#112, specs/Anchor.tla).
+      const anchor = cursorAnchor(actions)
+      if (s.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(s, actions, anchor.index)
       // Played in memory first, so what would fail is reported now, not when the batch plays.
       const rehearsal = s.stale || s.ended ? undefined : await this.rehearse(s, actions)
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it.
@@ -248,6 +266,7 @@ export class Controller {
       const batch: Batch = { id: this.nextBatchId++, actions, state: "queued", after: rehearsal?.after }
       if (current) {
         s.queue.push(batch)
+        if (anchor?.anchored) s.anchorNeeded = false
         this.kick(s)
       } else {
         this.discard(s, batch)
@@ -592,6 +611,15 @@ export class Controller {
     return this.withCursor(s, report)
   }
 
+  /** Reports a batch refused for not anchoring the cursor after a discarded one, without queuing it (#112, specs/Anchor.tla). */
+  private rejectUnanchored(s: Session, actions: Action[], index: number): Promise<Report> {
+    const error = { kind: "unanchored" as const, message: UNANCHORED }
+    const rejected = { index, action: actions[index - 1]!, error }
+    const report = { ...this.snapshot(s, undefined, false), rejected }
+    this.render()
+    return this.withCursor(s, report)
+  }
+
   private requireSession(): Session {
     if (!this.session) {
       throw new ToolError("no_session", "No pairing session is active. Call `start` to begin one.")
@@ -717,6 +745,8 @@ export class Controller {
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
   private snapshot(s: Session, submitted: Batch | undefined, waiting: boolean): Report {
     const batches = s.finished.toSorted((a, b) => a.id - b.id)
+    // The agent planned against where these would have ended; the cursor is where they stopped (#112, specs/Anchor.tla).
+    if (batches.some((b) => b.status !== "completed")) s.anchorNeeded = true
     const events: Event[] = []
     for (const e of s.events) {
       if (e.kind !== "edit") {

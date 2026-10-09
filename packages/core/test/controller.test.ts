@@ -860,6 +860,36 @@ describe("interruptions", () => {
     expect(report.batches).toMatchObject([{ status: "discarded", unplayed: [{ say: "Typed." }] }])
   })
 
+  it("refuses a batch after a discarded one unless it anchors the cursor with a file and line (specs/Anchor.tla)", async () => {
+    const { editor, controller } = setup({ "a.ts": "x\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
+    await until(controller.step([]))
+    const eol = editor.eol.bind(editor)
+    let calls = 0
+    editor.eol = async (file) => {
+      if (++calls === 2) controller.userInterrupt()
+      return eol(file)
+    }
+    await controller.step([{ type: "\u{258c}" }, { say: "Typed." }])
+    const report = await until(controller.listen())
+    expect(report.batches).toMatchObject([{ status: "discarded" }])
+    // Typing first, even after a say: refused at the type. A say alone passes.
+    const refused = await controller.step([{ say: "Next." }, { type: "y\u{258c}" }])
+    expect(refused.rejected).toMatchObject({ index: 2, error: { kind: "unanchored" } })
+    const talk = await until(controller.step([{ say: "Still here." }]))
+    expect(talk.rejected).toBeUndefined()
+    // A move with file and line anchors the cursor, and ends the requirement.
+    const anchored = await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "y\u{258c}" }]))
+    expect(anchored.rejected).toBeUndefined()
+    await until(controller.step([]))
+    const free = await until(controller.step([{ type: "z\u{258c}" }]))
+    expect(free.rejected).toBeUndefined()
+    await until(controller.step([]))
+    expect(editor.text("a.ts")).toBe("xyz\n")
+  })
+
   it("stops a delete when the programmer takes the turn while it starts, and deletes nothing", async () => {
     const { editor, controller } = setup({ "a.ts": "keep DELETE keep\n" })
     await controller.start()
@@ -957,7 +987,7 @@ describe("interruptions", () => {
     ])
     expect(stale.events).toEqual([{ kind: "interrupt" }])
 
-    const fresh = await controller.step([{ type: "c▌" }])
+    const fresh = await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "c\u{258c}" }])
     expect(fresh.submitted).toEqual({ id: 3, status: "playing" })
     await advance(500)
     expect(editor.text("a.ts")).toBe("abc")

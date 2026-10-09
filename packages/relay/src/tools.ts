@@ -168,7 +168,9 @@ A batch that would fail, e.g. on text that isn't on its line, is rejected at onc
 
 Read every report. It shows each finished batch's code as it now reads, with your cursor marked \`▌\`: check it's what you meant. If a batch was interrupted or failed, or the programmer said or did something, your later batches were discarded; what didn't play is listed, ready to resubmit, starting with what's left of an interrupted action. Take what happened into account and re-plan.
 
-An empty batch waits for your queued batches without waiting for the programmer.`,
+An empty batch waits for your queued batches without waiting for the programmer.
+
+After a report says a batch was interrupted or discarded, your cursor is where it stopped: \`read\`, then anchor the cursor with a \`move\` or \`select\` giving both \`file\` and \`line\` before anything else at the cursor, or the batch is refused with \`unanchored\`.`,
     inputSchema: {
       actions: z.array(Action).describe("Played in order."),
     },

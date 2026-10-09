@@ -43,6 +43,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
+| `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
@@ -175,6 +176,16 @@ A keystroke made while the save participants run can't be told from their edits,
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code doesn't end the `away` pause, and the agent isn't told about pauses.
+
+### `Anchor`: the cursor after a discarded batch
+
+`step` and `snapshot` in `packages/core/src/controller.ts`. The agent plans a batch against where the one before would have ended; when that one is interrupted or discarded, the cursor is where it stopped (#112). `Guard` switches the refusal; with `FALSE`, TLC violates `NoMisplacedEdit` in two steps: `Discard`, `Unanchored`.
+
+| Spec | Code |
+|---|---|
+| `Discard` | a report with a batch not completed sets `anchorNeeded` |
+| `Anchored` | a batch whose first action at the cursor is a `move` or `select` with `file` and `line`: accepted, and the flag cleared |
+| `Unanchored` | any other action at the cursor first: refused with `unanchored` while the flag holds |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 

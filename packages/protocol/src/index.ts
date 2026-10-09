@@ -154,6 +154,8 @@ export type ErrorKind =
   | "command_failed"
   | "command_declined"
   | "save_failed"
+  /** After a discarded or interrupted batch, the next one did not anchor the cursor with a file and line (#112). */
+  | "unanchored"
 
 export type Candidate = { line: number; context: string }
 

@@ -21,6 +21,7 @@ Code goes without a spec for one of these reasons:
 | `step`, `listen`, `block`, `finishCall`, `ready`, `pump`, `update` | `Serialize`, `Controller` |
 | `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents` |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
+| `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Programmer`), `Actions` (`Interrupt`) |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`Other`) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
