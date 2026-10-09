@@ -176,14 +176,20 @@ a todos API, I'm new to Express"), or runs the server's `start` prompt (in
 Claude Code: `/mcp__pair__start`). The agent calls `start`, which returns the
 [agent guide](AGENT_GUIDE.md) along with the first report.
 
-**From the panel.** With Claude Code's extension installed and set up for the
-pair server, the idle view offers **Start a session**: it runs
-`claude-vscode.editor.open` with no session id and the prompt `start pairing
-session`, which opens a Claude Code tab with the prompt in its input box,
-unsent; the programmer presses Enter (#107, `specs/Start.tla`). The command is
-read from Claude Code's bundle, not documented, so the button shows only when
-VS Code lists it, and the panel asks again after Set Up Agent. Other harnesses
-keep the text asking the programmer to ask their agent.
+**From the panel.** With Claude Code's CLI installed and set up for the pair
+server, and a folder open, the idle view offers **Start a session**: it runs
+`claude -p "start pairing session" --allowedTools mcp__pair` in the first
+workspace folder, as the process of a terminal that is never shown, so the
+Pair panel stays in front (#107, #115, `specs/Start.tla`). Print mode sends
+the prompt at once, and the agent's turn lasts the whole session, so the CLI
+exits when the session ends and its terminal closes with it. Print mode
+refuses any tool that would ask for permission, so the pair server's tools are
+allowed on the command line; every other tool follows the programmer's own
+Claude Code settings. A second start while that terminal is open does
+nothing. The panel asks again after Set Up Agent. Claude Code's extension is
+not used: its open command only fills its input box, which needs Enter
+pressed there, and it rewrites `claudeCode.preferredLocation` to `panel`.
+Other harnesses keep the text asking the programmer to ask their agent.
 
 ## Distribution
 

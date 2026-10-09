@@ -686,7 +686,7 @@ document.addEventListener("click", (e) => {
   if (a?.dataset.command) vscode.postMessage({ type: "command", command: a.dataset.command })
 })
 
-// Start a session: Claude Code opens with the prompt in its input box (#107).
+// Start a session: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115).
 ui.start.addEventListener("click", () => vscode.postMessage({ type: "start" }))
 
 vscode.postMessage({ type: "ready" })

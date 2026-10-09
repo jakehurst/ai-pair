@@ -128,13 +128,15 @@ export function activate(context: vscode.ExtensionContext): Api {
   const ready = bridge.start()
   ready.catch((e: unknown) => void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`))
   const launcher = writeLauncher(context.extensionPath)
-  panel.starter = claudeStarter(launcher)
+  const starter = claudeStarter(launcher)
+  panel.starter = starter
   // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, Flip).
   const setUp = () => setUpAgent(launcher).then(() => panel.askStart())
   registerServerProvider(context)
 
   context.subscriptions.push(
     log,
+    starter,
     outsideWatch,
     { dispose: () => bridge.dispose() },
     vscode.window.onDidChangeWindowState((state) => {

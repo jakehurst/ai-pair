@@ -56,9 +56,10 @@ When you want to pair:
 2. Ask it to pair: *"Let's pair on adding a settings page."* In Claude Code,
    you can also run `/mcp__pair__start`. If you want to learn the technology
    too, say so: *"…I'm new to Svelte, explain as you go."*
-   With the Claude Code extension installed and set up, the **Pair** panel
-   also offers **Start a session**: it opens a Claude Code tab with the request
-   typed in, and you press Enter.
+   With Claude Code's CLI installed and set up, the **Pair** panel also
+   offers **Start a session**: it starts Claude Code in a hidden terminal with
+   the request already sent, and the Pair panel stays in front. The terminal
+   closes when the session ends.
 3. The **Pair** panel opens in the secondary side bar, and the agent's cursor
    appears in your editor.
 
