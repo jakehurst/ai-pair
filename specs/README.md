@@ -46,6 +46,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, 2 replies, `DropStaleFocus = TRUE` | holds | 29 |
+| `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE` | holds | 2,018 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
@@ -210,6 +211,42 @@ The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, t
 | `Point`, `CursorAction` | a `point` action setting the focus; the next cursor action taking it back |
 | `LookAway` | `onActiveEditor` away from the target: `pause("away")` |
 | `Reply` | `resume()` with no reason: with an away pause among the reasons and the focus on a point, the focus returns to the cursor and the editor is rendered before `reveal` |
+
+### `Start`: the Start a session button
+
+`packages/vscode/src/panel.ts` (`askStart`, the `ready` and `start` messages), `setup.ts` (`claudeStarter`), and `webview/panel.ts` (`canStart`, the button), with `extension.ts` asking again after Set Up Agent. Issue #107. A page asks once as it loads; the answer comes later, from Claude Code's configuration read at once and VS Code's command list awaited; pages come and go; the environment flips. Two constants switch fixes the model found before the code was reviewed against it. `DropStale`: the panel posted every answer to whatever view it had; with `FALSE`, TLC violates `OwnAnswer` in three steps: `Ready` (page 2 loads), then page 1's `Answer` lands on page 2. `ReaskOnSetUp`: the page asked only as it loaded; with `FALSE`, TLC violates `Reasked` in three steps: `Answer` (hidden), then `Flip` sets Claude Code up with nothing pending.
+
+| Spec | Code |
+|---|---|
+| `Ready` | `ready`: `askStart` numbers the question and calls `available()`, which reads `isSetUp` at once |
+| `Answer(c)` | `getCommands` resolving; `canStart` is posted only if the question is still the latest; the page sets `hidden` |
+| `Dispose` | `onDidDispose`; the next page starts hidden |
+| `Flip` | Set Up Agent, or Claude Code's extension installed or removed; `extension.ts` calls `askStart` after Set Up Agent |
+| `Click` | the button posting `start`; `starter.start()` runs `claude-vscode.editor.open` with no session id and the prompt |
+
+Each property was proved to bite with a mutation of a copy of the model, and each mutation failed on the property named and no other:
+
+| Mutation | Breaks |
+|---|---|
+| `DropStale = FALSE` | `OwnAnswer` |
+| `ReaskOnSetUp = FALSE` | `Reasked` |
+| `Answer`'s value ignores `cmd` | `Grounded` |
+| `Click` without a run | `RunsAreClicks` |
+| `Click` while hidden | `ClicksNeedButton` |
+| `Answer` never delivered | `Offered` |
+| `Click` unbounded | `TypeOK` |
+
+Every property names the test that proves the code obeys it; the test's title carries the property's name:
+
+| Property | Proved by |
+|---|---|
+| `TypeOK` | the TypeScript types of `Starter`, `FromPanel`, and `ToPanel` |
+| `OwnAnswer` | `start.test.ts`: drops the answer of a page replaced before it landed |
+| `Grounded` | `start.setup.test.ts`: offers the button only once Claude Code is set up and its open command is registered |
+| `RunsAreClicks` | `start.test.ts`: runs the starter once per start; `start.page.test.ts`: posts start when the button is clicked; `start.setup.test.ts`: opens a new Claude Code tab with the prompt, once per start |
+| `ClicksNeedButton` | `start.page.test.ts`: hides Start a session until the extension says it can start one; `start.test.ts`: tells the page nothing without a starter |
+| `Offered` | `start.test.ts`: tells a new page whether it can start a session |
+| `Reasked` | `start.test.ts`: asks again after Set Up Agent |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 

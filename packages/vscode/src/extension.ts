@@ -8,7 +8,7 @@ import type { OutsideChanges } from "./outside"
 import { watchOutside } from "./outsideWatch"
 import { NarrationPanel } from "./panel"
 import { settingSpeed } from "./panelHtml"
-import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
+import { claudeStarter, registerServerProvider, setUpAgent, writeLauncher } from "./setup"
 import { Calibration } from "./calibration"
 import { builtInPassage, type Passage } from "./passage"
 
@@ -128,6 +128,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   const ready = bridge.start()
   ready.catch((e: unknown) => void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`))
   const launcher = writeLauncher(context.extensionPath)
+  panel.starter = claudeStarter(launcher)
+  // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, Flip).
+  const setUp = () => setUpAgent(launcher).then(() => panel.askStart())
   registerServerProvider(context)
 
   context.subscriptions.push(
@@ -138,7 +141,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (state.focused) bridge.focused()
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => bridge.writeDiscovery()),
-    vscode.commands.registerCommand("aiPair.setUpAgent", () => setUpAgent(launcher)),
+    vscode.commands.registerCommand("aiPair.setUpAgent", setUp),
     editor,
     vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -188,7 +191,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     void context.globalState.update("aiPair.offeredSetup", true)
     void vscode.window
       .showInformationMessage("AI Pair is installed. Connect it to your agent?", "Set Up Agent")
-      .then((answer) => answer && setUpAgent(launcher))
+      .then((answer) => answer && setUp())
   }
 
   return {

@@ -7,6 +7,7 @@ import * as path from "node:path"
 import * as vscode from "vscode"
 import { aiPairHome } from "@ai-pair/protocol"
 import { AGENTS, execProgram, SERVER, type Host } from "./agents"
+import type { Starter } from "./panel"
 
 function relayPath(extensionPath: string): string {
   return path.join(extensionPath, "dist", "relay.js")
@@ -122,4 +123,27 @@ export async function setUpAgent(launcher: string): Promise<void> {
 
 function list(names: string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+}
+
+/** What the Start a session button puts in Claude Code's input box, unsent: the programmer presses Enter. */
+export const START_PROMPT = "start pairing session"
+/**
+ * The command Claude Code's extension registers to open a tab, `(sessionId, initialPrompt, ...)`: read
+ * from its bundle (2.1.294), not documented, so it is looked up before the button is offered.
+ */
+const CLAUDE_OPEN = "claude-vscode.editor.open"
+
+/** Starts a session with Claude Code from the idle view (#107). */
+export function claudeStarter(launcher: string, h: Host = host): Starter {
+  return {
+    async available() {
+      // specs/Start.tla, Answer: isSetUp read now, the command list when it resolves.
+      const claude = AGENTS.find((a) => a.id === "claude")
+      if (!claude?.isSetUp(h, launcher)) return false
+      return (await vscode.commands.getCommands(true)).includes(CLAUDE_OPEN)
+    },
+    async start() {
+      await vscode.commands.executeCommand(CLAUDE_OPEN, undefined, START_PROMPT)
+    },
+  }
 }

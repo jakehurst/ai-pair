@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- **Start a session** in the Pair panel's idle view opens a Claude Code tab
+  with the request typed in, when the Claude Code extension is installed and
+  set up for the pair server: one click and Enter, without leaving the editor.
+
 ## 0.2.0
 
 - A reading menu sets the pause after each message on its own, from 0.4x to
