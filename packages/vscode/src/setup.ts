@@ -6,7 +6,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import * as vscode from "vscode"
 import { aiPairHome } from "@ai-pair/protocol"
-import { AGENTS, execProgram, SERVER, type Host } from "./agents"
+import { AGENTS, execProgram, SERVER, which, type Host } from "./agents"
 import type { Starter } from "./panel"
 
 function relayPath(extensionPath: string): string {
@@ -125,25 +125,54 @@ function list(names: string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
 }
 
-/** What the Start a session button puts in Claude Code's input box, unsent: the programmer presses Enter. */
+/** What Start a session sends Claude Code: the CLI sends it at once, as the first message (#115). */
 export const START_PROMPT = "start pairing session"
 /**
- * The command Claude Code's extension registers to open a tab, `(sessionId, initialPrompt, ...)`: read
- * from its bundle (2.1.294), not documented, so it is looked up before the button is offered.
+ * The CLI's arguments: print mode, so the agent ends with its turn, which in a session is when the
+ * session ends; and the pair server's tools allowed, since print mode refuses a tool that would ask.
  */
-const CLAUDE_OPEN = "claude-vscode.editor.open"
+export const START_ARGS = ["-p", START_PROMPT, "--allowedTools", `mcp__${SERVER}`]
+/** The name of the terminal the agent runs in. */
+export const START_TERMINAL = "AI Pair: Claude Code"
 
-/** Starts a session with Claude Code from the idle view (#107). */
-export function claudeStarter(launcher: string, h: Host = host): Starter {
+/**
+ * Starts a session with Claude Code from the idle view (#107): its CLI runs in a terminal that is
+ * never shown, so the Pair panel stays in front, and the terminal closes when the CLI exits (#115).
+ */
+export function claudeStarter(
+  launcher: string,
+  h: Host = host,
+  folders: () => string[] = () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+): Starter & vscode.Disposable {
+  let running: vscode.Terminal | undefined
+  // What `start` returns while the agent runs: resolved once its terminal closes (#118).
+  let exited = Promise.resolve()
+  let exit: (() => void) | undefined
+  // specs/Start.tla, Exit: the CLI exited, and its terminal closed with it.
+  const closed = vscode.window.onDidCloseTerminal((t) => {
+    if (t !== running) return
+    running = undefined
+    exit?.()
+  })
+  const cli = () => which(h, "claude", [path.join(h.home, ".local", "bin")])
   return {
     async available() {
-      // specs/Start.tla, Answer: isSetUp read now, the command list when it resolves.
+      // specs/Start.tla, Answer: Claude Code set up for the pair server, its CLI here, a folder open.
       const claude = AGENTS.find((a) => a.id === "claude")
-      if (!claude?.isSetUp(h, launcher)) return false
-      return (await vscode.commands.getCommands(true)).includes(CLAUDE_OPEN)
+      return !!claude?.isSetUp(h, launcher) && !!cli() && folders().length > 0
     },
     async start() {
-      await vscode.commands.executeCommand(CLAUDE_OPEN, undefined, START_PROMPT)
+      // specs/Start.tla, Click: one agent at a time (OneAgent), in a terminal never shown (InTerminal).
+      const shellPath = cli()
+      const cwd = folders()[0]
+      if (running) return exited
+      if (!shellPath || !cwd) return
+      exited = new Promise((resolve) => (exit = resolve))
+      running = vscode.window.createTerminal({ name: START_TERMINAL, shellPath, shellArgs: START_ARGS, cwd, isTransient: true })
+      return exited
+    },
+    dispose() {
+      closed.dispose()
     },
   }
 }

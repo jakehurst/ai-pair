@@ -46,7 +46,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, 2 replies, `DropStaleFocus = TRUE` | holds | 29 |
-| `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE` | holds | 2,018 |
+| `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
@@ -214,17 +214,21 @@ The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, t
 
 ### `Start`: the Start a session button
 
-`packages/vscode/src/panel.ts` (`askStart`, the `ready` and `start` messages), `setup.ts` (`claudeStarter`), and `webview/panel.ts` (`canStart`, the button), with `extension.ts` asking again after Set Up Agent. Issue #107. A page asks once as it loads; the answer comes later, from Claude Code's configuration read at once and VS Code's command list awaited; pages come and go; the environment flips. Two constants switch fixes the model found before the code was reviewed against it. `DropStale`: the panel posted every answer to whatever view it had; with `FALSE`, TLC violates `OwnAnswer` in three steps: `Ready` (page 2 loads), then page 1's `Answer` lands on page 2. `ReaskOnSetUp`: the page asked only as it loaded; with `FALSE`, TLC violates `Reasked` in three steps: `Answer` (hidden), then `Flip` sets Claude Code up with nothing pending.
+`packages/vscode/src/panel.ts` (`askStart`, the `ready` and `start` messages), `setup.ts` (`claudeStarter`), and `webview/panel.ts` (`canStart`, the button), with `extension.ts` asking again after Set Up Agent. Issue #107. A page asks once as it loads; the answer comes later, from Claude Code's configuration read at once and VS Code's command list awaited; pages come and go; the environment flips. Two constants switch fixes the model found before the code was reviewed against it. `DropStale`: the panel posted every answer to whatever view it had; with `FALSE`, TLC violates `OwnAnswer` in three steps: `Ready` (page 2 loads), then page 1's `Answer` lands on page 2. `ReaskOnSetUp`: the page asked only as it loaded; with `FALSE`, TLC violates `Reasked` in three steps: `Answer` (hidden), then `Flip` sets Claude Code up with nothing pending. Issue #115 added how a start lands. `InTerminal`: the starter ran Claude Code's open command, which brings Claude Code to the front with the prompt unsent and writes `panel` to `claudeCode.preferredLocation`; with `FALSE`, TLC violates `KeepsLocation` and `StaysOnPair` in two steps: `Answer` shows the button, then `Click`. `OneAgent`: a second start while the first agent runs; with `FALSE`, TLC violates `OneAtATime`. Issue #118 added the note the click shows, Starting a session with Claude Code, until a session starts. `NoteOnClick`: the page changed nothing until the agent's `start` landed; with `FALSE`, TLC violates `Acknowledged` on the first `Click`. `ClearOnExit`: the note went only with a session, so a CLI that exited without starting one left it up; with `FALSE`, TLC violates `Settles`: `Click`, then `Exit`, and the note stays.
 
 | Spec | Code |
 |---|---|
 | `Ready` | `ready`: `askStart` numbers the question and calls `available()`, which reads `isSetUp` at once |
-| `Answer(c)` | `getCommands` resolving; `canStart` is posted only if the question is still the latest; the page sets `hidden` |
+| `Answer(c)` | `available()` resolving, with the CLI found and a folder open; `canStart` is posted only if the question is still the latest; the page sets `hidden` |
 | `Dispose` | `onDidDispose`; the next page starts hidden |
-| `Flip` | Set Up Agent, or Claude Code's extension installed or removed; `extension.ts` calls `askStart` after Set Up Agent |
-| `Click` | the button posting `start`; `starter.start()` runs `claude-vscode.editor.open` with no session id and the prompt |
+| `Flip` | Set Up Agent, or Claude Code's CLI installed or removed; `extension.ts` calls `askStart` after Set Up Agent |
+| `Click` | the button posting `start`; `starter.start()` creates a terminal, never shown, whose process is `claude -p "start pairing session" --allowedTools mcp__pair`, unless its last terminal is still open; the page shows the note before it posts `start` |
+| `Exit` | the CLI exiting when the session ends; its terminal closes, and `onDidCloseTerminal` clears the starter's terminal and resolves the promise `start()` returned, and the panel posts `startEnded`, which hides the note |
+| `Choose` | the programmer, or Claude Code's own commands, setting `claudeCode.preferredLocation` |
+| `AgentStart` | the `session` event reaching the page: `handle`'s `session` case hides the note |
+| `AgentEnd` | the session ending: the idle view and its button are back |
 
-Each property was proved to bite with a mutation of a copy of the model, and each mutation failed on the property named and no other:
+Each property was proved to bite with a mutation of a copy of the model, and each mutation failed on the properties named and no others, and passed with them left out (all but `Click` unbounded, whose state space has no end without `TypeOK`):
 
 | Mutation | Breaks |
 |---|---|
@@ -235,6 +239,17 @@ Each property was proved to bite with a mutation of a copy of the model, and eac
 | `Click` while hidden | `ClicksNeedButton` |
 | `Answer` never delivered | `Offered` |
 | `Click` unbounded | `TypeOK` |
+| `InTerminal = FALSE` | `KeepsLocation` and `StaysOnPair` |
+| `Click` writes `panel` to the setting | `KeepsLocation` |
+| `Click` brings Claude Code to the front | `StaysOnPair` |
+| `OneAgent = FALSE` | `OneAtATime` |
+| `Click` starts no agent | `Starts` and `Settles` |
+| `Exit` never happens | `Closes` and `Settles` |
+| `NoteOnClick = FALSE` | `Acknowledged` |
+| `ClearOnExit = FALSE` | `Settles` |
+| `AgentStart` leaves the note | `NoteUntilSession` |
+| `Dispose` leaves the note | `NoteUntilSession` |
+| `Click` during a session | `NoteUntilSession` |
 
 Every property names the test that proves the code obeys it; the test's title carries the property's name:
 
@@ -242,11 +257,19 @@ Every property names the test that proves the code obeys it; the test's title ca
 |---|---|
 | `TypeOK` | the TypeScript types of `Starter`, `FromPanel`, and `ToPanel` |
 | `OwnAnswer` | `start.test.ts`: drops the answer of a page replaced before it landed |
-| `Grounded` | `start.setup.test.ts`: offers the button only once Claude Code is set up and its open command is registered |
-| `RunsAreClicks` | `start.test.ts`: runs the starter once per start; `start.page.test.ts`: posts start when the button is clicked; `start.setup.test.ts`: opens a new Claude Code tab with the prompt, once per start |
+| `Grounded` | `start.setup.test.ts`: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
+| `RunsAreClicks` | `start.test.ts`: runs the starter once per start; `start.page.test.ts`: posts start when the button is clicked; `start.setup.test.ts`: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `ClicksNeedButton` | `start.page.test.ts`: hides Start a session until the extension says it can start one; `start.test.ts`: tells the page nothing without a starter |
 | `Offered` | `start.test.ts`: tells a new page whether it can start a session |
 | `Reasked` | `start.test.ts`: asks again after Set Up Agent |
+| `KeepsLocation` | `start.setup.test.ts`: runs the CLI with the prompt in a terminal it never shows, without Claude Code's open command |
+| `StaysOnPair` | `start.setup.test.ts`: runs the CLI with the prompt in a terminal it never shows |
+| `Starts` | `start.setup.test.ts`: runs the CLI with the prompt in a terminal it never shows, once per start |
+| `OneAtATime` | `start.setup.test.ts`: starts no second agent while the first one's terminal is open |
+| `Closes` | `start.setup.test.ts`: starts again once it closes. Nothing yet proves the CLI exits when the session ends; that needs a run in the editor |
+| `Acknowledged` | `start.page.test.ts`: shows the starting note at once when the button is clicked |
+| `NoteUntilSession` | `start.page.test.ts`: hides the starting note when a session starts, new or resumed |
+| `Settles` | `start.page.test.ts`: hides the starting note once the agent has exited, with no session; `start.test.ts`: tells the page once the agent a start ran has exited; `start.setup.test.ts`: resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 

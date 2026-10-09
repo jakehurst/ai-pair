@@ -38,6 +38,7 @@ const ui = {
   idleSummary: $("idle-summary", HTMLElement),
   idleText: $("idle-text", HTMLElement),
   start: $("start", HTMLButtonElement),
+  starting: $("starting", HTMLElement),
   reply: $("reply", HTMLTextAreaElement),
   send: $("send", HTMLButtonElement),
   attach: $("attach", HTMLElement),
@@ -362,8 +363,14 @@ function handle(e: ToPanel): void {
       // specs/Start.tla, Answer: the button shows exactly what the extension answered.
       ui.start.hidden = !e.value
       return
+    case "startEnded":
+      // specs/Start.tla, Exit: the agent is done, session or not (Settles).
+      ui.starting.hidden = true
+      return
     case "session":
       if (e.active) {
+        // specs/Start.tla, AgentStart: a session clears the note (NoteUntilSession).
+        ui.starting.hidden = true
         if (e.suspended || e.resumed) {
           // The same session: its agent gone, or back (#25).
           fileCurrent()
@@ -686,7 +693,11 @@ document.addEventListener("click", (e) => {
   if (a?.dataset.command) vscode.postMessage({ type: "command", command: a.dataset.command })
 })
 
-// Start a session: Claude Code opens with the prompt in its input box (#107).
-ui.start.addEventListener("click", () => vscode.postMessage({ type: "start" }))
+// Start a session: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115).
+ui.start.addEventListener("click", () => {
+  // specs/Start.tla, Click: the note shows at once (Acknowledged).
+  ui.starting.hidden = false
+  vscode.postMessage({ type: "start" })
+})
 
 vscode.postMessage({ type: "ready" })
