@@ -43,8 +43,8 @@ Set by Justine on 2026-10-08. The extension's version is `version` in `packages/
 
 - **Enhancement** (a new feature, or a feature extended): bump the second number (minor), and reset the third to 0.
 - **Bug fix** (behavior corrected, nothing new): bump the third number (patch).
-- **Major change to a feature** (a feature removed, or changed so that what users did before no longer works the same way): bump the first number (major), and reset the others to 0.
-- **Changes forced by a VS Code upgrade:** if the code changes but the extension still runs on the same VS Code versions and behaves the same, it is a patch. If the change raises the minimum VS Code version (`engines.vscode`), it is a minor bump, since users on the older VS Code can no longer install it but nothing else changes for anyone. If it drops a feature that the old VS Code supported, it is a major bump.
+- **Major change to a feature** (a feature removed, or changed so that what users did before no longer works the same way): the first number (major) is Justine's call, not the agent's (set by Justine on 2026-10-09: "we're not 1.0.0 yet. I'll make the call on a major number"). Bump the minor number instead, and tell her the change would be major under these rules.
+- **Changes forced by a VS Code upgrade:** if the code changes but the extension still runs on the same VS Code versions and behaves the same, it is a patch. If the change raises the minimum VS Code version (`engines.vscode`), it is a minor bump, since users on the older VS Code can no longer install it but nothing else changes for anyone. If it drops a feature that the old VS Code supported, it would be a major bump, which is Justine's call, as above.
 - The `CHANGELOG.md` in `packages/vscode` gets a section for the new version with the change, in the same PR.
 
 ## Governance
