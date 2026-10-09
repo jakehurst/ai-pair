@@ -14,6 +14,7 @@ const PANEL_COMMANDS: ReadonlySet<string> = new Set(["aiPair.playDemo", "aiPair.
 /** An agent the idle view can start a session with: whether it can right now, and how (#107). */
 export type Starter = {
   available(): Promise<boolean>
+  /** Resolves once the agent it ran has exited, or at once if it ran none (#118). */
   start(): Promise<void>
 }
 
@@ -199,8 +200,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command)
         return
       case "start":
-        // specs/Start.tla, Click: one run per click.
-        void this.starter?.start()
+        // specs/Start.tla, Click: one run per click. Exit: the agent is done, and the page drops its note
+        // (Settles).
+        void this.starter?.start().then(() => this.send({ type: "startEnded" }))
         return
       case "openChange":
         void this.openChange(m.file)

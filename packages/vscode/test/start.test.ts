@@ -38,18 +38,19 @@ function setup(starter?: { available: boolean | "manual" }) {
   )
   let started = 0
   const answers: ((value: boolean) => void)[] = []
+  const exits: (() => void)[] = []
   if (starter) {
     const fake: Starter = {
       available: () =>
         starter.available === "manual" ? new Promise((resolve) => answers.push(resolve)) : Promise.resolve(starter.available),
       start: () => {
         started++
-        return Promise.resolve()
+        return new Promise((resolve) => exits.push(resolve))
       },
     }
     panel.starter = fake
   }
-  return { panel, started: () => started, answer: (i: number, value: boolean) => answers[i]?.(value) }
+  return { panel, started: () => started, answer: (i: number, value: boolean) => answers[i]?.(value), exit: (i: number) => exits[i]?.() }
 }
 
 it("tells a new page whether it can start a session (Offered)", async () => {
@@ -74,6 +75,17 @@ it("runs the starter once per start from the page (RunsAreClicks)", () => {
   view.send({ type: "start" })
   view.send({ type: "start" })
   expect(started()).toBe(2)
+})
+
+it("tells the page once the agent a start ran has exited (Settles)", async () => {
+  const { panel, exit } = setup({ available: true })
+  const view = open(panel)
+  view.send({ type: "start" })
+  await Promise.resolve()
+  expect(view.posted).not.toContainEqual({ type: "startEnded" })
+  exit(0)
+  await Promise.resolve()
+  expect(view.posted).toContainEqual({ type: "startEnded" })
 })
 
 it("asks again after Set Up Agent, so the button appears without a reload (Reasked)", async () => {

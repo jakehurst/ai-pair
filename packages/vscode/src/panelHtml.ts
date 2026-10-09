@@ -176,6 +176,7 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
   #idle-summary:empty { display: none; }
   #idle-text { margin-top: 4px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
   #start { margin-top: 8px; }
+  #starting { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 
   #composer { display: none; margin-top: 12px; }
   body.active #composer { display: block; }
@@ -286,6 +287,7 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
         <div id="idle-title">No active session</div>
         <div id="idle-summary"></div>
         <button id="start" class="primary" hidden>${ICONS.play}<span>Start a session</span></button>
+        <div id="starting" role="status" hidden>Starting a session with Claude Code.</div>
         <div id="idle-text">Ask your agent to pair with you, or run <a href="#" class="command" data-command="aiPair.playDemo">AI Pair: Play Demo Session</a>. First time? Run <a href="#" class="command" data-command="aiPair.setUpAgent">AI Pair: Set Up Agent</a>.</div>
       </div>
     </div>

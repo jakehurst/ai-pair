@@ -21,6 +21,8 @@ function send(event: object): void {
 }
 
 const hidden = (): boolean => document.getElementById("start")?.hasAttribute("hidden") ?? false
+const noteHidden = (): boolean => document.getElementById("starting")?.hasAttribute("hidden") ?? false
+const click = (): void => void document.getElementById("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
 
 it("hides Start a session until the extension says it can start one (ClicksNeedButton)", () => {
   expect(hidden()).toBe(true)
@@ -34,4 +36,29 @@ it("posts start when the button is clicked (RunsAreClicks)", () => {
   send({ type: "canStart", value: true })
   document.getElementById("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
   expect(posted).toContainEqual({ type: "start" })
+})
+
+it("shows the starting note at once when the button is clicked (Acknowledged)", () => {
+  send({ type: "canStart", value: true })
+  expect(noteHidden()).toBe(true)
+  click()
+  expect(noteHidden()).toBe(false)
+})
+
+it("hides the starting note once the agent has exited, with no session (Settles)", () => {
+  send({ type: "canStart", value: true })
+  click()
+  send({ type: "startEnded" })
+  expect(noteHidden()).toBe(true)
+})
+
+it("hides the starting note when a session starts, new or resumed (NoteUntilSession)", () => {
+  for (const session of [{ active: true }, { active: true, resumed: true }]) {
+    send({ type: "session", active: false, reason: "user" })
+    send({ type: "canStart", value: true })
+    click()
+    expect(noteHidden()).toBe(false)
+    send({ type: "session", ...session })
+    expect(noteHidden()).toBe(true)
+  }
 })

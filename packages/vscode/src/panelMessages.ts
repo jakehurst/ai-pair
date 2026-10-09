@@ -21,7 +21,7 @@ export type FromPanel =
   | { type: "openChange"; file: string }
   /** A command the intro offers, like Set Up Agent. */
   | { type: "command"; command: string }
-  /** The Start a session button: Claude Code opens with the prompt in its input box (#107). */
+  /** The Start a session button: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115). */
   | { type: "start" }
   | { type: "speed"; value: number }
   | { type: "readingSpeed"; value: number }
@@ -39,5 +39,7 @@ export type ToPanel =
   | { type: "readingSpeed"; value: number }
   /** The reading speed calibration's state, for the band (#109). */
   | { type: "calibration"; view: CalibrationView }
-  /** Whether the idle view offers Start a session: Claude Code is set up and its extension is here (#107). */
+  /** Whether the idle view offers Start a session: Claude Code is set up, its CLI is here, a folder is open (#107). */
   | { type: "canStart"; value: boolean }
+  /** The agent the Start a session button ran has exited, with or without a session: the note goes (#118). */
+  | { type: "startEnded" }

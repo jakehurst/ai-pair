@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- **Start a session** now starts Claude Code's CLI in a hidden terminal with
+  the request already sent, so the Pair panel stays in front and you never
+  press Enter in Claude Code. The terminal closes when the session ends. It
+  needs the `claude` CLI on your PATH or in `~/.local/bin`, and a folder open.
+- Start a session no longer changes Claude Code's preferred location to
+  `panel`.
+- After you click **Start a session**, the panel says a session is starting
+  until the agent starts it, or until Claude Code exits without one.
+
 ## 0.3.0
 
 - **Start a session** in the Pair panel's idle view opens a Claude Code tab
