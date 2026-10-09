@@ -13,7 +13,7 @@ Run, from the repo root:
 sh .claude/skills/reload-extension/scripts/reload.sh
 ```
 
-It runs the unit tests, packages `ai-pair-<version>.vsix` at the repo root, and installs it with `code --install-extension --force`. It stops at the first failure: a failing test is never installed.
+It runs the unit tests, deletes any `ai-pair-*.vsix` already at the repo root, packages `ai-pair-<version>.vsix` at the repo root, and installs it with `code --install-extension --force`. It stops at the first failure: a failing test is never installed.
 
 After it finishes, tell the programmer the two steps that cannot be scripted:
 
