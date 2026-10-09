@@ -32,7 +32,12 @@ function open(panel: NarrationPanel) {
 
 function setup() {
   const controller = new Controller(new FakeEditor(), new FakePanel(), testConfig)
-  const panel = new NarrationPanel((f) => f, { get: () => 1, set: () => {} }, { current: () => undefined, ref: () => undefined })
+  const panel = new NarrationPanel(
+    (f) => f,
+    { get: () => 1, set: () => {} },
+    { get: () => 1, set: () => {} },
+    { current: () => undefined, ref: () => undefined },
+  )
   panel.controller = controller
   return { controller, panel }
 }

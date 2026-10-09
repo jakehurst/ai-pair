@@ -74,8 +74,11 @@ export class FakeEditor implements EditorPort {
     this.point = point
   }
   reveals = 0
+  /** What the view was following at the last reveal. */
+  revealedFocus: Focus | null = null
   reveal(): void {
     this.reveals++
+    this.revealedFocus = this.focus
   }
   follows = 0
   follow(): void {
@@ -156,7 +159,7 @@ export const testConfig: Config = {
   timing: {
     type: { charMs: 100, jitter: 0.25, wordStartMs: 0, punctuationMs: 0, openBracketMs: 0, newlineMs: 0 },
     fastFactor: 0.1,
-    reading: { msPerWord: 100, minMs: 500, maxMs: 2000 },
+    reading: { msPerChar: 20, minMs: 500 },
     beforeMoveMs: 100,
     afterMoveNearMs: 0,
     afterMoveFarMs: 0,

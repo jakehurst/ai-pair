@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -65,6 +65,11 @@
         "category": "AI Pair"
       },
       {
+        "command": "aiPair.calibrate",
+        "title": "Calibrate Reading Speed",
+        "category": "AI Pair"
+      },
+      {
         "command": "aiPair.togglePause",
         "title": "Pause / Resume",
         "category": "AI Pair"
@@ -119,6 +124,18 @@
           "minimum": 0.25,
           "maximum": 4,
           "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4× to 3×."
+        },
+        "aiPair.readingSpeed": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0.25,
+          "maximum": 4,
+          "description": "Reading speed: divides only the pause after each of the agent's messages. The panel's reading menu offers 0.4x to 3x."
+        },
+        "aiPair.calibrationPassage": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "The passage read to calibrate the reading speed: `{ \"title\": ..., \"text\": ..., \"notice\": ... }`. Empty, the built-in one, Comma Gets a Cure. The agent's `calibrate` tool writes it."
         },
         "aiPair.agentName": {
           "type": "string",

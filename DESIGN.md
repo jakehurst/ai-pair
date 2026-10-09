@@ -5,7 +5,7 @@ agent is in [PROTOCOL.md](PROTOCOL.md), and the components and how they
 connect are in [ARCHITECTURE.md](ARCHITECTURE.md). This document covers what
 the programmer experiences.
 
-Status: describes 0.1.0. Numbers marked *tunable* are initial guesses to be adjusted
+Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be adjusted
 by feel.
 
 ## Agent cursor
@@ -177,12 +177,22 @@ the close typed before the cursor leaves it, and the pause after it.
 `type_fast` shortens both by the same factor as its typing. With nothing
 after the `▌`, the cursor is already in place and there's neither.
 
-**Reading.** After a `say`: `clamp(words × 270, 1500, 9000)`. Enough to read
-the message at an ordinary pace, about 220 words a minute.
+**Reading.** After a `say`: characters times 47 ms, at least 1500 ms, with no
+upper bound, so a long message gets its full time (#109). At the default that
+is about 220 words a minute.
 
-**Speed.** The panel's speed menu (0.4×, 0.6×, 1.0×, 1.5×, 2.0×, 3.0×) scales
-all of it together, immediately, even mid-typing. It's the `aiPair.speed`
-setting, which takes any value from 0.25 to 4.
+**Speed.** The panel's speed menu (0.4x, 0.6x, 1.0x, 1.5x, 2.0x, 3.0x) scales
+all of it together, immediately, even mid-typing, except the reading pause.
+It's the `aiPair.speed` setting, which takes any value from 0.25 to 4. The
+reading menu next to it scales only the reading pause: `aiPair.readingSpeed`,
+with the same range (#109).
+
+**Calibration.** *AI Pair: Calibrate Reading Speed* (or the agent's
+`calibrate` tool, with a passage of its own) announces a passage in the panel; `go`
+shows it and starts the clock, `x` stops it. The rate, elapsed time over the
+passage's characters, is written to `aiPair.timing` in the user settings, and
+playback, held while the passage is read, resumes only once the player has the
+new rate (specs/Calibration.tla). Any other reply cancels (#109).
 
 ### Undo
 

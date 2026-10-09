@@ -1,6 +1,7 @@
 // The messages between the narration panel's page (webview/panel.ts) and the extension (panel.ts).
 
 import type { PanelEvent, Ref } from "@ai-pair/core"
+import type { CalibrationView } from "./calibration"
 
 /** Messages from the page. */
 export type FromPanel =
@@ -21,6 +22,7 @@ export type FromPanel =
   /** A command the intro offers, like Set Up Agent. */
   | { type: "command"; command: string }
   | { type: "speed"; value: number }
+  | { type: "readingSpeed"; value: number }
   | { type: "runDecision"; id: number; run: boolean; remember?: boolean }
 
 /** Messages to the page: the session's events, and the panel's own. */
@@ -32,3 +34,6 @@ export type ToPanel =
   | { type: "selection"; ref: Ref | undefined }
   | { type: "focusReply" }
   | { type: "speed"; value: number }
+  | { type: "readingSpeed"; value: number }
+  /** The reading speed calibration's state, for the band (#109). */
+  | { type: "calibration"; view: CalibrationView }

@@ -17,7 +17,8 @@ export type Cadence = {
   newlineMs: number
 }
 
-export type Reading = { msPerWord: number; minMs: number; maxMs: number }
+/** Per character read, with a floor for short messages and no ceiling, so a long message gets its full time. Issue 109. */
+export type Reading = { msPerChar: number; minMs: number }
 
 export type Timing = {
   type: Cadence
@@ -52,7 +53,7 @@ export const defaultTiming: Timing = {
     newlineMs: 350,
   },
   fastFactor: 0.25,
-  reading: { msPerWord: 270, minMs: 1500, maxMs: 9000 },
+  reading: { msPerChar: 47, minMs: 1500 },
   beforeMoveMs: 150,
   afterMoveNearMs: 450,
   afterMoveFarMs: 900,

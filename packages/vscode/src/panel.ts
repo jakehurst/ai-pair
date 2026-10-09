@@ -4,6 +4,7 @@ import * as vscode from "vscode"
 import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from "@ai-pair/core"
 import { panelHtml, SPEEDS } from "./panelHtml"
 import type { FromPanel, ToPanel } from "./panelMessages"
+import type { Calibration, CalibrationView } from "./calibration"
 
 const MAX_LOG = 400
 
@@ -13,6 +14,8 @@ const PANEL_COMMANDS: ReadonlySet<string> = new Set(["aiPair.playDemo", "aiPair.
 export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   static readonly viewId = "aiPair.narration"
   controller?: Controller
+  /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
+  calibration?: Calibration
   private view?: vscode.WebviewView
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = []
@@ -27,6 +30,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   constructor(
     private readonly resolvePath: (file: string) => string,
     private readonly speed: { get: () => number; set: (value: number) => void },
+    private readonly readingSpeed: { get: () => number; set: (value: number) => void },
     private readonly selection: { current: () => SharedSelection | undefined; ref: () => Ref | undefined },
     /** Called with a line for each message from the page, for diagnosing deliveries (#27). */
     private readonly trace?: (line: string) => void,
@@ -49,6 +53,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: "speed", value })
   }
 
+  showReadingSpeed(value: number): void {
+    this.send({ type: "readingSpeed", value })
+  }
+
+  showCalibration(view: CalibrationView): void {
+    this.send({ type: "calibration", view })
+  }
+
   post(event: PanelEvent): void {
     this.log.push(event)
     if (this.log.length > MAX_LOG) {
@@ -62,6 +74,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     if (event.type === "session") {
       void vscode.commands.executeCommand("setContext", "aiPair.active", event.active)
       if (event.active) this.reveal()
+      if (!event.active) this.calibration?.cancel()
     }
     this.onPost?.()
   }
@@ -88,6 +101,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       if (this.view === view) this.view = undefined
       // Its draft went with it, and so does the pause the draft asked for (#69).
       this.controller?.resume("reply")
+      this.calibration?.cancel()
     })
   }
 
@@ -107,14 +121,19 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         c?.resume("reply")
         this.send({ type: "replay", events: this.log })
         this.showSpeed(this.speed.get())
+        this.showReadingSpeed(this.readingSpeed.get())
         this.showSelection(this.selection.ref())
         return
       case "speed":
         // Only the menu's speeds: the page sends no others (#17).
         if (SPEEDS.includes(m.value)) this.speed.set(m.value)
         return
+      case "readingSpeed":
+        if (SPEEDS.includes(m.value)) this.readingSpeed.set(m.value)
+        return
       case "reply":
         // Replying means "go on with this", so any pause ends.
+        if (this.calibration?.reply(m.text)) return
         c?.resume()
         c?.userMessage(m.text, m.attach ? this.selection.current() : undefined)
         return

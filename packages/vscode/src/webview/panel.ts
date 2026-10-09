@@ -3,6 +3,7 @@
 
 import type { AgentState, PanelEvent, Ref } from "@ai-pair/core"
 import type { FromPanel, ToPanel } from "../panelMessages"
+import type { CalibrationView } from "../calibration"
 
 declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void }
 
@@ -25,6 +26,11 @@ const ui = {
   turnLabel: $("turn-label", HTMLElement),
   speed: $("speed", HTMLButtonElement),
   speedMenu: $("speed-menu", HTMLElement),
+  readingSpeed: $("reading-speed", HTMLButtonElement),
+  readingMenu: $("reading-menu", HTMLElement),
+  passage: $("passage", HTMLElement),
+  passageText: $("passage-text", HTMLElement),
+  passageNotice: $("passage-notice", HTMLElement),
   end: $("end", HTMLButtonElement),
   now: $("now-text", HTMLElement),
   ref: $("now-ref", HTMLElement),
@@ -47,6 +53,7 @@ const ui = {
 }
 
 let active = false
+let calibrating = false
 let turn = "agent"
 let paused = false
 let replaying = false
@@ -210,6 +217,40 @@ function setNow(text: string): void {
   arrive(ui.now)
 }
 
+// The reading speed calibration (#109): its instructions in the band, the passage under them.
+function showCalibration(view: CalibrationView): void {
+  calibrating = view.phase === "armed" || view.phase === "reading"
+  document.body.classList.toggle("calibrating", calibrating)
+  ui.reply.disabled = !active && !calibrating
+  ui.passage.hidden = view.phase !== "reading"
+  switch (view.phase) {
+    case "armed":
+      setNow(
+        "Reading speed calibration. When you type go, the passage appears: " +
+          view.title +
+          ". Read it at the pace at which you read and understand it, and the moment you finish, type x.",
+      )
+      return
+    case "reading":
+      ui.passageText.textContent = view.text
+      ui.passageNotice.textContent = view.notice ?? ""
+      setNow(view.title + ". Type x the moment you finish.")
+      return
+    case "done":
+      setNow(
+        "Measured " +
+          Math.round(view.msPerChar) +
+          " ms per character, about " +
+          view.wordsPerMinute +
+          " words a minute. Saved to your settings: every message now gets its own time at that pace.",
+      )
+      return
+    case "idle":
+      setNow("Calibration canceled; the reading speed is unchanged.")
+      return
+  }
+}
+
 // The reading pause fills a ring around the status dot.
 function startReading(ms: number): void {
   if (replaying) return
@@ -294,12 +335,13 @@ function clearRun(): void {
 function setActive(on: boolean): void {
   active = on
   document.body.classList.toggle("active", on)
-  ui.reply.disabled = !on
+  ui.reply.disabled = !on && !calibrating
   if (!on) {
     suspended = false
     reading = null
     clearRun()
     closeSpeedMenu()
+    closeReadingMenu()
   }
   syncStatus()
   syncAttach()
@@ -406,16 +448,15 @@ function handle(e: ToPanel): void {
     case "focusReply":
       ui.reply.focus()
       return
-    case "speed": {
-      // One decimal, so the menu's speeds line up; a setting with more keeps them.
-      const label = (Number.isInteger(e.value * 10) ? e.value.toFixed(1) : String(e.value)) + "×"
-      ui.speed.textContent = label
-      ui.speed.setAttribute("aria-label", "Playback speed: " + label)
-      for (const b of ui.speedMenu.querySelectorAll("button")) {
-        b.setAttribute("aria-checked", String(Math.abs(Number(b.dataset.speed) - e.value) < 0.01))
-      }
+    case "speed":
+      showSpeed(ui.speed, ui.speedMenu, "Playback speed", "", e.value)
       return
-    }
+    case "readingSpeed":
+      showSpeed(ui.readingSpeed, ui.readingMenu, "Reading speed", "read ", e.value)
+      return
+    case "calibration":
+      showCalibration(e.view)
+      return
     default:
       throw new Error(`Unknown panel message: ${JSON.stringify(e satisfies never)}`)
   }
@@ -485,35 +526,50 @@ ui.runAlways.addEventListener("click", () => decide(true, true))
 ui.runSkip.addEventListener("click", () => decide(false, false))
 ui.end.addEventListener("click", () => vscode.postMessage({ type: "end" }))
 
-function closeSpeedMenu(): void {
-  ui.speedMenu.hidden = true
-  ui.speed.setAttribute("aria-expanded", "false")
-  ui.speed.classList.remove("on")
-}
-ui.speed.addEventListener("click", (e) => {
-  e.stopPropagation()
-  const open = ui.speedMenu.hidden === true
-  ui.speedMenu.hidden = !open
-  ui.speed.setAttribute("aria-expanded", String(open))
-  ui.speed.classList.toggle("on", open)
-  if (open) ui.speedMenu.querySelector<HTMLElement>('[aria-checked="true"]')?.focus()
-})
-for (const b of ui.speedMenu.querySelectorAll("button")) {
-  b.addEventListener("click", () => {
-    closeSpeedMenu()
-    ui.speed.focus()
-    vscode.postMessage({ type: "speed", value: Number(b.dataset.speed) })
-  })
-}
-document.addEventListener("click", (e) => {
-  if (!ui.speedMenu.hidden && !(e.target instanceof Node && ui.speedMenu.contains(e.target))) closeSpeedMenu()
-})
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !ui.speedMenu.hidden) {
-    closeSpeedMenu()
-    ui.speed.focus()
+function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: "speed" | "readingSpeed"): () => void {
+  const close = () => {
+    menu.hidden = true
+    button.setAttribute("aria-expanded", "false")
+    button.classList.remove("on")
   }
-})
+  button.addEventListener("click", (e) => {
+    e.stopPropagation()
+    const open = menu.hidden === true
+    menu.hidden = !open
+    button.setAttribute("aria-expanded", String(open))
+    button.classList.toggle("on", open)
+    if (open) menu.querySelector<HTMLElement>('[aria-checked="true"]')?.focus()
+  })
+  for (const b of menu.querySelectorAll("button")) {
+    b.addEventListener("click", () => {
+      close()
+      button.focus()
+      vscode.postMessage({ type, value: Number(b.dataset.speed) })
+    })
+  }
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !(e.target instanceof Node && menu.contains(e.target))) close()
+  })
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !menu.hidden) {
+      close()
+      button.focus()
+    }
+  })
+  return close
+}
+const closeSpeedMenu = speedMenu(ui.speed, ui.speedMenu, "speed")
+const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, "readingSpeed")
+
+// One decimal, so the menu's speeds line up; a setting with more keeps them.
+function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
+  const label = (Number.isInteger(value * 10) ? value.toFixed(1) : String(value)) + String.fromCharCode(0xd7)
+  button.textContent = prefix + label
+  button.setAttribute("aria-label", name + ": " + label)
+  for (const b of menu.querySelectorAll("button")) {
+    b.setAttribute("aria-checked", String(Math.abs(Number(b.dataset.speed) - value) < 0.01))
+  }
+}
 
 // Tooltips: an element's data-tip shows under it after a moment's hover, or at once while one is
 // showing or just was, the way VS Code's own hovers do; and on keyboard focus. A click hides it.
@@ -535,7 +591,7 @@ function setTip(el: HTMLElement, text: string): void {
 
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer)
-  if (el === ui.speed && !ui.speedMenu.hidden) return
+  if ((el === ui.speed && !ui.speedMenu.hidden) || (el === ui.readingSpeed && !ui.readingMenu.hidden)) return
   tipTarget = el
   ui.tip.textContent = el.dataset.tip ?? ""
   ui.tip.hidden = false

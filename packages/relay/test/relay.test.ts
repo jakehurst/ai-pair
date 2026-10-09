@@ -19,7 +19,7 @@ const fast = {
   timing: {
     ...testConfig.timing,
     type: { ...testConfig.timing.type, charMs: 0.5 },
-    reading: { msPerWord: 1, minMs: 5, maxMs: 5 },
+    reading: { msPerChar: 0, minMs: 5 },
     beforeMoveMs: 5,
     beforeSelectMs: 5,
   },
@@ -84,10 +84,35 @@ describe("relay", () => {
   it("lists the tools and the prompt, with short instructions", async () => {
     const client = await connect()
     const tools = await client.listTools()
-    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(["end", "listen", "read", "start", "step"])
+    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(["calibrate", "end", "listen", "read", "start", "step"])
     expect(client.getInstructions()).toContain("`start`")
     const prompt = await client.getPrompt({ name: "start", arguments: { task: "add a todos API" } })
     expect(JSON.stringify(prompt.messages)).toContain("The task: add a todos API")
+  })
+
+  it("starts a calibration from a passage file, and refuses a second one", async () => {
+    const client = await connect()
+    await call(client, "start")
+    const passages: string[] = []
+    // The first passage is taken; the hook refuses the next, as the calibration does while one runs.
+    controller.onCalibrate = (p) => passages.push(`${p.title}: ${p.text}`) === 1
+    const file = path.join(dir, "passage.txt")
+    fs.writeFileSync(file, "one two three")
+    const first = await call(client, "calibrate", { title: "Sample", file })
+    expect(first.error).toBe(false)
+    expect(first.text).toContain("under way")
+    expect(passages).toEqual(["Sample: one two three"])
+    const second = await call(client, "calibrate", { title: "Again", file })
+    expect(second.error).toBe(true)
+    expect(second.text).toContain("calibration_busy")
+  })
+
+  it("types a backslash-u sequence as its six characters, not as the character it names", async () => {
+    const client = await connect()
+    await call(client, "start")
+    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "\\u0041\u{258c}" }] })
+    await call(client, "step", { actions: [] })
+    expect(editor.text("src/a.ts")).toBe("\\u0041")
   })
 
   it("runs a session: start with the guide, pipelined steps, read, end", async () => {

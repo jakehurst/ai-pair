@@ -38,6 +38,7 @@ export async function rehearse(
     pacing: instant,
     config: () => config,
     speed: () => 1,
+    readingSpeed: () => 1,
     render: () => {},
     confirm: () => Promise.resolve(true),
     lines,

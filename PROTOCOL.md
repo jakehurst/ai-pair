@@ -9,7 +9,7 @@ This document covers only what the agent can do and observe. How the extension
 presents it to the programmer is in [DESIGN.md](DESIGN.md), and how the tool is
 built and connected is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Status: describes 0.1.0. Numbers marked *tunable* are initial guesses to be adjusted
+Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be adjusted
 by feel.
 
 ## Goals
@@ -217,6 +217,16 @@ files that aren't open. The result is the
 file's name, whether it has unsaved changes, and its lines, numbered. Like a
 report's code, it says where the lines reach the end of the file, and whether
 a newline ends its last line. Does not block and does not deliver events.
+
+### `calibrate(title: string, file: string, notice?: string) -> Report`
+
+Starts a reading speed calibration in the panel with a passage of the agent's
+choosing, read from `file` (relative to the agent's working directory, or
+absolute): the extension stores it in `aiPair.calibrationPassage` and runs the
+flow of `specs/Calibration.tla`, with playback held until the measured rate is
+in force. The text travels as a file, never in the call: the agent fetches it
+with a command, and does not read it back. Refused with `calibration_busy`
+while a calibration is under way. Needs a session.
 
 ## Actions
 

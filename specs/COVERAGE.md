@@ -26,7 +26,7 @@ Code goes without a spec for one of these reasons:
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`Other`) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
-| `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll` |
+| `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, and a stale point: `PointFocus` |
 | `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
 | `confirm`, `decideRun` | `RunBox` (`Decided`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
@@ -35,6 +35,7 @@ Code goes without a spec for one of these reasons:
 | `state`, `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
 | `setSpeed`, `setTiming`, `setConfirmCommands` | Glue: settings |
+| `calibrate`, `onCalibrate`, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
 
 ### `player.ts`
 
@@ -122,10 +123,12 @@ Code goes without a spec for one of these reasons:
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed` | Glue |
+| | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
 | | `setState`, `syncStatus`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look |
+| | `showCalibration` | Look |
 | | `esc`, `codeLink`, `refLink` | Format |
 | `outside.ts`, `outsideWatch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals` |
@@ -135,7 +138,10 @@ Code goes without a spec for one of these reasons:
 | `agents.ts` | all | Pure, Glue: agents' config files; `setup.properties.test.ts` |
 | `setup.ts` | all | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
+| | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`Stored`) |
 | | the rest | Glue |
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |
+| `calibration.ts` | all | `Calibration` |
+| `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
 | `panelHtml.ts` | `panelHtml`, `settingSpeed` | Format |
 | `panelMessages.ts` | | Types |

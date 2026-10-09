@@ -330,6 +330,38 @@ type_fast ";▌"
   `read`, then start the next batch with a `move` or `select` that gives both
   `file` and `line`. A batch that types or moves without them first is
   refused with `unanchored`; a batch of only `say` or `run` passes.
+- **Edit bottom-up within a batch.** An insert moves every line below it, so
+  a later action's `line` is stale. Put the lowest edit first, or `read`
+  between batches.
+- **A `select` takes whole pairs.** Replacing `foo(a,` leaves its `)` behind,
+  and typing `foo(` with its close then adds another. Select from an opening
+  through its close, or neither.
+- **`to: "line_end"` steps past every close on the line.** After a parameter
+  list on a line that ends `) }`, it lands after the `}`. To stop after the
+  first close, move to a spot: the text up to and including that `)`.
+- **Don't reformat files from a `run`.** A formatter's rewrite counts as an
+  outside edit of a file your batch is in, and cuts the batch short; run it
+  from your own tools instead, between batches.
+- **A `\uXXXX` sequence in a `type` may arrive as the character it names,**
+  decoded by the harness on the way. To put an escape in source, build the
+  character another way, such as `String.fromCharCode(0xd7)`.
+
+### Calibrating the programmer's reading speed
+
+The pause after each `say` is sized to the message at a rate per character, and the
+programmer can measure their own rate on a passage: *AI Pair: Calibrate
+Reading Speed* in the editor. When they ask you for a passage of their own
+("use the Rainbow Passage for the calibration"):
+
+- **Fetch it with a command into a file**: `curl`, a script. Never type the
+  text yourself, never put it in a reply, and never read the file back: the
+  API blocks output that reproduces published text, on every retry.
+- **Call `calibrate`** with the passage's title, the file's path, and a notice if
+  its license asks for one. The extension reads the file, stores the passage
+  in the programmer's settings, and starts the flow in the Pair panel.
+- **Then `listen`**: playback is held while they read. Their next message
+  comes once the calibration ends, and from then on every message of yours is
+  timed at their pace.
 
 ### When the programmer steps in
 

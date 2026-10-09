@@ -1,6 +1,6 @@
 import * as os from "node:os"
 import * as vscode from "vscode"
-import { Bridge, Controller, type PanelEvent, type SavedSession } from "@ai-pair/core"
+import { Bridge, Controller, type PanelEvent, type SavedSession, type TimingOverrides } from "@ai-pair/core"
 import { discoveryDir } from "@ai-pair/protocol"
 import { playDemo } from "./demo"
 import { VsCodeEditor } from "./editor"
@@ -9,6 +9,8 @@ import { watchOutside } from "./outsideWatch"
 import { NarrationPanel } from "./panel"
 import { settingSpeed } from "./panelHtml"
 import { registerServerProvider, setUpAgent, writeLauncher } from "./setup"
+import { Calibration } from "./calibration"
+import { builtInPassage, type Passage } from "./passage"
 
 /** Returned from `activate`, for integration tests. */
 export type Api = {
@@ -39,6 +41,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => settingSpeed(config().get<unknown>("speed", 1)),
     set: (value: number) => void config().update("speed", value, vscode.ConfigurationTarget.Global),
   }
+  const readingSpeed = {
+    get: () => settingSpeed(config().get<unknown>("readingSpeed", 1)),
+    set: (value: number) => void config().update("readingSpeed", value, vscode.ConfigurationTarget.Global),
+  }
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
   // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
   const log = vscode.window.createOutputChannel("AI Pair", { log: true })
@@ -46,6 +52,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
+    readingSpeed,
     {
       current: () => editor.programmerSelection(),
       ref: () => editor.selectionRef(),
@@ -58,8 +65,36 @@ export function activate(context: vscode.ExtensionContext): Api {
   editor.onSelection = (ref) => panel.showSelection(ref)
   panel.controller = controller
   controller.setSpeed(speed.get())
+  controller.setReadingSpeed(readingSpeed.get())
   controller.setTiming(config().get("timing", {}))
   controller.setConfirmCommands(config().get("confirmCommands", true))
+  // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
+  const passage = (): Passage => {
+    const chosen = config().get<Partial<Passage>>("calibrationPassage", {})
+    if (!chosen.text?.trim()) return builtInPassage(context.extensionPath)
+    return { title: chosen.title || "Your passage", text: chosen.text, ...(chosen.notice ? { notice: chosen.notice } : {}) }
+  }
+  const calibration = new Calibration(
+    {
+      now: () => Date.now(),
+      pause: () => controller.pause("calibrate"),
+      resume: () => controller.resume("calibrate"),
+      // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla.
+      store: async (msPerChar) => {
+        const timing = config().get<TimingOverrides>("timing", {})
+        await config().update("timing", { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global)
+        controller.setTiming(config().get("timing", {}))
+      },
+      show: (view) => panel.showCalibration(view),
+    },
+    passage(),
+  )
+  panel.calibration = calibration
+  controller.onCalibrate = (chosen) => {
+    if (!calibration.arm(chosen)) return false
+    void config().update("calibrationPassage", chosen, vscode.ConfigurationTarget.Global)
+    return true
+  }
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
   // specs/Resume.tla): saved shortly after each change, and once more as the window goes.
@@ -113,6 +148,10 @@ export function activate(context: vscode.ExtensionContext): Api {
         controller.setSpeed(speed.get())
         panel.showSpeed(speed.get())
       }
+      if (e.affectsConfiguration("aiPair.readingSpeed")) {
+        controller.setReadingSpeed(readingSpeed.get())
+        panel.showReadingSpeed(readingSpeed.get())
+      }
       if (e.affectsConfiguration("aiPair.timing")) controller.setTiming(config().get("timing", {}))
       if (e.affectsConfiguration("aiPair.agentName")) editor.setAgentName(config().get("agentName", "Agent"))
       if (e.affectsConfiguration("aiPair.confirmCommands")) {
@@ -138,6 +177,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     vscode.commands.registerCommand("aiPair.endSession", () => controller.endSession()),
     vscode.commands.registerCommand("aiPair.focusReply", () => panel.focusReply()),
     vscode.commands.registerCommand("aiPair.askAboutSelection", () => panel.focusReply()),
+    vscode.commands.registerCommand("aiPair.calibrate", () => {
+      if (calibration.arm(passage())) panel.focusReply()
+      else void vscode.window.showInformationMessage("AI Pair: a calibration is already under way in the Pair panel.")
+    }),
     { dispose: () => controller.disconnect() },
     { dispose: save },
   )

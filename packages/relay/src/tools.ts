@@ -196,4 +196,13 @@ After a report says a batch was interrupted or discarded, your cursor is where i
       to_line: z.number().int().optional(),
     },
   },
+  calibrate: {
+    description:
+      "Start a reading speed calibration in the Pair panel with a passage of your own, when the programmer asks for one (`use the Rainbow Passage`). Give the passage as a FILE: fetch or write it with a command (curl, a script) into a file, then name that file here. Never put the text in this call, in a `type`, or in your reply, and never read the file back: the API blocks reproducing published text. The extension reads the file, stores the passage in the programmer's settings, and runs the calibration; playback is held while they read, so call `listen` and wait. Refused while a calibration is under way.",
+    inputSchema: {
+      title: z.string().describe("The passage's name, shown to the programmer."),
+      file: file.describe("The file holding the passage's text, relative to your working directory or absolute."),
+      notice: z.string().optional().describe("Shown with the passage, outside the timed text: a license notice, or where it is from."),
+    },
+  },
 } as const

@@ -1,7 +1,7 @@
 // The protocol state machine: sessions, the batch queue, and reports. Playing a batch is player.ts.
 // See PROTOCOL.md for the rules implemented here.
 
-import type { Action, BatchResult, Event, Excerpt, FileContent, Report, Turn } from "@ai-pair/protocol"
+import type { Action, BatchResult, Event, Excerpt, FileContent, Passage, Report, Turn } from "@ai-pair/protocol"
 import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
 import { fileDiff, lineChanges } from "./diff"
 import { LineIds, type Sighting } from "./lines"
@@ -120,6 +120,7 @@ export class Controller {
   private nextBatchId = 1
   private pauseReasons = new Set<string>()
   private speed = 1
+  private readingSpeed = 1
   private lastPosted = ""
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void
@@ -189,6 +190,7 @@ export class Controller {
         pacing: timeline,
         config: () => this.config,
         speed: () => this.speed,
+        readingSpeed: () => this.readingSpeed,
         render: () => this.render(),
         confirm: (id, command) => this.confirm(s, id, command),
         lines,
@@ -509,11 +511,18 @@ export class Controller {
   /** Removes one pause reason, or all of them. Playback continues when none are left. */
   resume(reason?: string): void {
     if (this.pauseReasons.size === 0) return
+    const lookedAway = this.pauseReasons.has("away")
     if (reason === undefined) this.pauseReasons.clear()
     else this.pauseReasons.delete(reason)
     if (this.pauseReasons.size > 0) return
     const s = this.session
     if (s) {
+      // A point the programmer looked away from is stale: a reply brings the view back to the
+      // cursor, not to it (specs/PointFocus.tla). The editor is told before the reveal targets it.
+      if (lookedAway && s.scene.focus === "point") {
+        s.scene.focus = "cursor"
+        this.render()
+      }
       if (s.scene.turn === "agent" && (s.scene.cursor || s.scene.point)) this.editor.reveal()
       s.timeline.resume()
     }
@@ -524,8 +533,28 @@ export class Controller {
     this.speed = speed
   }
 
+  setReadingSpeed(speed: number): void {
+    this.readingSpeed = speed
+  }
+
   setConfirmCommands(confirm: boolean): void {
     this.config = { ...this.config, confirmCommands: confirm }
+  }
+
+  /** A path the agent gave, against the session's root: for a file the bridge reads itself. */
+  resolveFile(file: string): string {
+    return this.resolvePath(this.requireSession(), file)
+  }
+
+  /** The extension's reading speed calibration: false while one is under way (#109, specs/Calibration.tla). */
+  onCalibrate?: (passage: Passage) => boolean
+
+  /** The agent's `calibrate` tool: a passage of its own, handed to the calibration. */
+  calibrate(passage: Passage): Report {
+    const s = this.requireSession()
+    if (!this.onCalibrate) throw new ToolError("no_editor", "This editor has no reading speed calibration.")
+    if (!this.onCalibrate(passage)) throw new ToolError("calibration_busy", "A calibration is already under way in the Pair panel.")
+    return { batches: [], events: [], turn: s.scene.turn }
   }
 
   /**
