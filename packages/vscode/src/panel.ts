@@ -11,11 +11,21 @@ const MAX_LOG = 400
 /** The commands the panel may run: the ones its intro links to. */
 const PANEL_COMMANDS: ReadonlySet<string> = new Set(["aiPair.playDemo", "aiPair.setUpAgent"])
 
+/** An agent the idle view can start a session with: whether it can right now, and how (#107). */
+export type Starter = {
+  available(): Promise<boolean>
+  start(): Promise<void>
+}
+
 export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   static readonly viewId = "aiPair.narration"
   controller?: Controller
   /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
   calibration?: Calibration
+  /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
+  starter?: Starter
+  /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
+  private asked = 0
   private view?: vscode.WebviewView
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = []
@@ -25,6 +35,19 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Everything posted so far, as the window saves it. */
   get history(): readonly PanelEvent[] {
     return this.log
+  }
+
+  /**
+   * Asks the starter whether a session can be started from here, and tells the page: for each new
+   * page, and again after Set Up Agent (specs/Start.tla, Ready and Flip with ReaskOnSetUp). Only the
+   * latest question's answer reaches the page, so a page replaced before its answer landed cannot
+   * set the button on its successor (DropStale).
+   */
+  askStart(): void {
+    const asked = ++this.asked
+    void this.starter?.available().then((value) => {
+      if (asked === this.asked) this.send({ type: "canStart", value })
+    })
   }
 
   constructor(
@@ -123,6 +146,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showSpeed(this.speed.get())
         this.showReadingSpeed(this.readingSpeed.get())
         this.showSelection(this.selection.ref())
+        this.askStart()
         return
       case "speed":
         // Only the menu's speeds: the page sends no others (#17).
@@ -173,6 +197,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return
       case "command":
         if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command)
+        return
+      case "start":
+        // specs/Start.tla, Click: one run per click.
+        void this.starter?.start()
         return
       case "openChange":
         void this.openChange(m.file)

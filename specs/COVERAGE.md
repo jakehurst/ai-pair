@@ -124,11 +124,13 @@ Code goes without a spec for one of these reasons:
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
+| | `askStart`, the `start` message | `Start` |
 | `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
 | | `setState`, `syncStatus`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look |
 | | `showCalibration` | Look |
+| | the `canStart` message, the Start a session button | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
 | `outside.ts`, `outsideWatch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals` |
@@ -136,9 +138,11 @@ Code goes without a spec for one of these reasons:
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
 | `agents.ts` | all | Pure, Glue: agents' config files; `setup.properties.test.ts` |
-| `setup.ts` | all | Glue |
+| `setup.ts` | `claudeStarter` | `Start` (`Answer`, `Click`) |
+| | the rest | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
 | | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`Stored`) |
+| | asking the panel again after Set Up Agent | `Start` (`Flip`) |
 | | the rest | Glue |
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |
 | `calibration.ts` | all | `Calibration` |

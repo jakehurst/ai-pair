@@ -37,6 +37,7 @@ const ui = {
   idleTitle: $("idle-title", HTMLElement),
   idleSummary: $("idle-summary", HTMLElement),
   idleText: $("idle-text", HTMLElement),
+  start: $("start", HTMLButtonElement),
   reply: $("reply", HTMLTextAreaElement),
   send: $("send", HTMLButtonElement),
   attach: $("attach", HTMLElement),
@@ -356,6 +357,10 @@ function handle(e: ToPanel): void {
       replaying = true
       for (const ev of e.events) handle(ev)
       replaying = false
+      return
+    case "canStart":
+      // specs/Start.tla, Answer: the button shows exactly what the extension answered.
+      ui.start.hidden = !e.value
       return
     case "session":
       if (e.active) {
@@ -680,5 +685,8 @@ document.addEventListener("click", (e) => {
   if (a?.dataset.url) vscode.postMessage({ type: "openUrl", url: a.dataset.url })
   if (a?.dataset.command) vscode.postMessage({ type: "command", command: a.dataset.command })
 })
+
+// Start a session: Claude Code opens with the prompt in its input box (#107).
+ui.start.addEventListener("click", () => vscode.postMessage({ type: "start" }))
 
 vscode.postMessage({ type: "ready" })

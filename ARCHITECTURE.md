@@ -176,9 +176,14 @@ a todos API, I'm new to Express"), or runs the server's `start` prompt (in
 Claude Code: `/mcp__pair__start`). The agent calls `start`, which returns the
 [agent guide](AGENT_GUIDE.md) along with the first report.
 
-**Later, from the editor.** Starting from the editor (type the task in the
-panel, and the extension launches the harness in the integrated terminal)
-would be a convenience on top, with a small adapter per harness. Not in v1.
+**From the panel.** With Claude Code's extension installed and set up for the
+pair server, the idle view offers **Start a session**: it runs
+`claude-vscode.editor.open` with no session id and the prompt `start pairing
+session`, which opens a Claude Code tab with the prompt in its input box,
+unsent; the programmer presses Enter (#107, `specs/Start.tla`). The command is
+read from Claude Code's bundle, not documented, so the button shows only when
+VS Code lists it, and the panel asks again after Set Up Agent. Other harnesses
+keep the text asking the programmer to ask their agent.
 
 ## Distribution
 
