@@ -10,6 +10,9 @@ cd "$root"
 echo "==> npm test"
 npm test
 
+echo "==> rm old .vsix files"
+rm -f "$root"/ai-pair-*.vsix
+
 echo "==> npm run package"
 npm run package
 
