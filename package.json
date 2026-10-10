@@ -17,7 +17,8 @@
     "typecheck": "tsc -p . && tsc -p packages/vscode/src/webview",
     "lint": "oxlint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "check:ascii": "node scripts/check-ascii.mjs"
   },
   "devDependencies": {
     "@types/node": "~22.19.0",

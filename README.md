@@ -214,6 +214,7 @@ packages/
 npm install
 npm test                  # unit and end-to-end tests
 npm run typecheck
+npm run check:ascii       # every tracked file is ASCII, apart from scripts/check-ascii.mjs's allowlist
 npm run build             # development build of the extension
 npm run test:integration  # plays a session inside a real, isolated VS Code (macOS; VSCODE_BIN for another)
 npm run test:coverage     # the unit tests, with coverage

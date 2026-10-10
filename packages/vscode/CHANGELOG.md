@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+- The panel and the editor show plain ASCII where they showed symbols: the
+  speed menus read `1.0x`, the agent's cursor label reads `Claude - running`,
+  line ranges read `12-20`, a file changed outside the editor is badged `*`,
+  and a command's outcome reads `exit 0`, `exit 1`, `stopped`, or `skipped`,
+  without a symbol in front.
+- The Pair view has an icon, shown when it's moved into a container of its own.
+
 ## 0.4.0
 
 - **Start a session** now starts Claude Code's CLI in a hidden terminal with

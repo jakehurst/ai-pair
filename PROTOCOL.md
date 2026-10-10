@@ -86,7 +86,7 @@ Concretely:
    report and then waits for the programmer.
 
 ```
-agent:      [think 1] step(1) [think 2] step(2)·····blocked·····  [think 3] step(3)····
+agent:      [think 1] step(1) [think 2] step(2).....blocked.....  [think 3] step(3)....
 playback:                     [==== batch 1 ====][==== batch 2 ====][==== batch 3 ====]
                                                   ^ step(2) returns report of batch 1
 ```
@@ -199,7 +199,7 @@ Collects the reports of all queued batches, then waits for the programmer.
 Returns when:
 
 - all batches have finished and a programmer event arrives (message, turn
-  change, …), or
+  change, ...), or
 - a batch finishes with a status other than `completed`, or
 - `MAX_BLOCK` elapses.
 
@@ -243,7 +243,7 @@ type Action =
 ```
 
 Each action is an object with exactly one of these keys. Anything else is
-rejected, including two actions in one object (`{ move: …, type: … }`): they
+rejected, including two actions in one object (`{ move: ..., type: ... }`): they
 are separate actions, played in order.
 
 `move`, `select` and `point` say where they act the same way, as a
@@ -324,7 +324,7 @@ agent selects first, which makes deletions visible before they happen.)
 
 Highlights a [span](#places), as `select` takes it, without editing it and
 without moving the agent cursor, for talking about code: "this function is
-called from two places…". The highlight persists until the next `point` or
+called from two places...". The highlight persists until the next `point` or
 the next editing action.
 
 **Point, then say.** During the agent's turn, the view follows the pointed
@@ -355,7 +355,7 @@ commands can still run in the background with the agent's native tools.
   running in its terminal.
 - **Result.** The batch's report shows each `run`: the exit code, the last
   ~12,000 characters of output as plain text, and the terminal's shell
-  (`pwsh`, `zsh`, …) so the agent can write commands for it.
+  (`pwsh`, `zsh`, ...) so the agent can write commands for it.
 - **Failure.** A nonzero exit fails the batch with `command_failed`, since the
   rest of the batch, and the next one, were planned assuming success. A `run`
   counts as played once its command has started, so it is never returned as
@@ -655,17 +655,17 @@ experience (order of work, narration, background vs. visible work) is in
 ### Normal flow
 
 ```
-→ step
+-> step
 [{ "say": "Let's add the POST handler. Signature first." },
  { "move": { "file": "src/server.ts", "line": 4, "at": "app.use(express.json());▌" } },
  { "type": "\n\napp.post('/todos', async (req, res) => {\n▌\n});" }]
-← returns immediately
+<- returns immediately
 Batch 1 is playing.
 
-→ step (blocks until batch 1 finishes)
+-> step (blocks until batch 1 finishes)
 [{ "say": "We need a title from the body." },
  { "type": "  const title = req.body.title;▌" }]
-←
+<-
 Batch 1 completed, in src/server.ts:
  1  import express from 'express';
  2
@@ -687,7 +687,7 @@ Batch 2 is playing.
 ```
 Batch 2 is playing; the agent has already submitted batch 3 and is blocked.
 The programmer replies in the narration panel: "use zod for validation".
-← step returns immediately
+<- step returns immediately
 The programmer said:
 > use zod for validation
 
@@ -701,7 +701,7 @@ Not played:
   {"say":"..."}
   {"type":"...▌"}
 
-→ step
+-> step
 [{ "select": { "text": "  const ti" } },
  { "say": "Good call. Let me define a schema instead." },
  { "delete": true }, ...]
@@ -710,10 +710,10 @@ Not played:
 ### A spot on the wrong line
 
 ```
-→ step
+-> step
 [{ "say": "Now the response." },
  { "move": { "line": 30, "at": "  return res.json(▌" } }, ...]
-← returns immediately
+<- returns immediately
 Your batch was rejected: its action 2 would fail:
   {"move":{"line":30,"at":"  return res.json(▌"}}
 not_found: The spot isn't on line 30: line 30 reads "  const todo = findTodo(id);". It's on these lines:
@@ -728,21 +728,21 @@ Nothing of it was queued. Fix it and submit the whole batch again.
 
 ```
 Programmer presses "My turn".
-← The programmer took the turn.
+<- The programmer took the turn.
 
   It's the programmer's turn: you're the navigator. ...
-→ listen
+-> listen
 ... programmer writes a loop, pauses typing ...
-← The programmer edited src/server.ts:
+<- The programmer edited src/server.ts:
   @@ -20,2 +20,4 @@
   ...
-→ read src/server.ts, from line 20: the loop is on line 21
-→ step
+-> read src/server.ts, from line 20: the loop is on line 21
+-> step
 [{ "point": { "line": 21, "text": "for (let i = 0; i <= todos.length; i++)" } },
  { "say": "Careful: `<=` will go one past the end." }]
-→ listen
+-> listen
 ... programmer fixes it, presses "Hand back" ...
-← The programmer edited src/server.ts:
+<- The programmer edited src/server.ts:
   ...
   The programmer handed the turn back to you:
   > ok, finish the handler

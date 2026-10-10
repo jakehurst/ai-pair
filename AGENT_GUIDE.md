@@ -196,13 +196,13 @@ config and markup, with `type_fast`, in every language.
   `to: "line_end"` goes to the end of the body's line, still inside the
   block. After `"f(▌)"` and `"x▌"`, the `)` is on your line, so
   `to: "line_end"` steps past it.
-- **Start new lines at the end of the line above**, `"\n  …▌"`, never at
+- **Start new lines at the end of the line above**, `"\n  ...▌"`, never at
   the start of a line with code on it: that code would slide right with every
   character you type. At the very top of a file, make an empty line first:
   `"▌\n"` at the file's start.
 - **Blank lines.** Separate definitions with one blank line, and leave one
   newline at the end of the file, no more. To add a definition after
-  another, go to the end of the one above and start with `"\n\n…"`: a
+  another, go to the end of the one above and start with `"\n\n..."`: a
   blank line, then your new line. The blank line that followed the one above
   now separates yours from the next. At the end of a file, it's the same:
   the end of the last line. A new file starts with its final newline:
