@@ -26,7 +26,7 @@ Code goes without a spec for one of these reasons:
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`Other`) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
-| `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, and a stale point: `PointFocus` |
+| `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
 | `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
 | `confirm`, `decideRun` | `RunBox` (`Decided`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
@@ -119,7 +119,7 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Save`, `Reload`) |
-| | the `draft` and `reply` messages, `onDidDispose` | `Draft` |
+| | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed` | Glue |

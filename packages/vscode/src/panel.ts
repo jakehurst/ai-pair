@@ -157,9 +157,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (SPEEDS.includes(m.value)) this.readingSpeed.set(m.value)
         return
       case "reply":
-        // Replying means "go on with this", so any pause ends.
+        // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
+        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125).
         if (this.calibration?.reply(m.text)) return
-        c?.resume()
+        c?.resume(undefined, { reveal: false })
         c?.userMessage(m.text, m.attach ? this.selection.current() : undefined)
         return
       case "draft":

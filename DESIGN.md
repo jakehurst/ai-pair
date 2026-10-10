@@ -109,7 +109,9 @@ Behavior:
   start talking. Clearing it resumes. Sending the reply delivers a `message`
   event (which interrupts) and ends any pause, so the agent's answer plays
   right away. (Pausing on focus alone would leave playback paused after
-  sending, while the box still has focus.)
+  sending, while the box still has focus.) The reply moves no view: a file the
+  programmer closed stays closed, and the tab they switched to stays in front, with the selection
+  they made (#125).
 - With text in the reply box, "Hand back" hands back the turn with it as the
   message.
 - **Sharing a selection.** While the programmer has code selected in the
@@ -229,7 +231,8 @@ During the agent's turn:
   editor or scrolls what the view follows out of view. Scrolling caused by
   follow mode itself is ignored.
 - **Resume always brings the view back** to what it follows first, then
-  playback continues.
+  playback continues. A reply ends the pause too, but leaves the view where the programmer
+  put it (#125); the agent's next edit shows its file.
 
 ### Saving
 

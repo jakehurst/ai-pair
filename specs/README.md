@@ -45,7 +45,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
-| `PointFocus.cfg` | a point, a look-away, 2 replies, `DropStaleFocus = TRUE` | holds | 29 |
+| `PointFocus.cfg` | a point, a look-away, a closed tab, 2 replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
@@ -202,15 +202,33 @@ The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, t
 | `Cancel` | any other reply, the view disposed, the session ending |
 | `SayStart` | the reading time computed in the player from the timing in force at that moment |
 
-### `PointFocus`: a stale point on a reply
+### `PointFocus`: the view on a reply and on Resume
 
-`resume` in `packages/core/src/controller.ts`, with the scene's `focus` from `player.ts` and the away pause from `editor.ts`. Found while working on #109: the view followed a point until the next cursor action, so a reply after the programmer had looked away revealed a point from long ago, reopening a file they had closed. `DropStaleFocus` switches the fix; with `FALSE`, TLC violates `NoStaleReveal` in three steps: `Point`, `LookAway`, `Reply`.
+`resume` in `packages/core/src/controller.ts` and the `reply` message in `packages/vscode/src/panel.ts`, with the scene's `focus` from `player.ts` and the away pause from `editor.ts`. Found while working on #109: the view followed a point until the next cursor action, so a reveal after the programmer had looked away brought back a point from long ago, reopening a file they had closed. `DropStaleFocus` switches that fix; with `FALSE`, TLC violates `NoStaleReveal` in three steps: `Point`, `LookAway`, `Resume`. Issue #125: every typed reply revealed the target, since typing a draft pauses playback and a reply lifts the pause, so a reply reopened a file the programmer had closed or took them off the one they had switched to. `RevealOnReply` switches that fix; with `TRUE`, TLC violates `ReplyKeepsView` in two steps: `LookAway`, `Reply`.
 
 | Spec | Code |
 |---|---|
-| `Point`, `CursorAction` | a `point` action setting the focus; the next cursor action taking it back |
+| `Point`, `CursorAction` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `editor.show` before each edit) |
 | `LookAway` | `onActiveEditor` away from the target: `pause("away")` |
-| `Reply` | `resume()` with no reason: with an away pause among the reasons and the focus on a point, the focus returns to the cursor and the editor is rendered before `reveal` |
+| `CloseTab` | the programmer closing the target's tab, or every tab: `onActiveEditor(undefined)` returns early, so nothing pauses |
+| `Reply` | the panel's `reply`: `resume(undefined, { reveal: false })`, then `userMessage`; a stale point is dropped, and nothing is revealed |
+| `Resume` | the Resume button: `resume()`: with an away pause among the reasons and the focus on a point, the focus returns to the cursor and the editor is rendered before `reveal` |
+
+Each invariant was proved to bite with a mutation of a copy of the model; each mutation failed on the invariant named and no other:
+
+| Mutation | Breaks |
+|---|---|
+| `RevealOnReply = TRUE` | `ReplyKeepsView` |
+| `DropStaleFocus = FALSE` | `NoStaleReveal` |
+| `CursorAction` leaves the active editor | `CursorShown` |
+
+Every invariant names the test that proves the code obeys it; the test's title carries the invariant's name:
+
+| Invariant | Proved by |
+|---|---|
+| `NoStaleReveal` | `controller.test.ts`: NoStaleReveal: Resume after a look-away reveals the cursor, not a point the programmer looked away from (#109) |
+| `ReplyKeepsView` | `controller.test.ts`: ReplyKeepsView: a reply resumes playback without revealing, after a look-away or with every tab closed (#125) |
+| `CursorShown` | `controller.test.ts`: CursorShown: the agent's next edit after a reply shows its file again (#125) |
 
 ### `Start`: the Start a session button
 

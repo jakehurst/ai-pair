@@ -656,7 +656,7 @@ describe("pointing", () => {
     expect(editor.text("a.ts")).toBe("ax\n")
   })
 
-  it("brings a reply back to the cursor, not to a point the programmer looked away from", async () => {
+  it("NoStaleReveal: Resume after a look-away reveals the cursor, not a point the programmer looked away from (#109)", async () => {
     const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -669,6 +669,39 @@ describe("pointing", () => {
     controller.resume()
     expect(editor.revealedFocus).toBe("cursor")
     expect(editor.focus).toBe("cursor")
+  })
+
+  it("ReplyKeepsView: a reply resumes playback without revealing, after a look-away or with every tab closed (#125)", async () => {
+    const { editor, controller } = setup({ "a.ts": "a\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }]))
+    await until(controller.step([]))
+    controller.pause("away")
+    controller.pause("reply")
+    controller.resume(undefined, { reveal: false })
+    expect(controller.isPaused).toBe(false)
+    controller.pause("reply")
+    controller.resume(undefined, { reveal: false })
+    expect(controller.isPaused).toBe(false)
+    expect(editor.reveals).toBe(0)
+  })
+
+  it("CursorShown: the agent's next edit after a reply shows its file again (#125)", async () => {
+    const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }]))
+    await until(controller.step([]))
+    // The programmer switches to b.ts: the fake's last shown file is the active editor.
+    editor.shown.push(editor.resolvePath("b.ts"))
+    controller.pause("reply")
+    controller.resume(undefined, { reveal: false })
+    expect(editor.shown.at(-1)).toBe(editor.resolvePath("b.ts"))
+    await until(controller.step([{ type: `!${CURSOR_MARKER}` }]))
+    await until(controller.step([]))
+    expect(editor.reveals).toBe(0)
+    expect(editor.shown.at(-1)).toBe(editor.resolvePath("a.ts"))
   })
 
   it("leaves the view alone during the programmer's turn", async () => {

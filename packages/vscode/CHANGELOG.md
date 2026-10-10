@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Sending a reply no longer moves the editor: a file you closed stays closed, and the tab you
+  switched to stays in front, with the selection you made. The agent's next edit still shows its
+  file, and **Resume** still brings you back to the agent's cursor.
+
 ## 0.4.1
 
 - The panel and the editor show plain ASCII where they showed symbols: the
