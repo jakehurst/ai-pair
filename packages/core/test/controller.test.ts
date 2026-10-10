@@ -1906,3 +1906,50 @@ describe("changes by others, while batches are queued", () => {
     expect([...first.batches, ...rest.batches].map((b) => b.status)).toEqual(["interrupted", "discarded"])
   })
 })
+
+describe("listen grace (specs/ListenGrace.tla)", () => {
+  const MAX_BLOCK_MS = 1000
+  const GRACE_MS = 5000
+
+  async function timedOut() {
+    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS })
+    await controller.start()
+    const report = await until(controller.listen())
+    expect(report).toMatchObject({ waiting: true, batches: [], events: [] })
+    return { editor, controller }
+  }
+
+  it("NoFlicker: keeps listening after a listen times out with nothing to report", async () => {
+    const { editor } = await timedOut()
+    expect(editor.state).toBe("listening")
+    await advance(GRACE_MS / 2)
+    expect(editor.state).toBe("listening")
+  })
+
+  it("GraceEnds: shows thinking once the grace runs out without a call", async () => {
+    const { editor } = await timedOut()
+    await advance(GRACE_MS)
+    expect(editor.state).toBe("thinking")
+  })
+
+  it("NoFalseYourMove: shows thinking when a listen times out with a batch to report", async () => {
+    const { editor, controller } = setup({ "a.ts": "" }, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS })
+    await controller.start()
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
+    const report = await until(controller.listen())
+    expect(report).toMatchObject({ waiting: true, batches: [{ id: 1, status: "completed" }] })
+    expect(editor.state).toBe("thinking")
+  })
+
+  it("NoYourMoveAfterAct: shows thinking when the programmer sends a message during the grace", async () => {
+    const { editor, controller } = await timedOut()
+    controller.userMessage("hi")
+    expect(editor.state).toBe("thinking")
+  })
+
+  it("NoYourMoveInOtherCall: shows thinking after a step during the grace", async () => {
+    const { editor, controller } = await timedOut()
+    await until(controller.step([]))
+    expect(editor.state).toBe("thinking")
+  })
+})

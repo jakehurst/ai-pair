@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3
+
+- The status no longer flashes "Agent is thinking" every 45 seconds while the agent is only
+  waiting for you. It stays "Your move" between the agent's waits, and changes as soon as you
+  do something or the agent starts working.
+
 ## 0.4.2
 
 - Sending a reply no longer moves the editor: a file you closed stays closed, and the tab you

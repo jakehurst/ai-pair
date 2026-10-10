@@ -47,6 +47,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, 2 replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
+| `ListenGrace.cfg` | unbounded, `Grace = TRUE` | holds | 12 |
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
@@ -389,6 +390,39 @@ The feature of #25, specified before its code: `disconnect`, `start`, `resumeSes
 | `Edit` | `userEdit` in the programmer's turn: `recordEdit`, `navigatorReady = false`, the timer started again |
 | `Pause`, `Fire` | `navigatorIdleMs` without an edit; the timer setting `navigatorReady` and calling `pump()` |
 | `Listen`, `Return`, `Timeout` | `listen`; `ready` holding, and `snapshot` clearing `navigatorReady`; `maxBlockMs` |
+
+### `ListenGrace`: "Your move" between two idle listens
+
+`state`, `finishCall`, `block`, and `close` in `packages/core/src/controller.ts`. Issue #126: a `listen` that times out at `maxBlockMs` with nothing to report leaves no call open until the agent's next `listen`, a few seconds later, and the status showed "Agent is thinking" in that gap. `Grace` is the fix: such a timeout keeps the status "listening" for `listenGraceMs`, until the agent's next call, or until the programmer does something that wakes a `listen`. The grace changes only the status, not when a call returns or what a report holds, so no other spec changes. `Scroll` reads the status only through `FOLLOWING` in `editor.ts`, which holds both "thinking" and "listening".
+
+| Spec | Code |
+|---|---|
+| `Status` | `state()` with the queue empty |
+| `Call` | `block()` ending the grace with `endGrace` as the call opens; `close` too |
+| `TimeOut` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
+| `Return` | `finishCall` with anything else |
+| `Act` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
+| `Expire` | the grace timer firing after `listenGraceMs` |
+
+Each property was proved to bite with a mutation of a copy of the model:
+
+| Mutation | Breaks |
+|---|---|
+| `Grace = FALSE`, the code before | `NoFlicker` |
+| `Status` ignores `pending` | `NoYourMoveAfterAct` |
+| `Return` starts the grace too | `NoFalseYourMove` |
+| `Expire` leaves the grace set | `GraceEnds` |
+| `Call` leaves the grace set | `NoYourMoveInOtherCall` |
+
+Every property names the test that proves the code obeys it:
+
+| Property | Proved by |
+|---|---|
+| `NoFlicker` | `controller.test.ts`: NoFlicker: keeps listening after a listen times out with nothing to report |
+| `GraceEnds` | `controller.test.ts`: GraceEnds: shows thinking once the grace runs out without a call |
+| `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove: shows thinking when a listen times out with a batch to report |
+| `NoYourMoveAfterAct` | `controller.test.ts`: NoYourMoveAfterAct: shows thinking when the programmer sends a message during the grace |
+| `NoYourMoveInOtherCall` | `controller.test.ts`: NoYourMoveInOtherCall: shows thinking after a step during the grace |
 
 ### `EditEvents`: an edit undone, in the report
 

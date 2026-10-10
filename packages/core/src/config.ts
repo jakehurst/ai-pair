@@ -7,6 +7,8 @@ export type Config = {
   maxBlockMs: number
   /** During the programmer's turn, how long after their last edit `listen` returns. */
   navigatorIdleMs: number
+  /** After a `listen` that timed out with nothing to report, how long the status stays "Your move" (#126). */
+  listenGraceMs: number
   timing: Timing
   random: () => number
   /** Ask the programmer before each `run`. */
@@ -19,6 +21,7 @@ export type Config = {
 export const defaultConfig: Config = {
   maxBlockMs: 45_000,
   navigatorIdleMs: 3000,
+  listenGraceMs: 10_000,
   timing: defaultTiming,
   random: Math.random,
   confirmCommands: true,
