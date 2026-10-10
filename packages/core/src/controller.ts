@@ -508,8 +508,12 @@ export class Controller {
     this.render()
   }
 
-  /** Removes one pause reason, or all of them. Playback continues when none are left. */
-  resume(reason?: string): void {
+  /**
+   * Removes one pause reason, or all of them. Playback continues when none are left. `reveal`: bring
+   * the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
+   * `Reply`, issue 125).
+   */
+  resume(reason?: string, { reveal = true }: { reveal?: boolean } = {}): void {
     if (this.pauseReasons.size === 0) return
     const lookedAway = this.pauseReasons.has("away")
     if (reason === undefined) this.pauseReasons.clear()
@@ -517,13 +521,13 @@ export class Controller {
     if (this.pauseReasons.size > 0) return
     const s = this.session
     if (s) {
-      // A point the programmer looked away from is stale: a reply brings the view back to the
-      // cursor, not to it (specs/PointFocus.tla). The editor is told before the reveal targets it.
+      // A point the programmer looked away from is stale: from now on the view follows the cursor,
+      // not it (specs/PointFocus.tla). The editor is told before a reveal targets it.
       if (lookedAway && s.scene.focus === "point") {
         s.scene.focus = "cursor"
         this.render()
       }
-      if (s.scene.turn === "agent" && (s.scene.cursor || s.scene.point)) this.editor.reveal()
+      if (reveal && s.scene.turn === "agent" && (s.scene.cursor || s.scene.point)) this.editor.reveal()
       s.timeline.resume()
     }
     this.render()
