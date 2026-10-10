@@ -1,7 +1,8 @@
 // How reports read. These check what a report says, not its exact layout, so the wording can keep improving.
 
 import { describe, expect, it } from "vitest"
-import type { Report } from "@ai-pair/protocol"
+import { CURSOR_MARKER, type Report } from "@ai-pair/protocol"
+import { ELLIPSIS } from "@ai-pair/core/constants"
 import { renderFile, renderReport } from "../src/render"
 
 const report = (r: Partial<Report>): Report => ({ batches: [], events: [], turn: "agent", ...r })
@@ -15,7 +16,7 @@ describe("reports", () => {
           {
             id: 5,
             status: "completed",
-            code: { file: "src/server.ts", lines: [{ number: 12, text: "  const todo = createTodo();▌" }] },
+            code: { file: "src/server.ts", lines: [{ number: 12, text: `  const todo = createTodo();${CURSOR_MARKER}` }] },
           },
         ],
         submitted: { id: 6, status: "playing" },
@@ -24,7 +25,7 @@ describe("reports", () => {
     )
     expect(text).toMatch(/Batch 5 completed/)
     expect(text).toMatch(/src\/server\.ts/)
-    expect(text).toMatch(/12 +  const todo = createTodo\(\);▌/)
+    expect(text).toMatch(new RegExp(`12 +  const todo = createTodo\\(\\);${CURSOR_MARKER}`))
     expect(text).toMatch(/Batch 6 is playing/)
   })
 
@@ -33,17 +34,17 @@ describe("reports", () => {
       report({
         rejected: {
           index: 3,
-          action: { move: { line: 2, at: "x▌" } },
+          action: { move: { line: 2, at: `x${CURSOR_MARKER}` } },
           error: { kind: "ambiguous", message: "2 matches", candidates: [{ line: 1, context: "x" }] },
-          code: { file: "a.ts", lines: [{ number: 3, text: "y▌" }] },
+          code: { file: "a.ts", lines: [{ number: 3, text: `y${CURSOR_MARKER}` }] },
         },
       }),
       "step",
     )
     expect(text).toMatch(/rejected/)
-    expect(text).toMatch(/action 3 would fail:\n  \{"move":\{"line":2,"at":"x▌"\}\}/)
+    expect(text).toMatch(new RegExp(`action 3 would fail:\\n  \\{"move":\\{"line":2,"at":"x${CURSOR_MARKER}"\\}\\}`))
     expect(text).toMatch(/ambiguous: 2 matches\n  line 1: x/)
-    expect(text).toMatch(/a\.ts:\n3  y▌/)
+    expect(text).toMatch(new RegExp(`a\\.ts:\\n3  y${CURSOR_MARKER}`))
     expect(text).toMatch(/submit the whole batch again/)
   })
 
@@ -63,7 +64,7 @@ describe("reports", () => {
 
   it("says where code reaches the end of the file, and when no newline ends it", () => {
     const ending = renderReport(report({ batches: [{ id: 1, status: "completed", code: code(true) }] }), "step")
-    expect(ending).toMatch(/9  }▌\n   \(end of file\)$/)
+    expect(ending).toMatch(new RegExp(`9  }${CURSOR_MARKER}\\n   \\(end of file\\)$`))
     const missing = renderReport(report({ batches: [{ id: 1, status: "completed", code: code(false) }] }), "step")
     expect(missing).toMatch(/\(end of file, with no newline after the last line\)$/)
   })
@@ -71,7 +72,7 @@ describe("reports", () => {
   it("shows gaps in long code", () => {
     const lines = [1, 2, 58, 59].map((number) => ({ number, text: `line ${number}` }))
     const text = renderReport(report({ batches: [{ id: 1, status: "completed", code: { file: "a.ts", lines } }] }), "step")
-    expect(text).toMatch(/line 2\n.*…\n.*line 58/)
+    expect(/line 2\n(.*)\n.*line 58/.exec(text)?.[1]?.trim()).toBe(ELLIPSIS)
   })
 
   it("puts what the programmer did first, and lists unplayed actions ready to resubmit", () => {
@@ -82,8 +83,8 @@ describe("reports", () => {
           {
             id: 6,
             status: "interrupted",
-            code: { file: "a.ts", lines: [{ number: 3, text: "  res.sta▌" }] },
-            unplayed: [{ type: "tus(▌)" }],
+            code: { file: "a.ts", lines: [{ number: 3, text: `  res.sta${CURSOR_MARKER}` }] },
+            unplayed: [{ type: `tus(${CURSOR_MARKER})` }],
           },
           { id: 7, status: "discarded", unplayed: [{ say: "Next." }] },
         ],
@@ -93,7 +94,7 @@ describe("reports", () => {
     expect(text.indexOf("use zod")).toBeLessThan(text.indexOf("Batch 6"))
     expect(text).toMatch(/> please/)
     expect(text).toMatch(/Batch 6 interrupted/)
-    expect(text).toContain(JSON.stringify({ type: "tus(▌)" }))
+    expect(text).toContain(JSON.stringify({ type: `tus(${CURSOR_MARKER})` }))
     expect(text).toMatch(/Batch 7 discarded/)
     expect(text).toContain(JSON.stringify({ say: "Next." }))
   })
@@ -113,7 +114,7 @@ describe("reports", () => {
                 { line: 31, context: "x = 2" },
               ],
             },
-            unplayed: [{ move: { line: 2, at: "x▌" } }],
+            unplayed: [{ move: { line: 2, at: `x${CURSOR_MARKER}` } }],
           },
         ],
       }),

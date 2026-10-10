@@ -93,7 +93,7 @@ type Block = {
 }
 
 type Session = {
-  …existing…
+  ...existing...
   /** The block being built by the playing and queued batches. */
   block: Block
   /** Set while a block is on the table. Playback holds. */
@@ -113,7 +113,7 @@ after a batch completes, it calls `startHead(s)` and loops. Add one check:
 
 ```ts
 batch.state = "done"
-…
+...
 if (result.status === "completed") this.extendBlock(s, batch, result)
 if (result.status === "completed" && !batch.continues && this.config.gate) {
   this.openGate(s)
@@ -183,13 +183,13 @@ decideBlock(id: number, decision: "accept" | "reject", reason?: string): void {
   s.gate = undefined
   if (decision === "accept") {
     for (const [file, span] of b.spans) this.lock(s, file, span.range, b.id, span.before)
-    s.record.push({ …b, decision: "accept", at: Date.now() })
+    s.record.push({ ...b, decision: "accept", at: Date.now() })
     s.events.push({ kind: "block", id, decision: "accept" })
     this.panel.post({ type: "block", id, phase: "accepted" })
     this.kick(s)                          // queued batches resume
   } else {
     void this.revert(s, b).then(() => {
-      s.record.push({ …b, decision: "reject", reason, at: Date.now() })
+      s.record.push({ ...b, decision: "reject", reason, at: Date.now() })
       s.events.push({ kind: "block", id, decision: "reject", reason })
       this.panel.post({ type: "block", id, phase: "rejected" })
       this.interrupt(s)                   // existing: discards what was queued
@@ -347,7 +347,7 @@ unlockBlock(id: number): void {
   const locks = this.removeLocks(s, id)
   s.gate = { id, batches: [], spans: locks, argument: undefined, amended: false }
   s.events.push({ kind: "block", id, decision: "unlock" })
-  this.panel.post({ type: "block", id, phase: "open", … })
+  this.panel.post({ type: "block", id, phase: "open", ... })
   this.update()
 }
 ```

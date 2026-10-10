@@ -37,7 +37,7 @@ The first release.
   takes it into account. Select some code to ask about it.
 - **My turn** lets you write a part yourself while the agent navigates.
 - The agent's commands play in an *AI Pair* terminal, after you allow them.
-- The speed menu sets the pace, from 0.4× to 3.0×.
+- The speed menu sets the pace, from 0.4x to 3.0x.
 - **AI Pair: Set Up Agent** connects Claude Code, Codex, OpenCode, Gemini CLI
   and Cursor. GitHub Copilot needs no setup.
 - **AI Pair: Play Demo Session** shows what it's like without an agent.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { CURSOR_MARKER } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot } from "../src/places"
 import { applyChange } from "../src/lines"
 import { planTyping, readingTime } from "../src/typing"
@@ -7,10 +8,16 @@ import { samePath, withinFolder, type PathStyle } from "../src/paths"
 import { displayPath } from "../src/player"
 import { FakeEditor } from "./fake"
 
+// Terminal output as VS Code's shell integration reports it: OSC 633 marks, and ANSI colors.
+const COMMAND_OUTPUT_START = "\x1b]633;C\x07"
+const COMMAND_FINISHED_OK = "\x1b]633;D;0\x07"
+const GREEN = "\x1b[32m"
+const RESET_COLOR = "\x1b[0m"
+
 describe("terminal text", () => {
   it("drops colors and shell integration sequences, and resolves progress overwrites", () => {
-    const raw = "\x1b]633;C\x07\x1b[32m✓\x1b[0m 4 passed\r\n 10%\r 50%\r100%\r\n\x1b]633;D;0\x07"
-    expect(terminalText(raw)).toBe("✓ 4 passed\n100%")
+    const raw = `${COMMAND_OUTPUT_START}${GREEN}ok${RESET_COLOR} 4 passed\r\n 10%\r 50%\r100%\r\n${COMMAND_FINISHED_OK}`
+    expect(terminalText(raw)).toBe("ok 4 passed\n100%")
   })
 })
 
@@ -87,20 +94,20 @@ describe("places", () => {
   })
 
   it("ignores the cursor marker in a span, so code can be copied from a report", () => {
-    expect(resolveSpan(text, { line: 2, text: "b =▌ 1" })).toEqual({ ok: true, range: { start: 6, end: 11 } })
+    expect(resolveSpan(text, { line: 2, text: `b =${CURSOR_MARKER} 1` })).toEqual({ ok: true, range: { start: 6, end: 11 } })
   })
 
   it("resolves a spot between two texts that occur together, on its line only", () => {
-    expect(resolveSpot(text, { at: "b = ▌1", line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } })
-    expect(resolveSpot(text, { at: "▌c", line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } })
-    expect(resolveSpot(text, { at: " = ▌1", line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } })
-    expect(resolveSpot(text, { at: "b▌ = ", line: 3 })).toMatchObject({
+    expect(resolveSpot(text, { at: `b = ${CURSOR_MARKER}1`, line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } })
+    expect(resolveSpot(text, { at: `${CURSOR_MARKER}c`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } })
+    expect(resolveSpot(text, { at: ` = ${CURSOR_MARKER}1`, line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } })
+    expect(resolveSpot(text, { at: `b${CURSOR_MARKER} = `, line: 3 })).toMatchObject({
       ok: false,
       kind: "not_found",
       candidates: [{ line: 2, context: "b = 1" }],
     })
     // The line is the one the spot is on, after a `before` that ends with a newline.
-    expect(resolveSpot(text, { at: "b = 1\n▌", line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } })
+    expect(resolveSpot(text, { at: `b = 1\n${CURSOR_MARKER}`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } })
   })
 })
 

@@ -1,7 +1,17 @@
 // The MCP tool definitions: schemas and the descriptions the agent reads at the point of use.
 
 import { z } from "zod"
-import { ACTION_KINDS, actionKinds, moveProblem, spanProblem, typeProblem, type MoveTarget, type SpanTarget } from "@ai-pair/protocol"
+import {
+  ACTION_KINDS,
+  actionKinds,
+  CURSOR_MARKER,
+  moveProblem,
+  spanProblem,
+  typeProblem,
+  type MoveTarget,
+  type SpanTarget,
+} from "@ai-pair/protocol"
+import { ELLIPSIS } from "@ai-pair/core/constants"
 
 const file = z.string().describe("Path relative to your working directory, or absolute.")
 const line = z
@@ -35,7 +45,7 @@ const Span = z
     if (problem) ctx.addIssue({ code: "custom", message: problem })
   })
 
-/** The text to type, with ▌ where the cursor ends. */
+/** The text to type, with `CURSOR_MARKER` where the cursor ends. */
 const typeText = z.string({ error: (issue) => typeProblem(issue.input) }).superRefine((text, ctx) => {
   const problem = typeProblem(text)
   if (problem) ctx.addIssue({ code: "custom", message: problem })
@@ -64,7 +74,7 @@ const Action = z.union(
               .string()
               .optional()
               .describe(
-                'A spot: the exact text around it, with ▌ where your cursor goes, e.g. `"import { ▌type Context"` for right before `type Context`. May span lines. Enough text to fit only one place on the line.',
+                `A spot: the exact text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`"import { ${CURSOR_MARKER}type Context"\` for right before \`type Context\`. May span lines. Enough text to fit only one place on the line.`,
               ),
             to: z
               .enum(["line_end"])
@@ -82,7 +92,7 @@ const Action = z.union(
           if (problem) ctx.addIssue({ code: "custom", message: problem })
         })
         .describe(
-          'Move your cursor to a spot, `at`: the text around it with ▌ where your cursor goes (`line: 3, at: "import { ▌type Context"` lands right before `type Context`), or to the end of the line with `to: "line_end"`. On `line`, exactly: a spot that isn\'t on it is rejected. Without `line`, on your cursor\'s line: that\'s how you step past a close you just typed on your line, e.g. `{ to: "line_end" }`.',
+          `Move your cursor to a spot, \`at\`: the text around it with ${CURSOR_MARKER} where your cursor goes (\`line: 3, at: "import { ${CURSOR_MARKER}type Context"\` lands right before \`type Context\`), or to the end of the line with \`to: "line_end"\`. On \`line\`, exactly: a spot that isn't on it is rejected. Without \`line\`, on your cursor's line: that's how you step past a close you just typed on your line, e.g. \`{ to: "line_end" }\`.`,
         ),
     }),
     action({
@@ -92,7 +102,7 @@ const Action = z.union(
     }),
     action({
       type: typeText.describe(
-        'The text, with ▌ where your cursor ends: all of it is typed at a human pace, then your cursor steps back to the ▌. Replaces the selection if there is one. Inserted literally: include newlines and indentation yourself; nothing is auto-closed. The default for anything the programmer should read. The programmer watches every keystroke, and every second they see an unclosed bracket, parenthesis, quote or block is a second of suffering for them, so close each one the moment you open it, always, however short: `"f(▌)"` then `"x▌"`, never `"f(x)▌"`. Type left to right, except that whatever has a close gets its close first: when the text before ▌ opens a bracket, a quote or a block (however the language spells it: `{`, `begin`, `then`, `do`, a tag, a block comment), what\'s after ▌ is its close and nothing more. Fill it, step past its close (a `move` to the end of its line, or to a spot right after it; `to: "line_end"` is only the end of your cursor\'s line, so it doesn\'t step past a block\'s close on the line below), and type what follows there: `"if (▌)"`, `"x < 0▌"`, `to: "line_end"`, `" {\\n    ▌\\n  }"`, then the body; `"(▌)"`, `"x + y▌"`, `to: "line_end"`, `" * SCALE;▌"`. Nothing follows ▌ when the text opens nothing. Start new lines at the end of the line above, never where code follows on the line: it would slide right as you type. Separate definitions with one blank line, `"\\n\\n…"` at the end of the one above, and leave one newline at the end of the file.',
+        `The text, with ${CURSOR_MARKER} where your cursor ends: all of it is typed at a human pace, then your cursor steps back to the ${CURSOR_MARKER}. Replaces the selection if there is one. Inserted literally: include newlines and indentation yourself; nothing is auto-closed. The default for anything the programmer should read. The programmer watches every keystroke, and every second they see an unclosed bracket, parenthesis, quote or block is a second of suffering for them, so close each one the moment you open it, always, however short: \`"f(${CURSOR_MARKER})"\` then \`"x${CURSOR_MARKER}"\`, never \`"f(x)${CURSOR_MARKER}"\`. Type left to right, except that whatever has a close gets its close first: when the text before ${CURSOR_MARKER} opens a bracket, a quote or a block (however the language spells it: \`{\`, \`begin\`, \`then\`, \`do\`, a tag, a block comment), what's after ${CURSOR_MARKER} is its close and nothing more. Fill it, step past its close (a \`move\` to the end of its line, or to a spot right after it; \`to: "line_end"\` is only the end of your cursor's line, so it doesn't step past a block's close on the line below), and type what follows there: \`"if (${CURSOR_MARKER})"\`, \`"x < 0${CURSOR_MARKER}"\`, \`to: "line_end"\`, \`" {\\n    ${CURSOR_MARKER}\\n  }"\`, then the body; \`"(${CURSOR_MARKER})"\`, \`"x + y${CURSOR_MARKER}"\`, \`to: "line_end"\`, \`" * SCALE;${CURSOR_MARKER}"\`. Nothing follows ${CURSOR_MARKER} when the text opens nothing. Start new lines at the end of the line above, never where code follows on the line: it would slide right as you type. Separate definitions with one blank line, \`"\\n\\n${ELLIPSIS}"\` at the end of the one above, and leave one newline at the end of the file.`,
       ),
     }),
     action({
@@ -166,7 +176,7 @@ Pipelined: the call queues the batch and returns once the PREVIOUS batch has fin
 
 A batch that would fail, e.g. on text that isn't on its line, is rejected at once: nothing of it is queued, and the report says which action and why. Fix it and submit the whole batch again.
 
-Read every report. It shows each finished batch's code as it now reads, with your cursor marked \`▌\`: check it's what you meant. If a batch was interrupted or failed, or the programmer said or did something, your later batches were discarded; what didn't play is listed, ready to resubmit, starting with what's left of an interrupted action. Take what happened into account and re-plan.
+Read every report. It shows each finished batch's code as it now reads, with your cursor marked \`${CURSOR_MARKER}\`: check it's what you meant. If a batch was interrupted or failed, or the programmer said or did something, your later batches were discarded; what didn't play is listed, ready to resubmit, starting with what's left of an interrupted action. Take what happened into account and re-plan.
 
 An empty batch waits for your queued batches without waiting for the programmer.
 

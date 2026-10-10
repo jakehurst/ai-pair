@@ -1,5 +1,5 @@
 // Draws the extension's icon, the agent's cursor and label as they look in the editor, typing
-// inside a pair of parens, and writes it as media/icon.svg and a 256×256 media/icon.png.
+// inside a pair of parens, and writes it as media/icon.svg and a 256x256 media/icon.png.
 //
 // Run from packages/vscode: swift scripts/icon.swift
 
@@ -8,7 +8,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-// In a 128×128 box, y down, like the SVG.
+// In a 128x128 box, y down, like the SVG.
 struct Box { let x, y, w, h, r: CGFloat; let fill: String }
 struct Text { let text: String; let x, baseline, size: CGFloat; let bold, centered: Bool; let fill: String }
 

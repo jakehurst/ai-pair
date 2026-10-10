@@ -141,7 +141,7 @@ EndSession ==
     /\ bs' = Interrupted(bs) /\ stale' = TRUE
     /\ UNCHANGED <<ev, dB, dE, call, callBatch, cancelled, cancels, rejected, returned, held, told, closed, quiet, kept>>
 
-\* finishCall → snapshot; with the session ended, close() too, once no rejection is held (DrainHeld).
+\* finishCall -> snapshot; with the session ended, close() too, once no rejection is held (DrainHeld).
 Commit ==
     /\ call = "blocked"
     /\ \E h \in IF held = {} THEN {[b |-> 0, repeat |-> FALSE]} ELSE held :

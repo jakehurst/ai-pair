@@ -4,6 +4,7 @@
 
 import { expect, it } from "vitest"
 import type { Window } from "happy-dom"
+import { SPEED_SUFFIX } from "@ai-pair/core/constants"
 import { panelHtml, SPEEDS } from "../src/panelHtml"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
@@ -23,7 +24,7 @@ it("loads its script from the file it is given, with the page's nonce, and has n
 
 it("offers the speeds with one decimal, so they line up", () => {
   const html = panelHtml("vscode-resource:", "panel.js")
-  for (const s of SPEEDS) expect(html).toContain(`data-speed="${s}">${s.toFixed(1)}×</button>`)
+  for (const s of SPEEDS) expect(html).toContain(`data-speed="${s}">${s.toFixed(1)}${SPEED_SUFFIX}</button>`)
 })
 
 it("offers the same speeds for reading, in a menu of its own", () => {

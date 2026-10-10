@@ -4,6 +4,7 @@
 // then the reply box; below the band, the history, newest first.
 
 import { randomBytes } from "node:crypto"
+import { ELLIPSIS, SPEED_SUFFIX } from "@ai-pair/core/constants"
 
 /** Speeds offered in the panel's menu. The `aiPair.speed` setting takes any value in its range. */
 export const SPEEDS = [0.4, 0.6, 1, 1.5, 2, 3]
@@ -32,7 +33,9 @@ const ICONS = {
 /** `scriptUri`: dist/panel.js, built from webview/panel.ts, as the webview loads it. */
 export function panelHtml(cspSource: string, scriptUri: string): string {
   const nonce = randomBytes(16).toString("base64")
-  const speeds = SPEEDS.map((s) => `<button role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}×</button>`).join("")
+  const speeds = SPEEDS.map(
+    (s) => `<button role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}${SPEED_SUFFIX}</button>`,
+  ).join("")
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -259,11 +262,11 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
           <button id="interrupt" class="quiet" aria-label="Interrupt" data-tip="Interrupt">${ICONS.stop}</button>
           <button id="turn" class="quiet" aria-label="My turn" data-tip="Take the turn: you drive, the agent navigates">${ICONS.swap}<span id="turn-label">My turn</span></button>
           <div id="speed-wrap" class="speed-wrap">
-            <button id="speed" class="quiet speed" aria-haspopup="menu" aria-expanded="false" data-tip="Playback speed">1.0×</button>
+            <button id="speed" class="quiet speed" aria-haspopup="menu" aria-expanded="false" data-tip="Playback speed">1.0${SPEED_SUFFIX}</button>
             <div id="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>${speeds}</div>
           </div>
           <div id="reading-wrap" class="speed-wrap">
-            <button id="reading-speed" class="quiet speed" aria-haspopup="menu" aria-expanded="false" data-tip="Reading speed: the pause after each message">read 1.0&times;</button>
+            <button id="reading-speed" class="quiet speed" aria-haspopup="menu" aria-expanded="false" data-tip="Reading speed: the pause after each message">read 1.0${SPEED_SUFFIX}</button>
             <div id="reading-menu" class="speed-menu" role="menu" aria-label="Reading speed" hidden>${speeds}</div>
           </div>
           <button id="end" class="quiet" aria-label="End the session" data-tip="End the session">${ICONS.exit}</button>
@@ -292,9 +295,9 @@ export function panelHtml(cspSource: string, scriptUri: string): string {
       </div>
     </div>
     <div id="composer">
-      <div id="attach"><span>With selection</span><span id="attach-ref"></span><button id="attach-x" class="quiet" aria-label="Don't send the selection" data-tip="Don't send the selection">×</button></div>
+      <div id="attach"><span>With selection</span><span id="attach-ref"></span><button id="attach-x" class="quiet" aria-label="Don't send the selection" data-tip="Don't send the selection">x</button></div>
       <div id="compose-row">
-        <textarea id="reply" rows="1" aria-label="Reply to the agent" placeholder="Reply to the agent…"></textarea>
+        <textarea id="reply" rows="1" aria-label="Reply to the agent" placeholder="Reply to the agent${ELLIPSIS}"></textarea>
         <button id="send" class="quiet" aria-label="Send" data-tip="Send (Enter)">${ICONS.send}</button>
       </div>
     </div>

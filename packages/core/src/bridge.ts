@@ -16,6 +16,7 @@ import {
   type ToolName,
 } from "@ai-pair/protocol"
 import type { Controller } from "./controller"
+import { LEFT_ARROW, RIGHT_ARROW } from "./constants"
 
 export type BridgeOptions = {
   /** Where discovery files live; see `discoveryDir()`. */
@@ -139,7 +140,7 @@ export class Bridge {
     const trace = this.options.trace
     const send = (m: EditorMessage) => {
       const open = ws.readyState === ws.OPEN
-      trace?.(`socket ${socket} → ${describe(m)}${open ? "" : " (not sent: closed)"}`)
+      trace?.(`socket ${socket} ${RIGHT_ARROW} ${describe(m)}${open ? "" : " (not sent: closed)"}`)
       if (open) ws.send(JSON.stringify(m))
     }
 
@@ -147,7 +148,7 @@ export class Bridge {
       // A frame that isn't a message is dropped (#30).
       const m = parseRelayMessage(data)
       if (!m) return
-      trace?.(`socket ${socket} ← ${describe(m)}`)
+      trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(m)}`)
       if (!authenticated) {
         if (m.type !== "hello" || !this.tokenMatches(m.token)) {
           send({ type: "rejected", reason: "Authentication failed." })

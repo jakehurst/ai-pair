@@ -55,7 +55,7 @@ When you want to pair:
    a subfolder of it).
 2. Ask it to pair: *"Let's pair on adding a settings page."* In Claude Code,
    you can also run `/mcp__pair__start`. If you want to learn the technology
-   too, say so: *"…I'm new to Svelte, explain as you go."*
+   too, say so: *"...I'm new to Svelte, explain as you go."*
    With Claude Code's CLI installed and set up, the **Pair** panel also
    offers **Start a session**: it starts Claude Code in a hidden terminal with
    the request already sent, and the Pair panel stays in front. The terminal
@@ -67,15 +67,15 @@ When you want to pair:
 Anything you say or edit interrupts the agent, so its next move takes it into
 account. While you pair:
 
-| To… | Do this |
+| To... | Do this |
 |---|---|
 | say something to the agent | type in the reply box, press Enter. Typing pauses playback. |
-| ask about some code | select it in the editor, then reply: the selection goes along (× leaves it out) |
+| ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
 | let it run a command | the agent's tests and builds play in an *AI Pair* terminal; **Run**, **Allow for session**, or **Skip** in the panel |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
 | write a part yourself | **My turn**. The agent becomes the navigator and comments as you type. **Hand back** returns the turn, with your reply if you typed one |
-| change the pace | the speed menu (**1.0×**), from 0.4× to 3.0× |
+| change the pace | the speed menu (**1.0x**), from 0.4x to 3.0x |
 | finish | **End**, or tell the agent you're done. You can pair again anytime |
 
 The cursor's color tells you what the agent is doing. It's yellow and pulsing
@@ -88,7 +88,7 @@ session that adds a small API to an Express app, which it creates in
 ## How it works under the hood
 
 ```
-agent (Claude Code, …) ── stdio MCP ──▶ pair-mcp ── local WebSocket ──▶ VS Code extension
+agent (Claude Code, ...) ── stdio MCP ──▶ pair-mcp ── local WebSocket ──▶ VS Code extension
 ```
 
 The agent submits small batches of actions: say, move, select, type, delete,
@@ -163,7 +163,7 @@ has it fetch the text and start the calibration with it.
 
 | Setting | |
 |---|---|
-| `aiPair.speed` | Overall playback speed (the panel's speed menu offers 0.4× to 3.0×). |
+| `aiPair.speed` | Overall playback speed (the panel's speed menu offers 0.4x to 3.0x). |
 | `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |
 | `aiPair.calibrationPassage` | The passage *AI Pair: Calibrate Reading Speed* times you on, as `{ "title": ..., "text": ..., "notice": ... }`; empty, the built-in one. The agent's `calibrate` tool writes it. |
 | `aiPair.agentName` | The name on the agent's cursor. |
@@ -217,7 +217,7 @@ npm run typecheck
 npm run build             # development build of the extension
 npm run test:integration  # plays a session inside a real, isolated VS Code (macOS; VSCODE_BIN for another)
 npm run test:coverage     # the unit tests, with coverage
-npm run package           # production build → ai-pair-<version>.vsix
+npm run package           # production build -> ai-pair-<version>.vsix
 ```
 
 To run your working copy, open the repository in VS Code and press F5, or:

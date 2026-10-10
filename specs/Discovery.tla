@@ -38,7 +38,7 @@ OpenW(w) == win[w] \in {"none", "closed"} /\ \E s \in {"open", "unlisted"} : win
 \* A clean close: dispose() removes the file.
 CloseW(w) == win[w] \in {"open", "unlisted"} /\ win' = Set(win, w, "closed") /\ UNCHANGED <<relay, tries, conn>>
 
-\* The window gains focus: focused() → writeDiscovery. writeFileSync truncates the file, then
+\* The window gains focus: focused() -> writeDiscovery. writeFileSync truncates the file, then
 \* writes it; a rename replaces it whole.
 Focus(w) ==
     /\ win[w] = "open" /\ ~AtomicWrite /\ win' = Set(win, w, "writing")

@@ -1,4 +1,4 @@
-// End to end through MCP: client → relay → WebSocket → bridge → controller → fake editor.
+// End to end through MCP: client -> relay -> WebSocket -> bridge -> controller -> fake editor.
 
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -9,7 +9,8 @@ import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { WebSocket } from "ws"
 import { Bridge, Controller } from "@ai-pair/core"
-import { PROTOCOL_VERSION } from "@ai-pair/protocol"
+import { LEFT_ARROW, RIGHT_ARROW } from "@ai-pair/core/constants"
+import { CURSOR_MARKER, PROTOCOL_VERSION } from "@ai-pair/protocol"
 import { FakeEditor, FakePanel, testConfig } from "../../core/test/fake"
 import { EditorLink, findWindows } from "../src/link"
 import { agentGuide, createServer } from "../src/server"
@@ -122,12 +123,14 @@ describe("relay", () => {
     expect(started.text).toMatch(/started/)
     expect(started.content[1]!.text).toContain("THE GUIDE")
 
-    const first = await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "hi▌" }] })
+    const first = await call(client, "step", {
+      actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `hi${CURSOR_MARKER}` }],
+    })
     expect(first.text).toMatch(/Batch 1 is playing/)
     const second = await call(client, "step", { actions: [] })
     // Reports are text for the agent to read: check what they say, not how they're laid out.
     expect(second.text).toMatch(/Batch 1 completed/)
-    expect(second.text).toMatch(/1 +hi▌/)
+    expect(second.text).toMatch(new RegExp(`1 +hi${CURSOR_MARKER}`))
     expect(editor.text("src/a.ts")).toBe("hi")
 
     const read = await call(client, "read", { file: "a.ts" })
@@ -172,16 +175,16 @@ describe("relay", () => {
     const old = await call(client, "step", { actions: [{ move: { line: 1, before: "x", after: "" } }] })
     expect(old.text).toMatch(/A spot is one text, `at`/)
     const unmarked = await call(client, "step", { actions: [{ move: { line: 1, at: "x" } }] })
-    expect(unmarked.text).toMatch(/marks where your cursor goes with ▌/)
+    expect(unmarked.text).toContain(`marks where your cursor goes with ${CURSOR_MARKER}`)
     const end = await call(client, "step", { actions: [{ move: { to: "end" } }] })
     expect(end.text).toMatch(/`to` is `"line_end"`/)
     const plain = await call(client, "step", { actions: [{ type: "x" }] })
     expect(plain.error).toBe(true)
-    expect(plain.text).toMatch(/Mark where your cursor ends with ▌/)
+    expect(plain.text).toContain(`Mark where your cursor ends with ${CURSOR_MARKER}`)
     const pair = await call(client, "step", { actions: [{ type_fast: ["f(", ")"] }] })
-    expect(pair.text).toMatch(/one text, with ▌ where your cursor ends/)
-    const twice = await call(client, "step", { actions: [{ type: "f(▌)▌" }] })
-    expect(twice.text).toMatch(/has 2 ▌/)
+    expect(pair.text).toContain(`one text, with ${CURSOR_MARKER} where your cursor ends`)
+    const twice = await call(client, "step", { actions: [{ type: `f(${CURSOR_MARKER})${CURSOR_MARKER}` }] })
+    expect(twice.text).toContain(`has 2 ${CURSOR_MARKER}`)
     const near = await call(client, "step", { actions: [{ select: { text: "x", near_line: 3 } }] })
     expect(near.text).toMatch(/Give `line`: the line the code starts on/)
     const range = await call(client, "step", { actions: [{ point: { line: 1, from: "a", to: "b" } }] })
@@ -224,10 +227,10 @@ describe("relay", () => {
     controller.userMessage("hello")
     await listening
     expect(traced.filter((l) => !l.endsWith("hello") && !l.endsWith("welcome"))).toEqual([
-      "socket 1 ← call 1 start",
-      "socket 1 → result 1 batches [] events []",
-      "socket 1 ← call 2 listen",
-      "socket 1 → result 2 batches [] events [message]",
+      `socket 1 ${LEFT_ARROW} call 1 start`,
+      `socket 1 ${RIGHT_ARROW} result 1 batches [] events []`,
+      `socket 1 ${LEFT_ARROW} call 2 listen`,
+      `socket 1 ${RIGHT_ARROW} result 2 batches [] events [message]`,
     ])
   })
 
@@ -273,7 +276,7 @@ describe("relay", () => {
     expect((await listening).text).toMatch(/hello/)
     // The SDK's client sends a cancel for a signal aborted after the answer, too.
     abort.abort()
-    await until(() => traced.some((l) => l.includes("← return")))
+    await until(() => traced.some((l) => l.includes(`${LEFT_ARROW} return`)))
     const again = await call(client, "listen")
     expect(again.text).toMatch(/hello/)
     expect(again.text).toMatch(/may repeat/)
@@ -383,7 +386,7 @@ describe("relay", () => {
   it("works in the folder the agent gives, when the harness started the relay somewhere else", async () => {
     const client = await connect("/")
     expect((await call(client, "start", { cwd: "/project/src" })).error).toBe(false)
-    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "hi▌" }] })
+    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `hi${CURSOR_MARKER}` }] })
     await call(client, "step", { actions: [] })
     expect(editor.text("src/a.ts")).toBe("hi")
   })

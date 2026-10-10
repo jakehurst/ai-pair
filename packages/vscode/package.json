@@ -123,7 +123,7 @@
           "default": 1,
           "minimum": 0.25,
           "maximum": 4,
-          "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4× to 3×."
+          "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4x to 3x."
         },
         "aiPair.readingSpeed": {
           "type": "number",

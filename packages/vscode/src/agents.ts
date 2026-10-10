@@ -243,7 +243,7 @@ function setIn(object: Record<string, unknown>, keys: string[], value: unknown):
 
 const HEADER = /^\s*\[\[?\s*([^\]]*?)\s*\]\]?\s*(#.*)?$/
 
-/** The dotted key of a table header, unquoted: `[mcp_servers."pair".env]` → `mcp_servers.pair.env`. */
+/** The dotted key of a table header, unquoted: `[mcp_servers."pair".env]` -> `mcp_servers.pair.env`. */
 function headerKey(line: string): string | undefined {
   const key = HEADER.exec(line)?.[1]
   return key
@@ -316,7 +316,7 @@ export function withTomlTable(text: string, name: string, body: string[]): strin
   return out.join(eol) + eol
 }
 
-/** A key line defining the server outside its own table: `mcp_servers.pair = …`, or `pair = …` in `[mcp_servers]`. */
+/** A key line defining the server outside its own table: `mcp_servers.pair = ...`, or `pair = ...` in `[mcp_servers]`. */
 function definesInline(table: string, line: string, name: string): boolean {
   const key = /^\s*([^=#]+?)\s*=/.exec(line)?.[1]
   if (!key) return false

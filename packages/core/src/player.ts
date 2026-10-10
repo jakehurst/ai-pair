@@ -505,7 +505,7 @@ export class Player {
     return ok
   }
 
-  /** Types `before`, then `after`, then steps back to between them: to where the text had its `▌`. */
+  /** Types `before`, then `after`, then steps back to between them: to where the text had its `CURSOR_MARKER`. */
   private async type(before: string, after: string, fast: boolean, playing: Playing): Promise<Outcome> {
     const s = this.scene
     const { editor } = this.stage

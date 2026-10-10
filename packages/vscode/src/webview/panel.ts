@@ -4,6 +4,7 @@
 import type { AgentState, PanelEvent, Ref } from "@ai-pair/core"
 import type { FromPanel, ToPanel } from "../panelMessages"
 import type { CalibrationView } from "../calibration"
+import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from "@ai-pair/core/constants"
 
 declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void }
 
@@ -132,7 +133,7 @@ function codeLink(text: string, file: string, line: number): HTMLAnchorElement {
 }
 
 function refLink(ref: Ref): HTMLAnchorElement {
-  return codeLink(ref.file + ":" + ref.line + (ref.endLine > ref.line ? "–" + ref.endLine : ""), ref.file, ref.line)
+  return codeLink(ref.file + ":" + ref.line + (ref.endLine > ref.line ? RANGE_DASH + ref.endLine : ""), ref.file, ref.line)
 }
 
 /** Files changed on disk outside the protocol, each a link to its diff (#15). */
@@ -178,18 +179,18 @@ function setOutcome(el: Element, phase: RunPhase, exitCode: number | undefined):
   if (!outcome) return
   outcome.className = "outcome"
   el.classList.toggle("skipped", phase === "declined")
-  if (phase === "declined") outcome.textContent = "⊘ skipped"
+  if (phase === "declined") outcome.textContent = "skipped"
   else if (phase === "background") outcome.textContent = "still running"
   else if (exitCode === undefined) outcome.textContent = phase === "exited" ? "ended" : "done"
   else if (exitCode === 0) {
     outcome.classList.add("ok")
-    outcome.textContent = "✓ exit 0"
+    outcome.textContent = "exit 0"
   }
   // Interrupted (Ctrl+C) or terminated, like a server being restarted: not a failure.
-  else if (exitCode === 130 || exitCode === 143) outcome.textContent = "■ stopped"
+  else if (exitCode === 130 || exitCode === 143) outcome.textContent = "stopped"
   else {
     outcome.classList.add("fail")
-    outcome.textContent = "✕ exit " + exitCode
+    outcome.textContent = "exit " + exitCode
   }
 }
 
@@ -384,10 +385,12 @@ function handle(e: ToPanel): void {
         current = null
         state = null
         ui.now.className = "empty"
-        ui.now.textContent = "Waiting for the agent…"
+        ui.now.textContent = "Waiting for the agent" + ELLIPSIS
         ui.ref.innerHTML = ""
         pointed = null
-        addDivider("Session started" + (e.task ? ": " + e.task : "") + (e.rules ? " · rules from " + e.rules.join(", ") : ""))
+        addDivider(
+          "Session started" + (e.task ? ": " + e.task : "") + (e.rules ? LABEL_SEPARATOR + "rules from " + e.rules.join(", ") : ""),
+        )
         setActive(true)
       } else {
         fileCurrent()
@@ -420,10 +423,10 @@ function handle(e: ToPanel): void {
     case "turn":
       addDivider(e.to === "user" ? "You took the turn" : "You handed the turn back")
       if (e.message || e.ref) addYou(e.message, e.ref)
-      ui.reply.placeholder = e.to === "user" ? "Ask the agent…" : "Reply to the agent…"
+      ui.reply.placeholder = e.to === "user" ? "Ask the agent" + ELLIPSIS : "Reply to the agent" + ELLIPSIS
       return
     case "point":
-      pointed = codeLink("→ " + e.file + ":" + e.line, e.file, e.line)
+      pointed = codeLink(RIGHT_ARROW + " " + e.file + ":" + e.line, e.file, e.line)
       return
     case "run": {
       if (e.phase === "confirm" || e.phase === "running") {
@@ -433,7 +436,7 @@ function handle(e: ToPanel): void {
         // A command waiting for the programmer's decision is announced at once (#16).
         if (runConfirming) ui.run.setAttribute("role", "alert")
         else ui.run.removeAttribute("role")
-        ui.runLabel.textContent = runConfirming ? "Allow this command in the terminal?" : "Running in the terminal…"
+        ui.runLabel.textContent = runConfirming ? "Allow this command in the terminal?" : "Running in the terminal" + ELLIPSIS
         ui.runCmd.textContent = e.command
         syncStatus()
         if (runConfirming) arrive(ui.run)
@@ -575,7 +578,7 @@ const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, "readingSpee
 
 // One decimal, so the menu's speeds line up; a setting with more keeps them.
 function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
-  const label = (Number.isInteger(value * 10) ? value.toFixed(1) : String(value)) + String.fromCharCode(0xd7)
+  const label = (Number.isInteger(value * 10) ? value.toFixed(1) : String(value)) + SPEED_SUFFIX
   button.textContent = prefix + label
   button.setAttribute("aria-label", name + ": " + label)
   for (const b of menu.querySelectorAll("button")) {

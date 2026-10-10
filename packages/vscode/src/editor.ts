@@ -4,6 +4,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import * as vscode from "vscode"
 import { MissingFile, samePath, withinFolder } from "@ai-pair/core"
+import { LABEL_SEPARATOR } from "@ai-pair/core/constants"
 import type {
   AgentState,
   Change,
@@ -159,10 +160,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       read: labelDecoration(name, READ, READ_TEXT, 1),
       readDim: labelDecoration(name, CURSOR, CURSOR_TEXT, 1),
       thinking: labelDecoration(name, CURSOR, CURSOR_TEXT, 0.6),
-      running: labelDecoration(`${name} · running`, CURSOR, CURSOR_TEXT, 0.8),
-      paused: labelDecoration(`${name} · paused`, CURSOR, CURSOR_TEXT, 0.8),
-      listening: labelDecoration(`${name} · listening`, CURSOR, CURSOR_TEXT, 0.8),
-      navigator: labelDecoration(`${name} · your turn`, CURSOR, CURSOR_TEXT, 0.8),
+      running: labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, 0.8),
+      paused: labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, 0.8),
+      listening: labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, 0.8),
+      navigator: labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, 0.8),
     }
     this.redraw()
   }

@@ -1,6 +1,17 @@
 // Types of the agent-facing protocol. See PROTOCOL.md.
 
 /**
+ * Marks the agent cursor: in a report's code, where a spot puts it, and where a `type` leaves it.
+ * Spans ignore it, so code can be copied from a report as is.
+ */
+export const CURSOR_MARKER = "\u{258c}"
+
+/** The keys that name an action. An action object has exactly one of them. */
+export const ACTION_KINDS = ["say", "move", "select", "type", "type_fast", "delete", "point", "run"] as const
+const MOVE_FIELDS = ["file", "line", "at", "to"]
+const SPAN_FIELDS = ["file", "line", "text", "from", "through"]
+
+/**
  * Where a `move` goes: on `line`, exactly, a spot, `at`, or the end of the line. Without `line`,
  * on the cursor's line.
  */
@@ -8,7 +19,7 @@ export type MoveTarget = {
   file?: string
   /** The line the cursor lands on, from 1. Omitted: the cursor's line. */
   line?: number
-  /** A spot on the line: the text around it, with `▌` where the cursor goes. */
+  /** A spot on the line: the text around it, with `CURSOR_MARKER` where the cursor goes. */
   at?: string
   /** `line_end`: the end of the line. */
   to?: "line_end"
@@ -31,112 +42,11 @@ export type Action =
   | { say: string }
   | { move: MoveTarget }
   | { select: SpanTarget }
-  /** The text, with `▌` where the cursor ends: what's after it is typed too, and stepped back over. */
   | { type: string }
   | { type_fast: string }
   | { delete: true }
   | { point: SpanTarget }
   | { run: string; wait?: number }
-
-/** The keys that name an action. An action object has exactly one of them. */
-export const ACTION_KINDS = ["say", "move", "select", "type", "type_fast", "delete", "point", "run"] as const
-
-/** The action keys an object has; more than one means actions were combined by mistake. */
-export function actionKinds(value: object): string[] {
-  return Object.keys(value).filter((k) => (ACTION_KINDS as readonly string[]).includes(k))
-}
-
-const MOVE_FIELDS = ["file", "line", "at", "to"]
-const SPAN_FIELDS = ["file", "line", "text", "from", "through"]
-const fieldList = (fields: string[]) => fields.map((f) => `\`${f}\``).join(", ")
-
-/**
- * What's wrong with an action's fields, if anything: the fields the relay's schema allows, a
- * `delete` that is `true`, and a `wait` that is a number. The player checks this too, so an action
- * that skipped the schema is held to it all the same (#45).
- */
-export function fieldsProblem(action: object): string | undefined {
-  const kind = actionKinds(action)[0]
-  if (kind === undefined) return undefined
-  const allowed = kind === "run" ? ["run", "wait"] : [kind]
-  const extra = Object.keys(action).filter((k) => !allowed.includes(k))
-  if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`
-  if ("delete" in action && action.delete !== true) return "`delete` is `true`: it deletes the current selection."
-  if ("wait" in action && action.wait !== undefined && typeof action.wait !== "number") return "`wait` is a number: the seconds to wait."
-  const place: unknown = "move" in action ? action.move : "select" in action ? action.select : "point" in action ? action.point : undefined
-  if (typeof place === "object" && place !== null) {
-    // The place's own check first: it knows what a mistaken field was meant to be.
-    const problem = kind === "move" ? moveProblem(place) : spanProblem(place)
-    if (problem) return problem
-    const fields = kind === "move" ? MOVE_FIELDS : SPAN_FIELDS
-    const unknown = Object.keys(place).filter((k) => !fields.includes(k))
-    if (unknown.length > 0) return `Unknown field ${fieldList(unknown)} in \`${kind}\`: it takes ${fieldList(fields)}.`
-  }
-  return undefined
-}
-
-/** What's wrong with a place's `line`, if anything. */
-function lineProblem(line: unknown): string | undefined {
-  if (line === undefined || (typeof line === "number" && Number.isInteger(line) && line >= 1)) return undefined
-  return "`line` is a line number, from 1, exactly as your latest `read` or report shows it. Omit it for your cursor's line."
-}
-
-/** What's wrong with a `move`'s combination of fields, if anything. */
-export function moveProblem(m: MoveTarget): string | undefined {
-  const fields = m as Record<string, unknown>
-  if ("before" in fields || "after" in fields) {
-    return 'A spot is one text, `at`: the text around it, with ▌ where your cursor goes, e.g. `at: "import { ▌type Context"`.'
-  }
-  const line = lineProblem(m.line)
-  if (line) return line
-  if (m.to !== undefined && m.to !== "line_end") return '`to` is `"line_end"`: the end of the line.'
-  if (m.at !== undefined && m.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.'
-  if (m.at === undefined && m.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.'
-  if (m.at !== undefined) return spotProblem(m.at)
-  return undefined
-}
-
-/** What's wrong with a `select`'s or `point`'s combination of fields, if anything. */
-export function spanProblem(span: SpanTarget): string | undefined {
-  const fields = span as Record<string, unknown>
-  if ("near_line" in fields) return "Give `line`: the line the code starts on, exactly as your latest `read` or report shows it."
-  if ("to" in fields) return "The end of a range is `through`: `from` and `through` are both texts."
-  const line = lineProblem(span.line)
-  if (line) return line
-  const range = span.from !== undefined || span.through !== undefined
-  if (span.text !== undefined && range) return "Give `text`, or `from` and `through`, not both."
-  if (range && (typeof span.from !== "string" || typeof span.through !== "string")) {
-    return "A range is `from` and `through`, both texts: from the start of `from` through the end of the first `through` after it."
-  }
-  if (!range && typeof span.text !== "string") return "Give the code: `text`, or `from` and `through`."
-  if (span.text === "" || span.from === "" || span.through === "") return "The code's text can't be empty."
-  return undefined
-}
-
-/** What's wrong with a spot's `at`, if anything: it needs exactly one cursor marker, and text around it. */
-function spotProblem(at: string): string | undefined {
-  const markers = markerCount(at)
-  if (markers === 0) return '`at` marks where your cursor goes with ▌, e.g. `at: "import { ▌type Context"`.'
-  if (markers > 1) {
-    return `\`at\` has ${markers} ▌, but marks one spot: only where your cursor goes. Text copied from a report may carry the cursor's old ▌; leave that one out.`
-  }
-  if (at === CURSOR_MARKER) return "`at` needs text around ▌, to find the spot by."
-  return undefined
-}
-
-/** What's wrong with the text of a `type`, if anything: it marks where the cursor ends with one ▌. */
-export function typeProblem(text: unknown): string | undefined {
-  if (Array.isArray(text)) return 'The text to type is one text, with ▌ where your cursor ends: `"f(▌)"`, or `"x▌"` with nothing after it.'
-  if (typeof text !== "string") return "Give the text to type, with ▌ where your cursor ends."
-  const markers = markerCount(text)
-  if (markers === 0) return 'Mark where your cursor ends with ▌: `"f(▌)"`, or `"x▌"` with nothing after it.'
-  if (markers > 1) return `The text to type has ${markers} ▌, but marks one place: where your cursor ends. A literal ▌ can't be typed.`
-  return undefined
-}
-
-function markerCount(text: string): number {
-  return text.split(CURSOR_MARKER).length - 1
-}
 
 export type Turn = "agent" | "user"
 
@@ -170,12 +80,6 @@ export type RunResult = {
   /** The terminal's shell, e.g. `pwsh` or `zsh`, when it's known. */
   shell?: string
 }
-
-/**
- * Marks the agent cursor: in a report's code, where a spot puts it, and where a `type` leaves it.
- * Spans ignore it, so code can be copied from a report as is.
- */
-export const CURSOR_MARKER = "▌"
 
 /**
  * Lines of a file as they read, with the agent cursor marked. Long code skips lines in the middle. A
@@ -265,6 +169,105 @@ export type FileContent = {
 }
 
 export type ToolErrorCode = "no_session" | "session_active" | "no_editor" | "cancelled" | "invalid_arguments" | "calibration_busy"
+
+/** The action keys an object has; more than one means actions were combined by mistake. */
+export function actionKinds(value: object): string[] {
+  return Object.keys(value).filter((k) => (ACTION_KINDS as readonly string[]).includes(k))
+}
+
+const fieldList = (fields: string[]) => fields.map((f) => `\`${f}\``).join(", ")
+
+/**
+ * What's wrong with an action's fields, if anything: the fields the relay's schema allows, a
+ * `delete` that is `true`, and a `wait` that is a number. The player checks this too, so an action
+ * that skipped the schema is held to it all the same (#45).
+ */
+export function fieldsProblem(action: object): string | undefined {
+  const kind = actionKinds(action)[0]
+  if (kind === undefined) return undefined
+  const allowed = kind === "run" ? ["run", "wait"] : [kind]
+  const extra = Object.keys(action).filter((k) => !allowed.includes(k))
+  if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`
+  if ("delete" in action && action.delete !== true) return "`delete` is `true`: it deletes the current selection."
+  if ("wait" in action && action.wait !== undefined && typeof action.wait !== "number") return "`wait` is a number: the seconds to wait."
+  const place: unknown = "move" in action ? action.move : "select" in action ? action.select : "point" in action ? action.point : undefined
+  if (typeof place === "object" && place !== null) {
+    // The place's own check first: it knows what a mistaken field was meant to be.
+    const problem = kind === "move" ? moveProblem(place) : spanProblem(place)
+    if (problem) return problem
+    const fields = kind === "move" ? MOVE_FIELDS : SPAN_FIELDS
+    const unknown = Object.keys(place).filter((k) => !fields.includes(k))
+    if (unknown.length > 0) return `Unknown field ${fieldList(unknown)} in \`${kind}\`: it takes ${fieldList(fields)}.`
+  }
+  return undefined
+}
+
+/** What's wrong with a place's `line`, if anything. */
+function lineProblem(line: unknown): string | undefined {
+  if (line === undefined || (typeof line === "number" && Number.isInteger(line) && line >= 1)) return undefined
+  return "`line` is a line number, from 1, exactly as your latest `read` or report shows it. Omit it for your cursor's line."
+}
+
+/** What's wrong with a `move`'s combination of fields, if anything. */
+export function moveProblem(m: MoveTarget): string | undefined {
+  const fields = m as Record<string, unknown>
+  if ("before" in fields || "after" in fields) {
+    return `A spot is one text, \`at\`: the text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`at: "import { ${CURSOR_MARKER}type Context"\`.`
+  }
+  const line = lineProblem(m.line)
+  if (line) return line
+  if (m.to !== undefined && m.to !== "line_end") return '`to` is `"line_end"`: the end of the line.'
+  if (m.at !== undefined && m.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.'
+  if (m.at === undefined && m.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.'
+  if (m.at !== undefined) return spotProblem(m.at)
+  return undefined
+}
+
+/** What's wrong with a `select`'s or `point`'s combination of fields, if anything. */
+export function spanProblem(span: SpanTarget): string | undefined {
+  const fields = span as Record<string, unknown>
+  if ("near_line" in fields) return "Give `line`: the line the code starts on, exactly as your latest `read` or report shows it."
+  if ("to" in fields) return "The end of a range is `through`: `from` and `through` are both texts."
+  const line = lineProblem(span.line)
+  if (line) return line
+  const range = span.from !== undefined || span.through !== undefined
+  if (span.text !== undefined && range) return "Give `text`, or `from` and `through`, not both."
+  if (range && (typeof span.from !== "string" || typeof span.through !== "string")) {
+    return "A range is `from` and `through`, both texts: from the start of `from` through the end of the first `through` after it."
+  }
+  if (!range && typeof span.text !== "string") return "Give the code: `text`, or `from` and `through`."
+  if (span.text === "" || span.from === "" || span.through === "") return "The code's text can't be empty."
+  return undefined
+}
+
+/** What's wrong with a spot's `at`, if anything: it needs exactly one cursor marker, and text around it. */
+function spotProblem(at: string): string | undefined {
+  const markers = markerCount(at)
+  if (markers === 0)
+    return `\`at\` marks where your cursor goes with ${CURSOR_MARKER}, e.g. \`at: "import { ${CURSOR_MARKER}type Context"\`.`
+  if (markers > 1) {
+    return `\`at\` has ${markers} ${CURSOR_MARKER}, but marks one spot: only where your cursor goes. Text copied from a report may carry the cursor's old ${CURSOR_MARKER}; leave that one out.`
+  }
+  if (at === CURSOR_MARKER) return `\`at\` needs text around ${CURSOR_MARKER}, to find the spot by.`
+  return undefined
+}
+
+/** What's wrong with the text of a `type`, if anything: it marks where the cursor ends with one `CURSOR_MARKER`. */
+export function typeProblem(text: unknown): string | undefined {
+  if (Array.isArray(text))
+    return `The text to type is one text, with ${CURSOR_MARKER} where your cursor ends: \`"f(${CURSOR_MARKER})"\`, or \`"x${CURSOR_MARKER}"\` with nothing after it.`
+  if (typeof text !== "string") return `Give the text to type, with ${CURSOR_MARKER} where your cursor ends.`
+  const markers = markerCount(text)
+  if (markers === 0)
+    return `Mark where your cursor ends with ${CURSOR_MARKER}: \`"f(${CURSOR_MARKER})"\`, or \`"x${CURSOR_MARKER}"\` with nothing after it.`
+  if (markers > 1)
+    return `The text to type has ${markers} ${CURSOR_MARKER}, but marks one place: where your cursor ends. A literal ${CURSOR_MARKER} can't be typed.`
+  return undefined
+}
+
+function markerCount(text: string): number {
+  return text.split(CURSOR_MARKER).length - 1
+}
 
 export class ToolError extends Error {
   constructor(
