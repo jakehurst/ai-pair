@@ -20,11 +20,11 @@ The cursor's appearance shows the agent's state:
 |-----------|----------------------------------------------------|-----------------------------|
 | typing    | playing `type`, `type_fast`, `move`, `select`, `delete` | agent color            |
 | read      | reading pause after `say`                          | accent color, pulsing       |
-| running   | a `run` command is executing                       | dimmed, label "· running"   |
+| running   | a `run` command is executing                       | dimmed, label "- running"   |
 | thinking  | queue empty, agent hasn't called yet               | dimmed                      |
-| paused    | playback paused                                    | dashed, label "· paused"    |
-| listening | agent is in `listen`                               | dotted, label "· listening" |
-| navigator | programmer's turn                                  | dotted, label "· your turn" |
+| paused    | playback paused                                    | dashed, label "- paused"    |
+| listening | agent is in `listen`                               | dotted, label "- listening" |
+| navigator | programmer's turn                                  | dotted, label "- your turn" |
 
 The **read** state is the important one: it tells the programmer to look at the
 narration panel. Decorations can't animate, so the pulse is done by swapping
@@ -53,9 +53,9 @@ Layout, top to bottom:
      compact and quiet, as icons without fills: Pause/Resume, Interrupt, My
      turn, the speed, End. During the programmer's turn, Pause and Interrupt
      give way to Hand back, the one labeled control, since it's the main
-     action then. The speed opens a menu of 0.4× to 3.0×. The agent's color
+     action then. The speed opens a menu of 0.4x to 3.0x. The agent's color
      is on the dot only, never on the controls.
-   - **The current message**, in large text (≈1.3× the editor font,
+   - **The current message**, in large text (about 1.3 times the editor font,
      *tunable*), high contrast. Its **top edge is fixed**, right under the
      header; its height grows downward with the message length. A new message
      fades in, in sync with the cursor's read state. It stays at full
@@ -72,7 +72,7 @@ Layout, top to bottom:
      two lines of message, so the reply box moves only for a longer one.
 2. **History**, below the band, newest first. The agent's messages in muted
    text; the programmer's replies as neutral bubbles on the right; commands
-   as soft terminal rows with their outcome (✓ exit 0, ✕ exit 1, skipped,
+   as soft terminal rows with their outcome (exit 0, exit 1, skipped,
    still running, which changes to how it ended when it does); turn changes,
    interrupts and session starts and ends as faint dividers.
 
@@ -114,8 +114,8 @@ Behavior:
   message.
 - **Sharing a selection.** While the programmer has code selected in the
   editor, a line above the reply box says *With selection
-  `src/server.ts:12–18`*: the reply (or "Hand back") takes the selection
-  along. × leaves it out; the next selection brings the line back. The
+  `src/server.ts:12-18`*: the reply (or "Hand back") takes the selection
+  along. **x** leaves it out; the next selection brings the line back. The
   selection is sent once. *Ask the Agent About the Selection* in the editor's
   context menu focuses the reply box.
 - **Commands.** When the agent plays a `run`, the band shows the command under
@@ -146,8 +146,8 @@ after punctuation, brackets and newlines, the way people actually type:
 
 | Moment                                               | Pause          |
 |------------------------------------------------------|----------------|
-| between characters within a word                     | 55, ±25%       |
-| extra as a word starts (non-alphanumeric → alphanumeric) | +110       |
+| between characters within a word                     | 55, +/-25%     |
+| extra as a word starts (non-alphanumeric -> alphanumeric) | +110      |
 | extra after `,` `;` `:`                              | +90            |
 | extra after an opening `(` `[` `{`                   | +70            |
 | extra after a newline                                | +350           |
@@ -160,7 +160,7 @@ would do; watching spaces being typed is noise.
 **Cognitive switches.** The pause comes *after* a change, so the programmer
 can take it in before anything happens there:
 
-| After…                                           | Pause | Why                          |
+| After...                                         | Pause | Why                          |
 |--------------------------------------------------|-------|------------------------------|
 | a move within 15 lines in the same file          | 450   | eyes find the cursor again   |
 | a move farther, or to another file               | 900   | the view changed: re-orient  |
@@ -171,11 +171,11 @@ can take it in before anything happens there:
 Plus a 150 ms beat *before* a move or a selection, so it doesn't look
 instantaneous.
 
-When text follows the `▌` in a `type`, the cursor steps back to the `▌` after
+When text follows the cursor marker in a `type`, the cursor steps back to the marker after
 typing it all, like a nearby move: the beat before it, so the programmer sees
 the close typed before the cursor leaves it, and the pause after it.
 `type_fast` shortens both by the same factor as its typing. With nothing
-after the `▌`, the cursor is already in place and there's neither.
+after the cursor marker, the cursor is already in place and there's neither.
 
 **Reading.** After a `say`: characters times 47 ms, at least 1500 ms, with no
 upper bound, so a long message gets its full time (#109). At the default that
@@ -245,7 +245,7 @@ protocol (the agent's native tools, or anything else) are marked:
 - an entry in the narration history ("`package.json` changed outside the
   editor") with a link to the diff against git's index, or to the file outside
   git. Files changed within half a second of each other share one entry ("3
-  files changed outside the editor: …"), so a bulk rename or a branch switch is
+  files changed outside the editor: ..."), so a bulk rename or a branch switch is
   one line.
 
 The mark clears when the programmer opens the file or the diff. The extension

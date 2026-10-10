@@ -13,7 +13,7 @@ Status: describes 0.2.0.
 ┌──────────────────┐  stdio (MCP)  ┌────────────┐  WebSocket, 127.0.0.1  ┌─────────────────────────────┐
 │  agent harness   │ ────────────▶ │  pair-mcp  │ ─────────────────────▶ │  VS Code extension          │
 │  (Claude Code,   │               │  (relay)   │     + auth token       │                             │
-│   Codex, …)      │               └────────────┘                        │   core                      │
+│   Codex, ...)    │               └────────────┘                        │   core                      │
 └──────────────────┘                                                     │     │                       │
                                                                          │   VS Code adapter           │
                                                                          │     │                       │
@@ -67,7 +67,7 @@ file:
   "pid": 41234,
   "workspaceFolders": ["/Users/me/projects/todo-app"],
   "port": 53817,
-  "token": "…",               // random, per window
+  "token": "...",             // random, per window
   "protocolVersion": 3,
   "lastFocused": 1758700000000   // epoch ms, updated when the window gains focus
 }
@@ -93,12 +93,12 @@ editor may be opened after the harness. To find the window it:
 If no window matches, `start` fails with a clear message: "Open
 `/Users/me/projects/todo-app` in VS Code with the extension installed."
 
-**Relay ↔ extension messages** are JSON objects with a `type` field, over the
+**Relay <-> extension messages** are JSON objects with a `type` field, over the
 WebSocket, mirroring the MCP tool calls one to one:
 
 - `hello { token, protocolVersion }`: the handshake, answered with `welcome`, or
   with `rejected { reason }` for a wrong token or another protocol version.
-- `call { id, tool, args }` → `result { id, … }` or `error { id, … }`.
+- `call { id, tool, args }` -> `result { id, ... }` or `error { id, ... }`.
 - `cancel { id }`: forwarded when the harness cancels a tool call, for example
   when the programmer presses Esc in the harness.
 - `return { report, mayRepeat? }`: a report that arrived for a call the relay had
@@ -209,10 +209,10 @@ programmer doesn't need Node installed.
 
 ```
 packages/
-  protocol/   types of the agent protocol and the relay ↔ editor messages
+  protocol/   types of the agent protocol and the relay <-> editor messages
   core/       editor-agnostic session and playback logic, and the WebSocket
               server (bridge) with discovery
-  relay/      pair-mcp: stdio MCP ↔ WebSocket; tool schemas, instructions,
+  relay/      pair-mcp: stdio MCP <-> WebSocket; tool schemas, instructions,
               the start prompt; bundles AGENT_GUIDE.md at build time
   vscode/     the extension: adapter, panel, launcher, setup; ships the relay
 ```

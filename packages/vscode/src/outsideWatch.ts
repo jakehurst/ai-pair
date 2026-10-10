@@ -7,6 +7,9 @@ import type { Controller, PanelPort } from "@ai-pair/core"
 import type { VsCodeEditor } from "./editor"
 import { OutsideChanges, watched } from "./outside"
 
+/** The explorer badge on a file changed outside the editor. */
+const OUTSIDE_BADGE = "*"
+
 export function watchOutside(
   controller: Controller,
   editor: VsCodeEditor,
@@ -44,7 +47,7 @@ export function watchOutside(
       onDidChangeFileDecorations: redrawn.event,
       provideFileDecoration: (uri) =>
         uri.scheme === "file" && outside.isMarked(uri.fsPath)
-          ? new vscode.FileDecoration("●", "Changed outside the editor", new vscode.ThemeColor("editorWarning.foreground"))
+          ? new vscode.FileDecoration(OUTSIDE_BADGE, "Changed outside the editor", new vscode.ThemeColor("editorWarning.foreground"))
           : undefined,
     }),
     redrawn,

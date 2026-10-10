@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -49,7 +49,8 @@
         {
           "type": "webview",
           "id": "aiPair.narration",
-          "name": "Pair"
+          "name": "Pair",
+          "icon": "$(comment-discussion)"
         }
       ]
     },
@@ -123,7 +124,7 @@
           "default": 1,
           "minimum": 0.25,
           "maximum": 4,
-          "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4× to 3×."
+          "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4x to 3x."
         },
         "aiPair.readingSpeed": {
           "type": "number",

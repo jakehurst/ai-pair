@@ -54,12 +54,12 @@ this way of working.
 ## Pair
 
 Start your agent in the folder that's open in VS Code and ask it to pair ("let's
-pair on…"). In Claude Code you can also run `/mcp__pair__start`.
+pair on..."). In Claude Code you can also run `/mcp__pair__start`.
 
 - **Reply:** type in the panel's reply box and press Enter. Typing pauses
   playback.
 - **Ask about some code:** select it in the editor, then reply; the selection
-  goes along (× leaves it out). Or right-click it: *Ask the Agent About the
+  goes along (**x** leaves it out). Or right-click it: *Ask the Agent About the
   Selection*.
 - **Commands:** the agent's tests and builds play in an *AI Pair* terminal.
   Choose **Run**, **Allow for session**, or **Skip** in the panel.
@@ -67,7 +67,7 @@ pair on…"). In Claude Code you can also run `/mcp__pair__start`.
 - **Look around:** scrolling or switching files pauses playback. **Resume**
   brings you back.
 - **My turn / Hand back:** write a part yourself while the agent navigates.
-- **The speed menu (1.0×):** the pace, from 0.4× to 3.0×.
+- **The speed menu (1.0x):** the pace, from 0.4x to 3.0x.
 - **The reading menu (read 1.0x):** the pause after each message, from 0.4x
   to 3.0x.
 - **AI Pair: Calibrate Reading Speed** times you on a passage and sets the

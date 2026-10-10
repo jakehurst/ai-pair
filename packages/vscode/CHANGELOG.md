@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+- The panel and the editor show plain ASCII where they showed symbols: the
+  speed menus read `1.0x`, the agent's cursor label reads `Claude - running`,
+  line ranges read `12-20`, a file changed outside the editor is badged `*`,
+  and a command's outcome reads `exit 0`, `exit 1`, `stopped`, or `skipped`,
+  without a symbol in front.
+- The Pair view has an icon, shown when it's moved into a container of its own.
+
 ## 0.4.0
 
 - **Start a session** now starts Claude Code's CLI in a hidden terminal with
@@ -37,7 +46,7 @@ The first release.
   takes it into account. Select some code to ask about it.
 - **My turn** lets you write a part yourself while the agent navigates.
 - The agent's commands play in an *AI Pair* terminal, after you allow them.
-- The speed menu sets the pace, from 0.4× to 3.0×.
+- The speed menu sets the pace, from 0.4x to 3.0x.
 - **AI Pair: Set Up Agent** connects Claude Code, Codex, OpenCode, Gemini CLI
   and Cursor. GitHub Copilot needs no setup.
 - **AI Pair: Play Demo Session** shows what it's like without an agent.

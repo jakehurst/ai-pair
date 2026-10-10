@@ -74,7 +74,7 @@ Each violation TLC found was checked against the code step by step before it was
 
 | Spec | Code |
 |---|---|
-| `Open`, `Welcome` | `connect()` → `open()` → `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
+| `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
 | `ClientAbort`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
@@ -101,7 +101,7 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 | Spec | Code |
 |---|---|
 | `Post(e)` | `post()`: the event onto `log`, the oldest cut beyond `MAX_LOG`, the last `session` event kept |
-| `ReplayShowsSession` | a view created now: `ready` → `replay`, its session state from the log's last `session` event |
+| `ReplayShowsSession` | a view created now: `ready` -> `replay`, its session state from the log's last `session` event |
 
 ### `Controller`: what reaches the agent
 
@@ -114,7 +114,7 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 | `RehearseFails`, `RehearseOk` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
 | `Programmer` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
-| `Commit` | `finishCall` → `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
+| `Commit` | `finishCall` -> `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
 | `Cancel` | the agent cancelling a call |
 | `Answer`, `Bounce`, `Restore` | the report reaching the agent; the relay's `return`; `restore()` |
 | `LateBounce` | the agent's cancel coming after it took the answer: the relay's `handBack` with `mayRepeat`, and `restore()` setting `s.mayRepeat`, so the next report is marked `repeated` (#67) |
@@ -127,9 +127,9 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 | Spec | Code |
 |---|---|
 | `OpenW`, `CloseW`, `Crash`, `Reuse` | a window writing its file; `dispose()` removing it; a crash leaving it; its `pid` reused |
-| `Focus`, `Written` | `focused()` → `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
+| `Focus`, `Written` | `focused()` -> `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
 | `OpenW` unlisted, `Listed` | the write failing (`failed`): the window runs, and no relay finds it; a later focus writing it |
-| `Start` | `locate` → `findWindows`: files that hold a `Discovery` with a live `pid`, and parse |
+| `Start` | `locate` -> `findWindows`: files that hold a `Discovery` with a live `pid`, and parse |
 | `Try` | `openWindow` on one candidate, best first |
 | `Disconnect` | the socket closing, so the next call opens again |
 
@@ -328,10 +328,10 @@ One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and t
 
 | Spec | Code |
 |---|---|
-| `GetText` | `getText` → `document()`: `openDocument()`, `exists()`, `openTextDocument` |
+| `GetText` | `getText` -> `document()`: `openDocument()`, `exists()`, `openTextDocument` |
 | `Open`, `Close`, `Edit`, `Save`, `Reload` | VS Code's documents: opened by anything, dropped, edited, saved (recreating a deleted file), reloaded |
 | `Write`, `Delete` | the file changed or deleted on disk |
-| `Show` | `show` → `create`, for a `move` to the file |
+| `Show` | `show` -> `create`, for a `move` to the file |
 
 ### `Outside`: marking files changed outside the protocol
 
@@ -339,11 +339,11 @@ The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts
 
 | Spec | Code |
 |---|---|
-| `Save`, `Saved` | a document saved; `onDidSaveTextDocument` → `saved` |
-| `Create` | `show` creating a missing file → `wrote` → `saved` |
+| `Save`, `Saved` | a document saved; `onDidSaveTextDocument` -> `saved` |
+| `Create` | `show` creating a missing file -> `wrote` -> `saved` |
 | `Write` | anything else writing the file; an open document without unsaved changes reloads |
-| `Report` | the watcher's events → `reported`; the group settles → `settle` reads and compares |
-| `Open` | opening the file or its diff → `seen` |
+| `Report` | the watcher's events -> `reported`; the group settles -> `settle` reads and compares |
+| `Open` | opening the file or its diff -> `seen` |
 
 ### `ProjectGuide`: which project guides `start` reads
 
@@ -378,7 +378,7 @@ The feature of #25, specified before its code: `disconnect`, `start`, `resumeSes
 
 | Spec | Code |
 |---|---|
-| `Programmer`, `Other` | `userEdit` and `otherEdit` → `recordEdit`: the baseline, `by`, `interrupted` |
+| `Programmer`, `Other` | `userEdit` and `otherEdit` -> `recordEdit`: the baseline, `by`, `interrupted` |
 | `Report` | `snapshot`: the event, unless the file is unchanged and the edit didn't interrupt |
 
 ### `Scroll`: follow mode's scrolling
@@ -408,7 +408,7 @@ S10 and S11 for `otherEdit` and `recordEdit` in `packages/core/src/controller.ts
 
 | Spec | Code |
 |---|---|
-| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` → `recordEdit` moves the scene (`mapThrough`) and the identities (`applyChange`) through them |
+| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` -> `recordEdit` moves the scene (`mapThrough`) and the identities (`applyChange`) through them |
 | `Runs`, `Coarse` | the changes `recordEdit` is given, with and without `lineChanges` |
 
 ### `Rehearsal`: line identities across a rehearsal

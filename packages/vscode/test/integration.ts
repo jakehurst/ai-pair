@@ -9,7 +9,8 @@ import { Worker } from "node:worker_threads"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import * as vscode from "vscode"
-import { discoveryDir, type Report, type ToolName } from "@ai-pair/protocol"
+import { CURSOR_MARKER, discoveryDir, type Report, type ToolName } from "@ai-pair/protocol"
+import { LEFT_ARROW } from "@ai-pair/core/constants"
 import { EditorLink, findWindows } from "../../relay/src/link"
 import type { Api } from "../src/extension"
 
@@ -101,8 +102,8 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file("other.txt"), "before\n")
   const other = await vscode.workspace.openTextDocument(file("other.txt"))
   await c.start("other edits")
-  await c.step([{ move: { file: "tool.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(200)}▌` }])
-  const queued = c.step([{ type: "abc▌" }])
+  await c.step([{ move: { file: "tool.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(200)}${CURSOR_MARKER}` }])
+  const queued = c.step([{ type: `abc${CURSOR_MARKER}` }])
   await sleep(1500)
   fs.writeFileSync(file("other.txt"), "after\n")
   await until(() => other.getText() === "after\n")
@@ -121,8 +122,8 @@ export async function run(): Promise<void> {
   // ...and a save participant, trimming what the agent typed when its batch is saved: its change isn't
   // the programmer's, and the batch queued behind it, planned against the untrimmed text, is discarded.
   await vscode.workspace.getConfiguration("files").update("trimTrailingWhitespace", true, vscode.ConfigurationTarget.Global)
-  await c.step([{ type: "\nend   ▌" }])
-  const trimmed = await c.step([{ type: "!▌" }])
+  await c.step([{ type: `\nend   ${CURSOR_MARKER}` }])
+  const trimmed = await c.step([{ type: `!${CURSOR_MARKER}` }])
   const trimDone = await c.step([])
   await vscode.workspace.getConfiguration("files").update("trimTrailingWhitespace", undefined, vscode.ConfigurationTarget.Global)
   assert.deepEqual(
@@ -537,8 +538,8 @@ export async function run(): Promise<void> {
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = "abcdefghijklmnopqrstuvwxyz"
   await c.start("interrupt test")
-  await c.step([{ move: { file: "scratch.ts", line: 1, to: "line_end" } }, { type: `${alphabet}▌` }])
-  const pending = c.step([{ type: "!▌" }])
+  await c.step([{ move: { file: "scratch.ts", line: 1, to: "line_end" } }, { type: `${alphabet}${CURSOR_MARKER}` }])
+  const pending = c.step([{ type: `!${CURSOR_MARKER}` }])
   // Past the pauses around moving into a new file (~1 s), and into the typing.
   await sleep(1500)
   const doc = await vscode.workspace.openTextDocument(file("scratch.ts"))
@@ -549,7 +550,7 @@ export async function run(): Promise<void> {
   assert.equal(typing?.status, "interrupted")
   // What's left of the cut `type` comes back first, ready to resubmit.
   const rest = typing.unplayed?.[0]
-  const left = rest && "type" in rest ? rest.type.replace("▌", "") : ""
+  const left = rest && "type" in rest ? rest.type.replace(CURSOR_MARKER, "") : ""
   const typed = alphabet.slice(0, alphabet.length - left.length)
   assert.ok(typed.length > 0 && left.length > 0 && alphabet.endsWith(left), `left: ${JSON.stringify(left)}`)
   assert.equal(next?.status, "discarded")
@@ -559,7 +560,7 @@ export async function run(): Promise<void> {
     file: "scratch.ts",
     lines: [
       { number: 1, text: "// mine" },
-      { number: 2, text: typed + "▌" },
+      { number: 2, text: typed + CURSOR_MARKER },
     ],
     end: { final_newline: false },
   })
@@ -601,7 +602,11 @@ export async function run(): Promise<void> {
   const startText = await toolAll("start", { task: "relay test" })
   assert.match(startText, /# Project rules[\s\S]*\.ai-pair\/GUIDE\.md\n\nName every test after the issue it covers\./)
   await tool("step", {
-    actions: [{ say: "Hello from the relay." }, { move: { file: "relay.txt", line: 1, to: "line_end" } }, { type: "typed via the relay▌" }],
+    actions: [
+      { say: "Hello from the relay." },
+      { move: { file: "relay.txt", line: 1, to: "line_end" } },
+      { type: `typed via the relay${CURSOR_MARKER}` },
+    ],
   })
   const last = await tool("step", { actions: [] })
   assert.match(last, /Batch \d+ completed/)
@@ -656,7 +661,7 @@ export async function run(): Promise<void> {
       .filter((f) => path.basename(f) === "AI Pair.log")
       .map((f) => fs.readFileSync(path.join(logs, f), "utf8"))
       .join("")
-  await until(() => /\[info\] socket \d+ ← call \d+ start/.test(traced()))
+  await until(() => new RegExp(`\\[info\\] socket \\d+ ${LEFT_ARROW} call \\d+ start`).test(traced()))
   await vscode.workspace.getConfiguration("aiPair").update("trace", undefined, vscode.ConfigurationTarget.Global)
   console.log("relay session OK, with the project's guide")
 }

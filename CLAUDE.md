@@ -35,7 +35,7 @@ Set by Justine on 2026-10-07.
 
 ## Code
 
-- In test files, write the cursor marker as the escape `"\u{258c}"`, not as the literal character. Justine prefers the escape to a special character encoded in the file (2026-10-06).
+- In test files, write the cursor marker as `CURSOR_MARKER` from `@ai-pair/protocol`, not as the literal character or an escape. Justine prefers not to have a special character encoded in the file (2026-10-06), and a named constant to a magic value (2026-10-09).
 
 ## Versioning
 

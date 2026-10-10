@@ -2,6 +2,7 @@
 // strings full of escapes. See "Reports" in PROTOCOL.md.
 
 import type { BatchError, BatchResult, Code, Event, Excerpt, FileContent, Report, RunResult } from "@ai-pair/protocol"
+import { ELLIPSIS, RANGE_DASH } from "@ai-pair/core/constants"
 
 export type ReportingTool = "start" | "step" | "listen" | "end" | "calibrate"
 
@@ -107,7 +108,7 @@ function renderRun(run: RunResult): string {
 
 function renderExcerpt(x: Excerpt): string {
   const lines = x.text.split(/\r?\n/).map((text, i) => ({ number: x.from.line + i, text }))
-  const where = x.from.line === x.to.line ? `line ${x.from.line}` : `lines ${x.from.line}–${x.to.line}`
+  const where = x.from.line === x.to.line ? `line ${x.from.line}` : `lines ${x.from.line}${RANGE_DASH}${x.to.line}`
   const cut = x.truncated ? "\n(cut off here; `read` the rest)" : ""
   return `About the code they had selected, ${x.file} ${where}:\n${renderLines(lines)}${cut}`
 }
@@ -122,13 +123,13 @@ function endNote(end: Code["end"]): string | undefined {
   return end.final_newline ? "(end of file)" : "(end of file, with no newline after the last line)"
 }
 
-/** Numbered lines; a gap in the numbers is shown as `…`. A `note` goes below them, aligned with the text. */
+/** Numbered lines; a gap in the numbers is shown as `ELLIPSIS`. A `note` goes below them, aligned with the text. */
 function renderLines(lines: Code["lines"], note?: string): string {
   const width = String(lines.at(-1)?.number ?? 0).length
   const out: string[] = []
   let previous: number | undefined
   for (const { number, text } of lines) {
-    if (previous !== undefined && number > previous + 1) out.push(`${" ".repeat(width)}  …`)
+    if (previous !== undefined && number > previous + 1) out.push(`${" ".repeat(width)}  ${ELLIPSIS}`)
     out.push(`${String(number).padStart(width)}  ${text}`.trimEnd())
     previous = number
   }

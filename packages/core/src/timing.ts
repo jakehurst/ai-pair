@@ -5,7 +5,7 @@
 export type Cadence = {
   /** Between characters within a word. */
   charMs: number
-  /** Random variation of `charMs`, e.g. 0.25 for ±25%. */
+  /** Random variation of `charMs`, e.g. 0.25 for +/-25%. */
   jitter: number
   /** Extra, when a word starts: switching from punctuation or whitespace to a letter or digit. */
   wordStartMs: number

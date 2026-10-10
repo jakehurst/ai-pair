@@ -12,6 +12,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { createInterface } from "node:readline/promises"
 import { fileURLToPath } from "node:url"
+import { RIGHT_ARROW } from "../packages/core/src/constants.ts"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const EXTENSION = "packages/vscode"
@@ -23,12 +24,12 @@ const read = (cmd, args) => execFileSync(cmd, args, { cwd: ROOT, encoding: "utf8
 const manifest = () => JSON.parse(fs.readFileSync(path.join(ROOT, MANIFEST), "utf8"))
 
 function fail(message) {
-  console.error(`\n✕ ${message}`)
+  console.error(`\nFailed: ${message}`)
   process.exit(1)
 }
 
 function step(message) {
-  console.log(`\n▸ ${message}`)
+  console.log(`\n> ${message}`)
 }
 
 const parts = (v) => v.split(".").map(Number)
@@ -91,7 +92,7 @@ run("npm", ["run", "format:check"])
 run("npm", ["run", "test:integration"])
 
 if (version !== current) {
-  step(`Bumping ${current} → ${version}`)
+  step(`Bumping ${current} ${RIGHT_ARROW} ${version}`)
   run("npm", ["version", version, "-w", EXTENSION, "--no-git-tag-version"], { stdio: ["inherit", "ignore", "inherit"] })
 }
 
@@ -143,4 +144,4 @@ try {
   )
 }
 
-console.log(`\n✓ Released ${version}: https://marketplace.visualstudio.com/items?itemName=${publisher}.${name}`)
+console.log(`\nReleased ${version}: https://marketplace.visualstudio.com/items?itemName=${publisher}.${name}`)
