@@ -23,7 +23,7 @@ The cursor's appearance shows the agent's state:
 | running   | a `run` command is executing                       | dimmed, label "- running"   |
 | thinking  | queue empty, agent hasn't called yet               | dimmed                      |
 | paused    | playback paused                                    | dashed, label "- paused"    |
-| listening | agent is in `listen`                               | dotted, label "- listening" |
+| listening | agent is in `listen`, or up to `listenGraceMs` after one timed out empty | dotted, label "- listening" |
 | navigator | programmer's turn                                  | dotted, label "- your turn" |
 
 The **read** state is the important one: it tells the programmer to look at the

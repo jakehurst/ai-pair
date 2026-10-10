@@ -116,6 +116,8 @@ export class Controller {
   /** The session the last report closed, until another starts: a report handed back puts it back. */
   private closed: Session | null = null
   private call: Call | null = null
+  /** After a `listen` that timed out empty, the status stays "listening" until this fires (specs/ListenGrace.tla). */
+  private grace: ReturnType<typeof setTimeout> | null = null
   private chain: Promise<unknown> = Promise.resolve()
   private nextBatchId = 1
   private pauseReasons = new Set<string>()
@@ -679,6 +681,7 @@ export class Controller {
         reject,
         timer: setTimeout(() => this.finishCall(true), this.config.maxBlockMs),
       }
+      this.endGrace()
       this.call = call
       signal?.addEventListener("abort", () => {
         if (this.call !== call) return
@@ -740,8 +743,26 @@ export class Controller {
         this.panel.post({ type: "session", active: false, reason: "agent", summary: call.summary })
       }
     }
+    // `TimeOut` in specs/ListenGrace.tla: nothing came back for the agent to act on.
+    const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected
+    if (call.kind === "listen" && report.waiting && empty) this.startGrace()
     this.render()
     void this.withCursor(s, report).then(call.resolve, () => call.resolve(report))
+  }
+
+  /** `TimeOut` and `Expire` in specs/ListenGrace.tla: the agent is only waiting, so "listening" stays a while. */
+  private startGrace(): void {
+    this.endGrace()
+    this.grace = setTimeout(() => {
+      this.grace = null
+      this.render()
+    }, this.config.listenGraceMs)
+  }
+
+  /** `Call` in specs/ListenGrace.tla: a new call ends the grace. */
+  private endGrace(): void {
+    if (this.grace) clearTimeout(this.grace)
+    this.grace = null
   }
 
   /** Adds the cursor's line to the report, unless it's where the agent last saw it, in a report's code or cursor. */
@@ -824,6 +845,7 @@ export class Controller {
     if (this.session === s) this.session = null
     s.timeline.interrupt()
     clearTimeout(s.navigatorTimer)
+    this.endGrace()
     this.editor.renderPoint(null)
     this.render()
   }
@@ -921,7 +943,8 @@ export class Controller {
     if (!s || s.scene.turn === "user") return "navigator"
     if (this.pauseReasons.size > 0) return "paused"
     if (s.queue.length > 0) return s.player.reading ? "read" : s.player.commandRunning ? "running" : "typing"
-    return this.call?.kind === "listen" ? "listening" : "thinking"
+    const waiting = this.grace !== null && !s.events.some(interrupting)
+    return this.call?.kind === "listen" || waiting ? "listening" : "thinking"
   }
 
   private render(): void {
