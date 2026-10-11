@@ -22,63 +22,48 @@ import { Timeline } from './timeline';
 import { defaultConfig, type Config } from './config';
 import { defaultTiming, glideDuration, withOverrides, type TimingOverrides } from './timing';
 
-type Batch = {
+const UNANCHORED =
+  'Your previous batch was interrupted or discarded, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
+
+interface Batch {
   id: number;
   actions: Action[];
   state: 'queued' | 'playing' | 'done';
   result?: BatchResult;
   /** What it leaves behind, played in memory when it was queued: where the next batch is rehearsed from. */
   after?: Rehearsal;
-};
+}
 
 /** Like `Event`, but edits usually get their diff when the report is taken. */
 type PendingEvent = Exclude<Event, { kind: 'edit' }> | EditEvent;
 
 /** `interrupted`: a change the programmer didn't make, to a file the playing or queued batches edit. */
-type EditEvent = { kind: 'edit'; file: string; by: 'programmer' | 'other'; diff?: string; omitted?: number; interrupted?: true };
-
-/**
- * Everything interrupts, except changes the programmer didn't make to files no batch is going to edit. An event it
- * holds for is `Act` in specs/ListenGrace.tla.
- */
-function interrupting(e: PendingEvent): boolean {
-  return e.kind !== 'edit' || e.by === 'programmer' || e.interrupted === true;
+interface EditEvent {
+  kind: 'edit';
+  file: string;
+  by: 'programmer' | 'other';
+  diff?: string;
+  omitted?: number;
+  interrupted?: true;
 }
-
-/** A report in one log line: its batches, events, flags, and size (#149). */
-function describeReport(report: Report): string {
-  const parts = [
-    `batches [${report.batches.map((b) => `${b.id} ${b.status}`).join(', ')}]`,
-    `events [${report.events.map((e) => (e.kind === 'edit' ? `edit ${e.file}` : e.kind)).join(', ')}]`,
-  ];
-  if (report.waiting) parts.push('waiting');
-  if (report.paused) parts.push(`paused (${report.paused.join(', ')})`);
-  if (report.rejected) parts.push(`rejected at action ${report.rejected.index}: ${report.rejected.error.kind}`);
-  parts.push(`${JSON.stringify(report).length} chars`);
-  return parts.join(', ');
-}
-
-const UNANCHORED =
-  'Your previous batch was interrupted or discarded, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
 
 /** The first action at the cursor, and whether it anchors the cursor: a `move` or `select` giving both `file` and `line` (#112). */
-function cursorAnchor(actions: Action[]): { index: number; anchored: boolean } | undefined {
-  const i = actions.findIndex((a) => !('say' in a || 'run' in a || 'point' in a));
-  if (i === -1) return undefined;
-  const action = actions[i]!;
-  const place = 'move' in action ? action.move : 'select' in action ? action.select : undefined;
-  return { index: i + 1, anchored: place?.file !== undefined && place?.line !== undefined };
+interface CursorAnchor {
+  /** The action's number in the batch, from 1. */
+  index: number;
+  action: Action;
+  anchored: boolean;
 }
 
 /** A session as the window saves it across a reload, as JSON: what it needs to carry on (#25). */
-export type SavedSession = {
+export interface SavedSession {
   task?: string;
   scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection'> & { allowedCommands: string[] };
   finished: BatchResult[];
-  events: Exclude<Event, { kind: 'edit' }>[];
-};
+  events: Array<Exclude<Event, { kind: 'edit' }>>;
+}
 
-type Session = {
+interface Session {
   task?: string;
   scene: Scene;
   player: Player;
@@ -92,7 +77,7 @@ type Session = {
   /** A report told the agent a batch stopped short: the next batch must anchor the cursor with a file and line (#112). */
   anchorNeeded: boolean;
   /** Rejections handed back by `restore`, to be reported again, one per report (#28), each marked if the agent may have seen it. */
-  held: { rejected: NonNullable<Report['rejected']>; mayRepeat: boolean }[];
+  held: Array<{ rejected: NonNullable<Report['rejected']>; mayRepeat: boolean }>;
   /** A report restored may have reached the agent already: the next report says so (#67). */
   mayRepeat: boolean;
   /** Text of each file edited by the programmer, as of the last report. */
@@ -114,18 +99,52 @@ type Session = {
   lines: LineIds;
   /** For each file, the line the agent was last shown at each number, by its identity. */
   seen: Map<string, Map<number, number>>;
-};
+}
 
-type Call = {
+interface Call {
   kind: 'step' | 'listen' | 'end';
   batch?: Batch;
   summary?: string;
   timer: ReturnType<typeof setTimeout>;
   resolve: (report: Report) => void;
   reject: (error: unknown) => void;
-};
+}
 
-const cancelled = () => new ToolError('cancelled', 'The call was cancelled.');
+/**
+ * Returns whether an event interrupts. Everything does, except changes the programmer didn't make to files no batch
+ * is going to edit. An event it holds for is `Act` in specs/ListenGrace.tla.
+ */
+function interrupting(e: PendingEvent): boolean {
+  return e.kind !== 'edit' || e.by === 'programmer' || e.interrupted === true;
+}
+
+/** Returns a report in one log line: its batches, events, flags, and size (#149). */
+function describeReport(report: Report): string {
+  const parts = [
+    `batches [${report.batches.map((b) => `${b.id} ${b.status}`).join(', ')}]`,
+    `events [${report.events.map((e) => (e.kind === 'edit' ? `edit ${e.file}` : e.kind)).join(', ')}]`,
+  ];
+  if (report.waiting) parts.push('waiting');
+  if (report.paused) parts.push(`paused (${report.paused.join(', ')})`);
+  if (report.rejected) parts.push(`rejected at action ${report.rejected.index}: ${report.rejected.error.kind}`);
+  parts.push(`${JSON.stringify(report).length} chars`);
+  return parts.join(', ');
+}
+
+/** Returns the first action at the cursor, and whether it anchors the cursor: a `move` or `select` giving both `file` and `line` (#112). */
+function cursorAnchor(actions: Action[]): CursorAnchor | undefined {
+  for (const [i, action] of actions.entries()) {
+    if ('say' in action || 'run' in action || 'point' in action) continue;
+    const place = 'move' in action ? action.move : 'select' in action ? action.select : undefined;
+    return { index: i + 1, action, anchored: place?.file !== undefined && place?.line !== undefined };
+  }
+  return undefined;
+}
+
+/** Returns the error a cancelled call rejects with. */
+function cancelled(): ToolError {
+  return new ToolError('cancelled', 'The call was cancelled.');
+}
 
 export class Controller {
   private session: Session | null = null;
@@ -158,7 +177,7 @@ export class Controller {
 
   // ---- Tools -------------------------------------------------------------
 
-  /** `rules`: the project guides the relay read for the agent, named for the panel (#23). */
+  /** Starts a session, or resumes a suspended one from the same directory. `rules`: the project guides the relay read for the agent, named for the panel (#23). */
   start(task?: string, root?: string, rules?: string[]): Promise<Report> {
     return this.serialize(undefined, async () => {
       // In the editor's spelling, so paths inside it are reported relative to it.
@@ -201,10 +220,10 @@ export class Controller {
     s.seenCursor = undefined;
     this.panel.post({ type: 'session', active: true, task: s.task, resumed: true, ...(rules?.length ? { rules } : {}) });
     this.render();
-    return this.withCursor(s, { ...this.snapshot(s, undefined, false), resumed: true });
+    return this.withCursor(s, { ...this.snapshot(s, undefined, /* waiting= */ false), resumed: true });
   }
 
-  /** A new session, the window's from now on. */
+  /** Opens a new session, the window's from now on. */
   private open(task: string | undefined, scene: Scene): Session {
     const timeline = new Timeline(this.pauseReasons.size > 0);
     const lines = LineIds.editor();
@@ -218,7 +237,9 @@ export class Controller {
         config: () => this.config,
         speed: () => this.speed,
         readingSpeed: () => this.readingSpeed,
-        render: () => this.render(),
+        render: () => {
+          this.render();
+        },
         confirm: (id, command) => this.confirm(s, id, command),
         lines,
       }),
@@ -246,7 +267,7 @@ export class Controller {
   }
 
   /**
-   * The session as the window saves it in the workspace's storage, to bring it back suspended after a
+   * Returns the session as the window saves it in the workspace's storage, to bring it back suspended after a
    * reload (#25, specs/Resume.tla, `Save`); none once it has ended. Edits aren't kept: their diffs need the
    * text from before them, and the agent reads its files again when it resumes.
    */
@@ -262,7 +283,7 @@ export class Controller {
     };
   }
 
-  /** After a reload: the session the window saved, suspended until its agent's `start` (#25). */
+  /** Revives, after a reload, the session the window saved, suspended until its agent's `start` (#25). */
   revive(saved: SavedSession): void {
     if (this.session) return;
     const scene: Scene = {
@@ -290,7 +311,7 @@ export class Controller {
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
       // specs/Anchor.tla, `SubmitAnchored` and `SubmitUnanchored`).
       const anchor = cursorAnchor(actions);
-      if (s.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(s, actions, anchor.index);
+      if (s.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(s, anchor);
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
       const rehearsal = s.stale || s.ended ? undefined : await this.rehearse(s, actions);
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
@@ -311,7 +332,7 @@ export class Controller {
     });
   }
 
-  /** `Listen` in specs/Controller.tla. */
+  /** Blocks until there is something to report: `Listen` in specs/Controller.tla. */
   listen(signal?: AbortSignal): Promise<Report> {
     return this.serialize(signal, () => {
       this.requireSession();
@@ -319,7 +340,7 @@ export class Controller {
     });
   }
 
-  /** specs/Resume.tla, `EndByAgent`. */
+  /** Ends the session, the agent's way: specs/Resume.tla, `EndByAgent`. */
   end(summary?: string, signal?: AbortSignal): Promise<Report> {
     return this.serialize(signal, () => {
       this.requireSession();
@@ -327,20 +348,20 @@ export class Controller {
     });
   }
 
-  /** Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
+  /** Reads a file. Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
   async read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
     const s = this.requireSession();
     // `Call` and `GoQuiet` in specs/ListenGrace.tla: a read is a call too, settled at once.
     if (this.openCalls === 0) this.startQuiet();
     const path = this.resolvePath(s, file);
     const planned = this.planned(s, path);
-    const text = planned ?? (await this.textOrMissing(s, path));
+    const text = planned?.text ?? (await this.textOrMissing(s, path));
     const { lines, finalNewline } = fileLines(text);
     const from = Math.max(1, fromLine ?? 1);
     const to = Math.min(lines.length, toLine ?? lines.length);
     const numbers = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i);
     // As the queued batches leave the file, if they edit it (specs/Rehearsal.tla, `Read`).
-    this.saw(s, planned !== undefined ? s.queue.at(-1)!.after!.lines : s.lines, { file: path, text, lines: numbers });
+    this.saw(s, planned?.lines ?? s.lines, { file: path, text, lines: numbers });
     const content: FileContent = {
       file: this.displayPath(s, path),
       dirty: await this.editor.isDirty(path),
@@ -350,7 +371,7 @@ export class Controller {
     return content;
   }
 
-  /** The file's text; a file that doesn't exist is the agent's to create, with a `move` (#89). */
+  /** Returns the file's text; a file that doesn't exist is the agent's to create, with a `move` (#89). */
   private async textOrMissing(s: Session, path: string): Promise<string> {
     try {
       return await this.editor.getText(path);
@@ -361,13 +382,16 @@ export class Controller {
   }
 
   /**
-   * The text of a file as it will be once the queued batches have played, if they edit it: they
-   * were played in memory when queued. Not after an interruption, which discards what they'd do.
+   * Returns the text of a file as it will be once the queued batches have played, if they edit it, with
+   * the identities of its lines then: they were played in memory when queued. Not after an interruption,
+   * which discards what they'd do.
    */
-  private planned(s: Session, path: string): string | undefined {
+  private planned(s: Session, path: string): { text: string; lines: LineIds } | undefined {
     // specs/Rehearsal.tla, `Read`: while `stale`, the editor's text.
     if (s.stale) return undefined;
-    return s.queue.at(-1)?.after?.texts.get(path);
+    const after = s.queue.at(-1)?.after;
+    const text = after?.texts.get(path);
+    return after && text !== undefined ? { text, lines: after.lines } : undefined;
   }
 
   /**
@@ -400,7 +424,7 @@ export class Controller {
   // ---- Programmer input --------------------------------------------------
 
   /**
-   * `selection`: code the programmer had selected, sent along with the message. To an active or a suspended session
+   * Records a message from the programmer. `selection`: code they had selected, sent along with it. To an active or a suspended session
    * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
    */
   userMessage(text: string, selection?: SharedSelection): void {
@@ -421,7 +445,7 @@ export class Controller {
     this.update();
   }
 
-  /** A change the programmer made. `changes` are applied in order, each to the result of the previous. */
+  /** Records a change the programmer made. `changes` are applied in order, each to the result of the previous. */
   userEdit(file: string, before: string, after: string, changes: Change[]): void {
     const s = this.activeSession();
     if (!s) return;
@@ -444,7 +468,7 @@ export class Controller {
   }
 
   /**
-   * A change the programmer didn't make: by a tool, a formatter, or on disk. It interrupts if the
+   * Records a change the programmer didn't make: by a tool, a formatter, or on disk. It interrupts if the
    * playing or queued batches edit the file, since they were planned against the text before it.
    * Otherwise it's just reported, and the queued rehearsals follow it. A file changed
    * on disk: specs/Reload.tla, `Reload`.
@@ -457,7 +481,11 @@ export class Controller {
     const planned = s.queue.some((b) => b.after?.edits.has(file));
     // The queued rehearsals follow it, reading the file's line identities from the editor (specs/Rehearsal.tla,
     // `EditAsOther`).
-    if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, after, changes);
+    if (!planned) {
+      for (const b of s.queue) {
+        if (b.after) followChange(b.after, file, after, changes);
+      }
+    }
     this.recordEdit(s, file, before, after, changes, 'other');
     if (planned) {
       const e = s.events.find((p): p is EditEvent => p.kind === 'edit' && p.file === file && p.diff === undefined);
@@ -467,7 +495,7 @@ export class Controller {
     this.update();
   }
 
-  /** Edits to a file are reported as one diff, as the programmer's if any of them was
+  /** Records an edit. Edits to a file are reported as one diff, as the programmer's if any of them was
    * (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`). */
   private recordEdit(s: Session, file: string, before: string, after: string, changes: Change[], by: EditEvent['by']): void {
     s.lines.of(file, before);
@@ -513,7 +541,7 @@ export class Controller {
     this.update();
   }
 
-  /** specs/Resume.tla, `EndByProgrammer`: active or suspended. */
+  /** Ends the session, the programmer's way, active or suspended: specs/Resume.tla, `EndByProgrammer`. */
   endSession(): void {
     const s = this.activeSession();
     if (!s) return;
@@ -532,7 +560,7 @@ export class Controller {
   }
 
   /**
-   * The agent is gone (the relay disconnected). Its session waits, suspended, for a `start` from its
+   * Suspends the session: the agent is gone (the relay disconnected), so it waits for a `start` from its
    * directory, or for the programmer to end it (#25, specs/Resume.tla, `Disconnect`).
    */
   disconnect(): void {
@@ -573,8 +601,11 @@ export class Controller {
     if (this.pauseReasons.size === 0) return;
     const lookedAway = this.pauseReasons.has('away');
     if (reason === undefined || this.pauseReasons.has(reason)) this.trace?.(`resume ${reason ?? 'all'}`);
-    if (reason === undefined) this.pauseReasons.clear();
-    else this.pauseReasons.delete(reason);
+    if (reason === undefined) {
+      this.pauseReasons.clear();
+    } else {
+      this.pauseReasons.delete(reason);
+    }
     if (this.pauseReasons.size > 0) return;
     const s = this.session;
     if (s) {
@@ -594,7 +625,7 @@ export class Controller {
     this.speed = speed;
   }
 
-  /** How long follow mode's scroll glides over `lines` lines, at the playback speed (#123). */
+  /** Returns how long follow mode's scroll glides over `lines` lines, at the playback speed (#123). */
   glideMs(lines: number): number {
     return glideDuration(this.config.timing, lines, this.speed);
   }
@@ -607,7 +638,7 @@ export class Controller {
     this.config = { ...this.config, confirmCommands: confirm };
   }
 
-  /** A path the agent gave, against the session's root: for a file the bridge reads itself. */
+  /** Resolves a path the agent gave against the session's root: for a file the bridge reads itself. */
   resolveFile(file: string): string {
     return this.resolvePath(this.requireSession(), file);
   }
@@ -615,7 +646,7 @@ export class Controller {
   /** The extension's reading speed calibration: false while one is under way (#109, specs/Calibration.tla). */
   onCalibrate?: (passage: Passage) => boolean;
 
-  /** The agent's `calibrate` tool: a passage of its own, handed to the calibration. */
+  /** Hands a passage of the agent's own to the calibration: its `calibrate` tool. */
   calibrate(passage: Passage): Report {
     const s = this.requireSession();
     if (!this.onCalibrate) throw new ToolError('no_editor', 'This editor has no reading speed calibration.');
@@ -624,14 +655,15 @@ export class Controller {
   }
 
   /**
-   * The programmer's answer to a `run` waiting for confirmation. `remember`: run exactly this
+   * Takes the programmer's answer to a `run` waiting for confirmation. `remember`: run exactly this
    * command without asking for the rest of the session.
    */
   decideRun(id: number, run: boolean, remember = false): void {
     const s = this.session;
-    const c = s?.confirming;
+    if (!s) return;
+    const c = s.confirming;
     if (c?.id !== id) return;
-    if (run && remember) s!.scene.allowedCommands.add(c.command);
+    if (run && remember) s.scene.allowedCommands.add(c.command);
     c.decide(run);
   }
 
@@ -641,7 +673,9 @@ export class Controller {
     // An interrupt during the save before it: the abort event has fired already.
     if (signal.aborted) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
-      const abort = () => resolve(false);
+      function abort(): void {
+        resolve(false);
+      }
       s.confirming = {
         id,
         command,
@@ -656,12 +690,12 @@ export class Controller {
     });
   }
 
-  /** Calibration: overrides on top of the default timing. */
+  /** Sets the timing: the calibration's overrides on top of the default. */
   setTiming(overrides: TimingOverrides): void {
     this.config = { ...this.config, timing: withOverrides(defaultTiming, overrides) };
   }
 
-  /** The session's agent is gone, and a `start` from its directory takes it up again (#25). */
+  /** Returns whether the session's agent is gone, so a `start` from its directory takes it up again (#25). */
   get isSuspended(): boolean {
     return this.session?.suspended === true;
   }
@@ -686,7 +720,9 @@ export class Controller {
     this.openCalls++;
     this.endQuiet();
     // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
-    const guarded = () => (signal?.aborted ? Promise.reject(cancelled()) : fn());
+    function guarded(): Promise<T> {
+      return signal?.aborted ? Promise.reject(cancelled()) : fn();
+    }
     const run = this.chain.then(guarded, guarded);
     this.chain = run.catch(() => {});
     // `GoQuiet` in specs/ListenGrace.tla: once the last open call settles, no call is open until the agent makes the next.
@@ -708,20 +744,27 @@ export class Controller {
   private async rejectBatch(s: Session, actions: Action[], rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
     const rehearsed = rehearsal.result;
     const index = actions.length - (rehearsed.unplayed?.length ?? 0) + 1;
-    const rejected: NonNullable<Report['rejected']> = { index, action: actions[index - 1]!, error: rehearsed.error! };
+    const action = actions[index - 1];
+    const { error } = rehearsed;
+    if (action === undefined || error === undefined) {
+      throw new Error(`The rehearsal failed at action ${index} of ${actions.length}, but recorded no error.`);
+    }
+    const rejected: NonNullable<Report['rejected']> = { index, action, error };
     if (rehearsed.code) rejected.code = rehearsed.code;
-    for (const sighting of rehearsal.sightings) this.saw(s, rehearsal.after.lines, sighting);
-    const report = { ...this.snapshot(s, undefined, false), rejected };
+    for (const sighting of rehearsal.sightings) {
+      this.saw(s, rehearsal.after.lines, sighting);
+    }
+    const report = { ...this.snapshot(s, undefined, /* waiting= */ false), rejected };
     this.trace?.(`report to step: ${describeReport(report)}`);
     this.render();
     return this.withCursor(s, report);
   }
 
   /** Reports a batch refused for not anchoring the cursor after a discarded one, without queuing it (#112, specs/Anchor.tla). */
-  private rejectUnanchored(s: Session, actions: Action[], index: number): Promise<Report> {
+  private rejectUnanchored(s: Session, anchor: CursorAnchor): Promise<Report> {
     const error = { kind: 'unanchored' as const, message: UNANCHORED };
-    const rejected = { index, action: actions[index - 1]!, error };
-    const report = { ...this.snapshot(s, undefined, false), rejected };
+    const rejected = { index: anchor.index, action: anchor.action, error };
+    const report = { ...this.snapshot(s, undefined, /* waiting= */ false), rejected };
     this.trace?.(`report to step: ${describeReport(report)}`);
     this.render();
     return this.withCursor(s, report);
@@ -752,7 +795,9 @@ export class Controller {
         resolve,
         reject,
         // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `TimeOut`.
-        timer: setTimeout(() => this.finishCall(true), this.config.maxBlockMs),
+        timer: setTimeout(() => {
+          this.finishCall(/* timedOut= */ true);
+        }, this.config.maxBlockMs),
       };
       this.endGrace();
       this.call = call;
@@ -797,10 +842,10 @@ export class Controller {
     const call = this.call;
     const s = this.session;
     // specs/Serialize.tla, `Finish`.
-    if (call && s && this.ready(call, s)) this.finishCall(false);
+    if (call && s && this.ready(call, s)) this.finishCall(/* timedOut= */ false);
   }
 
-  /** `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
+  /** Finishes the open call with a report: `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
   private finishCall(timedOut: boolean): void {
     const call = this.call;
     if (!call) return;
@@ -831,10 +876,12 @@ export class Controller {
     this.trace?.(`report to ${call.kind}: ${describeReport(report)}`);
     // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
     // `Answer` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
-    void this.withCursor(s, report).then(call.resolve, () => call.resolve(report));
+    void this.withCursor(s, report).then(call.resolve, () => {
+      call.resolve(report);
+    });
   }
 
-  /** `TimeOut` and `Expire` in specs/ListenGrace.tla: the agent is only waiting, so "listening" stays a while. */
+  /** Starts the grace: the agent is only waiting, so "listening" stays a while (`TimeOut` and `Expire` in specs/ListenGrace.tla). */
   private startGrace(): void {
     this.endGrace();
     this.grace = setTimeout(() => {
@@ -843,13 +890,13 @@ export class Controller {
     }, this.config.listenGraceMs);
   }
 
-  /** `Call` in specs/ListenGrace.tla: a new call ends the grace. */
+  /** Ends the grace: a new call does (`Call` in specs/ListenGrace.tla). */
   private endGrace(): void {
     if (this.grace) clearTimeout(this.grace);
     this.grace = null;
   }
 
-  /** `GoQuiet` in specs/ListenGrace.tla: with no call open for absentMs, the agent isn't listening (#149). */
+  /** Starts the quiet: with no call open for absentMs, the agent isn't listening (`GoQuiet` in specs/ListenGrace.tla, #149). */
   private startQuiet(): void {
     this.endQuiet();
     this.quiet = setTimeout(() => {
@@ -859,7 +906,7 @@ export class Controller {
     }, this.config.absentMs);
   }
 
-  /** `Call` in specs/ListenGrace.tla: a new call ends the quiet. */
+  /** Ends the quiet: a new call does (`Call` in specs/ListenGrace.tla). */
   private endQuiet(): void {
     if (this.quiet) clearTimeout(this.quiet);
     this.quiet = null;
@@ -886,13 +933,16 @@ export class Controller {
   }
 
   /**
-   * The agent is shown lines: it knows which line each number is, while it stays that line's.
+   * Records that the agent was shown lines: it knows which line each number is, while it stays that line's.
    * `lines`: of the version shown, which may be a batch's, as it will play or would have.
    */
   private saw(s: Session, lines: LineIds, { file, text, lines: numbers }: Sighting): void {
     const ids = lines.of(file, text);
     let seen = s.seen.get(file);
-    if (!seen) s.seen.set(file, (seen = new Map()));
+    if (!seen) {
+      seen = new Map<number, number>();
+      s.seen.set(file, seen);
+    }
     for (const n of numbers) {
       const id = ids[n - 1];
       if (id !== undefined) seen.set(n, id);
@@ -921,8 +971,11 @@ export class Controller {
       // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla, `Report`).
       if (before === after && !interrupting(e)) continue;
       const file = this.displayPath(s, e.file);
-      if (before === after) events.push({ kind: 'edit', file, diff: '', by: e.by });
-      else events.push({ kind: 'edit', file, ...boundedDiff(file, before, after), by: e.by });
+      if (before === after) {
+        events.push({ kind: 'edit', file, diff: '', by: e.by });
+      } else {
+        events.push({ kind: 'edit', file, ...boundedDiff(file, before, after), by: e.by });
+      }
     }
     s.finished = [];
     s.events = [];
@@ -976,7 +1029,9 @@ export class Controller {
     const discarded = s.queue.filter((b) => b.state === 'queued').map((b) => b.id);
     const playing = s.queue.find((b) => b.state === 'playing');
     this.trace?.(`interrupt: discarding [${discarded.join(', ')}]${playing ? `, batch ${playing.id} plays on` : ''}`);
-    for (const b of s.queue) if (b.state === 'queued') this.discard(s, b);
+    for (const b of s.queue) {
+      if (b.state === 'queued') this.discard(s, b);
+    }
     s.queue = s.queue.filter((b) => b.state !== 'done');
     s.timeline.interrupt();
   }
@@ -1006,7 +1061,9 @@ export class Controller {
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
         // (specs/Rehearsal.tla, `Play`).
         if (result.status === 'completed' && batch.after) s.lines.adopt(batch.after.lines);
-        for (const sighting of sightings) this.saw(s, s.lines, sighting);
+        for (const sighting of sightings) {
+          this.saw(s, s.lines, sighting);
+        }
         // specs/Serialize.tla, `Play`: batches finish in queue order.
         batch.state = 'done';
         batch.result = result;

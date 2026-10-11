@@ -14,7 +14,9 @@ it(
   'ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation',
   () => {
     let texts = [''];
-    for (let n = 1; n <= 5; n++) texts = [...texts, ...texts.filter((t) => t.length === n - 1).flatMap((t) => CHARS.map((c) => t + c))];
+    for (let n = 1; n <= 5; n++) {
+      texts = [...texts, ...texts.filter((t) => t.length === n - 1).flatMap((t) => CHARS.map((c) => t + c))];
+    }
     for (const text of texts) {
       for (const atLineStart of [false, true]) {
         const chunks = planTyping(text, testConfig.timing.type, atLineStart, () => 0.5);

@@ -1,5 +1,5 @@
 import * as nodePath from 'node:path';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { withinFolder } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
 import { Controller } from '../src/controller';
@@ -23,7 +23,7 @@ export class FakeEditor implements EditorPort {
   files = new Map<string, string>();
   dirty = new Set<string>();
   saved: string[] = [];
-  edits: { file: string; offset: number; deleteLength: number; text: string; options: EditOptions }[] = [];
+  edits: Array<{ file: string; offset: number; deleteLength: number; text: string; options: EditOptions }> = [];
   shown: string[] = [];
   cursor: CursorView | null = null;
   state: AgentState | null = null;
@@ -86,18 +86,20 @@ export class FakeEditor implements EditorPort {
   }
 
   /** `unsaved`: the files with unsaved changes when the command started. */
-  commands: { command: string; options: RunOptions; unsaved: string[] }[] = [];
+  commands: Array<{ command: string; options: RunOptions; unsaved: string[] }> = [];
   /**
    * How each command behaves: its terminal takes `startMs` to get ready, then the command takes `ms`
    * and exits with `exitCode`, having printed `output`.
    */
-  commandScript: Record<string, { ms: number; startMs?: number; exitCode?: number; output?: string }> = {};
+  commandScript = new Map<string, { ms: number; startMs?: number; exitCode?: number; output?: string }>();
   async runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
-    const script = this.commandScript[command] ?? { ms: 0, exitCode: 0 };
+    const script = this.commandScript.get(command) ?? { ms: 0, exitCode: 0 };
     if (script.startMs) {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, script.startMs);
-        options.signal.addEventListener('abort', () => resolve());
+        options.signal.addEventListener('abort', () => {
+          resolve();
+        });
       });
       if (options.signal.aborted) return { output: '', notStarted: true };
     }
@@ -105,7 +107,12 @@ export class FakeEditor implements EditorPort {
     const output = script.output ?? '';
     const started = Date.now();
     const finished = await new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => resolve(script.ms <= options.waitMs), Math.min(script.ms, options.waitMs));
+      const timer = setTimeout(
+        () => {
+          resolve(script.ms <= options.waitMs);
+        },
+        Math.min(script.ms, options.waitMs),
+      );
       options.signal.addEventListener('abort', () => {
         clearTimeout(timer);
         resolve(false);
@@ -113,17 +120,22 @@ export class FakeEditor implements EditorPort {
     });
     if (finished) return { exitCode: script.exitCode, output, shell: 'bash' };
     const exited = new Promise<number | undefined>((resolve) => {
-      setTimeout(() => resolve(script.exitCode), Math.max(0, script.ms - (Date.now() - started)));
+      setTimeout(
+        () => {
+          resolve(script.exitCode);
+        },
+        Math.max(0, script.ms - (Date.now() - started)),
+      );
     });
     return { output, running: true, exited };
   }
 
-  /** The programmer types into a file. */
+  /** Types into a file, as the programmer. */
   userEdit(name: string, offset: number, deleteLength: number, text: string): void {
     this.change('programmer', name, offset, deleteLength, text);
   }
 
-  /** Something other than the programmer changes a file: a tool, a formatter. */
+  /** Changes a file as something other than the programmer: a tool, a formatter. */
   otherEdit(name: string, offset: number, deleteLength: number, text: string): void {
     this.change('other', name, offset, deleteLength, text);
   }
@@ -134,8 +146,11 @@ export class FakeEditor implements EditorPort {
     const after = before.slice(0, offset) + text + before.slice(offset + deleteLength);
     this.files.set(file, after);
     const changes = [{ offset, deleteLength, text }];
-    if (by === 'programmer') this.controller.userEdit(file, before, after, changes);
-    else this.controller.otherEdit(file, before, after, changes);
+    if (by === 'programmer') {
+      this.controller.userEdit(file, before, after, changes);
+    } else {
+      this.controller.otherEdit(file, before, after, changes);
+    }
   }
 
   text(name: string): string {
@@ -176,10 +191,13 @@ export const testConfig: Config = {
   random: () => 0.5,
 };
 
+/** Returns a controller over a fake editor holding `files`, with the test config and `config` on top. */
 export function setup(files: Record<string, string> = {}, config: Partial<Config> = {}) {
   const editor = new FakeEditor();
   const panel = new FakePanel();
-  for (const [name, text] of Object.entries(files)) editor.files.set(editor.resolvePath(name), text);
+  for (const [name, text] of Object.entries(files)) {
+    editor.files.set(editor.resolvePath(name), text);
+  }
   const controller = new Controller(editor, panel, { ...testConfig, ...config });
   editor.controller = controller;
   return { editor, panel, controller };
@@ -208,7 +226,9 @@ export async function until<T>(promise: Promise<T>, maxMs = 120_000): Promise<T>
     await vi.advanceTimersByTimeAsync(10);
   }
   if (!t.done) throw new Error(`Still pending after ${maxMs} ms`);
-  if (t.error !== undefined) throw t.error;
+  if (t.error !== undefined) {
+    throw t.error instanceof Error ? t.error : new Error('The promise rejected with a value that is not an Error.', { cause: t.error });
+  }
   // `track` keeps the value of the promise it was given, a `T`.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return t.value as T;
@@ -216,4 +236,26 @@ export async function until<T>(promise: Promise<T>, maxMs = 120_000): Promise<T>
 
 export async function advance(ms: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(ms);
+}
+
+/** Returns `expect.stringContaining(text)`, typed as the string it stands in for. */
+export function containing(text: string): string {
+  const matcher: unknown = expect.stringContaining(text);
+  // An asymmetric matcher stands in for the value it matches; vitest types it `any`.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return matcher as string;
+}
+
+/** Returns `expect.stringMatching(pattern)`, typed as the string it stands in for. */
+export function matching(pattern: RegExp): string {
+  const matcher: unknown = expect.stringMatching(pattern);
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return matcher as string;
+}
+
+/** Returns `expect.any(String)`, typed as the string it stands in for. */
+export function anyString(): string {
+  const matcher: unknown = expect.any(String);
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return matcher as string;
 }

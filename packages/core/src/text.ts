@@ -3,7 +3,10 @@
 /** In `terminalText`, where a line was erased: what came before it on the line is gone. */
 const ERASED_LINE = '\x00';
 
-export type Position = { line: number; column: number };
+export interface Position {
+  line: number;
+  column: number;
+}
 
 export function position(text: string, offset: number): Position {
   let line = 1;
@@ -20,7 +23,7 @@ export function splitLines(text: string): string[] {
 }
 
 /**
- * A file's lines, as the agent is shown them: a newline at the end ends the last line, and doesn't
+ * Returns a file's lines, as the agent is shown them: a newline at the end ends the last line, and doesn't
  * start an empty one after it. An empty file has no lines.
  */
 export function fileLines(text: string): { lines: string[]; finalNewline: boolean } {
@@ -32,7 +35,7 @@ export function fileLines(text: string): { lines: string[]; finalNewline: boolea
 }
 
 /**
- * The offsets on a line, as `position` counts them: from its first character through its newline,
+ * Returns the offsets on a line, as `position` counts them: from its first character through its newline,
  * or the end of the text. None for a line the text doesn't have.
  */
 export function lineSpan(text: string, line: number): { start: number; end: number } | undefined {
@@ -51,7 +54,7 @@ export function lineText(text: string, line: number): string {
   return splitLines(text)[line - 1] ?? '';
 }
 
-/** The offset of the end of a line (before its newline), clamped to the document. */
+/** Returns the offset of the end of a line (before its newline), clamped to the document. */
 export function lineEnd(text: string, line: number): number {
   let offset = 0;
   for (let l = 1; l < line; l++) {
@@ -68,10 +71,10 @@ export function isLineStart(text: string, offset: number): boolean {
   return offset === 0 || text[offset - 1] === '\n';
 }
 
-/** Raw terminal output as plain text: no escape sequences, carriage-return overwrites resolved. */
+/** Returns raw terminal output as plain text: no escape sequences, carriage-return overwrites resolved. */
 export function terminalText(raw: string): string {
   // Escape sequences start with ESC (\x1b) and some end with BEL (\x07): matching control characters is the point.
-  /* oxlint-disable no-control-regex */
+  // oxlint-disable no-control-regex
   const plain = raw
     // ECMA-48: CSI G or 1G moves the cursor to column 1; CSI K or 0K erases from it to the end, CSI 2K the whole line.
     .replace(/\x1b\[1?G\x1b\[0?K|\x1b\[2K/g, ERASED_LINE)
@@ -85,7 +88,7 @@ export function terminalText(raw: string): string {
     .map((line) => {
       const parts = (line.split(ERASED_LINE).at(-1) ?? '').split('\r').filter((p) => p !== '');
       return (parts.at(-1) ?? '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '').trimEnd();
-      /* oxlint-enable no-control-regex */
+      // oxlint-enable no-control-regex
     })
     .join('\n')
     .trim();

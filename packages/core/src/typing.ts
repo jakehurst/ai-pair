@@ -3,13 +3,16 @@
 import type { Cadence, Reading } from './timing';
 
 /** A piece of text inserted in one edit, after waiting `delay` ms. */
-export type Chunk = { text: string; delay: number };
+export interface Chunk {
+  text: string;
+  delay: number;
+}
 
 const PUNCTUATION = new Set([',', ';', ':']);
 const OPEN_BRACKETS = new Set(['(', '[', '{']);
 const WORD = /[\p{L}\p{N}_]/u;
 
-function isIndent(ch: string | undefined): boolean {
+function isIndent(ch: string): boolean {
   return ch === ' ' || ch === '\t';
 }
 
@@ -29,11 +32,13 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   let i = 0;
 
   // specs/Typing.tla, `IndentOf`.
-  const takeIndent = (): string => {
+  function takeIndent(): string {
     let indent = '';
-    while (isIndent(chars[i])) indent += chars[i++];
+    for (let ch = chars[i]; ch !== undefined && isIndent(ch); ch = chars[++i]) {
+      indent += ch;
+    }
     return indent;
-  };
+  }
 
   // specs/Typing.tla, `Plan`: the indentation at the very start is one chunk first.
   if (atLineStart) {
@@ -45,8 +50,8 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   }
 
   // specs/Typing.tla, `Loop`.
-  while (i < chars.length) {
-    const ch = chars[i++]!;
+  for (let ch = chars[i]; ch !== undefined; ch = chars[i]) {
+    i++;
     const wordStart = previous !== undefined && !WORD.test(previous) && WORD.test(ch);
     const delay = cadence.charMs * (1 + (random() * 2 - 1) * cadence.jitter) + (wordStart ? cadence.wordStartMs : 0) + pause;
     if (ch === '\n') {
@@ -63,12 +68,12 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   return chunks;
 }
 
-/** The characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
+/** Returns the characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
 export function readingChars(text: string): number {
   return text.trim().replace(/\s+/g, ' ').length;
 }
 
-/** How long a say pauses: per character of its text, at least the floor, so each message gets its own time. */
+/** Returns how long a say pauses: per character of its text, at least the floor, so each message gets its own time. */
 export function readingTime(text: string, reading: Reading): number {
   const chars = readingChars(text);
   return Math.max(reading.minMs, chars * reading.msPerChar);

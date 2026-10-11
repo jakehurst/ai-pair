@@ -3,7 +3,7 @@
 
 import { defaultTiming, type Timing } from './timing';
 
-export type Config = {
+export interface Config {
   maxBlockMs: number;
   /** During the programmer's turn, how long after their last edit `listen` returns. */
   navigatorIdleMs: number;
@@ -18,7 +18,7 @@ export type Config = {
   /** How long a `run` waits for its command by default, and at most. */
   runWaitMs: number;
   maxRunWaitMs: number;
-};
+}
 
 export const defaultConfig: Config = {
   maxBlockMs: 45_000,

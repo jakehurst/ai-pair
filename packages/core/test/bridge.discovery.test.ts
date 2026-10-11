@@ -29,9 +29,15 @@ it('FindsRunningProp: rewrites the discovery file on focus without a reader ever
   await bridge.start();
   const stop = new SharedArrayBuffer(4);
   const reader = new Worker(READER, { eval: true, workerData: { file: bridge.file, stop } });
-  const counted = new Promise<{ reads: number; broken: number }>((r) => reader.once('message', r));
-  await new Promise((r) => setTimeout(r, 100));
-  for (let i = 0; i < 5000; i++) bridge.focused();
+  const counted = new Promise<{ reads: number; broken: number }>((r) => {
+    reader.once('message', r);
+  });
+  await new Promise((r) => {
+    setTimeout(r, 100);
+  });
+  for (let i = 0; i < 5000; i++) {
+    bridge.focused();
+  }
   Atomics.store(new Int32Array(stop), 0, 1);
   const { reads, broken } = await counted;
   await reader.terminate();
@@ -50,10 +56,14 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     const bridge = new Bridge(new Controller(new FakeEditor(), new FakePanel(), testConfig), {
       dir: path.join(parent, 'windows'),
       workspaceFolders: () => ['/project'],
-      failed: (e) => failures.push(e),
+      failed: (e) => {
+        failures.push(e);
+      },
     });
     await bridge.start();
-    expect(() => bridge.focused()).not.toThrow();
+    expect(() => {
+      bridge.focused();
+    }).not.toThrow();
     bridge.dispose();
     fs.chmodSync(parent, 0o700);
     fs.rmSync(parent, { recursive: true, force: true });

@@ -11,21 +11,38 @@ const EXHAUSTIVE_MS = 30_000;
 
 const CHARS = ['x', 'y', '\n'];
 
+/** Returns every string of up to `max` characters from `CHARS`. */
 function strings(max: number): string[] {
   const all = [''];
-  for (let n = 1; n <= max; n++) for (const t of all.filter((s) => s.length === n - 1)) for (const c of CHARS) all.push(t + c);
+  for (let n = 1; n <= max; n++) {
+    for (const t of all.filter((s) => s.length === n - 1)) {
+      for (const c of CHARS) {
+        all.push(t + c);
+      }
+    }
+  }
   return all;
 }
 
+/** Returns the offsets where `needle` starts in `text`. */
 function starts(text: string, needle: string): number[] {
   const out: number[] = [];
   if (needle === '') return out;
-  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) out.push(i);
+  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) {
+    out.push(i);
+  }
   return out;
 }
 
-const lineOf = (text: string, offset: number) => position(text, offset).line;
-const lineCount = (text: string) => text.split('\n').length;
+/** Returns the line (from 1) that `offset` is on. */
+function lineOf(text: string, offset: number): number {
+  return position(text, offset).line;
+}
+
+/** Returns how many lines `text` has. */
+function lineCount(text: string): number {
+  return text.split('\n').length;
+}
 
 it(
   'SpotOK, SpotOnlyWhenUnique: resolves a spot only when one match has its marker on the line, and puts it there',
@@ -62,11 +79,16 @@ it(
           const r = resolveSpan(text, { line, text: find });
           const at = `${JSON.stringify(text)} ${JSON.stringify(find)} line ${line}`;
           expect(r.ok, at).toBe(here.length === 1);
-          if (r.ok) expect(r.range, at).toEqual({ start: here[0], end: here[0]! + find.length });
+          if (r.ok) {
+            const [first] = here;
+            if (first === undefined) throw new Error(`No match on the line: ${at}`);
+            expect(r.range, at).toEqual({ start: first, end: first + find.length });
+          }
           for (const through of strings(2)) {
             const range = resolveSpan(text, { line, from: find, through });
             if (!range.ok) continue;
-            const s = here[0]!;
+            const [s] = here;
+            if (s === undefined) throw new Error(`No match on the line: ${at}`);
             const e = range.range.end - through.length;
             expect(range.range.start, at).toBe(s);
             expect(through === '' ? -1 : text.indexOf(through, s + find.length), `${at} through ${JSON.stringify(through)}`).toBe(e);

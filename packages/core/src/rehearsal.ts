@@ -9,57 +9,16 @@ import { Player, transformScene, type Scene } from './player';
 import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort } from './ports';
 import { instant } from './timeline';
 
-/** What playing batches leaves behind: the scene, the text of each file they edited, and its lines. `edits`: this batch's own. */
-export type Rehearsal = { scene: Scene; texts: Map<string, string>; lines: LineIds; edits: Set<string> };
-
-/**
- * Plays `actions` in memory, starting from `from`. Commands don't run, and succeed; a `move` goes
- * only to a line the agent `knows`. Returns the batch's result, the lines it shows, and what it
- * leaves behind, for rehearsing the batch after it.
- */
-export async function rehearse(
-  editor: EditorPort,
-  config: Config,
-  from: Rehearsal,
-  actions: Action[],
-  knows: (file: string, line: number, id: number) => boolean,
-): Promise<{ result: BatchResult; sightings: Sighting[]; after: Rehearsal }> {
-  const scene: Scene = {
-    ...from.scene,
-    cursor: from.scene.cursor && { ...from.scene.cursor },
-    selection: from.scene.selection && { ...from.scene.selection },
-    point: from.scene.point && { ...from.scene.point },
-  };
-  const memory = new MemoryEditor(editor, new Map(from.texts));
-  const lines = from.lines.fork();
-  const player = new Player(scene, {
-    editor: memory,
-    panel: silent,
-    pacing: instant,
-    config: () => config,
-    speed: () => 1,
-    readingSpeed: () => 1,
-    render: () => {},
-    confirm: () => Promise.resolve(true),
-    lines,
-    knows,
-  });
-  const { result, sightings } = await player.play(0, actions);
-  return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } };
-}
-
-/**
- * Follows a change by others to a file no queued batch edits, so its rehearsed text is the editor's.
- * Its line identities are the editor's too: a copy of its own would give a line the change inserts
- * an identity of its own, unlike the one the agent is shown (specs/Rehearsal.tla, `ShareIds`).
- */
-export function followChange(r: Rehearsal, file: string, after: string, changes: Change[]): void {
-  for (const change of changes) transformScene(r.scene, file, change);
-  r.lines.forget(file);
-  if (r.texts.has(file)) r.texts.set(file, after);
-}
-
+/** A panel that shows nothing: a rehearsal is silent. */
 const silent: PanelPort = { post: () => {} };
+
+/** What playing batches leaves behind: the scene, the text of each file they edited, and its lines. `edits`: this batch's own. */
+export interface Rehearsal {
+  scene: Scene;
+  texts: Map<string, string>;
+  lines: LineIds;
+  edits: Set<string>;
+}
 
 /** A copy of the editor: files it has edited are its own, the rest are read from the real one. */
 class MemoryEditor implements EditorPort {
@@ -121,4 +80,53 @@ class MemoryEditor implements EditorPort {
   async runCommand(): Promise<CommandOutcome> {
     return { exitCode: 0, output: '' };
   }
+}
+
+/**
+ * Plays `actions` in memory, starting from `from`. Commands don't run, and succeed; a `move` goes
+ * only to a line the agent `knows`. Returns the batch's result, the lines it shows, and what it
+ * leaves behind, for rehearsing the batch after it.
+ */
+export async function rehearse(
+  editor: EditorPort,
+  config: Config,
+  from: Rehearsal,
+  actions: Action[],
+  knows: (file: string, line: number, id: number) => boolean,
+): Promise<{ result: BatchResult; sightings: Sighting[]; after: Rehearsal }> {
+  const scene: Scene = {
+    ...from.scene,
+    cursor: from.scene.cursor && { ...from.scene.cursor },
+    selection: from.scene.selection && { ...from.scene.selection },
+    point: from.scene.point && { ...from.scene.point },
+  };
+  const memory = new MemoryEditor(editor, new Map(from.texts));
+  const lines = from.lines.fork();
+  const player = new Player(scene, {
+    editor: memory,
+    panel: silent,
+    pacing: instant,
+    config: () => config,
+    speed: () => 1,
+    readingSpeed: () => 1,
+    render: () => {},
+    confirm: () => Promise.resolve(true),
+    lines,
+    knows,
+  });
+  const { result, sightings } = await player.play(0, actions);
+  return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } };
+}
+
+/**
+ * Follows a change by others to a file no queued batch edits, so its rehearsed text is the editor's.
+ * Its line identities are the editor's too: a copy of its own would give a line the change inserts
+ * an identity of its own, unlike the one the agent is shown (specs/Rehearsal.tla, `ShareIds`).
+ */
+export function followChange(r: Rehearsal, file: string, after: string, changes: Change[]): void {
+  for (const change of changes) {
+    transformScene(r.scene, file, change);
+  }
+  r.lines.forget(file);
+  if (r.texts.has(file)) r.texts.set(file, after);
 }

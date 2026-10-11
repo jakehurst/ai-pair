@@ -8,7 +8,7 @@ import { terminalText } from '../src/text';
 import { samePath, withinFolder, type PathStyle } from '../src/paths';
 import { displayPath } from '../src/player';
 import { Timeline } from '../src/timeline';
-import { FakeEditor } from './fake';
+import { containing, FakeEditor } from './fake';
 
 // Terminal output as VS Code's shell integration reports it: OSC 633 marks, and ANSI colors.
 const COMMAND_OUTPUT_START = '\x1b]633;C\x07';
@@ -91,7 +91,7 @@ describe('places', () => {
     expect(resolveSpan(text, { line: 1, text: ' ' })).toMatchObject({
       ok: false,
       kind: 'ambiguous',
-      message: expect.stringContaining('2 times on line 1'),
+      message: containing('2 times on line 1'),
     });
   });
 
@@ -123,7 +123,7 @@ describe('places', () => {
   });
 });
 
-/** Which line of `text` (from 1) each line is after the change, or 0 for a new one. */
+/** Returns which line of `text` (from 1) each line is after the change, or 0 for a new one. */
 function follow(text: string, offset: number, deleteLength: number, insert: string): number[] {
   const ids = text.split('\n').map((_, i) => -(i + 1));
   const after = applyChange({ text, ids }, { offset, deleteLength, text: insert });
@@ -187,7 +187,9 @@ describe('diffs', () => {
 
 describe('typing', () => {
   const cadence = { charMs: 100, jitter: 0, wordStartMs: 50, punctuationMs: 30, openBracketMs: 20, newlineMs: 250 };
-  const delays = (text: string, atLineStart = false) => planTyping(text, cadence, atLineStart, Math.random).map((c) => [c.text, c.delay]);
+  function delays(text: string, atLineStart = false): Array<[string, number]> {
+    return planTyping(text, cadence, atLineStart, Math.random).map((c) => [c.text, c.delay]);
+  }
 
   it('pauses as words start, and after punctuation and opening brackets', () => {
     expect(delays('ab c(d, e')).toEqual([
@@ -224,7 +226,7 @@ describe('typing', () => {
     const reading = { msPerChar: 10, minMs: 10 };
     expect(readingTime('', reading)).toBe(10);
     expect(readingTime('Hi.', reading)).toBe(30);
-    expect(readingTime(Array(100).fill('word').join(' '), reading)).toBe(4990);
+    expect(readingTime(Array.from({ length: 100 }, () => 'word').join(' '), reading)).toBe(4990);
     expect(readingTime('word\n\n  word', reading)).toBe(90);
   });
 });
@@ -241,16 +243,20 @@ describe('timeline', () => {
   });
 
   it('ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up', async () => {
-    const timeline = new Timeline(false);
+    const timeline = new Timeline(/* paused= */ false);
     const results: boolean[] = [];
-    void timeline.sleep(SLEEP_MS).then((completed) => results.push(completed));
+    void timeline.sleep(SLEEP_MS).then((completed) => {
+      results.push(completed);
+    });
     timeline.interrupt();
     await vi.advanceTimersByTimeAsync(SLEEP_MS);
     expect(results).toEqual([false]);
     expect(await timeline.sleep(SLEEP_MS)).toBe(false);
 
     timeline.reset();
-    void timeline.sleep(LONGER_SLEEP_MS).then((completed) => results.push(completed));
+    void timeline.sleep(LONGER_SLEEP_MS).then((completed) => {
+      results.push(completed);
+    });
     await vi.advanceTimersByTimeAsync(LONGER_SLEEP_MS - SLEEP_MS);
     expect(results).toEqual([false]);
     await vi.advanceTimersByTimeAsync(SLEEP_MS);

@@ -2,7 +2,7 @@
 // Durations are in milliseconds at normal speed; the speed setting divides them all.
 // The programmer can override any of them with the `aiPair.timing` setting.
 
-export type Cadence = {
+export interface Cadence {
   /** Between characters within a word. */
   charMs: number;
   /** Random variation of `charMs`, e.g. 0.25 for +/-25%. */
@@ -15,12 +15,15 @@ export type Cadence = {
   openBracketMs: number;
   /** Extra, after a newline: the next line is being thought of. */
   newlineMs: number;
-};
+}
 
 /** Per character read, with a floor for short messages and no ceiling, so a long message gets its full time. Issue 109. */
-export type Reading = { msPerChar: number; minMs: number };
+export interface Reading {
+  msPerChar: number;
+  minMs: number;
+}
 
-export type Timing = {
+export interface Timing {
   type: Cadence;
   /** `type_fast` plays the same cadence, with every delay multiplied by this. */
   fastFactor: number;
@@ -47,7 +50,7 @@ export type Timing = {
   glidePerLineMs: number;
   /** The longest a glide takes, however far it goes. */
   glideMaxMs: number;
-};
+}
 
 export const defaultTiming: Timing = {
   type: {
@@ -78,25 +81,12 @@ export type TimingOverrides = Partial<Omit<Timing, 'type' | 'reading'>> & {
   reading?: Partial<Reading>;
 };
 
-/**
- * `base` with the overrides from the programmer's settings. They are JSON VS Code doesn't check, so
- * one that isn't a finite number of zero or more keeps the base value: a `NaN` or negative delay
- * would turn pacing off without a word (#17).
- */
-export function withOverrides(base: Timing, overrides: TimingOverrides): Timing {
-  return {
-    ...numbers(base, overrides),
-    type: numbers(base.type, field(overrides, 'type')),
-    reading: numbers(base.reading, field(overrides, 'reading')),
-  };
+/** Returns the property `key` of `value`, if `value` is an object. */
+function field(value: unknown, key: string): unknown {
+  return typeof value === 'object' && value !== null ? (Reflect.get(value, key) as unknown) : undefined;
 }
 
-/** How long follow mode's scroll glides over `lines` lines at `speed`: longer the farther it goes, up to a cap (#123). */
-export function glideDuration(timing: Timing, lines: number, speed: number): number {
-  return Math.min(timing.glideMaxMs, timing.glideMs + timing.glidePerLineMs * lines) / speed;
-}
-
-/** `base`, with each of its numbers replaced by the one `over` has under its key, if that's valid. */
+/** Returns `base`, with each of its numbers replaced by the one `over` has under its key, if that's valid. */
 function numbers<T extends object>(base: T, over: unknown): T {
   const out = { ...base };
   for (const key of Object.keys(base)) {
@@ -108,6 +98,20 @@ function numbers<T extends object>(base: T, over: unknown): T {
   return out;
 }
 
-function field(value: unknown, key: string): unknown {
-  return typeof value === 'object' && value !== null ? (Reflect.get(value, key) as unknown) : undefined;
+/**
+ * Returns `base` with the overrides from the programmer's settings. They are JSON VS Code doesn't check, so
+ * one that isn't a finite number of zero or more keeps the base value: a `NaN` or negative delay
+ * would turn pacing off without a word (#17).
+ */
+export function withOverrides(base: Timing, overrides: TimingOverrides): Timing {
+  return {
+    ...numbers(base, overrides),
+    type: numbers(base.type, field(overrides, 'type')),
+    reading: numbers(base.reading, field(overrides, 'reading')),
+  };
+}
+
+/** Returns how long follow mode's scroll glides over `lines` lines at `speed`: longer the farther it goes, up to a cap (#123). */
+export function glideDuration(timing: Timing, lines: number, speed: number): number {
+  return Math.min(timing.glideMaxMs, timing.glideMs + timing.glidePerLineMs * lines) / speed;
 }

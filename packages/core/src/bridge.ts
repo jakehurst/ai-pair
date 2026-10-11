@@ -18,7 +18,7 @@ import {
 import type { Controller } from './controller';
 import { LEFT_ARROW, RIGHT_ARROW } from './constants';
 
-export type BridgeOptions = {
+export interface BridgeOptions {
   /** Where discovery files live; see `discoveryDir()`. */
   dir: string;
   workspaceFolders: () => string[];
@@ -26,9 +26,24 @@ export type BridgeOptions = {
   trace?: (line: string) => void;
   /** Called when the discovery file can't be written, so relays won't find this window (#9). */
   failed?: (error: unknown) => void;
-};
+}
 
-/** What a frame says, for `trace`: its type and id, and for a report, what it reports. */
+/** Returns what a report says, for `trace`: its batches, events, and flags. */
+function reported(r: unknown): string {
+  if (typeof r !== 'object' || r === null || !('batches' in r) || !('events' in r)) return '';
+  const { batches, events } = r;
+  const parts = [
+    Array.isArray(batches)
+      ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(', ')}]`
+      : '',
+    Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(', ')}]` : '',
+  ];
+  if ('rejected' in r && r.rejected) parts.push('rejected');
+  if ('waiting' in r && r.waiting) parts.push('waiting');
+  return parts.filter(Boolean).join(' ');
+}
+
+/** Returns what a frame says, for `trace`: its type and id, and for a report, what it reports. */
 function describe(m: RelayMessage | EditorMessage): string {
   switch (m.type) {
     case 'call':
@@ -46,18 +61,16 @@ function describe(m: RelayMessage | EditorMessage): string {
   }
 }
 
-function reported(r: unknown): string {
-  if (typeof r !== 'object' || r === null || !('batches' in r) || !('events' in r)) return '';
-  const { batches, events } = r;
-  const parts = [
-    Array.isArray(batches)
-      ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(', ')}]`
-      : '',
-    Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(', ')}]` : '',
-  ];
-  if ('rejected' in r && r.rejected) parts.push('rejected');
-  if ('waiting' in r && r.waiting) parts.push('waiting');
-  return parts.filter(Boolean).join(' ');
+function optionalString(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+function optionalStrings(v: unknown): string[] | undefined {
+  return Array.isArray(v) && v.every((s) => typeof s === 'string') ? v : undefined;
+}
+
+function optionalNumber(v: unknown): number | undefined {
+  return typeof v === 'number' ? v : undefined;
 }
 
 export class Bridge {
@@ -89,19 +102,21 @@ export class Bridge {
     const address = server.address();
     this.port = typeof address === 'object' && address ? address.port : 0;
     // A relay connects (specs/Resume.tla, `Connect`).
-    server.on('connection', (ws) => this.accept(ws));
+    server.on('connection', (ws) => {
+      this.accept(ws);
+    });
     // specs/Discovery.tla, `OpenWindow`: if the write fails, the window runs, and no relay finds it.
     this.writeDiscovery();
   }
 
-  /** Call when the window gains focus, so relays prefer it among windows with the same folder. */
+  /** Records that the window gained focus, so relays prefer it among windows with the same folder. */
   focused(): void {
     this.lastFocused = Date.now();
     // specs/Discovery.tla, `Focus`; after a write that failed, `ListWindow`.
     this.writeDiscovery();
   }
 
-  /** Call when the workspace folders change. */
+  /** Writes the discovery file: on start, on focus, and when the workspace folders change. */
   writeDiscovery(): void {
     if (!this.server) return;
     const discovery: Discovery = {
@@ -132,7 +147,9 @@ export class Bridge {
     } catch {
       // Already gone.
     }
-    for (const client of this.server?.clients ?? []) client.terminate();
+    for (const client of this.server?.clients ?? []) {
+      client.terminate();
+    }
     this.server?.close();
     this.server = undefined;
   }
@@ -142,11 +159,11 @@ export class Bridge {
     const calls = new Map<number, AbortController>();
     const socket = ++this.accepted;
     const trace = this.options.trace;
-    const send = (m: EditorMessage) => {
+    function send(m: EditorMessage): void {
       const open = ws.readyState === ws.OPEN;
       trace?.(`socket ${socket} ${RIGHT_ARROW} ${describe(m)}${open ? '' : ' (not sent: closed)'}`);
       if (open) ws.send(JSON.stringify(m));
-    };
+    }
 
     ws.on('message', (data) => {
       // A frame that isn't a message is dropped (#30).
@@ -179,23 +196,30 @@ export class Bridge {
         calls.set(m.id, abort);
         this.dispatch(ws, m.tool, m.args ?? {}, abort.signal)
           .then(
-            (result) => send({ type: 'result', id: m.id, result }),
-            (e: unknown) =>
+            (result) => {
+              send({ type: 'result', id: m.id, result });
+            },
+            (e: unknown) => {
               send({
                 type: 'error',
                 id: m.id,
                 code: e instanceof ToolError ? e.code : 'internal',
                 message: e instanceof Error ? e.message : String(e),
-              }),
+              });
+            },
           )
-          .finally(() => calls.delete(m.id));
+          .finally(() => {
+            calls.delete(m.id);
+          });
       }
     });
 
     ws.on('close', () => {
       trace?.(`socket ${socket} closed`);
       // specs/Bridge.tla, `Close`: the owner's socket gone, the session is suspended, or closed if it ended.
-      for (const abort of calls.values()) abort.abort();
+      for (const abort of calls.values()) {
+        abort.abort();
+      }
       if (this.owner === ws) {
         this.owner = null;
         this.controller.disconnect();
@@ -257,16 +281,4 @@ export class Bridge {
     const b = Buffer.from(this.token);
     return a.length === b.length && timingSafeEqual(a, b);
   }
-}
-
-function optionalString(v: unknown): string | undefined {
-  return typeof v === 'string' ? v : undefined;
-}
-
-function optionalStrings(v: unknown): string[] | undefined {
-  return Array.isArray(v) && v.every((s) => typeof s === 'string') ? v : undefined;
-}
-
-function optionalNumber(v: unknown): number | undefined {
-  return typeof v === 'number' ? v : undefined;
 }

@@ -1,7 +1,7 @@
 // Playing batches: what each action does, at a human pace. The same code plays a batch in the
 // programmer's editor and, to check it before it's queued, in memory (see rehearsal.ts).
 
-import type { Action, BatchResult, Candidate, Code, ErrorKind, RunResult, SpanTarget, Turn } from '@ai-pair/protocol';
+import type { Action, BatchError, BatchResult, Candidate, Code, ErrorKind, RunResult, SpanTarget, Turn } from '@ai-pair/protocol';
 import * as nodePath from 'node:path';
 import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, typeProblem, withinFolder } from '@ai-pair/protocol';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from './places';
@@ -12,8 +12,20 @@ import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
 import { planTyping, readingTime } from './typing';
 
+/** A report's code longer than this skips lines in the middle. */
+const MAX_CODE_LINES = 40;
+
+/** Lines of context around a report's code, above and below. */
+const CONTEXT_LINES = 3;
+
+const ok: Outcome = { kind: 'ok' };
+const nothing: Outcome = { kind: 'ok', nothing: true };
+
+/** Shared by all players, so the panel never sees two commands with one id. */
+let nextRunId = 1;
+
 /** What playback reads and changes. */
-export type Scene = {
+export interface Scene {
   /** The agent's working directory, if it gave one: paths to and from the agent are relative to it. */
   root?: string;
   turn: Turn;
@@ -26,10 +38,10 @@ export type Scene = {
   pointFar: boolean;
   /** Commands the programmer allowed to run without asking, until the session ends. */
   allowedCommands: Set<string>;
-};
+}
 
 /** Where actions take effect: the programmer's editor, or a copy of it in memory. */
-export type Stage = {
+export interface Stage {
   editor: EditorPort;
   panel: PanelPort;
   pacing: Pacing;
@@ -48,9 +60,13 @@ export type Stage = {
    * identity. Given, a `move` only goes to a line the agent knows the number of.
    */
   knows?(file: string, line: number, id: number): boolean;
-};
+}
 
-type Range = { file: string; start: number; end: number };
+interface Range {
+  file: string;
+  start: number;
+  end: number;
+}
 
 /**
  * `consumed`: the action took effect, so it counts as played and isn't returned as unplayed.
@@ -63,7 +79,7 @@ type Outcome =
   | { kind: 'error'; error: ErrorKind; message: string; candidates?: Candidate[]; consumed?: boolean; sighting?: Sighting };
 
 /** The batch being played: what it touched, for saving and for its report's code. */
-type Playing = {
+interface Playing {
   touched: Set<string>;
   runs: RunResult[];
   /** The lines its report shows. */
@@ -74,25 +90,13 @@ type Playing = {
   /** The text its edits changed, tracked through later edits. */
   span?: Range;
   moved: boolean;
-};
-
-/** A report's code longer than this skips lines in the middle. */
-const MAX_CODE_LINES = 40;
-
-/** Lines of context around a report's code, above and below. */
-const CONTEXT_LINES = 3;
-
-const ok: Outcome = { kind: 'ok' };
-const nothing: Outcome = { kind: 'ok', nothing: true };
-
-/** Shared by all players, so the panel never sees two commands with one id. */
-let nextRunId = 1;
+}
 
 function fail(error: ErrorKind, message: string): Outcome {
   return { kind: 'error', error, message };
 }
 
-/** `file` and `text`: where the resolution failed, so the lines it lists are shown. */
+/** Returns the outcome of a failed resolution. `file` and `text`: where it failed, so the lines it lists are shown. */
 function failed(r: Resolution & { ok: false }, file: string, text: string, shown: number[] = []): Outcome {
   const lines = [...shown, ...(r.candidates ?? []).map((c) => c.line)];
   const outcome: Outcome = { kind: 'error', error: r.kind, message: r.message, candidates: r.candidates };
@@ -100,12 +104,12 @@ function failed(r: Resolution & { ok: false }, file: string, text: string, shown
   return outcome;
 }
 
-/** Absolute path for a path from the agent: relative to its working directory, if it gave one. */
+/** Returns the absolute path for a path from the agent: relative to its working directory, if it gave one. */
 export function agentPath(editor: EditorPort, root: string | undefined, file: string): string {
   return editor.resolvePath(root ? nodePath.resolve(root, file) : file);
 }
 
-/** How to name a file to the agent. */
+/** Returns how to name a file to the agent. */
 export function displayPath(editor: EditorPort, root: string | undefined, file: string): string {
   if (!root) return editor.displayPath(file);
   // Not by `relative` starting with "..": a folder in the root may be named `..cache` (#5).
@@ -113,6 +117,7 @@ export function displayPath(editor: EditorPort, root: string | undefined, file: 
   return inside === undefined ? file : nodePath.relative(root, inside);
 }
 
+/** Returns a function mapping a position in the text before `change` to the same place after it. */
 function mapThrough(change: Change): (pos: number) => number {
   return (pos) => {
     if (pos <= change.offset) return pos;
@@ -173,7 +178,7 @@ export class Player {
     return { result, sightings: playing.sightings };
   }
 
-  /** The lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
+  /** Returns the lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
   async code({ span, moved }: { span?: Range; moved: boolean }): Promise<{ code: Code; sighting: Sighting } | undefined> {
     const s = this.scene;
     const file = span?.file ?? (moved ? s.cursor?.file : undefined);
@@ -217,33 +222,36 @@ export class Player {
   transform(file: string, change: Change): void {
     transformScene(this.scene, file, change);
     const map = mapThrough(change);
-    const span = this.playing?.span;
-    if (span?.file === file) this.playing!.span = { file, start: map(span.start), end: map(span.end) };
+    const playing = this.playing;
+    if (!playing) return;
+    const { span } = playing;
+    if (span?.file === file) playing.span = { file, start: map(span.start), end: map(span.end) };
   }
 
   private async actions(id: number, actions: Action[], playing: Playing): Promise<BatchResult> {
     // An action so far changed something the programmer sees.
     let effect = false;
     // specs/Actions.tla: `perform` takes an action's steps (`Proceed`, `TakeEffect`), and each pass after it is `FinishAction`.
-    for (let i = 0; i < actions.length; i++) {
+    for (const [i, action] of actions.entries()) {
       // specs/Turns.tla, `Start`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect);
       let outcome: Outcome;
       try {
-        outcome = await this.perform(actions[i]!, playing);
+        outcome = await this.perform(action, playing);
       } catch (e) {
         outcome = fail('invalid_action', e instanceof Error ? e.message : String(e));
       }
       const rest = actions.slice(i + 1);
       if (outcome.kind === 'interrupted') {
-        if (outcome.consumed) return this.stopped(id, rest, true);
-        if (outcome.rest) return this.stopped(id, [outcome.rest, ...rest], true);
+        if (outcome.consumed) return this.stopped(id, rest, /* effect= */ true);
+        if (outcome.rest) return this.stopped(id, [outcome.rest, ...rest], /* effect= */ true);
         return this.stopped(id, actions.slice(i), effect);
       }
       if (outcome.kind === 'error') {
         if (outcome.sighting) playing.sightings.push(outcome.sighting);
-        const result: BatchResult = { id, status: 'failed', error: { kind: outcome.error, message: outcome.message } };
-        if (outcome.candidates) result.error!.candidates = outcome.candidates;
+        const error: BatchError = { kind: outcome.error, message: outcome.message };
+        if (outcome.candidates) error.candidates = outcome.candidates;
+        const result: BatchResult = { id, status: 'failed', error };
         const unplayed = outcome.consumed ? rest : actions.slice(i);
         if (unplayed.length > 0) result.unplayed = unplayed;
         return result;
@@ -254,7 +262,7 @@ export class Player {
     return { id, status: 'completed' };
   }
 
-  /** An interrupted batch (specs/Actions.tla, `Stop`). With no visible effect yet, it counts as discarded. */
+  /** Returns the result of an interrupted batch (specs/Actions.tla, `Stop`). With no visible effect yet, it counts as discarded. */
   private stopped(id: number, unplayed: Action[], effect: boolean): BatchResult {
     const result: BatchResult = { id, status: effect ? 'interrupted' : 'discarded' };
     if (unplayed.length > 0) result.unplayed = unplayed;
@@ -344,9 +352,11 @@ export class Player {
       if ('kind' in where) return where;
       const { text, line } = where;
       let offset: number;
-      if (m.to === 'line_end') offset = lineEnd(text, line);
-      else {
-        const r = resolveSpot(text, { at: m.at!, line });
+      if (at === undefined) {
+        // moveProblem passed: without `at`, `to` is `line_end`.
+        offset = lineEnd(text, line);
+      } else {
+        const r = resolveSpot(text, { at, line });
         // A spot not on its line says what the line reads.
         if (!r.ok) return failed(r, file, text, r.kind === 'not_found' ? [line] : []);
         offset = r.range.start;
@@ -513,7 +523,9 @@ export class Player {
     // The panel keeps showing it as running until it ends, whenever that is.
     if (outcome.running) {
       void outcome.exited?.then(
-        (exitCode) => panel.post({ type: 'run', id, command, phase: 'exited', exitCode }),
+        (exitCode) => {
+          panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
+        },
         () => {},
       );
     }
@@ -546,8 +558,7 @@ export class Player {
 
     if (chunks.length === 0 && s.selection) chunks.push({ text: '', delay: 0 });
     let typed = '';
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]!;
+    for (const [i, chunk] of chunks.entries()) {
       // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
       if (!(await this.delay(chunk.delay))) {
         if (typed === '') return { kind: 'interrupted' };
@@ -590,7 +601,7 @@ export class Player {
   }
 
   /**
-   * The file an action names, or else the one its batch named, or else the cursor's: `looks` in
+   * Returns the file an action names, or else the one its batch named, or else the cursor's: `looks` in
    * specs/BatchFile.tla, `Act`, the file `ActInFile` acts in.
    */
   private fileOf(target: { file?: string }, playing: Playing): string | undefined {
@@ -599,7 +610,7 @@ export class Player {
   }
 
   /**
-   * The file an action names, if any, checked against the rest of its batch: a batch works in one
+   * Returns the file an action names, if any, checked against the rest of its batch: a batch works in one
    * file, which it names before its first edit.
    */
   private names(action: Action, playing: Playing): string | undefined | Outcome {
@@ -625,7 +636,7 @@ export class Player {
   }
 
   /**
-   * The line an action goes to, in `file`: `line`, exactly, if it's a line the agent was shown
+   * Returns the line an action goes to, in `file`: `line`, exactly, if it's a line the agent was shown
    * there, or the cursor's line. `find`: where the text the action looks for is, to list it if the
    * line isn't one the agent knows; none for the end of a line.
    */
@@ -639,8 +650,9 @@ export class Player {
     const text = await this.stage.editor.getText(file);
     if (line === undefined) {
       // The cursor's line, which may be the empty one after a final newline, if it's there.
-      if (s.cursor?.file !== file)
+      if (s.cursor?.file !== file) {
         return fail('invalid_action', `Give \`line\`: without it, a \`${action}\` is on your cursor's line, in its file.`);
+      }
       return { text, line: position(text, s.cursor.offset).line };
     }
     // An empty file has one line, the empty one; a newline at the end doesn't start another.
@@ -652,9 +664,10 @@ export class Player {
     return this.unseen(file, text, line, action === 'move' ? 'the spot' : 'the text', find) ?? { text, line };
   }
 
-  /** The code a `select` or `point` takes, in `file`. */
+  /** Returns the code a `select` or `point` takes, in `file`. */
   private async span(file: string, target: SpanTarget, action: string): Promise<{ text: string; start: number; end: number } | Outcome> {
-    const find = target.text ?? target.from!;
+    const find = target.text ?? target.from;
+    if (find === undefined) throw new Error('A span has `text` or `from`: spanProblem checks it before the span is played.');
     const where = await this.locate(file, target.line, action, (text) => spanCandidates(text, find));
     if ('kind' in where) return where;
     const { text, line } = where;
@@ -665,8 +678,8 @@ export class Player {
   }
 
   /**
-   * An action on a line whose number the agent may have worked out instead of being shown, if it
-   * isn't one it knows. Says what the line reads now, and where what it looks for is, which it's
+   * Returns the error for an action on a line whose number the agent may have worked out instead of
+   * being shown, if it isn't one it knows; nothing if it is. Says what the line reads now, and where what it looks for is, which it's
    * shown then. An empty file's one line needs no showing. In a rehearsal, `knows` taking the
    * number is specs/Rehearsal.tla, `Accept`.
    */
@@ -677,8 +690,8 @@ export class Player {
     what: string,
     find: ((text: string) => Candidate[]) | undefined,
   ): Outcome | undefined {
-    const { lines } = this.stage;
-    if (!this.stage.knows || text === '' || this.stage.knows(file, line, lines.of(file, text)[line - 1]!)) return undefined;
+    const id = this.stage.lines.of(file, text)[line - 1];
+    if (!this.stage.knows || text === '' || (id !== undefined && this.stage.knows(file, line, id))) return undefined;
     const candidates = find?.(text) ?? [];
     const reads = `line ${line} reads ${JSON.stringify(lineText(text, line))}`;
     const where = !find ? '.' : candidates.length > 0 ? `, and ${what} is on these lines:` : `, and ${what} isn't anywhere in the file.`;
@@ -693,8 +706,8 @@ export class Player {
   }
 
   /** Saves the files the batch has edited, so tools reading from disk see them; returns the ones it couldn't. */
-  private async save(playing: Playing): Promise<{ file: string; error: string }[]> {
-    const unsaved: { file: string; error: string }[] = [];
+  private async save(playing: Playing): Promise<Array<{ file: string; error: string }>> {
+    const unsaved: Array<{ file: string; error: string }> = [];
     for (const file of playing.touched) {
       try {
         await this.stage.editor.save(file);

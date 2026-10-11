@@ -12,13 +12,23 @@ const CHARS = ['x', '\n', '\r'];
 
 const FILE = 'a.ts';
 
+/** Returns every text of up to `max` characters from `CHARS`. */
 function texts(max: number): string[] {
   const all = [''];
-  for (let n = 1; n <= max; n++) for (const t of all.filter((s) => s.length === n - 1)) for (const c of CHARS) all.push(t + c);
+  for (let n = 1; n <= max; n++) {
+    for (const t of all.filter((s) => s.length === n - 1)) {
+      for (const c of CHARS) {
+        all.push(t + c);
+      }
+    }
+  }
   return all;
 }
 
-const lineCount = (t: string) => t.split('\n').length;
+/** Returns how many lines `t` has. */
+function lineCount(t: string): number {
+  return t.split('\n').length;
+}
 
 it(
   "OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'",
@@ -38,8 +48,12 @@ it(
             const a = text.slice(0, offset).split('\n').length - 1;
             const b = a + (text.slice(offset, offset + deleteLength).split('\n').length - 1);
             const shift = insert.split('\n').length - 1 - (b - a);
-            for (let i = 0; i < a; i++) expect(after.ids[i], at).toBe(ids[i]);
-            for (let i = b + 1; i < ids.length; i++) expect(after.ids[i + shift], at).toBe(ids[i]);
+            for (let i = 0; i < a; i++) {
+              expect(after.ids[i], at).toBe(ids[i]);
+            }
+            for (let i = b + 1; i < ids.length; i++) {
+              expect(after.ids[i + shift], at).toBe(ids[i]);
+            }
             if (a === b && !insert.includes('\n')) expect(after.ids, at).toEqual(ids);
             // A line break at the end of a line with text leaves it in place; at its start, it moves it down.
             if (deleteLength === 0 && insert === '\n') {
@@ -80,7 +94,9 @@ it(
             expect(new Set(editorIds).size, at).toBe(editorIds.length);
             expect(new Set(forkIds).size, at).toBe(forkIds.length);
             // The counter is shared, so a line the fork makes is never one of the editor's.
-            for (const id of forkIds) if (!before.has(id)) expect(editorIds, at).not.toContain(id);
+            for (const id of forkIds) {
+              if (!before.has(id)) expect(editorIds, at).not.toContain(id);
+            }
           }
         }
       }

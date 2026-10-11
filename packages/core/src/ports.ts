@@ -7,15 +7,18 @@ export type AgentState = 'typing' | 'read' | 'running' | 'thinking' | 'absent' |
 /** What follow mode keeps in the programmer's view: the agent cursor, or the code it last pointed at. */
 export type Focus = 'cursor' | 'point';
 
-export type CursorView = {
+export interface CursorView {
   file: string;
   offset: number;
   selection?: { start: number; end: number };
-};
+}
 
-export type EditOptions = { undoStopBefore: boolean; undoStopAfter: boolean };
+export interface EditOptions {
+  undoStopBefore: boolean;
+  undoStopAfter: boolean;
+}
 
-export type CommandOutcome = {
+export interface CommandOutcome {
   /** Absent while still running, or when the terminal couldn't report it. */
   exitCode?: number;
   output: string;
@@ -27,21 +30,25 @@ export type CommandOutcome = {
   notStarted?: boolean;
   /** For a command still running: settles when it ends, with its exit code if the terminal reported one. */
   exited?: Promise<number | undefined>;
-};
+}
 
-export type RunOptions = {
+export interface RunOptions {
   /** Directory to run in (absolute). */
   cwd: string;
   /** Stop waiting after this long; the command keeps running. */
   waitMs: number;
   /** Aborted when playback is interrupted: stop waiting, leave the command running. */
   signal: AbortSignal;
-};
+}
 
 /** An excerpt whose `file` is absolute, as the editor knows it. */
 export type SharedSelection = Excerpt;
 
-export type Ref = { file: string; line: number; endLine: number };
+export interface Ref {
+  file: string;
+  line: number;
+  endLine: number;
+}
 
 /** A file that isn't on disk, with no unsaved text in the editor for it (#88, #89). */
 export class MissingFile extends Error {
@@ -53,15 +60,15 @@ export class MissingFile extends Error {
 /** Files are absolute paths; offsets are into the document text. */
 export interface EditorPort {
   /**
-   * Absolute path for a path given by the agent (absolute or workspace-relative), in the same
+   * Returns the absolute path for a path given by the agent (absolute or workspace-relative), in the same
    * canonical form the editor reports files in (e.g. VS Code lowercases the Windows drive letter).
    */
   resolvePath(file: string): string;
-  /** How to name a file to the agent. */
+  /** Returns how to name a file to the agent. */
   displayPath(file: string): string;
-  /** The file's text: the editor's, with unsaved changes. Throws `MissingFile` for a file that doesn't exist. */
+  /** Returns the file's text: the editor's, with unsaved changes. Throws `MissingFile` for a file that doesn't exist. */
   getText(file: string): Promise<string>;
-  /** The line ending the editor stores in the file, "\n" or "\r\n", known even for an empty buffer. */
+  /** Returns the line ending the editor stores in the file, "\n" or "\r\n", known even for an empty buffer. */
   eol(file: string): Promise<string>;
   isDirty(file: string): Promise<boolean>;
   /** Opens the file (creating it empty if missing) and makes it the visible editor. */
@@ -105,4 +112,8 @@ export interface PanelPort {
 }
 
 /** A change to a document, in the coordinates of the text before it. */
-export type Change = { offset: number; deleteLength: number; text: string };
+export interface Change {
+  offset: number;
+  deleteLength: number;
+  text: string;
+}

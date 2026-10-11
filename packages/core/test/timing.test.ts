@@ -4,9 +4,11 @@
 import { expect, it } from 'vitest';
 import { defaultTiming, glideDuration, withOverrides, type TimingOverrides } from '../src/timing';
 
-// The settings are JSON: anything can be there, whatever their type says.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const settings = (value: unknown) => value as TimingOverrides;
+/** Returns `value` as the settings: they are JSON, so anything can be there, whatever their type says. */
+function settings(value: unknown): TimingOverrides {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return value as TimingOverrides;
+}
 
 it('takes overrides that are numbers of zero or more, at either level', () => {
   const timing = withOverrides(defaultTiming, { afterSelectMs: 0, type: { charMs: 80 }, reading: { minMs: 4000 } });

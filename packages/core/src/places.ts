@@ -4,12 +4,20 @@
 import { CURSOR_MARKER, type Candidate, type ErrorKind } from '@ai-pair/protocol';
 import { lineSpan, lineText, position } from './text';
 
-export type Range = { start: number; end: number };
+export interface Range {
+  start: number;
+  end: number;
+}
 
 export type Resolution = { ok: true; range: Range } | { ok: false; kind: ErrorKind; message: string; candidates?: Candidate[] };
 
 /** A span on `line`: `text`, or from `from` through the first `through` after it. */
-export type Span = { line: number; text?: string; from?: string; through?: string };
+export interface Span {
+  line: number;
+  text?: string;
+  from?: string;
+  through?: string;
+}
 
 const MAX_CANDIDATES = 20;
 
@@ -29,12 +37,12 @@ function candidates(text: string, starts: number[]): Candidate[] {
   });
 }
 
-/** Text copied from a report's code may carry the cursor marker. */
+/** Returns `text` without the cursor marker, which text copied from a report's code may carry. */
 function unmarked(text: string): string {
   return text.replaceAll(CURSOR_MARKER, '');
 }
 
-/** Where a spot's text occurs: its whole text, and the offsets of its marker in each match. */
+/** Returns where a spot's text occurs: its whole text, and the offsets of its marker in each match. */
 function findSpot(text: string, at: string): { whole: string; found: number[] } {
   const marker = at.indexOf(CURSOR_MARKER);
   const before = at.slice(0, marker);
@@ -42,12 +50,12 @@ function findSpot(text: string, at: string): { whole: string; found: number[] } 
   return { whole, found: findAll(text, whole).map((start) => start + before.length) };
 }
 
-/** The lines a spot's text is on, anywhere in `text`. */
+/** Returns the lines a spot's text is on, anywhere in `text`. */
 export function spotCandidates(text: string, at: string): Candidate[] {
   return candidates(text, findSpot(text, at).found);
 }
 
-/** The lines a span's text starts on, anywhere in `text`. */
+/** Returns the lines a span's text starts on, anywhere in `text`. */
 export function spanCandidates(text: string, find: string): Candidate[] {
   return candidates(text, findAll(text, unmarked(find)));
 }
@@ -60,8 +68,9 @@ function onLine(text: string, line: number, needle: string, found: number[], wha
   // The line's offsets once, not a scan from the start of the text for each match (#2).
   const span = lineSpan(text, line);
   const here = span ? found.filter((at) => at >= span.start && at <= span.end) : [];
-  if (here.length === 1) return here[0]!;
-  if (here.length > 1) {
+  const [only, second] = here;
+  if (only !== undefined && second === undefined) return only;
+  if (second !== undefined) {
     return {
       ok: false,
       kind: 'ambiguous',
@@ -73,7 +82,7 @@ function onLine(text: string, line: number, needle: string, found: number[], wha
   return {
     ok: false,
     kind: 'not_found',
-    message: `${what[0]!.toUpperCase()}${what.slice(1)} isn't on line ${line}: ${reads}. It's on these lines:`,
+    message: `${what.charAt(0).toUpperCase()}${what.slice(1)} isn't on line ${line}: ${reads}. It's on these lines:`,
     candidates: candidates(text, found),
   };
 }

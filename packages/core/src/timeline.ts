@@ -10,12 +10,12 @@ export const instant: Pacing = {
   signal: new AbortController().signal,
 };
 
-type Pending = {
+interface Pending {
   remaining: number;
   startedAt: number;
   timer?: ReturnType<typeof setTimeout>;
   resolve: (completed: boolean) => void;
-};
+}
 
 export class Timeline {
   private paused = false;
@@ -31,7 +31,7 @@ export class Timeline {
     return this.interrupted;
   }
 
-  /** Aborted when playback is interrupted, for waits that aren't delays. */
+  /** Returns a signal aborted when playback is interrupted, for waits that aren't delays. */
   get signal(): AbortSignal {
     return this.abort.signal;
   }

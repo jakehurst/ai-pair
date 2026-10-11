@@ -8,7 +8,7 @@ import type { Report, ToolErrorCode } from './index';
 export const PROTOCOL_VERSION = 3;
 
 /** Written by each editor window to `<discoveryDir>/<pid>.json`. */
-export type Discovery = {
+export interface Discovery {
   pid: number;
   workspaceFolders: string[];
   port: number;
@@ -16,14 +16,6 @@ export type Discovery = {
   protocolVersion: number;
   /** Epoch milliseconds. */
   lastFocused: number;
-};
-
-export function aiPairHome(): string {
-  return process.env.AI_PAIR_HOME ?? path.join(os.homedir(), '.ai-pair');
-}
-
-export function discoveryDir(): string {
-  return path.join(aiPairHome(), 'windows');
 }
 
 export type ToolName = 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate';
@@ -41,9 +33,22 @@ export type EditorMessage =
   | { type: 'result'; id: number; result: unknown }
   | { type: 'error'; id: number; code: ToolErrorCode | 'internal'; message: string };
 
+/** The raw data of a WebSocket frame, as `ws` hands it over. */
+export type Frame = Buffer | ArrayBuffer | Buffer[];
+
+/** Returns the directory of the user's AI Pair files: `AI_PAIR_HOME`, or `~/.ai-pair`. */
+export function aiPairHome(): string {
+  return process.env.AI_PAIR_HOME ?? path.join(os.homedir(), '.ai-pair');
+}
+
+/** Returns the directory the editor windows write their discovery files to. */
+export function discoveryDir(): string {
+  return path.join(aiPairHome(), 'windows');
+}
+
 /**
- * A frame's message, or `undefined` if it isn't one: not JSON, or JSON that isn't an object with a
- * string `type` (#4, #30).
+ * Returns a frame's message, or `undefined` if it isn't one: not JSON, or JSON that isn't an object
+ * with a string `type` (#4, #30).
  */
 function parseFrame(data: Frame): { type: string } | undefined {
   const bytes = Array.isArray(data) ? Buffer.concat(data) : data instanceof ArrayBuffer ? Buffer.from(data) : data;
@@ -60,18 +65,15 @@ function parseFrame(data: Frame): { type: string } | undefined {
   return m as { type: string };
 }
 
-/** The raw data of a WebSocket frame, as `ws` hands it over. */
-export type Frame = Buffer | ArrayBuffer | Buffer[];
-
 // Only `type` is checked: the other fields are taken on trust from a peer that authenticated, as they always were.
 
-/** A frame from the relay, or `undefined` if it isn't a message. */
+/** Returns a frame from the relay as a message, or `undefined` if it isn't one. */
 export function parseRelayMessage(data: Frame): RelayMessage | undefined {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return parseFrame(data) as RelayMessage | undefined;
 }
 
-/** A frame from the editor, or `undefined` if it isn't a message. */
+/** Returns a frame from the editor as a message, or `undefined` if it isn't one. */
 export function parseEditorMessage(data: Frame): EditorMessage | undefined {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return parseFrame(data) as EditorMessage | undefined;

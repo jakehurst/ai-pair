@@ -7,17 +7,22 @@ import type { Change } from '../src/ports';
 /** Every case, on CI's slower runners alongside the other test files. */
 const EXHAUSTIVE_MS = 30_000;
 
-const chars = ['a', 'b', '\n'];
+const CHARS = ['a', 'b', '\n'];
+
+/** Returns every text of up to `max` characters from `CHARS`. */
 function texts(max: number): string[] {
   const all = [''];
   for (let n = 1, layer = ['']; n <= max; n++) {
-    layer = layer.flatMap((t) => chars.map((c) => t + c));
+    layer = layer.flatMap((t) => CHARS.map((c) => t + c));
     all.push(...layer);
   }
   return all;
 }
 
-const apply = (text: string, c: Change) => text.slice(0, c.offset) + c.text + text.slice(c.offset + c.deleteLength);
+/** Returns `text` with the change applied. */
+function apply(text: string, c: Change): string {
+  return text.slice(0, c.offset) + c.text + text.slice(c.offset + c.deleteLength);
+}
 
 describe('lineChanges', () => {
   it(
@@ -31,9 +36,11 @@ describe('lineChanges', () => {
             for (const text of inserts) {
               const change = { offset, deleteLength, text };
               const split = lineChanges(before, [change]);
-              expect(split.reduce(apply, before)).toBe(apply(before, change));
+              expect(split.reduce((result, c) => apply(result, c), before)).toBe(apply(before, change));
               // Each one changes something.
-              for (const c of split) expect(c.deleteLength > 0 || c.text !== '').toBe(true);
+              for (const c of split) {
+                expect(c.deleteLength > 0 || c.text !== '').toBe(true);
+              }
               cases++;
             }
           }
@@ -57,6 +64,8 @@ describe('lineChanges', () => {
       { offset: 4, deleteLength: 2, text: 'C\n' },
       { offset: 0, deleteLength: 2, text: 'A\n' },
     ];
-    expect(lineChanges(before, changes).reduce(apply, before)).toBe(changes.reduce(apply, before));
+    expect(lineChanges(before, changes).reduce((result, c) => apply(result, c), before)).toBe(
+      changes.reduce((result, c) => apply(result, c), before),
+    );
   });
 });
