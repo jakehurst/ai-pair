@@ -1,5 +1,10 @@
 {
   "cSpell.ignoreWords": ["helloabcd", "subseteq"],
   "aiPair.trace": true,
-  "cSpell.words": ["describedby", "Reask", "Reasked"]
+  "cSpell.words": [
+    "CARON",
+    "describedby",
+    "Reask",
+    "Reasked"
+  ]
 }
