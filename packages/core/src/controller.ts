@@ -311,7 +311,7 @@ export class Controller {
     const from = Math.max(1, fromLine ?? 1)
     const to = Math.min(lines.length, toLine ?? lines.length)
     const numbers = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
-    // As the queued batches leave the file, if they edit it.
+    // As the queued batches leave the file, if they edit it (specs/Rehearsal.tla, `Read`).
     this.saw(s, planned !== undefined ? s.queue.at(-1)!.after!.lines : s.lines, { file: path, text, lines: numbers })
     const content: FileContent = {
       file: this.displayPath(s, path),
@@ -425,7 +425,8 @@ export class Controller {
     // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
     const changes = lineChanges(before, reported)
     const planned = s.queue.some((b) => b.after?.edits.has(file))
-    // The queued rehearsals follow it, reading the file's line identities from the editor.
+    // The queued rehearsals follow it, reading the file's line identities from the editor (specs/Rehearsal.tla,
+    // `EditAsOther`).
     if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, after, changes)
     this.recordEdit(s, file, before, after, changes, "other")
     if (planned) {
@@ -654,7 +655,7 @@ export class Controller {
     return run
   }
 
-  /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is. */
+  /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
   private rehearse(s: Session, actions: Action[]): ReturnType<typeof rehearse> {
     const from = s.queue.at(-1)?.after ?? { scene: s.scene, texts: new Map(), lines: s.lines, edits: new Set<string>() }
     return rehearse(this.editor, this.config, from, actions, (file, line, id) => s.seen.get(file)?.get(line) === id)
@@ -921,7 +922,8 @@ export class Controller {
         this.render()
         const { result, sightings } = await s.player.play(batch.id, batch.actions)
         if (this.session !== s) break
-        // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with.
+        // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
+        // (specs/Rehearsal.tla, `Play`).
         if (result.status === "completed" && batch.after) s.lines.adopt(batch.after.lines)
         for (const sighting of sightings) this.saw(s, s.lines, sighting)
         // specs/Serialize.tla, `Play`: batches finish in queue order.
@@ -929,6 +931,7 @@ export class Controller {
         batch.result = result
         s.queue = s.queue.filter((b) => b !== batch)
         s.finished.push(result)
+        // specs/Rehearsal.tla, `FailPlay`: a batch that didn't complete interrupts the queue behind it.
         if (result.status !== "completed") this.interrupt(s)
         // Mark the next batch as playing before reporting, so the report says so.
         this.startHead(s)

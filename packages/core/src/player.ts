@@ -667,7 +667,8 @@ export class Player {
   /**
    * An action on a line whose number the agent may have worked out instead of being shown, if it
    * isn't one it knows. Says what the line reads now, and where what it looks for is, which it's
-   * shown then. An empty file's one line needs no showing.
+   * shown then. An empty file's one line needs no showing. In a rehearsal, `knows` taking the
+   * number is specs/Rehearsal.tla, `Accept`.
    */
   private unseen(
     file: string,

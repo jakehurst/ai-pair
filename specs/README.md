@@ -1238,21 +1238,48 @@ tracker's id, and changes are whole lines inserted or deleted or an edit within
 a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change
 by others to a file the queue edits interrupts it (`OtherInterrupts`), and
 `adopt` takes the fork's ids only for a text that reads as in the fork
-(`AdoptChecksText`). Up to two batches are queued, each rehearsed from the one
-before. `ReadIsStart`: right after a read, the agent's next batch is checked
-against what it was shown. `ShareIds` is the fix for a bug this spec found:
-`followChange` gave a queued batch's fork its own id for a line a tool inserted,
-unlike the editor's id the agent was shown, so a line the agent had just read
-was refused. Now the fork drops its copy of the file's ids, and reads the
-editor's.
+(`AdoptChecksText`). Batches are queued, each rehearsed from the one before;
+the config bounds the queue. `ReadIsStart`: right after a read, the agent's next
+batch is checked against what it was shown. `ShareIds` is the fix for a bug
+this spec found: `followChange` gave a queued batch's fork its own id for a
+line a tool inserted, unlike the editor's id the agent was shown, so a line the
+agent had just read was refused. Now the fork drops its copy of the file's ids,
+and reads the editor's.
 
 | Spec | Code |
 |---|---|
 | `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), else the editor's |
 | `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Start`), the batch played in memory |
-| `Play`, `PlayFails` | the oldest batch playing, the editor tracking its edits, `adopt`; a failure interrupts the queue |
-| `Other` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file, else each rehearsal follows it (`followChange`) |
+| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a failure interrupts the queue |
+| `EditAsOther` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file, else each rehearsal follows it (`followChange`) |
 | `Accept` | the rehearsal's `knows` in `unseen`: the id the agent was shown at a number is the id there where the rehearsal starts |
+
+Each invariant was proved to bite with a mutation of a copy of the model, run in
+TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| a line someone else inserts gets an id below 0 | `TypeOK` |
+| `knows` takes any number in the text, whatever its id | `AcceptedOnlyForThatLine` |
+| `Submit` doesn't advance the shared counter | `IdsDistinct` |
+| a change by others leaves the editor's ids as they were | `OnePerLine` |
+| `ShareIds = FALSE`, the code before this spec | `ReadIsStart` |
+| `OtherInterrupts = FALSE` | `ReadIsStart` |
+| `AdoptChecksText = FALSE`, with `OtherInterrupts = FALSE` | `OnePerLine` |
+| `AdoptChecksText = FALSE` alone | nothing: with `OtherInterrupts`, a change by others discards the playing batch too, so no batch plays on a text other than its fork's; in the code the playing batch can still complete (a formatter on save), which the model does not cover |
+
+Neither `OtherInterrupts = FALSE` nor `AdoptChecksText = FALSE` alone breaks
+`AcceptedOnlyForThatLine`; with both, `OnePerLine` breaks first.
+
+Every invariant names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `AcceptedOnlyForThatLine` | `controller.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
+| `IdsDistinct` | `lines.exhaustive.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
+| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines' |
+| `ReadIsStart` | `controller.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits |
 
 ### `Terminals`: running commands
 

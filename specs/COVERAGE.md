@@ -25,7 +25,7 @@ Code goes without a spec for one of these reasons:
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Programmer`), `Actions` (`Interrupt`) |
-| `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`Other`) |
+| `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`EditAsOther`) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
@@ -65,7 +65,7 @@ Code goes without a spec for one of these reasons:
 | `lines.ts` | `applyChange`, `apply` | `LineIdentity` |
 | | `fork`, `forget`, `adopt`, `fresh`, `of`, `editor`, `version`, `newlines` | `Rehearsal` |
 | `rehearsal.ts` | `rehearse`, the in-memory editor | `Rehearsal` (`Submit`) |
-| | `followChange` | `Rehearsal` (`Other`, `ShareIds`) |
+| | `followChange` | `Rehearsal` (`EditAsOther`, `ShareIds`) |
 | `timeline.ts` | all | `Timeline` |
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |

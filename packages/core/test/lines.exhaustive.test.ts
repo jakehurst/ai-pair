@@ -1,13 +1,16 @@
 // applyChange over every small text and change: the same properties specs/LineIdentity.tla checks
-// on its model, here on the code itself.
+// on its model, here on the code itself. And IdsDistinct from specs/Rehearsal.tla, for the editor's
+// LineIds and a fork of it.
 
 import { expect, it } from "vitest"
-import { applyChange } from "../src/lines"
+import { applyChange, LineIds } from "../src/lines"
 
 /** Every case, on CI's slower runners alongside the other test files. */
 const EXHAUSTIVE_MS = 30_000
 
 const CHARS = ["x", "\n", "\r"]
+
+const FILE = "a.ts"
 
 function texts(max: number): string[] {
   const all = [""]
@@ -50,6 +53,39 @@ it(
       }
     }
     expect(cases).toBeGreaterThan(10_000)
+  },
+  EXHAUSTIVE_MS,
+)
+
+it(
+  "IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both",
+  () => {
+    let cases = 0
+    for (const text of texts(4)) {
+      for (let offset = 0; offset <= text.length; offset++) {
+        for (let deleteLength = 0; offset + deleteLength <= text.length; deleteLength++) {
+          for (const insert of texts(2)) {
+            cases++
+            const at = `${JSON.stringify(text)} @${offset} -${deleteLength} +${JSON.stringify(insert)}`
+            const editor = LineIds.editor()
+            const before = new Set(editor.of(FILE, text))
+            const fork = editor.fork()
+            fork.of(FILE, text)
+            const change = { offset, deleteLength, text: insert }
+            fork.apply(FILE, change)
+            editor.apply(FILE, change)
+            const after = text.slice(0, offset) + insert + text.slice(offset + deleteLength)
+            const editorIds = editor.of(FILE, after)
+            const forkIds = fork.of(FILE, after)
+            expect(new Set(editorIds).size, at).toBe(editorIds.length)
+            expect(new Set(forkIds).size, at).toBe(forkIds.length)
+            // The counter is shared, so a line the fork makes is never one of the editor's.
+            for (const id of forkIds) if (!before.has(id)) expect(editorIds, at).not.toContain(id)
+          }
+        }
+      }
+    }
+    expect(cases).toBeGreaterThan(1_000)
   },
   EXHAUSTIVE_MS,
 )

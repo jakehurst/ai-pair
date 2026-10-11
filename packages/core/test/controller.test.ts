@@ -493,7 +493,7 @@ describe("line numbers", () => {
     expect(editor.text("a.ts")).toBe("a!\nb\nc\n")
   })
 
-  it("rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them", async () => {
+  it("AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them", async () => {
     const { editor, controller } = setup({ "a.ts": "a\nb\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -541,7 +541,7 @@ describe("line numbers", () => {
     expect(editor.text("a.ts")).toBe("a\nb\nc\nd!\n")
   })
 
-  it("rejects a report's number that a queued batch has since moved", async () => {
+  it("AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved", async () => {
     const { controller } = setup({ "a.ts": "a\nb\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -1981,7 +1981,7 @@ describe("changes by others, while batches are queued", () => {
     expect(editor.text("a.ts")).toBe("XX\nhello\n!world\n")
   })
 
-  it("accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla)", async () => {
+  it("ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla)", async () => {
     const { editor, controller } = setup({ "a.ts": "hello\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -2009,7 +2009,7 @@ describe("changes by others, while batches are queued", () => {
     expect((await controller.read("a.ts")).lines.map((l) => l.text)).toEqual(["// tool", "a1"])
   })
 
-  it("still interrupts for a change to a file a queued batch edits", async () => {
+  it("ReadIsStart: still interrupts for a change to a file a queued batch edits", async () => {
     const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
     await controller.start()
     await controller.read("a.ts")
