@@ -527,7 +527,7 @@ carries the invariant's name:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons: holds playback until the last pause reason is gone |
 | `NoTimerWhilePaused` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume |
-| `ResolvedOnce` | `units.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up |
+| `ResolvedOnce` | `units.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset` |
 | `ResumeContinues` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume |
 
 ### `Anchor`: the cursor after a discarded batch
@@ -828,7 +828,7 @@ test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `ActsInNamedFile` | `controller.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing |
-| `EditAtCursorProp` | `controller.test.ts`: EditAtCursorProp: rejects a batch that works in more than one file at the action that switches, queueing nothing of it |
+| `EditAtCursorProp` | `controller.test.ts`: EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none |
 
 ### `Draft`: the reply box's pause, across the view's page
 

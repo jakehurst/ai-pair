@@ -920,7 +920,7 @@ describe("reports", () => {
     expect(report.batches[0]).toMatchObject({ status: "interrupted", unplayed: [{ type: `${CURSOR_MARKER}{}` }] })
   })
 
-  it("EditAtCursorProp: rejects a batch that works in more than one file at the action that switches, queueing nothing of it", async () => {
+  it("rejects a batch that works in more than one file at the action that switches, queueing nothing of it", async () => {
     const { controller } = setup({ "a.ts": "", "b.ts": "x" })
     await controller.start()
     await controller.read("b.ts")
@@ -942,6 +942,20 @@ describe("reports", () => {
       error: { kind: "invalid_action", message: expect.stringContaining("before the batch's first edit") },
       code: { file: "a.ts", lines: [{ number: 1, text: `xy${CURSOR_MARKER}` }] },
     })
+  })
+
+  it("EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none", async () => {
+    const { editor, controller } = setup({ "a.ts": "ab\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    const named = await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `c${CURSOR_MARKER}` }]))
+    expect(named.rejected).toBeUndefined()
+    const unnamed = await until(controller.step([{ type: `d${CURSOR_MARKER}` }]))
+    expect(unnamed.rejected).toBeUndefined()
+    const deleted = await until(controller.step([{ select: { line: 1, text: "b" } }, { delete: true }]))
+    expect(deleted.rejected).toBeUndefined()
+    await until(controller.step([]))
+    expect(editor.text("a.ts")).toBe("acd\n")
   })
 
   it("ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's", async () => {
