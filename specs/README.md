@@ -304,9 +304,28 @@ a `move` that shows its file before the agent cursor moves there.
 
 | Spec | Code |
 |---|---|
-| `ShowStart`, `Expire`, `Resolved` | `show()`: our navigation starts; the window (`SELF_NAV_MS`) runs out; `showTextDocument` resolves |
-| `Shown`, `Handle` | VS Code's change of active editor, and `onActiveEditor` pausing as `away` outside the window |
+| `StartShow`, `Expire`, `Resolve` | `show()`: our navigation starts; the window (`SELF_NAV_MS`) runs out; `showTextDocument` resolves, and the `move` puts the agent cursor in the file |
+| `ShowFile`, `Handle` | VS Code's change of active editor, and `onActiveEditor` pausing as `away` outside the window |
 | `LookAway` | the programmer switching files themselves |
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `ShowFile` shows a file outside `Files` | `TypeOK` |
+| `HoldWhileShowing = FALSE`, the code before #56 | `NoPauseFromOurOwnShow` |
+| `LookAway` leaves `paused` as it was | `LookAwayPauses` |
+| `Resolve` leaves the agent cursor where it was | `MoveEnds` |
+| `Next` without `Finished` | the deadlock check |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NoPauseFromOurOwnShow`, `MoveEnds` | `integration.ts`, in VS Code: NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause |
+| `LookAwayPauses` | Nothing yet: no test looks away in VS Code |
 
 ### `Bridge`: who drives the session
 

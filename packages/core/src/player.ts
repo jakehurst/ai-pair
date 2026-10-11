@@ -329,6 +329,7 @@ export class Player {
       const file = this.fileOf(m, playing)
       if (!file) return fail("no_cursor", "Your cursor isn't in a file yet; give `file`.")
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: "interrupted" }
+      // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
       await editor.show(file)
       const at = m.at
       const where = await this.locate(file, m.line, "move", at === undefined ? undefined : (text) => spotCandidates(text, at))

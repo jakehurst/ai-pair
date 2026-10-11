@@ -200,7 +200,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const uri = vscode.Uri.file(file)
     await this.create(file)
     if (this.visibleEditor(file)) return
-    // The change of active editor comes before showTextDocument's reply, however long that takes.
+    // The change of active editor comes before showTextDocument's reply, however long that takes
+    // (specs/FollowMode.tla, `StartShow` with `HoldWhileShowing`, then `ShowFile`).
     this.showing++
     try {
       const doc = await vscode.workspace.openTextDocument(uri)
@@ -210,6 +211,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         viewColumn: vscode.window.activeTextEditor?.viewColumn,
       })
     } finally {
+      // specs/FollowMode.tla, `Resolve`: the held window gets its SELF_NAV_MS from now (`Expire`).
       this.showing--
       this.selfNav()
     }
@@ -383,6 +385,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   private onActiveEditor(editor: vscode.TextEditor | undefined): void {
     // specs/PointFocus.tla: away from the target is `LookAway`; no editor at all (`CloseTab`) pauses nothing.
+    // specs/FollowMode.tla, `Handle`: a change during our own navigation pauses nothing.
     if (editor?.document.uri.scheme === "file") this.onSelectionChange(editor)
     const target = this.target()
     if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return

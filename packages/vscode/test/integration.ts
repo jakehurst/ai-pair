@@ -173,7 +173,7 @@ export async function run(): Promise<void> {
   )
   await c.read("follow-b.txt")
   api.editor.selfNavMs = 0
-  await c.step([{ move: { file: "follow-b.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+  await c.step([{ move: { file: "follow-b.txt", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }])
   const moved = await c.step([])
   api.editor.selfNavMs = 400
   assert.equal(c.isPaused, false, "paused by our own move")
@@ -183,7 +183,7 @@ export async function run(): Promise<void> {
   )
   assert.equal(await buffer("follow-b.txt"), "bx\n")
   await c.end()
-  console.log("our own move to another file doesn't pause")
+  console.log("NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause")
 
   // An action without `file` acts in the file its batch named, not the cursor's (#58).
   fs.writeFileSync(file("named-a.txt"), "a\n")
