@@ -257,7 +257,7 @@ replies are, or made by editing the code, as today's edits are. The header shows
 ```
 
 The webview's history already draws dividers for interrupts and turn changes
-(`addDivider` in `panelHtml.ts`). A block entry is a divider with a label and a
+(`addDivider` in `panel_html.ts`). A block entry is a divider with a label and a
 disclosure showing the diff, using `fileDiff` from `packages/core/src/diff.ts`,
 which already produces unified hunks for the `edit` event.
 
@@ -423,7 +423,7 @@ mismatch at `hello`.
 | `packages/relay/src/tools.ts` | `step` schema: `continues`, `argument` |
 | `packages/relay/src/render.ts` | renders `block` events, the `gate` field, and the `locked` error |
 | `packages/vscode/src/panel.ts` | `FromPanel`: `blockDecision`, `cut`, `unlock` |
-| `packages/vscode/src/panelHtml.ts` | gate band state, Accept and Reject, Block here, block entries in history with diff disclosure and Unlock |
+| `packages/vscode/src/panel_html.ts` | gate band state, Accept and Reject, Block here, block entries in history with diff disclosure and Unlock |
 | `packages/vscode/src/extension.ts` | `aiPair.gate` setting; commands `acceptBlock`, `rejectBlock`, `cutBlock`, `exportRecord` |
 | `AGENT_GUIDE.md` | a section "The gate": what to do while a block is on the table, the argument, asking to unlock |
 | `PROTOCOL.md`, `DESIGN.md` | the new fields, the band state, the history entries |

@@ -138,7 +138,7 @@ export const SCRIPT: Action[][] = [
 const SUMMARY =
   "That's the demo: the direction first, then one path end to end, then broadening one case at a time. Updating and deleting would follow the same cycle.";
 
-/** Where an action goes, if it says. */
+/** Returns where an action goes, if it says. */
 function target(action: Action): { file?: string; line?: number } | undefined {
   return 'move' in action ? action.move : 'select' in action ? action.select : 'point' in action ? action.point : undefined;
 }
@@ -162,6 +162,11 @@ export async function stepScript(controller: Controller, batch: Action[], curren
 
 function derailed(report: Report): boolean {
   return report.events.length > 0 || report.rejected !== undefined || report.batches.some((b) => b.status !== 'completed');
+}
+
+async function stopEarly(controller: Controller): Promise<void> {
+  await controller.step([{ say: "I'm a scripted demo, so I can't adapt to that. Let's stop here." }]);
+  await controller.end();
 }
 
 export async function playDemo(controller: Controller, root: string): Promise<void> {
@@ -195,9 +200,4 @@ export async function playDemo(controller: Controller, root: string): Promise<vo
     // The session was ended or replaced.
     console.error('AI Pair demo stopped:', e);
   }
-}
-
-async function stopEarly(controller: Controller): Promise<void> {
-  await controller.step([{ say: "I'm a scripted demo, so I can't adapt to that. Let's stop here." }]);
-  await controller.end();
 }

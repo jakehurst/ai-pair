@@ -2,8 +2,8 @@
 
 import * as vscode from 'vscode';
 import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
-import { panelHtml, SPEEDS } from './panelHtml';
-import type { FromPanel, ToPanel } from './panelMessages';
+import { panelHtml, SPEEDS } from './panel_html';
+import type { FromPanel, ToPanel } from './panel_messages';
 import type { Calibration, CalibrationView } from './calibration';
 
 const MAX_LOG = 400;
@@ -12,11 +12,11 @@ const MAX_LOG = 400;
 const PANEL_COMMANDS: ReadonlySet<string> = new Set(['aiPair.playDemo', 'aiPair.setUpAgent']);
 
 /** An agent the idle view can start a session with: whether it can right now, and how (#107). */
-export type Starter = {
+export interface Starter {
   available(): Promise<boolean>;
   /** Resolves once the agent it ran has exited, or at once if it ran none (#118). */
   start(): Promise<void>;
-};
+}
 
 export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   static readonly viewId = 'aiPair.narration';
@@ -33,7 +33,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** After each post: the window saves the history with a session, for a reload (#25). */
   onPost?: () => void;
 
-  /** Everything posted so far, as the window saves it. */
+  /** Returns everything posted so far, as the window saves it. */
   get history(): readonly PanelEvent[] {
     return this.log;
   }
@@ -67,12 +67,12 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     void this.view?.webview.postMessage(message);
   }
 
-  /** The programmer's selection changed. Not logged: only the current one matters. */
+  /** Shows the programmer's selection, which changed. Not logged: only the current one matters. */
   showSelection(ref: Ref | undefined): void {
     this.send({ type: 'selection', ref });
   }
 
-  /** The speed setting changed. Not logged: only the current value matters. */
+  /** Shows the speed setting, which changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
     this.send({ type: 'speed', value });
   }
@@ -104,14 +104,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.onPost?.();
   }
 
-  /** After a reload: the history the window saved with its session, for the view to replay (#25). */
+  /** Restores, after a reload, the history the window saved with its session, for the view to replay (#25). */
   restoreHistory(events: readonly PanelEvent[]): void {
     this.log.splice(0, this.log.length, ...events);
     void vscode.commands.executeCommand('setContext', 'aiPair.active', true);
   }
 
   focusReply(): void {
-    this.reveal(false);
+    this.reveal(/* preserveFocus= */ false);
     this.send({ type: 'focusReply' });
   }
 
@@ -122,7 +122,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     const style = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString() : '';
     const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString() : '';
     view.webview.html = panelHtml(view.webview.cspSource, style, script);
-    view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m));
+    view.webview.onDidReceiveMessage((m: FromPanel) => {
+      this.receive(m);
+    });
     view.onDidDispose(() => {
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) this.view = undefined;
@@ -133,8 +135,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   }
 
   private reveal(preserveFocus = true): void {
-    if (this.view) this.view.show(preserveFocus);
-    else void vscode.commands.executeCommand(`${NarrationPanel.viewId}.focus`);
+    if (this.view) {
+      this.view.show(preserveFocus);
+    } else {
+      void vscode.commands.executeCommand(`${NarrationPanel.viewId}.focus`);
+    }
   }
 
   private receive(m: FromPanel): void {
@@ -170,8 +175,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
-        if (m.empty) c?.resume('reply');
-        else c?.pause('reply');
+        if (m.empty) {
+          c?.resume('reply');
+        } else {
+          c?.pause('reply');
+        }
         return;
       case 'pause':
         c?.pause();
@@ -185,8 +193,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'turn':
         c?.resume();
-        if (c?.turn === 'user') c.handBack(m.message, m.attach ? this.selection.current() : undefined);
-        else c?.takeTurn();
+        if (c?.turn === 'user') {
+          c.handBack(m.message, m.attach ? this.selection.current() : undefined);
+        } else {
+          c?.takeTurn();
+        }
         return;
       case 'end':
         c?.endSession();
@@ -241,11 +252,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       // Not a path from the workspace's root: look for it by name.
     }
     const found = await vscode.workspace.findFiles(`**/${name}`, '**/node_modules/**', 20);
-    if (found.length === 0) {
+    let uri = found[0];
+    if (uri === undefined) {
       void vscode.window.showInformationMessage(`AI Pair: couldn't find ${name} in the workspace.`);
       return;
     }
-    let uri = found[0]!;
     if (found.length > 1) {
       const picked = await vscode.window.showQuickPick(
         found.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })),

@@ -8,7 +8,13 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const shown: string[] = [];
-vi.mock('vscode', () => ({ window: { showErrorMessage: (m: string) => void shown.push(m) } }));
+vi.mock('vscode', () => ({
+  window: {
+    showErrorMessage: (m: string) => {
+      shown.push(m);
+    },
+  },
+}));
 
 const { writeLauncher } = await import('../src/setup');
 

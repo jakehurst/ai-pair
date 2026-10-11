@@ -2,7 +2,7 @@
 // The panel's history, with the page script running in a DOM. The cases come from specs/Panel.tla (#18).
 
 import { beforeEach, expect, it } from 'vitest';
-import type { Window } from 'happy-dom';
+import type { Element, Window } from 'happy-dom';
 import { LABEL_SEPARATOR } from '@ai-pair/core/constants';
 import { loadPage, ui } from './page';
 
@@ -21,15 +21,15 @@ function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent('message', { data: event }));
 }
 
-function history(): string[] {
-  return [...historyView().querySelectorAll('.entry')].map((e) => e.textContent ?? '');
-}
-
-/** The history's element, which scrolls. */
-function historyView() {
+/** Returns the history's element, which scrolls. */
+function historyView(): Element {
   const view = ui('history');
   if (!view) throw new Error('The page has no [data-ui="history"]');
   return view;
+}
+
+function history(): string[] {
+  return [...historyView().querySelectorAll('.entry')].map((e) => e.textContent ?? '');
 }
 
 it('NewestFirst, NoneLost: puts a reply above the agent message it answers', () => {

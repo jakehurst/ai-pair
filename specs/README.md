@@ -942,7 +942,7 @@ Every invariant and property names the test that proves the code obeys it:
 ### `Outside`: marking files changed outside the protocol
 
 The feature of #15, specified before its code: `outside.ts` and
-`outsideWatch.ts` in `packages/vscode/src`. One file, written by VS Code's
+`outside_watch.ts` in `packages/vscode/src`. One file, written by VS Code's
 saves, by the extension's own `show`, and by anything else; a watcher that
 reports writes late and merges them. The code marks a file when a group of
 writes settles, if the file differs from the text it knows: the last VS Code

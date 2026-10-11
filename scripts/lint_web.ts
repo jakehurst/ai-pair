@@ -1,5 +1,5 @@
 // Checks the Pair panel against Google's HTML/CSS Style Guide (#132): the page, rendered from
-// panelHtml.ts, with html-validate (.htmlvalidate.json) and the W3C's Nu Html Checker (vnu), and the
+// panel_html.ts, with html-validate (.htmlvalidate.json) and the W3C's Nu Html Checker (vnu), and the
 // stylesheet with Stylelint (stylelint.config.ts) and vnu. `npm run lint:web` runs it.
 
 import { spawnSync } from 'node:child_process';
@@ -11,9 +11,9 @@ import { build } from 'esbuild';
 import { FileSystemConfigLoader, formatterFactory, HtmlValidate } from 'html-validate/node';
 import stylelint from 'stylelint';
 import { config } from './stylelint.config.ts';
-import type * as panelHtml from '../packages/vscode/src/panelHtml.ts';
+import type * as panelHtml from '../packages/vscode/src/panel_html.ts';
 
-const TEMPLATE = 'packages/vscode/src/panelHtml.ts';
+const TEMPLATE = 'packages/vscode/src/panel_html.ts';
 const STYLESHEET = 'packages/vscode/src/webview/panel.css';
 const VNU_JAR = 'node_modules/vnu-jar/build/dist/vnu.jar';
 const PRETTIER_CONFIG = '.prettierrc.json';

@@ -5,15 +5,22 @@ import { discoveryDir } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import type { OutsideChanges } from './outside';
-import { watchOutside } from './outsideWatch';
+import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
-import { settingSpeed } from './panelHtml';
+import { settingSpeed } from './panel_html';
 import { claudeStarter, registerServerProvider, setUpAgent, writeLauncher } from './setup';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 
+/** Where a session waits across a reload, in the workspace's storage (#25). */
+const SAVED_SESSION = 'aiPair.session';
+/** Where the session's panel history waits across a reload, next to the session. */
+const SAVED_HISTORY = 'aiPair.history';
+/** How long after a change the session is saved: changes come a keystroke at a time. */
+const SAVE_MS = 200;
+
 /** Returned from `activate`, for integration tests. */
-export type Api = {
+export interface Api {
   controller: Controller;
   editor: VsCodeEditor;
   bridge: Bridge;
@@ -23,15 +30,21 @@ export type Api = {
   ready: Promise<void>;
   /** The session as the workspace's storage holds it. */
   saved: () => SavedSession | undefined;
-};
+}
 
-const config = () => vscode.workspace.getConfiguration('aiPair');
+function config(): vscode.WorkspaceConfiguration {
+  return vscode.workspace.getConfiguration('aiPair');
+}
 
-/** Where a session and its panel history wait across a reload, in the workspace's storage (#25). */
-const SAVED_SESSION = 'aiPair.session';
-const SAVED_HISTORY = 'aiPair.history';
-/** How long after a change the session is saved: changes come a keystroke at a time. */
-const SAVE_MS = 200;
+/** Wraps `f` so that it runs the first time only. */
+function once<T>(f: (arg: T) => void): (arg: T) => void {
+  let done = false;
+  return (arg) => {
+    if (done) return;
+    done = true;
+    f(arg);
+  };
+}
 
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
@@ -39,16 +52,26 @@ export function activate(context: vscode.ExtensionContext): Api {
   const editor = new VsCodeEditor(root, config().get('agentName', 'Agent'));
   const speed = {
     get: () => settingSpeed(config().get<unknown>('speed', 1)),
-    set: (value: number) => void config().update('speed', value, vscode.ConfigurationTarget.Global),
+    set: (value: number) => {
+      void config().update('speed', value, vscode.ConfigurationTarget.Global);
+    },
   };
   const readingSpeed = {
     get: () => settingSpeed(config().get<unknown>('readingSpeed', 1)),
-    set: (value: number) => void config().update('readingSpeed', value, vscode.ConfigurationTarget.Global),
+    set: (value: number) => {
+      void config().update('readingSpeed', value, vscode.ConfigurationTarget.Global);
+    },
   };
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
   // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
   const log = vscode.window.createOutputChannel('AI Pair', { log: true });
-  const trace = (line: string) => (config().get('trace', false) ? log.info(line) : log.trace(line));
+  function trace(line: string): void {
+    if (config().get('trace', false)) {
+      log.info(line);
+    } else {
+      log.trace(line);
+    }
+  }
   const panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
@@ -61,25 +84,33 @@ export function activate(context: vscode.ExtensionContext): Api {
     context.extensionUri,
   );
   const controller = new Controller(editor, panel);
-  controller.trace = (line) => log.info(line);
+  controller.trace = (line) => {
+    log.info(line);
+  };
   editor.controller = controller;
-  editor.onSelection = (ref) => panel.showSelection(ref);
+  editor.onSelection = (ref) => {
+    panel.showSelection(ref);
+  };
   panel.controller = controller;
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
   controller.setTiming(config().get('timing', {}));
   controller.setConfirmCommands(config().get('confirmCommands', true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
-  const passage = (): Passage => {
+  function passage(): Passage {
     const chosen = config().get<Partial<Passage>>('calibrationPassage', {});
     if (!chosen.text?.trim()) return builtInPassage(context.extensionPath);
     return { title: chosen.title || 'Your passage', text: chosen.text, ...(chosen.notice ? { notice: chosen.notice } : {}) };
-  };
+  }
   const calibration = new Calibration(
     {
       now: () => Date.now(),
-      pause: () => controller.pause('calibrate'),
-      resume: () => controller.resume('calibrate'),
+      pause: () => {
+        controller.pause('calibrate');
+      },
+      resume: () => {
+        controller.resume('calibrate');
+      },
       // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla, and
       // setTiming below is `ApplyRate`.
       store: async (msPerChar) => {
@@ -87,7 +118,9 @@ export function activate(context: vscode.ExtensionContext): Api {
         await config().update('timing', { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global);
         controller.setTiming(config().get('timing', {}));
       },
-      show: (view) => panel.showCalibration(view),
+      show: (view) => {
+        panel.showCalibration(view);
+      },
     },
     passage(),
   );
@@ -106,12 +139,12 @@ export function activate(context: vscode.ExtensionContext): Api {
     controller.revive(saved);
   }
   let saving: ReturnType<typeof setTimeout> | undefined;
-  const save = () => {
+  function save(): void {
     clearTimeout(saving);
     const session = controller.saved;
     void context.workspaceState.update(SAVED_SESSION, session);
     void context.workspaceState.update(SAVED_HISTORY, session ? panel.history : undefined);
-  };
+  }
   controller.onChange = panel.onPost = () => {
     clearTimeout(saving);
     saving = setTimeout(save, SAVE_MS);
@@ -122,29 +155,40 @@ export function activate(context: vscode.ExtensionContext): Api {
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
     trace,
     // Once: it would fail again on every focus.
-    failed: once(
-      (e) =>
-        void vscode.window.showErrorMessage(`AI Pair couldn't write its discovery file, so agents won't find this window: ${String(e)}`),
-    ),
+    failed: once((e) => {
+      void vscode.window.showErrorMessage(`AI Pair couldn't write its discovery file, so agents won't find this window: ${String(e)}`);
+    }),
   });
   const ready = bridge.start();
-  ready.catch((e: unknown) => void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`));
+  ready.catch((e: unknown) => {
+    void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`);
+  });
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
   panel.starter = starter;
   // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, `FlipSetUp`).
-  const setUp = () => setUpAgent(launcher).then(() => panel.askStart());
+  function setUp(): Promise<void> {
+    return setUpAgent(launcher).then(() => {
+      panel.askStart();
+    });
+  }
   registerServerProvider(context);
 
   context.subscriptions.push(
     log,
     starter,
     outsideWatch,
-    { dispose: () => bridge.dispose() },
+    {
+      dispose: () => {
+        bridge.dispose();
+      },
+    },
     vscode.window.onDidChangeWindowState((state) => {
       if (state.focused) bridge.focused();
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => bridge.writeDiscovery()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      bridge.writeDiscovery();
+    }),
     vscode.commands.registerCommand('aiPair.setUpAgent', setUp),
     editor,
     vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
@@ -173,29 +217,50 @@ export function activate(context: vscode.ExtensionContext): Api {
       void playDemo(controller, root);
     }),
     vscode.commands.registerCommand('aiPair.togglePause', () => {
-      if (controller.isPaused) controller.resume();
-      else controller.pause();
+      if (controller.isPaused) {
+        controller.resume();
+      } else {
+        controller.pause();
+      }
     }),
-    vscode.commands.registerCommand('aiPair.interrupt', () => controller.userInterrupt()),
+    vscode.commands.registerCommand('aiPair.interrupt', () => {
+      controller.userInterrupt();
+    }),
     vscode.commands.registerCommand('aiPair.toggleTurn', () => {
-      if (controller.turn === 'user') controller.handBack();
-      else controller.takeTurn();
+      if (controller.turn === 'user') {
+        controller.handBack();
+      } else {
+        controller.takeTurn();
+      }
     }),
-    vscode.commands.registerCommand('aiPair.endSession', () => controller.endSession()),
-    vscode.commands.registerCommand('aiPair.focusReply', () => panel.focusReply()),
-    vscode.commands.registerCommand('aiPair.askAboutSelection', () => panel.focusReply()),
+    vscode.commands.registerCommand('aiPair.endSession', () => {
+      controller.endSession();
+    }),
+    vscode.commands.registerCommand('aiPair.focusReply', () => {
+      panel.focusReply();
+    }),
+    vscode.commands.registerCommand('aiPair.askAboutSelection', () => {
+      panel.focusReply();
+    }),
     vscode.commands.registerCommand('aiPair.calibrate', () => {
-      if (calibration.arm(passage())) panel.focusReply();
-      else void vscode.window.showInformationMessage('AI Pair: a calibration is already under way in the Pair panel.');
+      if (calibration.arm(passage())) {
+        panel.focusReply();
+      } else {
+        void vscode.window.showInformationMessage('AI Pair: a calibration is already under way in the Pair panel.');
+      }
     }),
-    { dispose: () => controller.disconnect() },
+    {
+      dispose: () => {
+        controller.disconnect();
+      },
+    },
     { dispose: save },
   );
   if (!context.globalState.get('aiPair.offeredSetup')) {
     void context.globalState.update('aiPair.offeredSetup', true);
-    void vscode.window
-      .showInformationMessage('AI Pair is installed. Connect it to your agent?', 'Set Up Agent')
-      .then((answer) => answer && setUp());
+    void vscode.window.showInformationMessage('AI Pair is installed. Connect it to your agent?', 'Set Up Agent').then((answer) => {
+      if (answer) void setUp();
+    });
   }
 
   return {
@@ -211,13 +276,3 @@ export function activate(context: vscode.ExtensionContext): Api {
 }
 
 export function deactivate(): void {}
-
-/** `f`, run the first time only. */
-function once<T>(f: (arg: T) => void): (arg: T) => void {
-  let done = false;
-  return (arg) => {
-    if (done) return;
-    done = true;
-    f(arg);
-  };
-}

@@ -8,7 +8,7 @@ import { NarrationPanel } from '../src/panel';
 
 vi.mock('vscode', () => ({ commands: { executeCommand: () => Promise.resolve() } }));
 
-/** A view, standing in for VS Code's WebviewView: what its page sends, and its disposal. */
+/** Opens a view standing in for VS Code's WebviewView: what its page sends, and its disposal. */
 function open(panel: NarrationPanel) {
   let receive: ((m: object) => void) | undefined;
   let dispose: (() => void) | undefined;
@@ -18,9 +18,13 @@ function open(panel: NarrationPanel) {
       html: '',
       cspSource: '',
       postMessage: () => Promise.resolve(true),
-      onDidReceiveMessage: (f: (m: object) => void) => (receive = f),
+      onDidReceiveMessage: (f: (m: object) => void) => {
+        receive = f;
+      },
     },
-    onDidDispose: (f: () => void) => (dispose = f),
+    onDidDispose: (f: () => void) => {
+      dispose = f;
+    },
     show: () => {},
   };
   // Only what NarrationPanel uses.

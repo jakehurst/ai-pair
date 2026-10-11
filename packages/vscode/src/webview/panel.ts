@@ -1,8 +1,8 @@
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
-// styles are in panelHtml.ts; the messages in panelMessages.ts.
+// styles are in panel_html.ts; the messages in panel_messages.ts.
 
 import type { AgentState, PanelEvent, Ref } from '@ai-pair/core';
-import type { FromPanel, ToPanel } from '../panelMessages';
+import type { FromPanel, ToPanel } from '../panel_messages';
 import type { CalibrationView } from '../calibration';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
@@ -10,7 +10,44 @@ declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void };
 
 const vscode = acquireVsCodeApi();
 
-/** The page's element marked `data-ui="name"`, as the element it is. */
+const ESCAPES = new Map([
+  ['&', '&amp;'],
+  ['<', '&lt;'],
+  ['>', '&gt;'],
+  ['"', '&quot;'],
+  ["'", '&#39;'],
+]);
+// A code span that names a file, like `game.ts` or `src/game.ts`, becomes a link that opens it.
+const FILE =
+  /^[\w@.~-]*(\/[\w@.~-]+)*\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|css|scss|less|html|vue|svelte|py|rs|go|java|kt|swift|c|h|cc|cpp|hpp|cs|rb|php|lua|sh|zsh|toml|yaml|yml|xml|sql|txt|lock|env)$/;
+const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]]/g;
+
+const STATUS: Record<AgentState, [string, string]> = {
+  typing: ['', 'Agent is typing'],
+  read: ['read', 'Read this'],
+  running: ['', 'Running a command'],
+  thinking: ['dim', 'Agent is thinking'],
+  absent: ['dim', "Agent isn't listening"],
+  paused: ['dim', 'Paused'],
+  listening: ['ring', 'Your move'],
+  navigator: ['ring', 'Your turn'],
+};
+
+const ENDED = { agent: 'The agent ended the session', user: 'You ended the session', disconnected: 'The agent disconnected' };
+
+// Tooltips: an element's data-tip shows under it after a moment's hover, or at once while one is
+// showing or just was, the way VS Code's own hovers do; and on keyboard focus. A click hides it.
+const TIP_DELAY_MS = 500;
+const TIP_WARM_MS = 300;
+const TIP_GAP = 4;
+const TIP_MARGIN = 6;
+
+/** The tallest the reply box grows, in pixels, before it scrolls. */
+const REPLY_MAX_HEIGHT = 120;
+
+type RunPhase = Extract<PanelEvent, { type: 'run' }>['phase'];
+
+/** Returns the page's element marked `data-ui="name"`, as the element it is. */
 function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
   const el = document.querySelector(`[data-ui="${name}"]`);
   if (!(el instanceof type)) throw new Error(`The panel has no ${type.name} [data-ui="${name}"]`);
@@ -66,43 +103,50 @@ let suspended = false;
 let state: AgentState | null = null;
 /** The programmer's selection, offered with the reply. */
 let selection: Ref | null = null;
+/** The programmer dismissed the selection, so it isn't offered until it changes. */
 let selectionDismissed = false;
 /** The command shown in the run box. */
 let runId: number | null = null;
+/** The run box waits for the programmer's decision on its command. */
 let runConfirming = false;
 /** Text of the current message. */
 let current: string | null = null;
 /** Whether the current message is in the history already. */
 let filed = false;
+/** The reading pause under way: its length, and how much of it has elapsed, as of `last`. */
 let reading: { ms: number; elapsed: number; last: number } | null = null;
 /** A link to the code the agent just pointed at, shown with the message about it. */
 let pointed: HTMLAnchorElement | null = null;
+let draftEmpty = true;
+let tipTarget: HTMLElement | null = null;
+let tipTimer: ReturnType<typeof setTimeout> | undefined;
+let tipWarmUntil = 0;
 
-const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ESCAPES[c] ?? c);
-// A code span that names a file, like `game.ts` or `src/game.ts`, becomes a link that opens it.
-const FILE =
-  /^[\w@.~-]*(\/[\w@.~-]+)*\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|css|scss|less|html|vue|svelte|py|rs|go|java|kt|swift|c|h|cc|cpp|hpp|cs|rb|php|lua|sh|zsh|toml|yaml|yml|xml|sql|txt|lock|env)$/;
-const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]]/g;
-const codeSpan = (code: string) =>
-  FILE.test(code) && !code.startsWith('.')
-    ? '<a href="#" class="file" data-file="' + code + '">' + code + '</a>'
-    : '<code>' + code + '</code>';
-const rich = (s: string) =>
-  esc(s)
+// ---- Messages as HTML ------------------------------------------------------
+
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ESCAPES.get(c) ?? c);
+}
+
+function codeSpan(code: string): string {
+  return FILE.test(code) && !code.startsWith('.') ? `<a href="#" class="file" data-file="${code}">${code}</a>` : `<code>${code}</code>`;
+}
+
+function rich(s: string): string {
+  return esc(s)
     .split(/(`[^`]+`)/)
     .map((part, i) =>
-      i % 2 === 1
-        ? codeSpan(part.slice(1, -1))
-        : part.replace(URL_PATTERN, (u) => '<a href="#" class="url" data-url="' + u + '">' + u + '</a>'),
+      i % 2 === 1 ? codeSpan(part.slice(1, -1)) : part.replace(URL_PATTERN, (u) => `<a href="#" class="url" data-url="${u}">${u}</a>`),
     )
     .join('');
+}
 
-function add(el: HTMLElement): HTMLElement {
-  // Newest first: the current message came before this entry, so it goes in first
-  // (specs/Panel.tla, `AddEntry`).
-  fileCurrent();
-  ui.history.prepend(el);
+// ---- The history -----------------------------------------------------------
+
+function entry(cls: string, html?: string): HTMLElement {
+  const el = document.createElement('div');
+  el.className = `entry ${cls}`;
+  if (html !== undefined) el.innerHTML = html;
   return el;
 }
 
@@ -113,10 +157,11 @@ function fileCurrent(): void {
   filed = true;
 }
 
-function entry(cls: string, html?: string): HTMLElement {
-  const el = document.createElement('div');
-  el.className = 'entry ' + cls;
-  if (html !== undefined) el.innerHTML = html;
+function add(el: HTMLElement): HTMLElement {
+  // Newest first: the current message came before this entry, so it goes in first
+  // (specs/Panel.tla, `AddEntry`).
+  fileCurrent();
+  ui.history.prepend(el);
   return el;
 }
 
@@ -124,31 +169,35 @@ function addDivider(text: string): void {
   add(entry('divider')).textContent = text;
 }
 
-/** A link to code; it has an href, so it takes focus and Enter (#16). */
+/** Makes a link to code; it has an href, so it takes focus and Enter (#16). */
 function codeLink(text: string, file: string, line: number): HTMLAnchorElement {
   const a = document.createElement('a');
   a.href = '#';
   a.className = 'ref';
   a.textContent = text;
-  a.addEventListener('click', () => vscode.postMessage({ type: 'open', file, line }));
+  a.addEventListener('click', () => {
+    vscode.postMessage({ type: 'open', file, line });
+  });
   return a;
 }
 
 function refLink(ref: Ref): HTMLAnchorElement {
-  return codeLink(ref.file + ':' + ref.line + (ref.endLine > ref.line ? RANGE_DASH + ref.endLine : ''), ref.file, ref.line);
+  return codeLink(`${ref.file}:${ref.line}${ref.endLine > ref.line ? `${RANGE_DASH}${ref.endLine}` : ''}`, ref.file, ref.line);
 }
 
-/** Files changed on disk outside the protocol, each a link to its diff (#15). */
+/** Adds the files changed on disk outside the protocol, each a link to its diff (#15). */
 function addOutside(files: string[]): void {
   const el = entry('outside');
-  el.append(files.length === 1 ? '' : files.length + ' files changed outside the editor: ');
+  el.append(files.length === 1 ? '' : `${files.length} files changed outside the editor: `);
   files.forEach((file, i) => {
     if (i > 0) el.append(', ');
     const a = document.createElement('a');
     a.href = '#';
     a.className = 'change';
     a.textContent = file;
-    a.addEventListener('click', () => vscode.postMessage({ type: 'openChange', file }));
+    a.addEventListener('click', () => {
+      vscode.postMessage({ type: 'openChange', file });
+    });
     el.append(a);
   });
   if (files.length === 1) el.append(' changed outside the editor');
@@ -163,7 +212,28 @@ function addYou(text: string | undefined, ref: Ref | undefined): void {
   ui.history.scrollTop = 0;
 }
 
-type RunPhase = Extract<PanelEvent, { type: 'run' }>['phase'];
+function setOutcome(el: Element, phase: RunPhase, exitCode: number | undefined): void {
+  const outcome = el.querySelector('.outcome') ?? el.lastElementChild;
+  if (!outcome) return;
+  outcome.className = 'outcome';
+  el.classList.toggle('skipped', phase === 'declined');
+  if (phase === 'declined') {
+    outcome.textContent = 'skipped';
+  } else if (phase === 'background') {
+    outcome.textContent = 'still running';
+  } else if (exitCode === undefined) {
+    outcome.textContent = phase === 'exited' ? 'ended' : 'done';
+  } else if (exitCode === 0) {
+    outcome.classList.add('ok');
+    outcome.textContent = 'exit 0';
+  } else if (exitCode === 130 || exitCode === 143) {
+    // Interrupted (Ctrl+C) or terminated, like a server being restarted: not a failure.
+    outcome.textContent = 'stopped';
+  } else {
+    outcome.classList.add('fail');
+    outcome.textContent = `exit ${exitCode}`;
+  }
+}
 
 function addRun(id: number, command: string, phase: RunPhase, exitCode: number | undefined): void {
   const el = entry('run');
@@ -178,27 +248,12 @@ function addRun(id: number, command: string, phase: RunPhase, exitCode: number |
   add(el);
 }
 
-function setOutcome(el: Element, phase: RunPhase, exitCode: number | undefined): void {
-  const outcome = el.querySelector('.outcome') ?? el.lastElementChild;
-  if (!outcome) return;
-  outcome.className = 'outcome';
-  el.classList.toggle('skipped', phase === 'declined');
-  if (phase === 'declined') outcome.textContent = 'skipped';
-  else if (phase === 'background') outcome.textContent = 'still running';
-  else if (exitCode === undefined) outcome.textContent = phase === 'exited' ? 'ended' : 'done';
-  else if (exitCode === 0) {
-    outcome.classList.add('ok');
-    outcome.textContent = 'exit 0';
-  }
-  // Interrupted (Ctrl+C) or terminated, like a server being restarted: not a failure.
-  else if (exitCode === 130 || exitCode === 143) outcome.textContent = 'stopped';
-  else {
-    outcome.classList.add('fail');
-    outcome.textContent = 'exit ' + exitCode;
-  }
+// ---- The band --------------------------------------------------------------
+
+function attaching(): boolean {
+  return active && selection !== null && !selectionDismissed;
 }
 
-const attaching = () => active && selection !== null && !selectionDismissed;
 function syncAttach(): void {
   ui.attach.classList.toggle('on', attaching());
   if (attaching() && selection) ui.attachRef.replaceChildren(refLink(selection));
@@ -234,23 +289,17 @@ function showCalibration(view: CalibrationView): void {
   switch (view.phase) {
     case 'armed':
       setNow(
-        'Reading speed calibration. When you type go, the passage appears: ' +
-          view.title +
-          '. Read it at the pace at which you read and understand it, and the moment you finish, type x.',
+        `Reading speed calibration. When you type go, the passage appears: ${view.title}. Read it at the pace at which you read and understand it, and the moment you finish, type x.`,
       );
       return;
     case 'reading':
       ui.passageText.textContent = view.text;
       ui.passageNotice.textContent = view.notice ?? '';
-      setNow(view.title + '. Type x the moment you finish.');
+      setNow(`${view.title}. Type x the moment you finish.`);
       return;
     case 'done':
       setNow(
-        'Measured ' +
-          Math.round(view.msPerChar) +
-          ' ms per character, about ' +
-          view.wordsPerMinute +
-          ' words a minute. Saved to your settings: every message now gets its own time at that pace.',
+        `Measured ${Math.round(view.msPerChar)} ms per character, about ${view.wordsPerMinute} words a minute. Saved to your settings: every message now gets its own time at that pace.`,
       );
       return;
     case 'idle':
@@ -259,13 +308,8 @@ function showCalibration(view: CalibrationView): void {
   }
 }
 
-// The reading pause fills a ring around the status dot.
-function startReading(ms: number): void {
-  if (replaying) return;
-  reading = { ms, elapsed: 0, last: performance.now() };
-  ui.dot.style.setProperty('--progress', '0');
-  syncReading();
-  requestAnimationFrame(tick);
+function syncReading(): void {
+  ui.dot.classList.toggle('reading', reading !== null);
 }
 
 function tick(t: number): void {
@@ -282,20 +326,14 @@ function tick(t: number): void {
   requestAnimationFrame(tick);
 }
 
-function syncReading(): void {
-  ui.dot.classList.toggle('reading', reading !== null);
+// The reading pause fills a ring around the status dot.
+function startReading(ms: number): void {
+  if (replaying) return;
+  reading = { ms, elapsed: 0, last: performance.now() };
+  ui.dot.style.setProperty('--progress', '0');
+  syncReading();
+  requestAnimationFrame(tick);
 }
-
-const STATUS: Record<AgentState, [string, string]> = {
-  typing: ['', 'Agent is typing'],
-  read: ['read', 'Read this'],
-  running: ['', 'Running a command'],
-  thinking: ['dim', 'Agent is thinking'],
-  absent: ['dim', "Agent isn't listening"],
-  paused: ['dim', 'Paused'],
-  listening: ['ring', 'Your move'],
-  navigator: ['ring', 'Your turn'],
-};
 
 function syncStatus(): void {
   if (!active) {
@@ -309,10 +347,82 @@ function syncStatus(): void {
     return;
   }
   const [cls, text] = runConfirming ? ['read', 'Needs you'] : state ? STATUS[state] : ['', 'Session started'];
-  ui.dot.className = 'dot ' + cls;
+  ui.dot.className = `dot ${cls}`;
   syncReading();
   ui.status.textContent = text;
 }
+
+// ---- Tooltips --------------------------------------------------------------
+
+// Under the element, centered on it, inside the panel; above it if there's no room below.
+function placeTip(): void {
+  if (!tipTarget) return;
+  const r = tipTarget.getBoundingClientRect();
+  const w = ui.tip.offsetWidth;
+  const h = ui.tip.offsetHeight;
+  const left = Math.max(TIP_MARGIN, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - TIP_MARGIN));
+  const top = r.bottom + TIP_GAP + h <= innerHeight - TIP_MARGIN ? r.bottom + TIP_GAP : r.top - TIP_GAP - h;
+  ui.tip.style.left = `${left}px`;
+  ui.tip.style.top = `${Math.max(TIP_MARGIN, top)}px`;
+}
+
+function setTip(el: HTMLElement, text: string): void {
+  el.dataset.tip = text;
+  if (el === tipTarget) {
+    ui.tip.textContent = text;
+    placeTip();
+  }
+}
+
+function showTip(el: HTMLElement): void {
+  clearTimeout(tipTimer);
+  if ((el === ui.speed && !ui.speedMenu.hidden) || (el === ui.readingSpeed && !ui.readingMenu.hidden)) return;
+  tipTarget = el;
+  ui.tip.textContent = el.dataset.tip ?? '';
+  ui.tip.hidden = false;
+  el.setAttribute('aria-describedby', 'tip');
+  placeTip();
+}
+
+function hideTip(): void {
+  clearTimeout(tipTimer);
+  if (!tipTarget) return;
+  tipTarget.removeAttribute('aria-describedby');
+  tipTarget = null;
+  ui.tip.hidden = true;
+  tipWarmUntil = performance.now() + TIP_WARM_MS;
+}
+
+function hoverTip(el: HTMLElement | null): void {
+  if (el === tipTarget) return;
+  const warm = tipTarget !== null || performance.now() < tipWarmUntil;
+  hideTip();
+  if (!el) return;
+  if (warm) {
+    showTip(el);
+  } else {
+    tipTimer = setTimeout(() => {
+      showTip(el);
+    }, TIP_DELAY_MS);
+  }
+}
+
+// The element went away or moved, when the panel changed under it.
+function syncTip(): void {
+  if (!tipTarget) return;
+  if (tipTarget.getClientRects().length === 0) {
+    hideTip();
+  } else {
+    placeTip();
+  }
+}
+
+/** Returns the element an event happened on, if it is one. */
+function elementOf(e: Event): HTMLElement | null {
+  return e.target instanceof HTMLElement ? e.target : null;
+}
+
+// ---- The session's state ---------------------------------------------------
 
 function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   state = e.state;
@@ -333,13 +443,49 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   syncTip();
 }
 
-/** The run box shows nothing. */
+/** Clears the run box. */
 function clearRun(): void {
   runId = null;
   runConfirming = false;
   ui.run.classList.remove('on', 'confirm');
   ui.run.removeAttribute('role');
 }
+
+/** Wires a speed menu to its button, and returns what closes it. */
+function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed'): () => void {
+  function close(): void {
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    button.classList.remove('on');
+  }
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden === true;
+    menu.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+    button.classList.toggle('on', open);
+    if (open) menu.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+  });
+  for (const b of menu.querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      close();
+      button.focus();
+      vscode.postMessage({ type, value: Number(b.dataset.speed) });
+    });
+  }
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !(e.target instanceof Node && menu.contains(e.target))) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hidden) {
+      close();
+      button.focus();
+    }
+  });
+  return close;
+}
+const closeSpeedMenu = speedMenu(ui.speed, ui.speedMenu, 'speed');
+const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, 'readingSpeed');
 
 function setActive(on: boolean): void {
   active = on;
@@ -358,13 +504,23 @@ function setActive(on: boolean): void {
   syncTip();
 }
 
-const ENDED = { agent: 'The agent ended the session', user: 'You ended the session', disconnected: 'The agent disconnected' };
+// One decimal, so the menu's speeds line up; a setting with more keeps them.
+function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
+  const label = `${Number.isInteger(value * 10) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
+  button.textContent = prefix + label;
+  button.setAttribute('aria-label', `${name}: ${label}`);
+  for (const b of menu.querySelectorAll('button')) {
+    b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < 0.01));
+  }
+}
 
 function handle(e: ToPanel): void {
   switch (e.type) {
     case 'replay':
       replaying = true;
-      for (const ev of e.events) handle(ev);
+      for (const ev of e.events) {
+        handle(ev);
+      }
       replaying = false;
       return;
     case 'canStart':
@@ -387,8 +543,9 @@ function handle(e: ToPanel): void {
           const was = suspended;
           suspended = e.suspended === true;
           // A revive repeats the suspension a disconnect already showed (#138).
-          if (was !== suspended)
+          if (was !== suspended) {
             addDivider(suspended ? 'The agent disconnected: the session waits for it' : 'The agent is back: session resumed');
+          }
           setActive(true);
           return;
         }
@@ -396,12 +553,10 @@ function handle(e: ToPanel): void {
         current = null;
         state = null;
         ui.now.classList.add('empty');
-        ui.now.textContent = 'Waiting for the agent' + ELLIPSIS;
+        ui.now.textContent = `Waiting for the agent${ELLIPSIS}`;
         ui.ref.innerHTML = '';
         pointed = null;
-        addDivider(
-          'Session started' + (e.task ? ': ' + e.task : '') + (e.rules ? LABEL_SEPARATOR + 'rules from ' + e.rules.join(', ') : ''),
-        );
+        addDivider(`Session started${e.task ? `: ${e.task}` : ''}${e.rules ? `${LABEL_SEPARATOR}rules from ${e.rules.join(', ')}` : ''}`);
         setActive(true);
       } else {
         fileCurrent();
@@ -435,10 +590,10 @@ function handle(e: ToPanel): void {
     case 'turn':
       addDivider(e.to === 'user' ? 'You took the turn' : 'You handed the turn back');
       if (e.message || e.ref) addYou(e.message, e.ref);
-      ui.reply.placeholder = e.to === 'user' ? 'Ask the agent' + ELLIPSIS : 'Reply to the agent' + ELLIPSIS;
+      ui.reply.placeholder = e.to === 'user' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
       return;
     case 'point':
-      pointed = codeLink(RIGHT_ARROW + ' ' + e.file + ':' + e.line, e.file, e.line);
+      pointed = codeLink(`${RIGHT_ARROW} ${e.file}:${e.line}`, e.file, e.line);
       return;
     case 'run': {
       // specs/RunBox.tla, Show: confirm and running show the box; a phase that ends the run clears it.
@@ -448,9 +603,12 @@ function handle(e: ToPanel): void {
         ui.run.classList.add('on');
         ui.run.classList.toggle('confirm', runConfirming);
         // A command waiting for the programmer's decision is announced at once (#16).
-        if (runConfirming) ui.run.setAttribute('role', 'alert');
-        else ui.run.removeAttribute('role');
-        ui.runLabel.textContent = runConfirming ? 'Allow this command in the terminal?' : 'Running in the terminal' + ELLIPSIS;
+        if (runConfirming) {
+          ui.run.setAttribute('role', 'alert');
+        } else {
+          ui.run.removeAttribute('role');
+        }
+        ui.runLabel.textContent = runConfirming ? 'Allow this command in the terminal?' : `Running in the terminal${ELLIPSIS}`;
         ui.runCmd.textContent = e.command;
         syncStatus();
         if (runConfirming) arrive(ui.run);
@@ -458,7 +616,7 @@ function handle(e: ToPanel): void {
       }
       if (e.phase === 'exited') {
         // A command left running has ended: its row says how.
-        const row = ui.history.querySelector('.run[data-run="' + e.id + '"]');
+        const row = ui.history.querySelector(`.run[data-run="${e.id}"]`);
         if (row) setOutcome(row, e.phase, e.exitCode);
         return;
       }
@@ -491,21 +649,19 @@ function handle(e: ToPanel): void {
   }
 }
 
-// The extension posts only ToPanel messages.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-window.addEventListener('message', (m: MessageEvent) => handle(m.data as ToPanel));
+// ---- The reply box ---------------------------------------------------------
 
-let draftEmpty = true;
 // specs/Draft.tla, `Type` and `Clear`: posts `draft` when the box's emptiness changes.
 function syncDraft(): void {
   const empty = ui.reply.value.trim() === '';
   ui.reply.style.height = 'auto';
-  ui.reply.style.height = Math.min(ui.reply.scrollHeight, 120) + 'px';
+  ui.reply.style.height = `${Math.min(ui.reply.scrollHeight, REPLY_MAX_HEIGHT)}px`;
   if (empty !== draftEmpty) {
     draftEmpty = empty;
     vscode.postMessage({ type: 'draft', empty });
   }
 }
+
 function takeDraft(): string {
   const text = ui.reply.value.trim();
   ui.reply.value = '';
@@ -513,6 +669,7 @@ function takeDraft(): string {
   syncDraft();
   return text;
 }
+
 function takeAttach(): boolean {
   const on = attaching();
   if (on) {
@@ -521,10 +678,23 @@ function takeAttach(): boolean {
   }
   return on;
 }
+
 function sendReply(): void {
   const text = takeDraft();
   if (text) vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
 }
+
+function decide(run: boolean, remember: boolean): void {
+  if (runId !== null) vscode.postMessage({ type: 'runDecision', id: runId, run, remember });
+}
+
+// ---- Wiring ----------------------------------------------------------------
+
+window.addEventListener('message', (m: MessageEvent) => {
+  // The extension posts only ToPanel messages.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  handle(m.data as ToPanel);
+});
 
 ui.reply.addEventListener('input', syncDraft);
 ui.reply.addEventListener('keydown', (e) => {
@@ -536,8 +706,12 @@ ui.reply.addEventListener('keydown', (e) => {
   }
 });
 ui.send.addEventListener('click', sendReply);
-ui.pause.addEventListener('click', () => vscode.postMessage({ type: paused ? 'resume' : 'pause' }));
-ui.interrupt.addEventListener('click', () => vscode.postMessage({ type: 'interrupt' }));
+ui.pause.addEventListener('click', () => {
+  vscode.postMessage({ type: paused ? 'resume' : 'pause' });
+});
+ui.interrupt.addEventListener('click', () => {
+  vscode.postMessage({ type: 'interrupt' });
+});
 ui.turn.addEventListener('click', () => {
   const handingBack = turn === 'user';
   const message = handingBack ? takeDraft() : '';
@@ -548,131 +722,27 @@ ui.attachX.addEventListener('click', () => {
   selectionDismissed = true;
   syncAttach();
 });
-const decide = (run: boolean, remember: boolean) => {
-  if (runId !== null) vscode.postMessage({ type: 'runDecision', id: runId, run, remember });
-};
-ui.runGo.addEventListener('click', () => decide(true, false));
-ui.runAlways.addEventListener('click', () => decide(true, true));
-ui.runSkip.addEventListener('click', () => decide(false, false));
-ui.end.addEventListener('click', () => vscode.postMessage({ type: 'end' }));
-
-function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed'): () => void {
-  const close = () => {
-    menu.hidden = true;
-    button.setAttribute('aria-expanded', 'false');
-    button.classList.remove('on');
-  };
-  button.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = menu.hidden === true;
-    menu.hidden = !open;
-    button.setAttribute('aria-expanded', String(open));
-    button.classList.toggle('on', open);
-    if (open) menu.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
-  });
-  for (const b of menu.querySelectorAll('button')) {
-    b.addEventListener('click', () => {
-      close();
-      button.focus();
-      vscode.postMessage({ type, value: Number(b.dataset.speed) });
-    });
-  }
-  document.addEventListener('click', (e) => {
-    if (!menu.hidden && !(e.target instanceof Node && menu.contains(e.target))) close();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !menu.hidden) {
-      close();
-      button.focus();
-    }
-  });
-  return close;
-}
-const closeSpeedMenu = speedMenu(ui.speed, ui.speedMenu, 'speed');
-const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, 'readingSpeed');
-
-// One decimal, so the menu's speeds line up; a setting with more keeps them.
-function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
-  const label = (Number.isInteger(value * 10) ? value.toFixed(1) : String(value)) + SPEED_SUFFIX;
-  button.textContent = prefix + label;
-  button.setAttribute('aria-label', name + ': ' + label);
-  for (const b of menu.querySelectorAll('button')) {
-    b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < 0.01));
-  }
-}
-
-// Tooltips: an element's data-tip shows under it after a moment's hover, or at once while one is
-// showing or just was, the way VS Code's own hovers do; and on keyboard focus. A click hides it.
-const TIP_DELAY_MS = 500;
-const TIP_WARM_MS = 300;
-const TIP_GAP = 4;
-const TIP_MARGIN = 6;
-let tipTarget: HTMLElement | null = null;
-let tipTimer: ReturnType<typeof setTimeout> | undefined;
-let tipWarmUntil = 0;
-
-function setTip(el: HTMLElement, text: string): void {
-  el.dataset.tip = text;
-  if (el === tipTarget) {
-    ui.tip.textContent = text;
-    placeTip();
-  }
-}
-
-function showTip(el: HTMLElement): void {
-  clearTimeout(tipTimer);
-  if ((el === ui.speed && !ui.speedMenu.hidden) || (el === ui.readingSpeed && !ui.readingMenu.hidden)) return;
-  tipTarget = el;
-  ui.tip.textContent = el.dataset.tip ?? '';
-  ui.tip.hidden = false;
-  el.setAttribute('aria-describedby', 'tip');
-  placeTip();
-}
-
-// Under the element, centered on it, inside the panel; above it if there's no room below.
-function placeTip(): void {
-  if (!tipTarget) return;
-  const r = tipTarget.getBoundingClientRect();
-  const w = ui.tip.offsetWidth;
-  const h = ui.tip.offsetHeight;
-  const left = Math.max(TIP_MARGIN, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - TIP_MARGIN));
-  const top = r.bottom + TIP_GAP + h <= innerHeight - TIP_MARGIN ? r.bottom + TIP_GAP : r.top - TIP_GAP - h;
-  ui.tip.style.left = left + 'px';
-  ui.tip.style.top = Math.max(TIP_MARGIN, top) + 'px';
-}
-
-function hideTip(): void {
-  clearTimeout(tipTimer);
-  if (!tipTarget) return;
-  tipTarget.removeAttribute('aria-describedby');
-  tipTarget = null;
-  ui.tip.hidden = true;
-  tipWarmUntil = performance.now() + TIP_WARM_MS;
-}
-
-function hoverTip(el: HTMLElement | null): void {
-  if (el === tipTarget) return;
-  const warm = tipTarget !== null || performance.now() < tipWarmUntil;
-  hideTip();
-  if (!el) return;
-  if (warm) showTip(el);
-  else tipTimer = setTimeout(() => showTip(el), TIP_DELAY_MS);
-}
-
-// The element went away or moved, when the panel changed under it.
-function syncTip(): void {
-  if (!tipTarget) return;
-  if (tipTarget.getClientRects().length === 0) hideTip();
-  else placeTip();
-}
-
-/** The element an event happened on, if it is one. */
-const elementOf = (e: Event) => (e.target instanceof HTMLElement ? e.target : null);
+ui.runGo.addEventListener('click', () => {
+  decide(/* run= */ true, /* remember= */ false);
+});
+ui.runAlways.addEventListener('click', () => {
+  decide(/* run= */ true, /* remember= */ true);
+});
+ui.runSkip.addEventListener('click', () => {
+  decide(/* run= */ false, /* remember= */ false);
+});
+ui.end.addEventListener('click', () => {
+  vscode.postMessage({ type: 'end' });
+});
 
 // From any element under the pointer: over a button's icon, it's an SVG one.
-document.addEventListener('pointerover', (e) => hoverTip(e.target instanceof Element ? e.target.closest<HTMLElement>('[data-tip]') : null));
-document.documentElement.addEventListener('pointerleave', () => hoverTip(null));
-document.addEventListener('pointerdown', hideTip, true);
+document.addEventListener('pointerover', (e) => {
+  hoverTip(e.target instanceof Element ? e.target.closest<HTMLElement>('[data-tip]') : null);
+});
+document.documentElement.addEventListener('pointerleave', () => {
+  hoverTip(null);
+});
+document.addEventListener('pointerdown', hideTip, /* useCapture= */ true);
 document.addEventListener('focusin', (e) => {
   const el = elementOf(e);
   if (el?.matches('[data-tip]:focus-visible')) showTip(el);
@@ -685,9 +755,9 @@ document.addEventListener(
   (e) => {
     if (e.key === 'Escape') hideTip();
   },
-  true,
+  /* useCapture= */ true,
 );
-document.addEventListener('scroll', hideTip, true);
+document.addEventListener('scroll', hideTip, /* useCapture= */ true);
 window.addEventListener('blur', hideTip);
 
 // Space pauses and resumes, anywhere in the panel but the reply box. It doesn't press the focused

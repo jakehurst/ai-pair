@@ -18,14 +18,20 @@ export type CalibrationView =
   | { phase: 'done'; msPerChar: number; wordsPerMinute: number };
 
 /** What the flow needs from VS Code: the clock, the pause, the store, and the panel. */
-export type CalibrationHost = {
+export interface CalibrationHost {
   now(): number;
   pause(): void;
   resume(): void;
   /** Writes the rate to the settings; resolves once the player reads it, which is when the pause may end. */
   store(msPerChar: number): Promise<void>;
   show(view: CalibrationView): void;
-};
+}
+
+/** Returns the passage's words over the minutes it took, rounded. */
+export function wordsPerMinute(text: string, elapsedMs: number): number {
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return Math.round(words / (elapsedMs / 60_000));
+}
 
 export class Calibration {
   phase: Phase = 'idle';
@@ -36,7 +42,7 @@ export class Calibration {
     private passage: Passage,
   ) {}
 
-  /** The command, or the agent's calibrate tool with a passage of its own. Refused while one is under way, or for an empty passage. specs/Calibration.tla, `Arm` and `Supply`. */
+  /** Arms a calibration, for the command, or for the agent's calibrate tool with a passage of its own. Refused while one is under way, or for an empty passage. specs/Calibration.tla, `Arm` and `Supply`. */
   arm(passage?: Passage): boolean {
     if (this.phase !== 'idle') return false;
     if (passage) {
@@ -49,7 +55,7 @@ export class Calibration {
     return true;
   }
 
-  /** A reply while a calibration is under way: go shows the passage and starts the clock, x stops it, anything else cancels. False when it is not for the calibration. specs/Calibration.tla, `Go`. */
+  /** Takes a reply while a calibration is under way: go shows the passage and starts the clock, x stops it, anything else cancels. False when it is not for the calibration. specs/Calibration.tla, `Go`. */
   reply(text: string): boolean {
     const word = text.trim().toLowerCase();
     if (this.phase === 'armed' && word === 'go') {
@@ -69,7 +75,7 @@ export class Calibration {
     return false;
   }
 
-  /** x: the rate is written, and only once the player reads it does the pause end (AwaitStore): specs/Calibration.tla, `Finish`, then `ApplyRate`. */
+  /** Finishes the reading, on x: the rate is written, and only once the player reads it does the pause end (AwaitStore): specs/Calibration.tla, `Finish`, then `ApplyRate`. */
   private async finish(elapsedMs: number): Promise<void> {
     this.phase = 'storing';
     const text = this.passage.text;
@@ -80,17 +86,11 @@ export class Calibration {
     this.host.resume();
   }
 
-  /** Any other reply, the panel's view going away, or the session ending: back to idle, nothing stored (specs/Calibration.tla, `Cancel`). */
+  /** Cancels the calibration, on any other reply, the panel's view going away, or the session ending: back to idle, nothing stored (specs/Calibration.tla, `Cancel`). */
   cancel(): void {
     if (this.phase !== 'armed' && this.phase !== 'reading') return;
     this.phase = 'idle';
     this.host.show({ phase: 'idle' });
     this.host.resume();
   }
-}
-
-/** The passage's words over the minutes it took, rounded. */
-export function wordsPerMinute(text: string, elapsedMs: number): number {
-  const words = text.split(/\s+/).filter(Boolean).length;
-  return Math.round(words / (elapsedMs / 60_000));
 }

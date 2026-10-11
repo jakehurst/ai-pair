@@ -21,9 +21,9 @@ export class Tail {
 }
 
 /**
- * What the agent is told about a command: the tail of its output, as text, and either how it ended
- * (`finished`), or that it is still running, with its exit code once `ended` (which `exitCode` reads
- * then).
+ * Returns what the agent is told about a command: the tail of its output, as text, and either how it
+ * ended (`finished`), or that it is still running, with its exit code once `ended` (which `exitCode`
+ * reads then).
  */
 export function outcomeOf(
   output: Tail,

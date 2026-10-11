@@ -2,6 +2,7 @@
 // How the panel shows a message's text (`rich` in webview/panel.ts, #6): escaped, with code spans,
 // file names that open the file, and URLs.
 
+import { ok } from 'node:assert/strict';
 import { beforeEach, expect, it } from 'vitest';
 import type { Window } from 'happy-dom';
 import { loadPage, ui } from './page';
@@ -17,12 +18,15 @@ beforeEach(async () => {
 
 function shown(text: string): string {
   window.dispatchEvent(new window.MessageEvent('message', { data: { type: 'say', text } }));
-  return ui('now-text')!.innerHTML;
+  const now = ui('now-text');
+  ok(now);
+  return now.innerHTML;
 }
 
 it('escapes markup', () => {
   shown(`<b>"x" & 'y'</b>`);
-  const now = ui('now-text')!;
+  const now = ui('now-text');
+  ok(now);
   expect(now.textContent).toBe(`<b>"x" & 'y'</b>`);
   expect(now.querySelector('b')).toBeNull();
 });

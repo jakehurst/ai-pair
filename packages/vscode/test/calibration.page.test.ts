@@ -13,8 +13,12 @@ beforeEach(async () => {
   await loadPage();
 });
 
-const text = (name: string): string => ui(name)?.textContent ?? '';
-const has = (name: string, attribute: string): boolean => ui(name)?.hasAttribute(attribute) ?? false;
+function text(name: string): string {
+  return ui(name)?.textContent ?? '';
+}
+function has(name: string, attribute: string): boolean {
+  return ui(name)?.hasAttribute(attribute) ?? false;
+}
 
 function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent('message', { data: event }));

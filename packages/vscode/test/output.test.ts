@@ -13,7 +13,7 @@ describe('Tail', () => {
   });
 });
 
-/** A command's output as the terminal keeps it. */
+/** Returns a command's output as the terminal keeps it. */
 function tail(text: string): Tail {
   const t = new Tail(MAX_OUTPUT * 4);
   t.push(text);
@@ -34,17 +34,19 @@ describe('outcomeOf', () => {
   });
 
   it('says a command is still running, and reads its exit code once it ends', async () => {
-    let exitCode: number | undefined;
+    const exit: { code: number | undefined } = { code: undefined };
     let end!: () => void;
     const running = outcomeOf(tail('serving'), {
       shell: undefined,
       finished: false,
-      exitCode: () => exitCode,
-      ended: new Promise((r) => (end = r)),
+      exitCode: () => exit.code,
+      ended: new Promise((r) => {
+        end = r;
+      }),
     });
     expect(running).toMatchObject({ output: 'serving', running: true });
     expect(running.exitCode).toBeUndefined();
-    exitCode = 143;
+    exit.code = 143;
     end();
     expect(await running.exited).toBe(143);
   });

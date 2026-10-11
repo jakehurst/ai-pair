@@ -21,10 +21,17 @@ import type {
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport, type Lines } from './view';
 import { PairTerminals } from './terminal';
 
-type OwnEdit = { offset: number; deleteLength: number; text: string };
+interface OwnEdit {
+  offset: number;
+  deleteLength: number;
+  text: string;
+}
 
 /** A place follow mode keeps in view. */
-type Target = { file: string; offset: number };
+interface Target {
+  file: string;
+  offset: number;
+}
 
 /** States in which the programmer's view follows the agent cursor. */
 const FOLLOWING: ReadonlySet<AgentState> = new Set(['typing', 'read', 'thinking', 'absent', 'listening']);
@@ -54,7 +61,7 @@ function cursorDecoration(color: string, style: string, opacity: number) {
   });
 }
 
-/** `color` and `foreground`: the label's background and its text, a pair of theme colors. */
+/** Makes the label's decoration. `color` and `foreground`: the label's background and its text, a pair of theme colors. */
 function labelDecoration(text: string, color: string, foreground: string, opacity: number) {
   return vscode.window.createTextEditorDecorationType({
     before: {
@@ -64,8 +71,10 @@ function labelDecoration(text: string, color: string, foreground: string, opacit
   });
 }
 
-/** The visible ranges, by their lines. */
-const lines = (ranges: readonly vscode.Range[]): Lines[] => ranges.map((r) => ({ start: r.start.line, end: r.end.line }));
+/** Returns the visible ranges, by their lines. */
+function lines(ranges: readonly vscode.Range[]): Lines[] {
+  return ranges.map((r) => ({ start: r.start.line, end: r.end.line }));
+}
 
 const CURSOR = 'var(--vscode-aiPair-cursor)';
 const READ = 'var(--vscode-aiPair-cursorRead)';
@@ -106,8 +115,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   /** A scroll stopped short, as the state stopped following: a command ran (specs/Scroll.tla). */
   private cut = false;
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly cursorTypes: Record<string, vscode.TextEditorDecorationType>;
-  private labelTypes: Record<string, vscode.TextEditorDecorationType> = {};
+  private readonly cursorTypes: Map<string, vscode.TextEditorDecorationType>;
+  private labelTypes = new Map<string, vscode.TextEditorDecorationType>();
   private readonly selectionType = vscode.window.createTextEditorDecorationType({
     backgroundColor: new vscode.ThemeColor('aiPair.selectionBackground'),
   });
@@ -122,52 +131,70 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     private readonly root: string,
     agentName: string,
   ) {
-    this.cursorTypes = {
-      typing: cursorDecoration(CURSOR, 'solid', 1),
-      read: cursorDecoration(READ, 'solid', 1),
-      readDim: cursorDecoration(CURSOR, 'solid', 0.6),
-      thinking: cursorDecoration(CURSOR, 'solid', 0.45),
-      running: cursorDecoration(CURSOR, 'solid', 0.6),
-      paused: cursorDecoration(CURSOR, 'dashed', 0.6),
-      listening: cursorDecoration(CURSOR, 'dotted', 0.8),
-      navigator: cursorDecoration(CURSOR, 'dotted', 0.8),
-    };
+    this.cursorTypes = new Map([
+      ['typing', cursorDecoration(CURSOR, 'solid', 1)],
+      ['read', cursorDecoration(READ, 'solid', 1)],
+      ['readDim', cursorDecoration(CURSOR, 'solid', 0.6)],
+      ['thinking', cursorDecoration(CURSOR, 'solid', 0.45)],
+      ['running', cursorDecoration(CURSOR, 'solid', 0.6)],
+      ['paused', cursorDecoration(CURSOR, 'dashed', 0.6)],
+      ['listening', cursorDecoration(CURSOR, 'dotted', 0.8)],
+      ['navigator', cursorDecoration(CURSOR, 'dotted', 0.8)],
+    ]);
     this.setAgentName(agentName);
-    for (const doc of vscode.workspace.textDocuments) this.track(doc);
+    for (const doc of vscode.workspace.textDocuments) {
+      this.track(doc);
+    }
     this.disposables.push(
-      vscode.workspace.onDidOpenTextDocument((doc) => this.track(doc)),
-      vscode.workspace.onDidCloseTextDocument((doc) => this.mirror.delete(doc.uri.fsPath)),
-      vscode.workspace.onDidChangeTextDocument((e) => this.onChange(e)),
-      vscode.window.onDidChangeActiveTextEditor((e) => this.onActiveEditor(e)),
-      vscode.window.onDidChangeTextEditorVisibleRanges((e) => this.onScroll(e)),
+      vscode.workspace.onDidOpenTextDocument((doc) => {
+        this.track(doc);
+      }),
+      vscode.workspace.onDidCloseTextDocument((doc) => {
+        this.mirror.delete(doc.uri.fsPath);
+      }),
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        this.onChange(e);
+      }),
+      vscode.window.onDidChangeActiveTextEditor((e) => {
+        this.onActiveEditor(e);
+      }),
+      vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
+        this.onScroll(e);
+      }),
       vscode.window.onDidChangeVisibleTextEditors((editors) => {
-        for (const editor of editors) this.viewport(editor);
+        for (const editor of editors) {
+          this.viewport(editor);
+        }
         this.redraw();
       }),
-      vscode.window.onDidChangeTextEditorSelection((e) => this.onSelectionChange(e.textEditor)),
+      vscode.window.onDidChangeTextEditorSelection((e) => {
+        this.onSelectionChange(e.textEditor);
+      }),
       this.terminals,
     );
     this.lastEditor = vscode.window.activeTextEditor;
   }
 
   setAgentName(name: string): void {
-    for (const t of Object.values(this.labelTypes)) t.dispose();
-    this.labelTypes = {
-      typing: labelDecoration(name, CURSOR, CURSOR_TEXT, 1),
-      read: labelDecoration(name, READ, READ_TEXT, 1),
-      readDim: labelDecoration(name, CURSOR, CURSOR_TEXT, 1),
-      thinking: labelDecoration(name, CURSOR, CURSOR_TEXT, 0.6),
-      running: labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, 0.8),
-      paused: labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, 0.8),
-      listening: labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, 0.8),
-      navigator: labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, 0.8),
-    };
+    for (const t of this.labelTypes.values()) {
+      t.dispose();
+    }
+    this.labelTypes = new Map([
+      ['typing', labelDecoration(name, CURSOR, CURSOR_TEXT, 1)],
+      ['read', labelDecoration(name, READ, READ_TEXT, 1)],
+      ['readDim', labelDecoration(name, CURSOR, CURSOR_TEXT, 1)],
+      ['thinking', labelDecoration(name, CURSOR, CURSOR_TEXT, 0.6)],
+      ['running', labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, 0.8)],
+      ['paused', labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, 0.8)],
+      ['listening', labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, 0.8)],
+      ['navigator', labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, 0.8)],
+    ]);
     this.redraw();
   }
 
   // ---- EditorPort ----------------------------------------------------------
 
-  /** Spelled the way VS Code spells it: an open document's path, else a workspace folder's. */
+  /** Resolves `file` spelled the way VS Code spells it: an open document's path, else a workspace folder's. */
   resolvePath(file: string): string {
     const resolved = vscode.Uri.file(path.resolve(this.root, file)).fsPath;
     const open = vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && samePath(d.uri.fsPath, resolved));
@@ -228,7 +255,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       if (editor) {
         const doc = editor.document;
         const range = new vscode.Range(doc.positionAt(offset), doc.positionAt(offset + deleteLength));
-        if (!(await editor.edit((b) => b.replace(range, text), options))) throw new Error('The edit was rejected.');
+        const applied = await editor.edit((b) => {
+          b.replace(range, text);
+        }, options);
+        if (!applied) throw new Error('The edit was rejected.');
       } else {
         // Not visible (e.g. the programmer looked away): no control over undo stops. An edit is to the
         // document VS Code holds, if any, even one whose file is gone: `create` empties that one.
@@ -276,8 +306,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     // A scroll a command cut short goes on once it's done; a pause's end reveals the target anyway,
     // and the programmer's turn is theirs to look where they like. specs/Scroll.tla: leaving the
     // following states is `Leave`, and coming back `Return`.
-    if (state === 'navigator') this.cut = false;
-    else if (this.cut && FOLLOWING.has(state)) {
+    if (state === 'navigator') {
+      this.cut = false;
+    } else if (this.cut && FOLLOWING.has(state)) {
       this.cut = false;
       this.follow();
     }
@@ -291,7 +322,11 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   reveal(): void {
     // specs/Scroll.tla, `Return`: a pause ends in `resume`, which reveals the target.
     const target = this.target();
-    if (target) void this.show(target.file).then(() => this.follow());
+    if (target) {
+      void this.show(target.file).then(() => {
+        this.follow();
+      });
+    }
   }
 
   follow(): void {
@@ -306,7 +341,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   // ---- The programmer's selection ------------------------------------------
 
-  /** What the programmer has selected in a workspace file, if anything. */
+  /** Returns what the programmer has selected in a workspace file, if anything. */
   programmerSelection(): SharedSelection | undefined {
     const editor = this.lastEditor;
     if (!editor || !vscode.window.visibleTextEditors.includes(editor)) return undefined;
@@ -367,12 +402,15 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     }
 
     if (before === undefined || !this.inWorkspace(file)) return;
-    if (this.byProgrammer(e, after)) this.controller?.userEdit(file, before, after, changes);
-    else this.controller?.otherEdit(file, before, after, changes);
+    if (this.byProgrammer(e, after)) {
+      this.controller?.userEdit(file, before, after, changes);
+    } else {
+      this.controller?.otherEdit(file, before, after, changes);
+    }
   }
 
   /**
-   * VS Code doesn't say who made a change, but two kinds aren't the programmer's. Edits by save
+   * Decides whether a change is the programmer's. VS Code doesn't say who made it, but two kinds aren't theirs. Edits by save
    * participants (format on save, trimming whitespace) while we save; those of the programmer's own
    * saves arrive before any event says a save has begun, so they count as theirs. And a reload from
    * disk: it leaves a clean document (`isDirty` is still as it was before the change) reading
@@ -413,7 +451,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   // ---- Rendering -----------------------------------------------------------
 
-  /** What follow mode keeps in view: the agent cursor, or the start of the code it points at. */
+  /** Returns what follow mode keeps in view: the agent cursor, or the start of the code it points at. */
   private target(): Target | null {
     if (this.focus === 'point' && this.point) return { file: this.point.file, offset: this.point.start };
     return this.cursor;
@@ -447,8 +485,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * specs/Scroll.tla, `Glide`.
    */
   private async scroll(editor: vscode.TextEditor, line: number, height?: number): Promise<void> {
+    const first = editor.visibleRanges[0];
+    if (first === undefined) return;
     this.scrolling = true;
-    const from = editor.visibleRanges[0]!.start.line;
+    const from = first.start.line;
     try {
       if (height === undefined) {
         await this.revealLine(editor, line, vscode.TextEditorRevealType.InCenter);
@@ -485,7 +525,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     let top = from;
     // specs/Scroll.tla, `Glide`: each frame nearer the landing, until the state stops following.
     while (top !== to) {
-      await new Promise((resolve) => setTimeout(resolve, FRAME_MS));
+      await new Promise((resolve) => {
+        setTimeout(resolve, FRAME_MS);
+      });
       if (!FOLLOWING.has(this.state)) {
         this.cut = true;
         return;
@@ -509,12 +551,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     return this.revealLine(editor, top + room, vscode.TextEditorRevealType.AtTop);
   }
 
-  /** The top line of the view that has `line` a third of the way down, as far as the editor can scroll. */
+  /** Returns the top line of the view that has `line` a third of the way down, as far as the editor can scroll. */
   private landing(editor: vscode.TextEditor, line: number, height: number): number {
     return landing(line, height, editor.document.lineCount, this.scrollsBeyondEnd(editor));
   }
 
-  /** Whether the editor scrolls on past a document's last line, up to where it's the top one. */
+  /** Returns whether the editor scrolls on past a document's last line, up to where it's the top one. */
   private scrollsBeyondEnd(editor: vscode.TextEditor): boolean {
     return vscode.workspace.getConfiguration('editor', editor.document).get('scrollBeyondLastLine', true);
   }
@@ -526,19 +568,28 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private revealLine(editor: vscode.TextEditor, line: number, type: vscode.TextEditorRevealType): Promise<void> {
     const smooth = vscode.workspace.getConfiguration('editor', editor.document).get('smoothScrolling', false);
     return new Promise((resolve) => {
-      const done = () => {
-        clearTimeout(quiet);
-        clearTimeout(max);
-        changes.dispose();
+      const cleanup: Array<() => void> = [];
+      function done(): void {
+        for (const undo of cleanup) {
+          undo();
+        }
         resolve();
-      };
+      }
       let quiet = setTimeout(done, SCROLL_QUIET_MS);
+      cleanup.push(() => clearTimeout(quiet));
       const max = setTimeout(done, SCROLL_MAX_MS);
+      cleanup.push(() => clearTimeout(max));
       const changes = vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
         if (e.textEditor !== editor) return;
-        if (!smooth) return done();
+        if (!smooth) {
+          done();
+          return;
+        }
         clearTimeout(quiet);
         quiet = setTimeout(done, SCROLL_QUIET_MS);
+      });
+      cleanup.push(() => {
+        changes.dispose();
       });
       this.selfNav();
       editor.revealRange(new vscode.Range(line, 0, line, 0), type);
@@ -546,8 +597,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   /**
-   * The editor's view: its top line, how many lines it shows, and how many its viewport fits, if
-   * known. At a document's end the visible ranges stop at its last line, short of the viewport's
+   * Returns the editor's view: its top line, how many lines it shows, and how many its viewport fits,
+   * if known. At a document's end the visible ranges stop at its last line, short of the viewport's
    * bottom, so there the height is the one last seen or measured.
    */
   private viewport(editor: vscode.TextEditor): ReturnType<typeof viewport> {
@@ -563,8 +614,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       const doc = editor.document;
       const here = this.cursor && this.cursor.file === file ? this.cursor : null;
       const at = here ? [new vscode.Range(doc.positionAt(here.offset), doc.positionAt(here.offset))] : [];
-      for (const [key, type] of Object.entries(this.cursorTypes)) editor.setDecorations(type, key === cursorKey ? at : []);
-      for (const [key, type] of Object.entries(this.labelTypes)) editor.setDecorations(type, key === cursorKey ? at : []);
+      for (const [key, type] of this.cursorTypes) {
+        editor.setDecorations(type, key === cursorKey ? at : []);
+      }
+      for (const [key, type] of this.labelTypes) {
+        editor.setDecorations(type, key === cursorKey ? at : []);
+      }
       const sel = here?.selection;
       editor.setDecorations(this.selectionType, sel ? [new vscode.Range(doc.positionAt(sel.start), doc.positionAt(sel.end))] : []);
       const point = this.point && this.point.file === file ? this.point : null;
@@ -589,12 +644,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.selfNavUntil = Date.now() + this.selfNavMs;
   }
 
-  /** Whether a view change now is from our own navigation. */
+  /** Returns whether a view change now is from our own navigation. */
   private navigating(): boolean {
     return this.showing > 0 || Date.now() < this.selfNavUntil;
   }
 
-  /** Not by `relative`: it gives another drive's path, and `..cache` starts with "..", too (#5). */
+  /** Returns whether `file` is in the workspace. Not by `relative`: it gives another drive's path, and `..cache` starts with "..", too (#5). */
   private inWorkspace(file: string): boolean {
     return withinFolder(this.root, file) !== undefined;
   }
@@ -604,7 +659,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   /**
-   * The document for a file, as the session takes it (#88, #89). One with unsaved changes is the
+   * Returns the document for a file, as the session takes it (#88, #89). One with unsaved changes is the
    * programmer's text, whether its file still exists or not. Otherwise the file on disk decides:
    * VS Code keeps a document after its file is deleted, with the text it had, so a file that isn't
    * on disk is `MissingFile`, whatever document there is. specs/FileText.tla, `GetText`.
@@ -652,8 +707,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   dispose(): void {
     clearInterval(this.pulse);
-    for (const d of this.disposables) d.dispose();
-    for (const t of [...Object.values(this.cursorTypes), ...Object.values(this.labelTypes)]) t.dispose();
+    for (const d of this.disposables) {
+      d.dispose();
+    }
+    for (const t of [...this.cursorTypes.values(), ...this.labelTypes.values()]) {
+      t.dispose();
+    }
     this.selectionType.dispose();
     this.pointType.dispose();
   }

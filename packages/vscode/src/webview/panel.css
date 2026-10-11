@@ -1,5 +1,5 @@
 /*
- * The Pair panel's styles. The page is panelHtml.ts; the script is webview/panel.ts.
+ * The Pair panel's styles. The page is panel_html.ts; the script is webview/panel.ts.
  *
  * Colors come only from the VS Code theme, so the panel matches any theme.
  *
@@ -135,7 +135,7 @@ button:disabled {
   outline-offset: -1px;
 }
 
-/* Icons, from svg() in panelHtml.ts. */
+/* Icons, from svg() in panel_html.ts. */
 .i {
   flex: none;
   height: 14px;

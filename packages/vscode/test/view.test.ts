@@ -36,17 +36,17 @@ describe('comfortable', () => {
 
 describe('landing', () => {
   it('puts the line a third of the way down', () => {
-    expect(landing(100, 30, 1000, true)).toBe(90);
+    expect(landing(100, 30, 1000, /* beyondEnd= */ true)).toBe(90);
   });
 
   it('InRange: stops at the top of the document', () => {
-    expect(landing(5, 30, 1000, true)).toBe(0);
+    expect(landing(5, 30, 1000, /* beyondEnd= */ true)).toBe(0);
   });
 
   it('InRange: stops with the last line at the top when the editor scrolls beyond the end, else at the bottom', () => {
-    expect(landing(999, 30, 1000, true)).toBe(989);
-    expect(landing(999, 30, 1000, false)).toBe(970);
-    expect(landing(10, 30, 20, false)).toBe(0);
+    expect(landing(999, 30, 1000, /* beyondEnd= */ true)).toBe(989);
+    expect(landing(999, 30, 1000, /* beyondEnd= */ false)).toBe(970);
+    expect(landing(10, 30, 20, /* beyondEnd= */ false)).toBe(0);
   });
 });
 

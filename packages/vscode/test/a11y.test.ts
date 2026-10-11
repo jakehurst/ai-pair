@@ -2,6 +2,7 @@
 // The panel by keyboard and screen reader (#16): every link is focusable and works with Enter, and
 // what changes without the programmer acting is announced.
 
+import { ok } from 'node:assert/strict';
 import { beforeEach, expect, it } from 'vitest';
 import type { Window } from 'happy-dom';
 import { loadPage, ui } from './page';
@@ -10,18 +11,20 @@ import { loadPage, ui } from './page';
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { window, document } = globalThis as unknown as { window: Window; document: Window['document'] };
 
-let posted: { type: string }[];
+let posted: Array<{ type: string }>;
 
 beforeEach(async () => {
   posted = [];
-  await loadPage((m) => posted.push(m));
+  await loadPage((m) => {
+    posted.push(m);
+  });
 });
 
 function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent('message', { data: event }));
 }
 
-/** A session with every kind of link: the intro's commands, a file and a URL in messages, code references. */
+/** Starts a session with every kind of link: the intro's commands, a file and a URL in messages, code references. */
 function withEveryLink(): void {
   send({ type: 'session', active: true });
   send({ type: 'selection', ref: { file: 'src/a.ts', line: 3, endLine: 4 } });
@@ -52,9 +55,14 @@ it('activates a link without following its href', () => {
 });
 
 it("announces the agent's narration and the state, and a command waiting for a decision at once", () => {
-  expect(ui('now-text')!.getAttribute('aria-live')).toBe('polite');
-  expect(ui('status-text')!.getAttribute('role')).toBe('status');
-  const run = ui('run')!;
+  const now = ui('now-text');
+  ok(now);
+  expect(now.getAttribute('aria-live')).toBe('polite');
+  const status = ui('status-text');
+  ok(status);
+  expect(status.getAttribute('role')).toBe('status');
+  const run = ui('run');
+  ok(run);
   send({ type: 'session', active: true });
   send({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
   expect(run.getAttribute('role')).toBe('alert');
@@ -69,9 +77,12 @@ it('lists files changed outside the editor, each a link to its diff (#15)', () =
   send({ type: 'session', active: true });
   send({ type: 'outside', files: ['src/a.ts'] });
   send({ type: 'outside', files: ['b.ts', 'c.ts'] });
-  const entries = [...ui('history')!.querySelectorAll('.outside')].map((e) => e.textContent);
+  const history = ui('history');
+  ok(history);
+  const entries = [...history.querySelectorAll('.outside')].map((e) => e.textContent);
   expect(entries).toEqual(['2 files changed outside the editor: b.ts, c.ts', 'src/a.ts changed outside the editor']);
-  const link = ui('history')!.querySelector('.outside a[href="#"]')!;
+  const link = history.querySelector('.outside a[href="#"]');
+  ok(link);
   link.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
   expect(posted.at(-1)).toEqual({ type: 'openChange', file: 'b.ts' });
 });

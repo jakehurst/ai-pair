@@ -11,7 +11,69 @@ const SHELL_INTEGRATION_MS = 5000;
 /** After the command ends, how long its output stream gets to drain. */
 const DRAIN_MS = 500;
 
-type Owned = { terminal: vscode.Terminal; cwd: string; busy: boolean };
+interface Owned {
+  terminal: vscode.Terminal;
+  cwd: string;
+  busy: boolean;
+}
+
+function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promise<vscode.TerminalShellIntegration | undefined> {
+  // An interrupt before it (during the save): the abort event has fired already.
+  if (signal.aborted) return Promise.resolve(undefined);
+  if (terminal.shellIntegration) return Promise.resolve(terminal.shellIntegration);
+  return new Promise((resolve) => {
+    const cleanup: Array<() => void> = [];
+    function done(value: vscode.TerminalShellIntegration | undefined): void {
+      for (const undo of cleanup) {
+        undo();
+      }
+      resolve(value);
+    }
+    function abort(): void {
+      done(undefined);
+    }
+    const listener = vscode.window.onDidChangeTerminalShellIntegration((e) => {
+      if (e.terminal === terminal) done(e.shellIntegration);
+    });
+    cleanup.push(() => {
+      listener.dispose();
+    });
+    const timer = setTimeout(() => {
+      done(terminal.shellIntegration);
+    }, SHELL_INTEGRATION_MS);
+    cleanup.push(() => clearTimeout(timer));
+    signal.addEventListener('abort', abort, { once: true });
+    cleanup.push(() => signal.removeEventListener('abort', abort));
+  });
+}
+
+/** Resolves `false` when the wait is over or playback is interrupted (specs/Terminals.tla, `StopWaiting`). */
+function stopWaiting(ms: number, signal: AbortSignal, ended: Promise<void>): Promise<false> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve(false);
+      return;
+    }
+    const cleanup: Array<() => void> = [];
+    function done(): void {
+      for (const undo of cleanup) {
+        undo();
+      }
+      resolve(false);
+    }
+    const timer = setTimeout(done, ms);
+    cleanup.push(() => clearTimeout(timer));
+    signal.addEventListener('abort', done, { once: true });
+    cleanup.push(() => signal.removeEventListener('abort', done));
+    void ended.then(done);
+  });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 export class PairTerminals implements vscode.Disposable {
   private readonly owned: Owned[] = [];
@@ -31,7 +93,7 @@ export class PairTerminals implements vscode.Disposable {
     const owned = this.acquire(options.cwd);
     owned.busy = true;
     const { terminal } = owned;
-    terminal.show(true);
+    terminal.show(/* preserveFocus= */ true);
 
     const integration = await shellIntegration(terminal, options.signal);
     // specs/Terminals.tla: `AbortBeforeStart`, or `SkipAborted` when the signal fired before the run.
@@ -46,32 +108,40 @@ export class PairTerminals implements vscode.Disposable {
       return { output: '[output not captured: this terminal has no shell integration]' };
     }
 
+    // specs/Terminals.tla, `ExecuteCommand`. Its end event comes through VS Code's event loop, so the
+    // listeners below are in place before it can fire.
+    const execution = integration.executeCommand(command);
+
     // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`Close`), and the terminal is free.
-    let execution: vscode.TerminalShellExecution | undefined;
     let exitCode: number | undefined;
     const ended = new Promise<void>((resolve) => {
-      const done = () => {
-        onEnd.dispose();
-        onClose.dispose();
+      const listeners: vscode.Disposable[] = [];
+      function done(): void {
+        for (const listener of listeners) {
+          listener.dispose();
+        }
         resolve();
-      };
-      const onEnd = vscode.window.onDidEndTerminalShellExecution((e) => {
-        if (e.execution !== execution) return;
-        exitCode = e.exitCode;
-        done();
-      });
-      const onClose = vscode.window.onDidCloseTerminal((t) => {
-        if (t === terminal) done();
-      });
+      }
+      listeners.push(
+        vscode.window.onDidEndTerminalShellExecution((e) => {
+          if (e.execution !== execution) return;
+          exitCode = e.exitCode;
+          done();
+        }),
+        vscode.window.onDidCloseTerminal((t) => {
+          if (t === terminal) done();
+        }),
+      );
     });
-    void ended.then(() => (owned.busy = false));
+    void ended.then(() => {
+      owned.busy = false;
+    });
 
-    // specs/Terminals.tla, `ExecuteCommand`.
-    const started = integration.executeCommand(command);
-    execution = started;
     const output = new Tail(MAX_OUTPUT * 4);
     const drained = (async () => {
-      for await (const data of started.read()) output.push(data);
+      for await (const data of execution.read()) {
+        output.push(data);
+      }
     })().catch(() => {});
 
     const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)]);
@@ -94,45 +164,8 @@ export class PairTerminals implements vscode.Disposable {
   }
 
   dispose(): void {
-    for (const d of this.disposables) d.dispose();
+    for (const d of this.disposables) {
+      d.dispose();
+    }
   }
-}
-
-function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promise<vscode.TerminalShellIntegration | undefined> {
-  // An interrupt before it (during the save): the abort event has fired already.
-  if (signal.aborted) return Promise.resolve(undefined);
-  if (terminal.shellIntegration) return Promise.resolve(terminal.shellIntegration);
-  return new Promise((resolve) => {
-    const done = (value: vscode.TerminalShellIntegration | undefined) => {
-      listener.dispose();
-      clearTimeout(timer);
-      signal.removeEventListener('abort', abort);
-      resolve(value);
-    };
-    const abort = () => done(undefined);
-    const listener = vscode.window.onDidChangeTerminalShellIntegration((e) => {
-      if (e.terminal === terminal) done(e.shellIntegration);
-    });
-    const timer = setTimeout(() => done(terminal.shellIntegration), SHELL_INTEGRATION_MS);
-    signal.addEventListener('abort', abort, { once: true });
-  });
-}
-
-/** Resolves `false` when the wait is over or playback is interrupted (specs/Terminals.tla, `StopWaiting`). */
-function stopWaiting(ms: number, signal: AbortSignal, ended: Promise<void>): Promise<false> {
-  return new Promise((resolve) => {
-    if (signal.aborted) return resolve(false);
-    const done = () => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', done);
-      resolve(false);
-    };
-    const timer = setTimeout(done, ms);
-    signal.addEventListener('abort', done, { once: true });
-    void ended.then(done);
-  });
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

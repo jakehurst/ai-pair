@@ -4,8 +4,9 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ok } from 'node:assert/strict';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AGENTS, type Host, withTomlTable } from '../src/agents';
+import { AGENTS, type Agent, type Host, withTomlTable } from '../src/agents';
 
 const LAUNCHER = '/home/me/.ai-pair/bin/pair-mcp';
 let host: Host;
@@ -17,17 +18,27 @@ beforeEach(() => {
     home: fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-agents-')),
     env: { PATH: '' },
     platform: process.platform,
-    exec: async (file, args) => void calls.push([file, ...args]),
+    exec: async (program, args) => {
+      calls.push([program, ...args]);
+    },
   };
 });
 
-const agent = (id: string) => AGENTS.find((a) => a.id === id)!;
-const file = (...parts: string[]) => path.join(host.home, ...parts);
-const read = (...parts: string[]) => fs.readFileSync(file(...parts), 'utf8');
-const put = (text: string, ...parts: string[]) => {
+function agent(id: string): Agent {
+  const found = AGENTS.find((a) => a.id === id);
+  ok(found);
+  return found;
+}
+function file(...parts: string[]): string {
+  return path.join(host.home, ...parts);
+}
+function read(...parts: string[]): string {
+  return fs.readFileSync(file(...parts), 'utf8');
+}
+function put(text: string, ...parts: string[]): void {
   fs.mkdirSync(path.dirname(file(...parts)), { recursive: true });
   fs.writeFileSync(file(...parts), text);
-};
+}
 
 async function setUpTwice(id: string, ...parts: string[]): Promise<string> {
   expect(agent(id).isSetUp(host, LAUNCHER)).toBe(false);
@@ -62,10 +73,11 @@ describe('Claude Code', () => {
   it('edits ~/.claude.json without it, keeping the rest', async () => {
     put(`{\n  "numStartups": 3,\n  "mcpServers": {\n    "other": { "command": "x" }\n  }\n}\n`, '.claude.json');
     const text = await setUpTwice('claude', '.claude.json');
-    const json = JSON.parse(text);
-    expect(json.numStartups).toBe(3);
-    expect(json.mcpServers.other).toEqual({ command: 'x' });
-    expect(json.mcpServers.pair).toEqual({ type: 'stdio', command: LAUNCHER, args: [], env: {} });
+    const json: unknown = JSON.parse(text);
+    expect(json).toEqual({
+      numStartups: 3,
+      mcpServers: { other: { command: 'x' }, pair: { type: 'stdio', command: LAUNCHER, args: [], env: {} } },
+    });
   });
 
   it("leaves a file it can't parse alone", async () => {
@@ -121,9 +133,11 @@ describe('Codex', () => {
 
 describe('OpenCode', () => {
   it('creates opencode.json with its schema', async () => {
-    const json = JSON.parse(await setUpTwice('opencode', '.config', 'opencode', 'opencode.json'));
-    expect(json.$schema).toBe('https://opencode.ai/config.json');
-    expect(json.mcp.pair).toEqual({ type: 'local', command: [LAUNCHER], enabled: true });
+    const json: unknown = JSON.parse(await setUpTwice('opencode', '.config', 'opencode', 'opencode.json'));
+    expect(json).toEqual({
+      $schema: 'https://opencode.ai/config.json',
+      mcp: { pair: { type: 'local', command: [LAUNCHER], enabled: true } },
+    });
   });
 
   it('edits an existing opencode.jsonc, keeping comments', async () => {
@@ -148,10 +162,10 @@ describe('OpenCode', () => {
 describe('Gemini CLI and Cursor', () => {
   it('add the server to their files', async () => {
     put(`{ "theme": "GitHub" }`, '.gemini', 'settings.json');
-    const gemini = JSON.parse(await setUpTwice('gemini', '.gemini', 'settings.json'));
+    const gemini: unknown = JSON.parse(await setUpTwice('gemini', '.gemini', 'settings.json'));
     expect(gemini).toEqual({ theme: 'GitHub', mcpServers: { pair: { command: LAUNCHER, args: [] } } });
 
-    const cursor = JSON.parse(await setUpTwice('cursor', '.cursor', 'mcp.json'));
+    const cursor: unknown = JSON.parse(await setUpTwice('cursor', '.cursor', 'mcp.json'));
     expect(cursor).toEqual({ mcpServers: { pair: { type: 'stdio', command: LAUNCHER, args: [] } } });
   });
 });

@@ -16,15 +16,19 @@ beforeEach(() => {
   redraws = [];
   outside = new OutsideChanges(
     async (file) => disk.get(file),
-    (files) => reports.push(files),
-    (files) => redraws.push(files),
+    (files) => {
+      reports.push(files);
+    },
+    (files) => {
+      redraws.push(files);
+    },
   );
 });
 afterEach(() => {
   vi.useRealTimers();
 });
 
-/** The watcher reports `file`, after it was written with `text`. */
+/** Writes `text` to `file`, and has the watcher report it. */
 function written(file: string, text: string): void {
   disk.set(file, text);
   outside.reported(file);

@@ -10,6 +10,19 @@ import { OutsideChanges, watched } from './outside';
 /** The explorer badge on a file changed outside the editor. */
 const OUTSIDE_BADGE = '*';
 
+function folders(): string[] {
+  return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+}
+
+/** Reads a file's text on disk, or undefined if it's gone or can't be read. */
+async function read(file: string): Promise<string | undefined> {
+  try {
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file)));
+  } catch {
+    return undefined;
+  }
+}
+
 export function watchOutside(
   controller: Controller,
   editor: VsCodeEditor,
@@ -18,22 +31,28 @@ export function watchOutside(
   const redrawn = new vscode.EventEmitter<vscode.Uri[]>();
   const outside = new OutsideChanges(
     read,
-    (files) => panel.post({ type: 'outside', files: files.map((f) => editor.displayPath(f)) }),
-    (files) => redrawn.fire(files.map((f) => vscode.Uri.file(f))),
+    (files) => {
+      panel.post({ type: 'outside', files: files.map((f) => editor.displayPath(f)) });
+    },
+    (files) => {
+      redrawn.fire(files.map((f) => vscode.Uri.file(f)));
+    },
   );
   // What the editor writes itself, and what VS Code saves, are known; the watcher reports them too.
-  editor.wrote = (file, text) => outside.saved(file, text);
-  const onDisk = (uri: vscode.Uri) => {
-    if (uri.scheme === 'file' && controller.isActive && watched(uri.fsPath, folders())) outside.reported(uri.fsPath);
+  editor.wrote = (file, text) => {
+    outside.saved(file, text);
   };
+  function onDisk(uri: vscode.Uri): void {
+    if (uri.scheme === 'file' && controller.isActive && watched(uri.fsPath, folders())) outside.reported(uri.fsPath);
+  }
   // Opening a file, or its diff (whose editor is the file's), is seeing it, marked or not: one
   // written outside may be opened before its writes are decided (specs/Outside.tla, `Open`).
-  const opened = async (editorShown: vscode.TextEditor | undefined) => {
+  async function opened(editorShown: vscode.TextEditor | undefined): Promise<void> {
     const file = editorShown?.document.uri;
     if (file?.scheme !== 'file' || !watched(file.fsPath, folders())) return;
     const text = await read(file.fsPath);
     if (text !== undefined) outside.seen(file.fsPath, text);
-  };
+  }
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
   const disposable = vscode.Disposable.from(
     watcher,
@@ -42,7 +61,9 @@ export function watchOutside(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.uri.scheme === 'file') outside.saved(doc.uri.fsPath, doc.getText());
     }),
-    vscode.window.onDidChangeActiveTextEditor((e) => void opened(e)),
+    vscode.window.onDidChangeActiveTextEditor((e) => {
+      void opened(e);
+    }),
     vscode.window.registerFileDecorationProvider({
       onDidChangeFileDecorations: redrawn.event,
       provideFileDecoration: (uri) =>
@@ -53,17 +74,4 @@ export function watchOutside(
     redrawn,
   );
   return { outside, disposable };
-}
-
-function folders(): string[] {
-  return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
-}
-
-/** A file's text on disk, or undefined if it's gone or can't be read. */
-async function read(file: string): Promise<string | undefined> {
-  try {
-    return new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file)));
-  } catch {
-    return undefined;
-  }
 }

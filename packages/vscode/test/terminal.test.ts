@@ -1,17 +1,23 @@
 // A command whose batch was interrupted before it started isn't started, and says so at once. A terminal
 // is given to a command only once the one before it ended (specs/Terminals.tla).
 
+import { ok } from 'node:assert/strict';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-type Execution = { read: () => AsyncIterable<string> };
-type FakeTerminal = {
+interface Execution {
+  read: () => AsyncIterable<string>;
+}
+interface FakeTerminal {
   show: () => void;
   sendText: () => void;
   state: { shell: string | undefined };
   shellIntegration: { executeCommand: () => Execution };
   executions: Execution[];
-};
-type EndEvent = { execution: Execution; exitCode: number | undefined };
+}
+interface EndEvent {
+  execution: Execution;
+  exitCode: number | undefined;
+}
 
 const fake = vi.hoisted(() => ({
   terminals: [] as FakeTerminal[],
@@ -32,11 +38,11 @@ vi.mock('vscode', () => ({
     },
     createTerminal: () => {
       const executions: Execution[] = [];
-      const executeCommand = () => {
+      function executeCommand(): Execution {
         const execution = { read: async function* () {} };
         executions.push(execution);
         return execution;
-      };
+      }
       const terminal: FakeTerminal = {
         show: () => {},
         sendText: () => {},
@@ -75,7 +81,9 @@ async function runPastTheWait(terminals: InstanceType<typeof PairTerminals>, com
 it("RunReturns: doesn't wait for shell integration once playback is interrupted", async () => {
   const interrupted = AbortSignal.abort();
   let outcome;
-  void new PairTerminals().run('npm test', { cwd: '/', waitMs: WAIT_MS, signal: interrupted }).then((o) => (outcome = o));
+  void new PairTerminals().run('npm test', { cwd: '/', waitMs: WAIT_MS, signal: interrupted }).then((o) => {
+    outcome = o;
+  });
   await vi.advanceTimersByTimeAsync(0);
   expect(outcome).toEqual({ output: '', notStarted: true });
 });
@@ -92,9 +100,14 @@ it('FreedAfterEnd: reuses a terminal once its command ends', async () => {
   const terminals = new PairTerminals();
   await runPastTheWait(terminals, 'npm run build');
   const [first] = fake.terminals;
-  for (const listener of fake.onEnd) listener({ execution: first!.executions[0]!, exitCode: 0 });
+  ok(first);
+  const execution = first.executions[0];
+  ok(execution);
+  for (const listener of fake.onEnd) {
+    listener({ execution, exitCode: 0 });
+  }
   await vi.advanceTimersByTimeAsync(0);
   await runPastTheWait(terminals, 'npm test');
   expect(fake.terminals).toHaveLength(1);
-  expect(first!.executions).toHaveLength(2);
+  expect(first.executions).toHaveLength(2);
 });

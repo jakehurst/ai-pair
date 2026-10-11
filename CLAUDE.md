@@ -165,7 +165,7 @@ Set by Justine on 2026-10-07.
     (`scripts/stylelint.config.ts`) on `panel.css`, html-validate
     (`.htmlvalidate.json`) and the W3C's Nu Html Checker (vnu) on the page as
     `panelHtml` renders it, vnu on `panel.css`, and the 140-column limit on
-    `panelHtml.ts`. It runs in CI's `check` job. These rules no tool checks, so
+    `panel_html.ts`. It runs in CI's `check` job. These rules no tool checks, so
     follow them by hand:
     -   Give the script its hooks as `data-ui` attributes, and styling as
         classes; no `id`s, which `panel.test.ts` checks (id Attributes).

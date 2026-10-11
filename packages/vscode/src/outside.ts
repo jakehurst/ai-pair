@@ -18,8 +18,8 @@ export class OutsideChanges {
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   /**
-   * `read`: a file's text on disk, or undefined if it's gone. `report`: the history entry for a
-   * group of files changed outside. `redraw`: files whose badge appeared or went.
+   * Creates the tracker. `read`: a file's text on disk, or undefined if it's gone. `report`: the
+   * history entry for a group of files changed outside. `redraw`: files whose badge appeared or went.
    */
   constructor(
     private readonly read: (file: string) => Promise<string | undefined>,
@@ -27,19 +27,19 @@ export class OutsideChanges {
     private readonly redraw: (files: string[]) => void,
   ) {}
 
-  /** VS Code wrote `text` to the file: a document saved, or the extension creating the file (specs/Outside.tla, `NotifySave`, `Create`). */
+  /** Records that VS Code wrote `text` to the file: a document saved, or the extension creating the file (specs/Outside.tla, `NotifySave`, `Create`). */
   saved(file: string, text: string): void {
     this.known.set(file, text);
   }
 
-  /** The file watcher reported a write. It's decided once the group settles (specs/Outside.tla, `Report`). */
+  /** Takes a write the file watcher reported. It's decided once the group settles (specs/Outside.tla, `Report`). */
   reported(file: string): void {
     if (!this.group.includes(file)) this.group.push(file);
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.settle(), GROUP_MS);
   }
 
-  /** The programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */
+  /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */
   seen(file: string, text: string): void {
     this.known.set(file, text);
     if (this.marked.delete(file)) this.redraw([file]);
@@ -79,7 +79,7 @@ export class OutsideChanges {
 /** Folders whose files change by the hundred, from git or a package manager: not marked. */
 const UNWATCHED = new Set(['.git', 'node_modules']);
 
-/** Whether a change to `file` is marked: it is in one of `folders`, and not under an unwatched folder. */
+/** Returns whether a change to `file` is marked: it is in one of `folders`, and not under an unwatched folder. */
 export function watched(file: string, folders: readonly string[]): boolean {
   const inside = folders.map((f) => ({ folder: f, path: withinFolder(f, file) })).find((f) => f.path !== undefined);
   if (!inside?.path) return false;

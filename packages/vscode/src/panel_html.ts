@@ -9,15 +9,15 @@ import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
 export const SPEEDS = [0.4, 0.6, 1, 1.5, 2, 3];
 
 /**
- * The `aiPair.speed` setting as played: clamped to the range it declares (0.25 to 4), or 1 for what
- * isn't a finite number. VS Code only warns about a value out of range in settings.json (#17).
+ * Returns the `aiPair.speed` setting as played: clamped to the range it declares (0.25 to 4), or 1
+ * for what isn't a finite number. VS Code only warns about a value out of range in settings.json (#17).
  */
 export function settingSpeed(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(4, Math.max(0.25, value)) : 1;
 }
 
-const svg = (paths: string, cls = '') =>
-  `<svg
+function svg(paths: string, cls = ''): string {
+  return `<svg
     class="i ${cls}"
     viewbox="0 0 24 24"
     fill="none"
@@ -27,6 +27,7 @@ const svg = (paths: string, cls = '') =>
     stroke-linejoin="round"
     aria-hidden="true"
   >${paths}</svg>`;
+}
 
 const ICONS = {
   pause: svg('<path d="M9 5v14M15 5v14"/>', 'pause'),
@@ -38,7 +39,7 @@ const ICONS = {
   play: svg('<path d="M8 5l11 7-11 7z"/>'),
 };
 
-/** `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
+/** Renders the page. `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
 export function panelHtml(cspSource: string, styleUri: string, scriptUri: string): string {
   const nonce = randomBytes(16).toString('base64');
   const speeds = SPEEDS.map(

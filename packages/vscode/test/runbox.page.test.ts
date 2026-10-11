@@ -18,9 +18,15 @@ function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent('message', { data: event }));
 }
 
-const shown = (): boolean => ui('run')?.classList.contains('on') ?? false;
-const confirming = (): boolean => ui('run')?.classList.contains('confirm') ?? false;
-const run = (phase: string): void => send({ type: 'run', id: 1, command: 'npm test', phase });
+function shown(): boolean {
+  return ui('run')?.classList.contains('on') ?? false;
+}
+function confirming(): boolean {
+  return ui('run')?.classList.contains('confirm') ?? false;
+}
+function run(phase: string): void {
+  send({ type: 'run', id: 1, command: 'npm test', phase });
+}
 
 it('BoxMatches: shows the box while a command waits for a decision, and while it runs', () => {
   send({ type: 'session', active: true });

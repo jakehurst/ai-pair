@@ -9,8 +9,30 @@ import { aiPairHome } from '@ai-pair/protocol';
 import { AGENTS, execProgram, SERVER, which, type Host } from './agents';
 import type { Starter } from './panel';
 
+/** What Start a session sends Claude Code: the CLI sends it at once, as the first message (#115). */
+export const START_PROMPT = 'start pairing session';
+/**
+ * The CLI's arguments: print mode, so the agent ends with its turn, which in a session is when the
+ * session ends; and the pair server's tools allowed, since print mode refuses a tool that would ask.
+ */
+export const START_ARGS = ['-p', START_PROMPT, '--allowedTools', `mcp__${SERVER}`];
+/** The name of the terminal the agent runs in. */
+export const START_TERMINAL = 'AI Pair: Claude Code';
+
+const host: Host = { home: os.homedir(), env: process.env, platform: process.platform, exec: execProgram };
+
 function relayPath(extensionPath: string): string {
   return path.join(extensionPath, 'dist', 'relay.js');
+}
+
+/** Quotes `s` for sh: single quotes, inside which nothing expands; a single quote ends them, so it is `'\''` (#9). */
+function shQuoted(s: string): string {
+  return `'${s.replaceAll("'", "'\\''")}'`;
+}
+
+/** Escapes `s` for a .cmd file: `%` expands even inside quotes, and `%%` is a literal one. A path can't hold `"`. */
+function cmdLiteral(s: string): string {
+  return s.replaceAll('%', '%%');
 }
 
 /**
@@ -42,14 +64,9 @@ export function writeLauncher(extensionPath: string): string {
   return launcher;
 }
 
-/** For sh: single quotes, inside which nothing expands; a single quote ends them, so it is `'\''` (#9). */
-function shQuoted(s: string): string {
-  return `'${s.replaceAll("'", "'\\''")}'`;
-}
-
-/** For a .cmd file: `%` expands even inside quotes, and `%%` is a literal one. A path can't hold `"`. */
-function cmdLiteral(s: string): string {
-  return s.replaceAll('%', '%%');
+/** Checks that `value` has a string `version`, as the extension's package.json does. */
+function hasVersion(value: unknown): value is { version: string } {
+  return typeof value === 'object' && value !== null && 'version' in value && typeof value.version === 'string';
 }
 
 /**
@@ -62,18 +79,22 @@ export function registerServerProvider(context: vscode.ExtensionContext): void {
   const changed = new vscode.EventEmitter<void>();
   context.subscriptions.push(
     changed,
-    vscode.workspace.onDidChangeWorkspaceFolders(() => changed.fire()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      changed.fire();
+    }),
     vscode.lm.registerMcpServerDefinitionProvider('aiPair.pair', {
       onDidChangeMcpServerDefinitions: changed.event,
       provideMcpServerDefinitions: () => {
         const folder = vscode.workspace.workspaceFolders?.[0];
         if (!folder) return [];
+        // `packageJSON` is `any` in VS Code's API.
+        const manifest: unknown = context.extension.packageJSON;
         const server = new vscode.McpStdioServerDefinition(
           SERVER,
           process.execPath,
           [relayPath(context.extensionPath)],
           { ELECTRON_RUN_AS_NODE: '1' },
-          String(context.extension.packageJSON.version),
+          hasVersion(manifest) ? manifest.version : undefined,
         );
         server.cwd = folder.uri;
         return [server];
@@ -82,7 +103,9 @@ export function registerServerProvider(context: vscode.ExtensionContext): void {
   );
 }
 
-const host: Host = { home: os.homedir(), env: process.env, platform: process.platform, exec: execProgram };
+function list(names: string[]): string {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
 
 export async function setUpAgent(launcher: string): Promise<void> {
   type Item = vscode.QuickPickItem & { id: string };
@@ -121,20 +144,6 @@ export async function setUpAgent(launcher: string): Promise<void> {
   }
 }
 
-function list(names: string[]): string {
-  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
-/** What Start a session sends Claude Code: the CLI sends it at once, as the first message (#115). */
-export const START_PROMPT = 'start pairing session';
-/**
- * The CLI's arguments: print mode, so the agent ends with its turn, which in a session is when the
- * session ends; and the pair server's tools allowed, since print mode refuses a tool that would ask.
- */
-export const START_ARGS = ['-p', START_PROMPT, '--allowedTools', `mcp__${SERVER}`];
-/** The name of the terminal the agent runs in. */
-export const START_TERMINAL = 'AI Pair: Claude Code';
-
 /**
  * Starts a session with Claude Code from the idle view (#107): its CLI runs in a terminal that is
  * never shown, so the Pair panel stays in front, and the terminal closes when the CLI exits (#115).
@@ -154,7 +163,9 @@ export function claudeStarter(
     running = undefined;
     exit?.();
   });
-  const cli = () => which(h, 'claude', [path.join(h.home, '.local', 'bin')]);
+  function cli(): string | undefined {
+    return which(h, 'claude', [path.join(h.home, '.local', 'bin')]);
+  }
   return {
     async available() {
       // specs/Start.tla, `Answer`: Claude Code set up for the pair server, its CLI here, a folder open.
@@ -167,7 +178,9 @@ export function claudeStarter(
       const cwd = folders()[0];
       if (running) return exited;
       if (!shellPath || !cwd) return;
-      exited = new Promise((resolve) => (exit = resolve));
+      exited = new Promise((resolve) => {
+        exit = resolve;
+      });
       running = vscode.window.createTerminal({ name: START_TERMINAL, shellPath, shellArgs: START_ARGS, cwd, isTransient: true });
       return exited;
     },

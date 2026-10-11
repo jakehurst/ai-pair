@@ -52,7 +52,11 @@ app.get("/todos", (req, res) => {
 app.listen(3000, () => console.log("Listening on http://localhost:3000"));
 `;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => {
+    setTimeout(r, ms);
+  });
+}
 
 /** A glide long enough to catch mid-way, set as both `glideMs` and `glideMaxMs`: 500 ms at speed 20. */
 const LONG_GLIDE_MS = 10_000;
@@ -72,7 +76,7 @@ async function insertAsProgrammer(uri: vscode.Uri, position: vscode.Position, te
   assert.fail("VS Code kept rejecting the programmer's edit");
 }
 
-/** A `read` of a file that doesn't exist (#89). */
+/** Returns whether `e` is the rejection of a `read` of a file that doesn't exist (#89). */
 function missing(e: unknown): boolean {
   return e instanceof Error && 'code' in e && e.code === 'invalid_arguments' && /doesn't exist/.test(e.message);
 }
@@ -81,10 +85,18 @@ export async function run(): Promise<void> {
   const ext = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
   assert.ok(ext, 'extension not found');
   const api = await ext.activate();
-  const root = vscode.workspace.workspaceFolders![0]!.uri.fsPath;
-  const file = (name: string) => path.join(root, name);
-  const buffer = async (name: string) => (await vscode.workspace.openTextDocument(file(name))).getText();
-  const disk = async (name: string) => new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file(name))));
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'no workspace folder is open');
+  const root = folder.uri.fsPath;
+  function file(name: string): string {
+    return path.join(root, name);
+  }
+  async function buffer(name: string): Promise<string> {
+    return (await vscode.workspace.openTextDocument(file(name))).getText();
+  }
+  async function disk(name: string): Promise<string> {
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file(name))));
+  }
 
   // The demo, sped up. If our own edits were mistaken for the programmer's, it would stop early.
   api.controller.setSpeed(20);
@@ -98,10 +110,12 @@ export async function run(): Promise<void> {
   // Changes the programmer didn't make are reported, without interrupting: a tool writing to another file...
   const c = api.controller;
   c.setSpeed(1);
-  const until = async (done: () => boolean) => {
-    for (let i = 0; i < 100 && !done(); i++) await sleep(50);
+  async function until(done: () => boolean): Promise<void> {
+    for (let i = 0; i < 100 && !done(); i++) {
+      await sleep(50);
+    }
     assert.ok(done(), 'timed out');
-  };
+  }
   fs.writeFileSync(file('other.txt'), 'before\n');
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
   await c.start('other edits');
@@ -213,8 +227,10 @@ export async function run(): Promise<void> {
   // programmer ends the session, the session still takes it (#60). The relay's own link, against this window.
   const link = new EditorLink(root, discoveryDir());
   // The editor answers these tools with reports.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const relayed = (tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal) => link.call(tool, args, signal) as Promise<Report>;
+  function relayed(name: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<Report> {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return link.call(name, args, signal) as Promise<Report>;
+  }
   fs.writeFileSync(file('return.txt'), 'a\n');
   await relayed('start', { task: 'return', cwd: root });
   await link.call('read', { file: 'return.txt' });
@@ -411,14 +427,16 @@ export async function run(): Promise<void> {
   const SLOW = 10;
   const FAST = 100;
   const SAMPLE_MS = 300;
-  const top = () => glide.visibleRanges[0]?.start.line ?? 0;
-  const glideTo = async (line: number, speed: number) => {
+  function top(): number {
+    return glide.visibleRanges[0]?.start.line ?? 0;
+  }
+  async function glideTo(line: number, speed: number): Promise<number> {
     c.setSpeed(speed);
     await c.step([{ move: { file: 'glide.txt', line, to: 'line_end' } }]);
     await c.step([]);
     await sleep(SAMPLE_MS);
     return top();
-  };
+  }
   await c.start('glide speed');
   await c.read('glide.txt');
   assert.equal(await glideTo(1, FAST), 0);
@@ -437,7 +455,9 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file('asked.txt'), 'a\n');
   await c.start('asked');
   await c.read('asked.txt');
-  const interrupting = vscode.workspace.onWillSaveTextDocument(() => c.userInterrupt());
+  const interrupting = vscode.workspace.onWillSaveTextDocument(() => {
+    c.userInterrupt();
+  });
   c.setSpeed(20);
   await c.step([{ move: { file: 'asked.txt', line: 1, to: 'line_end' } }, { type: `b${CURSOR_MARKER}` }, { run: 'true' }]);
   const asked = await Promise.race([c.listen(), sleep(3000).then(() => undefined)]);
@@ -561,7 +581,9 @@ export async function run(): Promise<void> {
   );
   const counted = new Promise<{ reads: number; broken: number }>((r) => reader.once('message', r));
   await sleep(100);
-  for (let i = 0; i < 2000; i++) api.bridge.focused();
+  for (let i = 0; i < 2000; i++) {
+    api.bridge.focused();
+  }
   Atomics.store(new Int32Array(stop), 0, 1);
   const { reads, broken } = await counted;
   await reader.terminate();
@@ -590,7 +612,7 @@ export async function run(): Promise<void> {
   assert.ok(typed.length > 0 && left.length > 0 && alphabet.endsWith(left), `left: ${JSON.stringify(left)}`);
   assert.equal(next?.status, 'discarded');
   assert.equal(report.events[0]?.kind, 'edit');
-  assert.equal(doc.getText(), '// mine\n' + typed);
+  assert.equal(doc.getText(), `// mine\n${typed}`);
   assert.deepEqual(typing.code, {
     file: 'scratch.ts',
     lines: [
@@ -616,20 +638,22 @@ export async function run(): Promise<void> {
   const tools = await agent.listTools();
   assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ['calibrate', 'end', 'listen', 'read', 'start', 'step']);
   // Every text part of a tool's result, joined.
-  const toolAll = async (name: string, args: Record<string, unknown> = {}) => {
+  async function toolAll(name: string, args: Record<string, unknown> = {}): Promise<string> {
     const result = await agent.callTool({ name, arguments: args });
     // The relay answers with text parts only.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return (result.content as { text: string }[]).map((part) => part.text).join('\n\n');
-  };
-  const tool = async (name: string, args: Record<string, unknown> = {}) => {
+    return (result.content as Array<{ text: string }>).map((part) => part.text).join('\n\n');
+  }
+  async function tool(name: string, args: Record<string, unknown> = {}): Promise<string> {
     const result = await agent.callTool({ name, arguments: args });
     // The relay answers with text parts only.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const content = result.content as { type: string; text: string }[];
-    assert.ok(!result.isError, content[0]?.text ?? 'tool error');
-    return content[0]!.text;
-  };
+    const content = result.content as Array<{ type: string; text: string }>;
+    const part = content[0];
+    assert.ok(!result.isError, part?.text ?? 'tool error');
+    assert.ok(part, `${name} answered with no text`);
+    return part.text;
+  }
   c.setSpeed(20);
   // The project's guide reaches the agent with the pairing guide (#23).
   fs.mkdirSync(file('.ai-pair'), { recursive: true });
@@ -654,7 +678,9 @@ export async function run(): Promise<void> {
   c.userMessage('seen once');
   // The relay answers with text parts only.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  assert.match(((await taken).content as { text: string }[])[0]!.text, /seen once/);
+  const takenFirst = ((await taken).content as Array<{ text: string }>)[0];
+  assert.ok(takenFirst, 'listen answered with no text');
+  assert.match(takenFirst.text, /seen once/);
   cancelAfter.abort();
   const repeated = await tool('listen');
   assert.match(repeated, /seen once/);
@@ -664,15 +690,17 @@ export async function run(): Promise<void> {
   // Two rejections cancelled after the agent took them come back, each in a report marked as one
   // that may repeat, and a session the programmer ends stays until both are out (specs/Controller.tla).
   await toolAll('start', { task: 'held' });
-  const rejectedOnce = async (line: number) => {
+  async function rejectedOnce(line: number): Promise<AbortController> {
     const abort = new AbortController();
     const actions = [{ move: { file: 'relay.txt', line, to: 'line_end' } }];
     const result = await agent.callTool({ name: 'step', arguments: { actions } }, undefined, { signal: abort.signal });
     // The relay answers with text parts only.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    assert.match((result.content as { text: string }[])[0]!.text, /rejected/);
+    const answer = (result.content as Array<{ text: string }>)[0];
+    assert.ok(answer, 'step answered with no text');
+    assert.match(answer.text, /rejected/);
     return abort;
-  };
+  }
   const one = await rejectedOnce(5);
   const two = await rejectedOnce(6);
   one.abort();
@@ -690,12 +718,13 @@ export async function run(): Promise<void> {
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');
-  const traced = () =>
-    fs
+  function traced(): string {
+    return fs
       .readdirSync(logs, { recursive: true, encoding: 'utf8' })
       .filter((f) => path.basename(f) === 'AI Pair.log')
       .map((f) => fs.readFileSync(path.join(logs, f), 'utf8'))
       .join('');
+  }
   await until(() => new RegExp(`\\[info\\] socket \\d+ ${LEFT_ARROW} call \\d+ start`).test(traced()));
   await vscode.workspace.getConfiguration('aiPair').update('trace', undefined, vscode.ConfigurationTarget.Global);
   console.log("relay session OK, with the project's guide");

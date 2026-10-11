@@ -1,15 +1,16 @@
 // The panel's log, replayed into a view created after a long session: it still has the session
 // (#54, specs/PanelReplay.tla).
 
+import { ok } from 'node:assert/strict';
 import { expect, it, vi } from 'vitest';
 import type { PanelEvent } from '@ai-pair/core';
 import { NarrationPanel } from '../src/panel';
 
 vi.mock('vscode', () => ({ commands: { executeCommand: () => Promise.resolve() } }));
 
-/** A view created now: what it's sent when its page says it's ready. */
+/** Returns what a view created now is sent when its page says it's ready. */
 function replay(panel: NarrationPanel): PanelEvent[] {
-  const sent: { type: string; events?: PanelEvent[] }[] = [];
+  const sent: Array<{ type: string; events?: PanelEvent[] }> = [];
   let receive: ((m: { type: string }) => void) | undefined;
   const view = {
     webview: {
@@ -31,7 +32,10 @@ function replay(panel: NarrationPanel): PanelEvent[] {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   panel.resolveWebviewView(view as never);
   receive?.({ type: 'ready' });
-  return sent.find((m) => m.type === 'replay')!.events!;
+  const replayed = sent.find((m) => m.type === 'replay');
+  ok(replayed);
+  ok(replayed.events);
+  return replayed.events;
 }
 
 it("ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it", () => {
@@ -42,7 +46,9 @@ it("ReplayShowsSession and Bounded: keeps the session's start in the log however
     { current: () => undefined, ref: () => undefined },
   );
   panel.post({ type: 'session', active: true, task: 'long' });
-  for (let i = 0; i < 1000; i++) panel.post({ type: 'say', text: `message ${i}` });
+  for (let i = 0; i < 1000; i++) {
+    panel.post({ type: 'say', text: `message ${i}` });
+  }
   const events = replay(panel);
   expect(events.filter((e) => e.type === 'session')).toEqual([{ type: 'session', active: true, task: 'long' }]);
   expect(events.at(-1)).toEqual({ type: 'say', text: 'message 999' });
@@ -58,7 +64,9 @@ it("ReplayShowsSession: replays the session's end when that is the last session 
   );
   panel.post({ type: 'session', active: true });
   panel.post({ type: 'session', active: false, reason: 'user' });
-  for (let i = 0; i < 1000; i++) panel.post({ type: 'say', text: `message ${i}` });
+  for (let i = 0; i < 1000; i++) {
+    panel.post({ type: 'say', text: `message ${i}` });
+  }
   expect(replay(panel).filter((e) => e.type === 'session')).toEqual([{ type: 'session', active: false, reason: 'user' }]);
 });
 

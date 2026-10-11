@@ -9,20 +9,28 @@ import { loadPage, ui } from './page';
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { window } = globalThis as unknown as { window: Window };
 
-let posted: { type: string }[] = [];
+let posted: Array<{ type: string }> = [];
 
 beforeEach(async () => {
   posted = [];
-  await loadPage((m) => posted.push(m));
+  await loadPage((m) => {
+    posted.push(m);
+  });
 });
 
 function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent('message', { data: event }));
 }
 
-const hidden = (): boolean => ui('start')?.hasAttribute('hidden') ?? false;
-const noteHidden = (): boolean => ui('starting')?.hasAttribute('hidden') ?? false;
-const click = (): void => void ui('start')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+function hidden(): boolean {
+  return ui('start')?.hasAttribute('hidden') ?? false;
+}
+function noteHidden(): boolean {
+  return ui('starting')?.hasAttribute('hidden') ?? false;
+}
+function click(): void {
+  ui('start')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+}
 
 it('ClicksNeedButtonProp: hides Start a session until the extension says it can start one', () => {
   expect(hidden()).toBe(true);

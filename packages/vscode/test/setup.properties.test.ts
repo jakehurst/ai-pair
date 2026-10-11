@@ -21,7 +21,7 @@ const TOML = [
   '[mcp_servers."pair"]\ncommand = "old"\n# inside\nargs = ["z"]\n\n[c]\n',
 ];
 
-/** The text with the pair table and its subtables taken out, and blank lines trimmed. */
+/** Returns the text with the pair table and its subtables taken out, and blank lines trimmed. */
 function withoutPair(crlf: string): string {
   // tomlTable joins its lines with "\n".
   const text = crlf.replaceAll('\r\n', '\n');
@@ -56,9 +56,16 @@ const JSON_FILES = [
   '{\r\n  "a": 1\r\n}\r\n',
 ];
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const record = (v: unknown): Record<string, unknown> => (isRecord(v) ? v : {});
-const servers = (o: Record<string, unknown>) => ({ ...record(o.mcpServers) });
+/** Checks that `v` is a JSON object. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+function record(v: unknown): Record<string, unknown> {
+  return isRecord(v) ? v : {};
+}
+function servers(o: Record<string, unknown>): Record<string, unknown> {
+  return { ...record(o.mcpServers) };
+}
 
 it("sets the JSON entry once, however many times it's run, and leaves the rest as it was", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-setup-'));

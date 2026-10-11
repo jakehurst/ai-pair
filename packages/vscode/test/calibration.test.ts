@@ -3,23 +3,33 @@
 import { expect, it } from 'vitest';
 import { Calibration, wordsPerMinute, type CalibrationView } from '../src/calibration';
 
-const noop = (): void => {};
+function noop(): void {}
 
 function setup() {
   const views: CalibrationView[] = [];
   const calls: string[] = [];
   const clock = { now: 0 };
   let release: () => void = noop;
-  const stored = () => new Promise<void>((resolve) => void (release = resolve));
+  function stored(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  }
   const host = {
     now: () => clock.now,
-    pause: () => void calls.push('pause'),
-    resume: () => void calls.push('resume'),
+    pause: () => {
+      calls.push('pause');
+    },
+    resume: () => {
+      calls.push('resume');
+    },
     store: (msPerChar: number) => {
       calls.push(`store ${msPerChar}`);
       return stored();
     },
-    show: (view: CalibrationView) => void views.push(view),
+    show: (view: CalibrationView) => {
+      views.push(view);
+    },
   };
   const calibration = new Calibration(host, { title: 'Sample', text: 'one two three four', notice: 'free' });
   return { calibration, views, calls, clock, release: () => release() };

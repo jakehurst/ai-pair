@@ -5,7 +5,7 @@ import { NarrationPanel, type Starter } from '../src/panel';
 
 vi.mock('vscode', () => ({ commands: { executeCommand: () => Promise.resolve() } }));
 
-/** A view standing in for VS Code's: what the panel posts to the page, and a way to send the page's messages. */
+/** Opens a view standing in for VS Code's: what the panel posts to the page, and a way to send the page's messages. */
 function open(panel: NarrationPanel) {
   const posted: object[] = [];
   let receive: ((m: object) => void) | undefined;
@@ -18,7 +18,9 @@ function open(panel: NarrationPanel) {
         posted.push(m);
         return Promise.resolve(true);
       },
-      onDidReceiveMessage: (f: (m: object) => void) => (receive = f),
+      onDidReceiveMessage: (f: (m: object) => void) => {
+        receive = f;
+      },
     },
     onDidDispose: () => {},
     show: () => {},
@@ -37,8 +39,8 @@ function setup(starter?: { available: boolean | 'manual' }) {
     { current: () => undefined, ref: () => undefined },
   );
   let started = 0;
-  const answers: ((value: boolean) => void)[] = [];
-  const exits: (() => void)[] = [];
+  const answers: Array<(value: boolean) => void> = [];
+  const exits: Array<() => void> = [];
   if (starter) {
     const fake: Starter = {
       available: () =>
@@ -50,7 +52,16 @@ function setup(starter?: { available: boolean | 'manual' }) {
     };
     panel.starter = fake;
   }
-  return { panel, started: () => started, answer: (i: number, value: boolean) => answers[i]?.(value), exit: (i: number) => exits[i]?.() };
+  return {
+    panel,
+    started: () => started,
+    answer: (i: number, value: boolean) => {
+      answers[i]?.(value);
+    },
+    exit: (i: number) => {
+      exits[i]?.();
+    },
+  };
 }
 
 it('Offered: tells a new page whether it can start a session', async () => {
@@ -103,10 +114,10 @@ it("OwnAnswer: drops the answer of a page replaced before it landed, so it canno
   const view = open(panel);
   view.send({ type: 'ready' });
   view.send({ type: 'ready' });
-  answer(0, true);
+  answer(0, /* value= */ true);
   await Promise.resolve();
   expect(view.posted.some((m) => 'type' in m && m.type === 'canStart')).toBe(false);
-  answer(1, false);
+  answer(1, /* value= */ false);
   await Promise.resolve();
   expect(view.posted).toContainEqual({ type: 'canStart', value: false });
 });
