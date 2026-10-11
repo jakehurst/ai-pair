@@ -221,10 +221,14 @@ During the agent's turn:
   panel's current message. So typing downward scrolls every 40% of a
   viewport or so, not on every keystroke, and every jump lands in the same
   place. At the top of a file, it sits as low as the file lets it.
-- The view **glides** there, easing out over half a second, however far it
-  goes, so the programmer sees which way the code went. It moves a line at a
-  time, since that's how the extension API scrolls. With
-  `editor.smoothScrolling` on, VS Code animates it instead.
+- The view **glides** there, easing out over half a second for a short jump,
+  10 ms more for each line it scrolls, up to 1.5 s, divided by the playback
+  speed like every other duration (#123). So the programmer sees which way
+  the code went, and can slow the glide down to follow a long jump.
+  `aiPair.timing` sets the three numbers: `glideMs`, `glidePerLineMs`, and
+  `glideMaxMs`. It moves a line at a time, since that's how the extension API
+  scrolls. With `editor.smoothScrolling` on, VS Code animates it instead, at
+  its own pace, whatever the speed.
 - The viewport's height comes from the lines VS Code shows. Near the end of a
   file those stop at its last line, short of the viewport's bottom, and a
   zoom or a resize there changes nothing VS Code reports. So a scroll there

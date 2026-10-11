@@ -481,7 +481,7 @@ Every property names the test that proves the code obeys it:
 
 ### `Scroll`: follow mode's scrolling
 
-`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in `packages/vscode/src/editor.ts`, with `comfortable` and `landing` from `view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when the state stops following: a pause, or a command running. A pause ends in `resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut short goes on once the command is done, from `renderCursor`; before it, the view stayed where the glide stopped, with the target possibly out of view. The programmer's turn drops it. `beyond` is `editor.scrollBeyondLastLine`, either way: with it on (the default), the last line can scroll to the top.
+`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in `packages/vscode/src/editor.ts`, with `comfortable` and `landing` from `view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when the state stops following: a pause, or a command running. A pause ends in `resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut short goes on once the command is done, from `renderCursor`; before it, the view stayed where the glide stopped, with the target possibly out of view. The programmer's turn drops it. `beyond` is `editor.scrollBeyondLastLine`, either way: with it on (the default), the last line can scroll to the top. How long a glide takes (#123: `glideMs` in `controller.ts`, from the timing and the playback speed) is not modeled: a `Frame` carries no time, and `Move` and `Leave` can come between any two frames, so a longer or shorter glide is a run the model already has.
 
 | Spec | Code |
 |---|---|

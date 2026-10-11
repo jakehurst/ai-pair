@@ -77,11 +77,11 @@ pair on..."). In Claude Code you can also run `/mcp__pair__start`.
 
 ## Settings
 
-- `aiPair.speed`: overall playback speed.
+- `aiPair.speed`: overall playback speed, the follow scroll's glide included.
 - `aiPair.readingSpeed`: reading speed, for the pause after each message.
 - `aiPair.calibrationPassage`: the passage the calibration times you on; empty, the
   built-in one.
 - `aiPair.agentName`: the name on the agent's cursor.
-- `aiPair.timing`: fine-tune any typing or pause duration.
+- `aiPair.timing`: fine-tune any typing, pause, or glide duration.
 - `aiPair.confirmCommands`: ask before each command the agent runs in the
   terminal (on by default).

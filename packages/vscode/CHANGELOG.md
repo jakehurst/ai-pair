@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- The editor's scroll to follow the agent now takes its time from the playback speed, like
+  typing and pauses: at 1.0x it is half a second for a short jump, 10 ms more for each line,
+  up to 1.5 s, and the speed divides that. Before, it was half a second at any speed and any
+  distance. `aiPair.timing` sets the three numbers: `glideMs`, `glidePerLineMs`, and
+  `glideMaxMs`. With `editor.smoothScrolling` on, VS Code still animates the scroll at its
+  own pace.
+
 ## 0.5.1
 
 - After a window reload, a session in progress shows as suspended in the Pair panel, with

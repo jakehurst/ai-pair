@@ -94,6 +94,17 @@ describe("timing", () => {
     // The fake timing reads at 20 ms per character with a 500 ms floor: 500 ms, halved by the reading speed.
     expect(panel.events.find((e) => e.type === "reading")).toEqual({ type: "reading", ms: 250 })
   })
+
+  it("times the follow scroll's glide by the playback speed and the timing setting (#123)", () => {
+    const { controller } = setup({ "a.ts": "" })
+    const lines = testConfig.timing.nearLines
+    const speed = 4
+    const atNormalSpeed = controller.glideMs(lines)
+    controller.setSpeed(speed)
+    expect(controller.glideMs(lines)).toBe(atNormalSpeed / speed)
+    controller.setTiming({ glideMs: 0, glidePerLineMs: 0 })
+    expect(controller.glideMs(lines)).toBe(0)
+  })
 })
 
 describe("editing", () => {

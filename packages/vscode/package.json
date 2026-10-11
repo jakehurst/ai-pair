@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
