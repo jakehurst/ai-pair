@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- The repository's shell scripts follow Google's Shell Style Guide, and CI checks them with
+  ShellCheck, shfmt, and the guide's shebang, file name, and length rules (`npm run lint:sh`).
+  `npm run test:integration` now runs its script with `bash`. Nothing changes in the extension.
+
 ## 0.6.1
 
 - The Swift script that draws the icon, `scripts/icon.swift`, follows Google's Swift Style
