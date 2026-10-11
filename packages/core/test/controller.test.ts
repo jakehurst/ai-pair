@@ -14,7 +14,7 @@ afterEach(() => {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe("timing", () => {
-  it("BatchEnds: returns the first step immediately and blocks the second until the first finishes", async () => {
+  it("BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
 

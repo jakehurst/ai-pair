@@ -733,6 +733,8 @@ export class Controller {
     if (s.queue[0]?.state === "playing" && s.timeline.isInterrupted) return false
     switch (call.kind) {
       case "step":
+        // specs/Serialize.tla, `Finish`: a step's batch is done, or plays next (`AtHead`): the step returns once the one before it
+        // has (#150).
         if (!call.batch) return s.queue.length === 0
         return call.batch.state === "done" || s.queue[0] === call.batch
       case "end":
