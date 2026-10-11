@@ -1,5 +1,6 @@
-# Lint, type check, and unit tests; the integration test in a real VS Code, downloaded, on a
-# virtual display; the TLA+ specs (#7, #19); and the Swift lint and type check, on macOS (#137).
+# Lint, type check, unit tests, and the shell scripts' style (#135); the integration test
+# in a real VS Code, downloaded, on a virtual display; the TLA+ specs (#7, #19); and the
+# Swift lint and type check, on macOS (#137).
 name: CI
 
 on:
@@ -23,6 +24,14 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check:ascii
+      # shfmt 3.14.1, checked against its SHA-256; the runner image has ShellCheck.
+      - name: Install shfmt
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/shfmt" https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64
+          echo "76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf  $RUNNER_TEMP/shfmt" | sha256sum -c
+          chmod +x "$RUNNER_TEMP/shfmt"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: npm run lint:sh
       - run: npm run typecheck
       - run: npm test
 

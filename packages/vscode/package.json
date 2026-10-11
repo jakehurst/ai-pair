@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test:integration": "sh scripts/integration.sh",
+    "test:integration": "bash scripts/integration.sh",
     "package": "node scripts/build.mjs --production && vsce package --no-dependencies --out ../.."
   },
   "dependencies": {

@@ -20,7 +20,8 @@
     "format:check": "prettier --check .",
     "check:ascii": "node scripts/check-ascii.mjs",
     "lint:swift": "swift format lint --strict --recursive packages/vscode/scripts",
-    "typecheck:swift": "swiftc -typecheck -warnings-as-errors packages/vscode/scripts/icon.swift"
+    "typecheck:swift": "swiftc -typecheck -warnings-as-errors packages/vscode/scripts/icon.swift",
+    "lint:sh": "bash scripts/lint_shell.sh"
   },
   "devDependencies": {
     "@types/node": "~22.19.0",
