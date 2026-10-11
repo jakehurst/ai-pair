@@ -10,13 +10,42 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 [COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the
 spec that models it, or says why it has none.
 
+The specs and their configs follow the
+[TLA+ style guide](tlaplus-style-guide.md) (#148).
+
 CI runs `check.sh` on every push to `main` and every pull request
-(`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on
+(`.github/workflows/ci.yml`), with TLA+ tools 1.8.0. `check.sh` runs TLC on
 every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it
 is on `main`, and has to pass. Regressions are caught by the unit and
 integration tests. A spec's constants that switch a fix on or off still say
 which bug each one fixed; the configs that reproduced those bugs were dropped
 once the fixes were in.
+
+## Tools
+
+The TLA+ tools are one jar, `tla2tools.jar`, from the
+[tlaplus/tlaplus releases](https://github.com/tlaplus/tlaplus/releases). CI and
+local runs use 1.8.0, published 2026-10-06 (GitHub marks it a prerelease).
+Check a download against the SHA-256 GitHub lists for it:
+
+```sh
+gh api repos/tlaplus/tlaplus/releases/tags/v1.8.0 \
+  --jq '.assets[] | select(.name == "tla2tools.jar") | .digest'
+shasum -a 256 tla2tools.jar
+```
+
+| Tool | Command |
+|---|---|
+| TLC, the model checker | `java -jar tla2tools.jar -tool -config Foo.cfg Foo.tla` |
+| SANY, the parser | `java -cp tla2tools.jar tla2sany.SANY Foo.tla` |
+| The formatter | `java -cp tla2tools.jar formatter.Main Foo.tla Out.tla` |
+
+On Justine's Mac the jar is `~/.local/lib/tla2tools.jar`, and
+`~/.local/bin/tlc` is the `tlc` command `check.sh` runs: a wrapper for
+`java -jar ~/.local/lib/tla2tools.jar -tool`. The VS Code TLA+ extension ships
+its own copy of the jar in its `tools/` folder.
+The formatter's layout differs from the style guide (2-space indent, spaces
+inside `<< >>` and `{ }`), so the specs are not run through it.
 
 ## Results
 
