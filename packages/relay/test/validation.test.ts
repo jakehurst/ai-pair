@@ -3,22 +3,21 @@
 
 import { describe, expect, it, vi } from "vitest"
 import { z } from "zod"
-import type { Action } from "@ai-pair/protocol"
+import { CURSOR_MARKER, type Action } from "@ai-pair/protocol"
 import { setup, until } from "../../core/test/fake"
 import { TOOLS } from "../src/tools"
 
-const M = "\u{258c}"
 const places = {
   move: [
     { to: "line_end" },
     { line: 1, to: "line_end" },
-    { line: 1, at: `x${M}` },
+    { line: 1, at: `x${CURSOR_MARKER}` },
     { at: "x" },
-    { at: `${M}${M}` },
+    { at: `${CURSOR_MARKER}${CURSOR_MARKER}` },
     { line: 0, to: "line_end" },
     { line: 1.5, to: "line_end" },
     { to: "start" },
-    { at: `x${M}`, to: "line_end" },
+    { at: `x${CURSOR_MARKER}`, to: "line_end" },
     {},
     { before: "x" },
     { to: "line_end", extra: 1 },
@@ -38,7 +37,7 @@ const places = {
     { text: "x", extra: 1 },
     { line: -1, text: "x" },
   ],
-  type: [`x${M}`, "x", `${M}${M}`, 5, [`x${M}`], ""],
+  type: [`x${CURSOR_MARKER}`, "x", `${CURSOR_MARKER}${CURSOR_MARKER}`, 5, [`x${CURSOR_MARKER}`], ""],
 }
 
 const actions: unknown[] = [
@@ -61,7 +60,7 @@ const actions: unknown[] = [
   { say: "a", extra: 1 },
   { run: "true", extra: 1 },
   { delete: true, extra: 1 },
-  { say: "a", type: `b${M}` },
+  { say: "a", type: `b${CURSOR_MARKER}` },
   { foo: 1 },
   {},
   "say",

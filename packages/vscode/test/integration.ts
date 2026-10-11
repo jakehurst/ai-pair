@@ -200,7 +200,7 @@ export async function run(): Promise<void> {
     ["completed"],
   )
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, file("named-b.txt"))
-  const outside = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { type: "y\u{258c}" }])
+  const outside = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { type: `y${CURSOR_MARKER}` }])
   assert.equal(outside.rejected?.error.kind, "invalid_action")
   await c.step([])
   assert.equal(await buffer("named-a.txt"), "a\n")
@@ -223,7 +223,9 @@ export async function run(): Promise<void> {
   await sleep(300)
   c.userMessage("stop")
   cancelListen.abort()
-  const restored = await relayed("step", { actions: [{ move: { file: "return.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }] })
+  const restored = await relayed("step", {
+    actions: [{ move: { file: "return.txt", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }],
+  })
   assert.deepEqual(
     restored.events.map((e) => e.kind),
     ["message"],
@@ -278,7 +280,7 @@ export async function run(): Promise<void> {
   assert.equal(stale.getText(), "old\n")
   fs.unlinkSync(file("stale-88.txt"))
   await assert.rejects(c.read("stale-88.txt"), missing)
-  const recreated = await c.step([{ move: { file: "stale-88.txt", line: 1, to: "line_end" } }, { type: "new\u{258c}" }])
+  const recreated = await c.step([{ move: { file: "stale-88.txt", line: 1, to: "line_end" } }, { type: `new${CURSOR_MARKER}` }])
   assert.equal(recreated.rejected, undefined)
   const played = (await c.step([])).batches
   assert.deepEqual(
@@ -310,7 +312,7 @@ export async function run(): Promise<void> {
   await until(() => api.outside.isMarked(file("outside-written.txt")))
   await insertAsProgrammer(savedDoc.uri, new vscode.Position(0, 1), "b")
   await savedDoc.save()
-  await c.step([{ move: { file: "outside-new.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+  await c.step([{ move: { file: "outside-new.txt", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }])
   await c.step([])
   // Past the group's settling, and the watcher's own delay.
   await sleep(2000)
@@ -355,7 +357,7 @@ export async function run(): Promise<void> {
   await c.start("undone")
   await c.read("undone.txt")
   // The first step returns at once; nothing waits for a report while the programmer types and undoes.
-  await c.step([{ move: { file: "undone.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(100)}\u{258c}` }])
+  await c.step([{ move: { file: "undone.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(100)}${CURSOR_MARKER}` }])
   await sleep(800)
   await insertAsProgrammer(undone.uri, new vscode.Position(0, 0), "#")
   const undo = new vscode.WorkspaceEdit()
@@ -437,7 +439,7 @@ export async function run(): Promise<void> {
   await c.read("asked.txt")
   const interrupting = vscode.workspace.onWillSaveTextDocument(() => c.userInterrupt())
   c.setSpeed(20)
-  await c.step([{ move: { file: "asked.txt", line: 1, to: "line_end" } }, { type: "b\u{258c}" }, { run: "true" }])
+  await c.step([{ move: { file: "asked.txt", line: 1, to: "line_end" } }, { type: `b${CURSOR_MARKER}` }, { run: "true" }])
   const asked = await Promise.race([c.listen(), sleep(3000).then(() => undefined)])
   interrupting.dispose()
   assert.ok(asked, "listen is still waiting")
@@ -461,7 +463,7 @@ export async function run(): Promise<void> {
     if (++eols === 2) c.userInterrupt()
     return eol(f)
   }
-  await c.step([{ type: "\u{258c}" }, { say: "Typed." }])
+  await c.step([{ type: CURSOR_MARKER }, { say: "Typed." }])
   const untyped = await c.listen()
   api.editor.eol = eol
   assert.deepEqual(
@@ -506,7 +508,7 @@ export async function run(): Promise<void> {
   c.revive(kept)
   const revived = await c.start("kept")
   assert.equal(revived.resumed, true)
-  assert.match(revived.cursor?.lines.find((l) => l.text.includes("\u{258c}"))?.text ?? "", /two/)
+  assert.match(revived.cursor?.lines.find((l) => l.text.includes(CURSOR_MARKER))?.text ?? "", /two/)
   await c.end()
   console.log("a session saved while suspended resumes, with its cursor")
 

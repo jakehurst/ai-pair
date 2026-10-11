@@ -6,7 +6,7 @@ import { ELLIPSIS } from "@ai-pair/core/constants"
 import { renderFile, renderReport } from "../src/render"
 
 const report = (r: Partial<Report>): Report => ({ batches: [], events: [], turn: "agent", ...r })
-const code = (final_newline: boolean) => ({ file: "a.ts", lines: [{ number: 9, text: "}\u{258c}" }], end: { final_newline } })
+const code = (final_newline: boolean) => ({ file: "a.ts", lines: [{ number: 9, text: `}${CURSOR_MARKER}` }], end: { final_newline } })
 
 describe("reports", () => {
   it("shows a batch's code as numbered lines, with the cursor", () => {
