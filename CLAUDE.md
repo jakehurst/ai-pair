@@ -138,8 +138,8 @@ Set by Justine on 2026-10-07.
         `readarray`, or `${var,,}`.
 -   **The panel's HTML and CSS follow Google's HTML/CSS Style Guide**
     (https://google.github.io/styleguide/htmlcssguide.html, #132), and the page
-    is valid HTML5. `npm run lint:web` runs Stylelint (`stylelint.config.mjs`)
-    on `panel.css`, then `scripts/lint-web.mjs`: html-validate
+    is valid HTML5. `npm run lint:web` runs `scripts/lint-web.ts`: Stylelint
+    (`scripts/stylelint.config.ts`) on `panel.css`, html-validate
     (`.htmlvalidate.json`) and the W3C's Nu Html Checker (vnu) on the page as
     `panelHtml` renders it, vnu on `panel.css`, and the 140-column limit on
     `panelHtml.ts`. It runs in CI's `check` job. These rules no tool checks, so

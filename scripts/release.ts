@@ -7,44 +7,54 @@
 // written just before: CHANGELOG.md is the one file that may have uncommitted changes, and it goes
 // into the release commit.
 
-import { execFileSync } from "node:child_process"
+import { execFileSync, type ExecFileSyncOptions } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { createInterface } from "node:readline/promises"
-import { fileURLToPath } from "node:url"
 import { RIGHT_ARROW } from "../packages/core/src/constants.ts"
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const ROOT = path.resolve(import.meta.dirname, "..")
 const EXTENSION = "packages/vscode"
 const CHANGELOG = `${EXTENSION}/CHANGELOG.md`
 const MANIFEST = `${EXTENSION}/package.json`
+const VERSION = /^(\d+)\.(\d+)\.(\d+)$/
 
-const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit", ...opts })
-const read = (cmd, args) => execFileSync(cmd, args, { cwd: ROOT, encoding: "utf8" }).trim()
-const manifest = () => JSON.parse(fs.readFileSync(path.join(ROOT, MANIFEST), "utf8"))
+interface Manifest {
+  publisher: string
+  name: string
+  version: string
+}
 
-function fail(message) {
+const run = (cmd: string, args: string[], opts: ExecFileSyncOptions = {}) =>
+  execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit", ...opts })
+const read = (cmd: string, args: string[]) => execFileSync(cmd, args, { cwd: ROOT, encoding: "utf8" }).trim()
+const manifest = (): Manifest => JSON.parse(fs.readFileSync(path.join(ROOT, MANIFEST), "utf8"))
+
+function fail(message: string): never {
   console.error(`\nFailed: ${message}`)
   process.exit(1)
 }
 
-function step(message) {
+function step(message: string) {
   console.log(`\n> ${message}`)
 }
 
-const parts = (v) => v.split(".").map(Number)
+/** Splits an `x.y.z` version into its three numbers, or fails. */
+function parts(version: string): [number, number, number] {
+  const match = VERSION.exec(version)
+  if (!match) return fail(`${version} is not an x.y.z version.`)
+  return [Number(match[1]), Number(match[2]), Number(match[3])]
+}
 
 /** The version after `bump`, from `current`. An exact one may be the current, for its first release. */
-function next(current, bump) {
-  if (/^\d+\.\d+\.\d+$/.test(bump)) {
-    const order =
-      parts(bump)
-        .map((n, i) => n - parts(current)[i])
-        .find((d) => d !== 0) ?? 0
+function next(current: string, bump: string): string {
+  const [major, minor, patch] = parts(current)
+  if (VERSION.test(bump)) {
+    const [bumpMajor, bumpMinor, bumpPatch] = parts(bump)
+    const order = bumpMajor - major || bumpMinor - minor || bumpPatch - patch
     if (order < 0) fail(`${bump} is older than the current ${current}.`)
     return bump
   }
-  const [major, minor, patch] = parts(current)
   if (bump === "major") return `${major + 1}.0.0`
   if (bump === "minor") return `${major}.${minor + 1}.0`
   if (bump === "patch") return `${major}.${minor}.${patch + 1}`
@@ -52,10 +62,10 @@ function next(current, bump) {
 }
 
 /** The body of the changelog's section for `version`, without its heading. */
-function notes(version) {
+function notes(version: string): string | undefined {
   const text = fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8")
   const sections = text.split(/^## /m).slice(1)
-  const section = sections.find((s) => s.split("\n", 1)[0].trim() === version)
+  const section = sections.find((s) => s.split("\n", 1)[0]?.trim() === version)
   return section?.slice(section.indexOf("\n") + 1).trim()
 }
 
@@ -79,7 +89,8 @@ run("git", ["fetch", "--quiet", "--tags", "origin", "main"])
 if (read("git", ["rev-parse", "HEAD"]) !== read("git", ["rev-parse", "origin/main"]))
   fail("main isn't the same as origin/main: pull or push first.")
 if (read("git", ["tag", "--list", tag])) fail(`${tag} is already tagged.`)
-if (!notes(version)) fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`)
+const changes = notes(version)
+if (!changes) fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`)
 if (!read("vsce", ["ls-publishers"]).split("\n").includes(publisher))
   fail(`vsce has no token for the publisher ${publisher}: run \`vsce login ${publisher}\`.`)
 run("gh", ["auth", "status"], { stdio: "ignore" })
@@ -142,7 +153,7 @@ try {
 
 step("Making the GitHub release")
 try {
-  run("gh", ["release", "create", tag, vsix, "--title", version, "--notes", notes(version)])
+  run("gh", ["release", "create", tag, vsix, "--title", version, "--notes", changes])
 } catch {
   fail(
     `${version} is published and pushed, but the GitHub release failed. Finish with:\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`,

@@ -6,9 +6,8 @@
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { fileURLToPath } from "node:url"
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const ROOT = path.resolve(import.meta.dirname, "..")
 
 const SKIPPED = /^(package-lock\.json|.*\.(png|gif))$/
 
@@ -27,7 +26,7 @@ const S_CARON = 0x0160 // LATIN CAPITAL LETTER S WITH CARON
 const EM_DASH = 0x2014
 
 /** The characters a file may hold beyond ASCII, as code points, with why. */
-const ALLOWED = {
+const ALLOWED: Record<string, readonly number[]> = {
   // The cursor marker, shown to the agent as it types it.
   "AGENT_GUIDE.md": [CURSOR_MARKER],
   "PROTOCOL.md": [CURSOR_MARKER],
@@ -52,7 +51,7 @@ for (const file of files) {
     for (const char of line) {
       column++
       const code = char.codePointAt(0)
-      if (code > ASCII_DELETE && !allowed.has(code)) {
+      if (code !== undefined && code > ASCII_DELETE && !allowed.has(code)) {
         console.error(`${file}:${i + 1}:${column}: U+${code.toString(16).toUpperCase().padStart(4, "0")}`)
         found++
       }

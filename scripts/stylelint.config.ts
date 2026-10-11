@@ -1,6 +1,10 @@
 // Stylelint for the panel's stylesheet, by Google's HTML/CSS Style Guide (#132). Prettier does the
 // formatting rules: indentation, spacing, one selector and one declaration per line, semicolons.
-export default {
+// lint-web.ts runs Stylelint with it: Stylelint can't load a TypeScript config itself.
+
+import type { Config } from "stylelint"
+
+export const config: Config = {
   extends: ["stylelint-config-recommended"],
   plugins: ["@stylistic/stylelint-plugin", "stylelint-order"],
   rules: {

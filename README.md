@@ -221,7 +221,7 @@ packages/
 npm install
 npm test                  # unit and end-to-end tests
 npm run typecheck
-npm run check:ascii       # every tracked file is ASCII, apart from scripts/check-ascii.mjs's allowlist
+npm run check:ascii       # every tracked file is ASCII, apart from scripts/check-ascii.ts's allowlist
 npm run lint:swift        # Swift to Google's Swift Style Guide, with Xcode's swift-format (macOS)
 npm run typecheck:swift   # the Swift icon script compiles without warnings (macOS)
 npm run lint:sh           # shell scripts to Google's Shell Style Guide (needs ShellCheck and shfmt)

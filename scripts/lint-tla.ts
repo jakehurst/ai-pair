@@ -5,9 +5,8 @@
 
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { fileURLToPath } from "node:url"
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const ROOT = path.resolve(import.meta.dirname, "..")
 const SPECS = path.join(ROOT, "specs")
 
 /** The column limit (4.2). */
@@ -43,7 +42,7 @@ const MODEL_SEPARATOR = "_"
 /** A config line's keyword. */
 const CONFIG_KEYWORD = /^[A-Z_]+/
 /** Each config keyword's place in a config (8.1); the four state-space controls share one. */
-const CONFIG_ORDER = {
+const CONFIG_ORDER: Readonly<Record<string, number>> = {
   SPECIFICATION: 0,
   CONSTANTS: 1,
   INVARIANTS: 2,
@@ -55,32 +54,45 @@ const CONFIG_ORDER = {
   CHECK_DEADLOCK: 5,
 }
 /** The keywords TLC accepts that the guide replaces, with what replaces them (8.3, 8.4, 8.5). */
-const REPLACED = { CONSTANT: "CONSTANTS", INVARIANT: "INVARIANTS", PROPERTY: "PROPERTIES", INIT: "SPECIFICATION", NEXT: "SPECIFICATION" }
+const REPLACED: Readonly<Record<string, string>> = {
+  CONSTANT: "CONSTANTS",
+  INVARIANT: "INVARIANTS",
+  PROPERTY: "PROPERTIES",
+  INIT: "SPECIFICATION",
+  NEXT: "SPECIFICATION",
+}
 /** The keywords whose entries go below them, one per line (8.4, 8.5). */
-const BLOCK_KEYWORDS = ["CONSTANTS", "INVARIANTS", "PROPERTIES"]
+const BLOCK_KEYWORDS: readonly string[] = ["CONSTANTS", "INVARIANTS", "PROPERTIES"]
 /** The block keywords whose entries are names, one per line (8.5). */
-const NAME_BLOCKS = ["INVARIANTS", "PROPERTIES"]
+const NAME_BLOCKS: readonly string[] = ["INVARIANTS", "PROPERTIES"]
 /** A block's entry: indented 4 spaces (8.4). */
 const ENTRY = /^ {4}\S/
 /** The keywords a comment has to justify (7.2, 8.6), and the deadlock check turned off (6.13, 7.2). */
-const JUSTIFIED = ["SYMMETRY", "CONSTRAINT", "ACTION_CONSTRAINT", "VIEW"]
+const JUSTIFIED: readonly string[] = ["SYMMETRY", "CONSTRAINT", "ACTION_CONSTRAINT", "VIEW"]
 const DEADLOCK_OFF = "CHECK_DEADLOCK FALSE"
 
+/** A problem found in a spec or a config: its line, the guide's section, and what is wrong. */
+export interface Problem {
+  line: number
+  rule: string
+  message: string
+}
+
 /** The header line of module `name` (3.2): four dashes, `MODULE`, the name, and dashes to the column limit. */
-function header(name) {
+function header(name: string): string {
   return `---- MODULE ${name} `.padEnd(COLUMN_LIMIT, "-")
 }
 
 /** The code of `line`: the part before its line comment, if it has one. */
-function codeOf(line) {
+function codeOf(line: string): string {
   const start = line.indexOf(LINE_COMMENT)
   return start < 0 ? line : line.slice(0, start)
 }
 
 /** Where each `VARIABLES` block starts, and the variables the blocks declare, in order (3.6). */
-function variables(lines) {
-  const blocks = []
-  const names = []
+function variables(lines: string[]): { blocks: number[]; names: string[] } {
+  const blocks: number[] = []
+  const names: string[] = []
   let inBlock = false
   lines.forEach((line, i) => {
     let code = codeOf(line)
@@ -96,7 +108,7 @@ function variables(lines) {
 }
 
 /** The line of the `vars` definition and the names its tuple lists, or undefined if there is none (3.6). */
-function varsTuple(lines) {
+function varsTuple(lines: string[]): { line: number; names: string[] } | undefined {
   const start = lines.findIndex((line) => line.startsWith(VARS_DEFINITION))
   if (start < 0) return undefined
   const end = lines.findIndex((line, i) => i >= start && line.includes(">>"))
@@ -109,12 +121,12 @@ function varsTuple(lines) {
 }
 
 /** The problems in module `name`, whose text is `text`: each with its line, the guide's section, and what is wrong. */
-export function checkModule(name, text) {
+export function checkModule(name: string, text: string): Problem[] {
   const lines = text.split("\n")
-  const problems = []
+  const problems: Problem[] = []
   if (lines[0] !== header(name)) problems.push({ line: 1, rule: "3.2", message: `the header is not "${header(name)}"` })
   lines.forEach((line, i) => {
-    const report = (rule, message) => problems.push({ line: i + 1, rule, message })
+    const report = (rule: string, message: string) => problems.push({ line: i + 1, rule, message })
     const code = codeOf(line)
     const comment = line.slice(code.length)
     if (line.includes("\t")) report("4.1", "a tab")
@@ -130,26 +142,27 @@ export function checkModule(name, text) {
   else if (lines[last - 1] !== FOOTER) problems.push({ line: last, rule: "3.10", message: `the footer is not ${COLUMN_LIMIT} "="` })
   const { blocks, names } = variables(lines)
   for (const block of blocks.slice(1)) problems.push({ line: block + 1, rule: "3.6", message: "a second VARIABLES block" })
-  if (names.length > 0) {
+  const [firstBlock] = blocks
+  if (firstBlock !== undefined && names.length > 0) {
     const tuple = varsTuple(lines)
-    if (!tuple) problems.push({ line: blocks[0] + 1, rule: "3.6", message: "no vars tuple" })
+    if (!tuple) problems.push({ line: firstBlock + 1, rule: "3.6", message: "no vars tuple" })
     else if (tuple.names.join() !== names.join())
       problems.push({ line: tuple.line + 1, rule: "3.6", message: `vars is not <<${names.join(", ")}>>` })
     if (!lines.some((line) => line.startsWith(TYPE_OK_DEFINITION)))
-      problems.push({ line: blocks[0] + 1, rule: "6.1", message: "no TypeOK" })
+      problems.push({ line: firstBlock + 1, rule: "6.1", message: "no TypeOK" })
   }
   return problems
 }
 
 /** The problems in a config, whose text is `text`, for a module that declares variables or not (`hasVariables`). */
-export function checkConfig(text, hasVariables) {
+export function checkConfig(text: string, hasVariables: boolean): Problem[] {
   const lines = text.split("\n")
-  const problems = []
-  const report = (i, rule, message) => problems.push({ line: i + 1, rule, message })
-  if (!lines[0].startsWith(LINE_COMMENT)) report(0, "8.2", "no leading comment saying what the model is for")
-  const invariants = []
+  const problems: Problem[] = []
+  const report = (i: number, rule: string, message: string) => problems.push({ line: i + 1, rule, message })
+  if (!lines[0]?.startsWith(LINE_COMMENT)) report(0, "8.2", "no leading comment saying what the model is for")
+  const invariants: string[] = []
   let place = 0
-  let block
+  let block: string | undefined
   lines.forEach((line, i) => {
     if (line.length > COLUMN_LIMIT) report(i, "4.2", `${line.length} columns, over ${COLUMN_LIMIT}`)
     const code = codeOf(line).trimEnd()
@@ -157,7 +170,7 @@ export function checkConfig(text, hasVariables) {
     if (keyword === undefined) {
       if (code !== "" && !ENTRY.test(code)) report(i, "8.4, 8.5", "an entry is indented 4 spaces")
       const names = code.match(IDENTIFIER) ?? []
-      if (NAME_BLOCKS.includes(block) && names.length > 1) report(i, "8.5", "one name per line")
+      if (block !== undefined && NAME_BLOCKS.includes(block) && names.length > 1) report(i, "8.5", "one name per line")
       if (block === "INVARIANTS") invariants.push(...names)
       return
     }
@@ -179,12 +192,12 @@ export function checkConfig(text, hasVariables) {
 }
 
 /** The text of `file` in specs/. */
-function readSpec(file) {
+function readSpec(file: string): string {
   return fs.readFileSync(path.join(SPECS, file), "utf8")
 }
 
 /** The problems in `file`, a module or a config in specs/; none for another file. */
-function problemsIn(file) {
+function problemsIn(file: string): Problem[] {
   const extension = path.extname(file)
   const name = path.basename(file, extension)
   if (extension === MODULE_EXTENSION) return checkModule(name, readSpec(file))
@@ -209,4 +222,4 @@ function main() {
   console.log("specs/: no problems the script checks.")
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main()
+if (process.argv[1] === import.meta.filename) main()

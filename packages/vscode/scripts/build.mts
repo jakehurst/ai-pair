@@ -10,7 +10,7 @@ if (production) {
   fs.copyFileSync("../../LICENSE", "LICENSE")
 }
 
-const common = {
+const common: esbuild.BuildOptions = {
   bundle: true,
   platform: "node",
   format: "cjs",

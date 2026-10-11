@@ -19,9 +19,9 @@
     "onStartupFinished"
   ],
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "node scripts/build.mts",
     "test:integration": "bash scripts/integration.sh",
-    "package": "node scripts/build.mjs --production && vsce package --no-dependencies --out ../.."
+    "package": "node scripts/build.mts --production && vsce package --no-dependencies --out ../.."
   },
   "dependencies": {
     "@ai-pair/core": "*",

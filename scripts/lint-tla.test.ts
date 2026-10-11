@@ -1,8 +1,8 @@
-// Tests for scripts/lint-tla.mjs (#148): a fake spec that follows the guide passes, and each rule fires on a fake spec
+// Tests for scripts/lint-tla.ts (#148): a fake spec that follows the guide passes, and each rule fires on a fake spec
 // that breaks that rule alone.
 
 import { expect, it } from "vitest"
-import { checkConfig, checkModule } from "./lint-tla.mjs"
+import { checkConfig, checkModule, type Problem } from "./lint-tla.ts"
 
 const COLUMN_LIMIT = 80
 const FOOTER = "=".repeat(COLUMN_LIMIT)
@@ -53,14 +53,17 @@ const CONFIG = [
   "",
 ].join("\n")
 
+/** A case: the guide's section, the break, and a change that breaks that rule alone. */
+type Case = [rule: string, description: string, from: string, to: string]
+
 /** `text` with `from` replaced by `to`; throws if `from` is not in it, so a case cannot pass by changing nothing. */
-function edit(text, from, to) {
+function edit(text: string, from: string, to: string): string {
   if (!text.includes(from)) throw new Error(`not in the fake spec: ${from}`)
   return text.replace(from, to)
 }
 
 /** The guide sections that `problems` cite, in order. */
-function rules(problems) {
+function rules(problems: Problem[]): string[] {
   return problems.map((problem) => problem.rule)
 }
 
@@ -70,7 +73,7 @@ it("reports nothing for a module and a config that follow the guide", () => {
 })
 
 /** For each rule, the section, the break, and a change to MODULE that breaks that rule alone. */
-const MODULE_CASES = [
+const MODULE_CASES: readonly Case[] = [
   ["3.2", "a header with three dashes first", "---- MODULE Fake -", "--- MODULE Fake --"],
   ["3.10", "a short footer", FOOTER, "===="],
   ["2.2", "no newline at the end", `${FOOTER}\n`, FOOTER],
@@ -91,7 +94,7 @@ it.each(MODULE_CASES)("reports %s for %s in a module", (rule, _description, from
 })
 
 /** For each rule, the section, the break, and a change to CONFIG that breaks that rule alone. */
-const CONFIG_CASES = [
+const CONFIG_CASES: readonly Case[] = [
   ["8.2", "no leading comment", "\\* Fake model: counts to 2. Expected to pass.\n", ""],
   ["8.1", "no blank line before a keyword", "\n\nCONSTANTS", "\nCONSTANTS"],
   [
