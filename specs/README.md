@@ -643,16 +643,39 @@ its steps between awaits, read from the code: awaits, checks of a sleep's or
 `confirm`'s result or of `notStarted`, and effects the programmer sees. An
 interrupt comes at any await. Two defenses keep S14. A `type` cut after a chunk
 returns only what's left of it (`RestOnly`), and a `run` interrupted while its
-command keeps running counts as played (`ConsumeRun`). Unit tests cover both:
-"returns what's left of a type cut inside its second part" and "stops waiting
-when the programmer interrupts, reporting the command as still running".
+command keeps running counts as played (`ConsumeRun`).
 
 | Spec | Code |
 |---|---|
 | `Steps(k)` | each action's awaits, checks, and effects; `type` with two chunks; `type0`, a `type` with nothing to type, which returns `nothing` |
-| `Next1` | the loop in `actions` checking `isInterrupted` before each action, then the action's steps |
-| `Stopped` | `stopped(id, unplayed, effect)`: `discarded` unless an earlier action changed the screen (the `effect` flag in `actions`), or this one typed part of its text or left its command running |
+| `Complete` | `actions` returning `completed` after its last action |
+| `StopBeforeAction` | the loop in `actions` checking `isInterrupted` before each action |
+| `TakeEffect`, `Proceed` | the action's steps in `perform`: an effect, an await, or a check that finds no interrupt |
+| `StopAtCheck` | a check that finds the timeline interrupted: a sleep's result, `confirm`, or `notStarted`; a `type` cut after a chunk returns its `rest` |
+| `StopWhileRunning` | `run` interrupted while its command runs on: `consumed` |
+| `FinishAction` | the loop in `actions` going on to the next action |
+| `Stop` | `stopped(id, unplayed, effect)`: `discarded` unless an earlier action changed the screen (the `effect` flag in `actions`), or this one typed part of its text or left its command running |
 | `Interrupt` | the timeline interrupted, by an edit, a message, a turn change |
+
+Each invariant and property was proved to bite with a mutation of a copy of
+the model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Complete` reports a fifth status, "done" | `TypeOK` |
+| `RestOnly = FALSE`: a cut `type` returns all of its text | `PlaysNothingTwice` |
+| `ConsumeRun = FALSE`: an interrupted `run` whose command runs on is returned as unplayed | `PlaysNothingTwice` |
+| `StopBeforeAction` ignores the earlier actions' effects | `DiscardedMeansNothing` |
+| an await never returns: `Proceed` leaves `pc` as it was | `EventuallyReported` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `PlaysNothingTwice` | `controller.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running |
+| `DiscardedMeansNothing` | `controller.test.ts`: DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla); PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running |
+| `EventuallyReported` | `controller.test.ts`: EventuallyReported: runs a command, reporting its output and exit code with the batch |
 
 ### `Player`: a delete while the programmer edits
 

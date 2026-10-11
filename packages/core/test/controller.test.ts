@@ -908,7 +908,7 @@ describe("reports", () => {
     })
   })
 
-  it("returns what's left of a type cut inside its second part", async () => {
+  it("PlaysNothingTwice: returns what's left of a type cut inside its second part", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
     await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `f(${CURSOR_MARKER}) {}` }])
@@ -985,7 +985,7 @@ describe("reports", () => {
 })
 
 describe("interruptions", () => {
-  it("discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla)", async () => {
+  it("DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla)", async () => {
     const { editor, controller } = setup({ "a.ts": "x\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -1710,7 +1710,7 @@ describe("shared selections", () => {
 })
 
 describe("run", () => {
-  it("runs a command, reporting its output and exit code with the batch", async () => {
+  it("EventuallyReported: runs a command, reporting its output and exit code with the batch", async () => {
     const { editor, panel, controller } = setup({}, { confirmCommands: false })
     editor.commandScript["npm test"] = { ms: 3000, exitCode: 0, output: "4 passed" }
     await controller.start(undefined, "/project/sub")
@@ -1788,7 +1788,7 @@ describe("run", () => {
     expect(phases().at(-1)).toEqual(["exited", 1])
   })
 
-  it("stops waiting when the programmer interrupts, reporting the command as still running", async () => {
+  it("PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running", async () => {
     const { editor, controller } = setup({}, { confirmCommands: false })
     editor.commandScript["npm test"] = { ms: 60_000, exitCode: 0 }
     await controller.start()

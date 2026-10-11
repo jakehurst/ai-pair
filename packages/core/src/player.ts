@@ -224,8 +224,9 @@ export class Player {
   private async actions(id: number, actions: Action[], playing: Playing): Promise<BatchResult> {
     // An action so far changed something the programmer sees.
     let effect = false
+    // specs/Actions.tla: `perform` takes an action's steps (`Proceed`, `TakeEffect`), and each pass after it is `FinishAction`.
     for (let i = 0; i < actions.length; i++) {
-      // specs/Turns.tla, `Start`: an interrupt stops the batch between actions.
+      // specs/Turns.tla, `Start`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect)
       let outcome: Outcome
       try {
@@ -249,10 +250,11 @@ export class Player {
       }
       if (!outcome.nothing) effect = true
     }
+    // specs/Actions.tla, `Complete`.
     return { id, status: "completed" }
   }
 
-  /** An interrupted batch. With no visible effect yet, it counts as discarded. */
+  /** An interrupted batch (specs/Actions.tla, `Stop`). With no visible effect yet, it counts as discarded. */
   private stopped(id: number, unplayed: Action[], effect: boolean): BatchResult {
     const result: BatchResult = { id, status: effect ? "interrupted" : "discarded" }
     if (unplayed.length > 0) result.unplayed = unplayed
@@ -516,6 +518,7 @@ export class Player {
       )
     }
 
+    // specs/Actions.tla, `StopWhileRunning`: the command runs on, so it counts as played.
     if (outcome.running && signal.aborted) return { kind: "interrupted", consumed: true }
     if (result.exit_code !== undefined && result.exit_code !== 0) {
       return { kind: "error", error: "command_failed", message: `The command exited with ${result.exit_code}.`, consumed: true }
@@ -545,6 +548,7 @@ export class Player {
     let typed = ""
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]!
+      // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
       if (!(await this.delay(chunk.delay))) {
         if (typed === "") return { kind: "interrupted" }
         const rest =
