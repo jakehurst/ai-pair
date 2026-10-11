@@ -1,10 +1,10 @@
 // The editor side of the relay connection: a WebSocket server on localhost that forwards tool
 // calls to the controller, and the discovery file that lets relays find it.
 
-import { randomBytes, timingSafeEqual } from "node:crypto"
-import * as fs from "node:fs"
-import * as path from "node:path"
-import { WebSocketServer, type WebSocket } from "ws"
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { WebSocketServer, type WebSocket } from 'ws';
 import {
   parseRelayMessage,
   PROTOCOL_VERSION,
@@ -14,61 +14,61 @@ import {
   type EditorMessage,
   type RelayMessage,
   type ToolName,
-} from "@ai-pair/protocol"
-import type { Controller } from "./controller"
-import { LEFT_ARROW, RIGHT_ARROW } from "./constants"
+} from '@ai-pair/protocol';
+import type { Controller } from './controller';
+import { LEFT_ARROW, RIGHT_ARROW } from './constants';
 
 export type BridgeOptions = {
   /** Where discovery files live; see `discoveryDir()`. */
-  dir: string
-  workspaceFolders: () => string[]
+  dir: string;
+  workspaceFolders: () => string[];
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
-  trace?: (line: string) => void
+  trace?: (line: string) => void;
   /** Called when the discovery file can't be written, so relays won't find this window (#9). */
-  failed?: (error: unknown) => void
-}
+  failed?: (error: unknown) => void;
+};
 
 /** What a frame says, for `trace`: its type and id, and for a report, what it reports. */
 function describe(m: RelayMessage | EditorMessage): string {
   switch (m.type) {
-    case "call":
-      return `call ${m.id} ${m.tool}`
-    case "cancel":
-      return `cancel ${m.id}`
-    case "return":
-      return `return ${reported(m.report)}`
-    case "result":
-      return `result ${m.id} ${reported(m.result)}`
-    case "error":
-      return `error ${m.id} ${m.code}`
+    case 'call':
+      return `call ${m.id} ${m.tool}`;
+    case 'cancel':
+      return `cancel ${m.id}`;
+    case 'return':
+      return `return ${reported(m.report)}`;
+    case 'result':
+      return `result ${m.id} ${reported(m.result)}`;
+    case 'error':
+      return `error ${m.id} ${m.code}`;
     default:
-      return m.type
+      return m.type;
   }
 }
 
 function reported(r: unknown): string {
-  if (typeof r !== "object" || r === null || !("batches" in r) || !("events" in r)) return ""
-  const { batches, events } = r
+  if (typeof r !== 'object' || r === null || !('batches' in r) || !('events' in r)) return '';
+  const { batches, events } = r;
   const parts = [
     Array.isArray(batches)
-      ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(", ")}]`
-      : "",
-    Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(", ")}]` : "",
-  ]
-  if ("rejected" in r && r.rejected) parts.push("rejected")
-  if ("waiting" in r && r.waiting) parts.push("waiting")
-  return parts.filter(Boolean).join(" ")
+      ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(', ')}]`
+      : '',
+    Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(', ')}]` : '',
+  ];
+  if ('rejected' in r && r.rejected) parts.push('rejected');
+  if ('waiting' in r && r.waiting) parts.push('waiting');
+  return parts.filter(Boolean).join(' ');
 }
 
 export class Bridge {
-  private server?: WebSocketServer
-  private readonly token = randomBytes(24).toString("hex")
-  private port = 0
-  private lastFocused = Date.now()
+  private server?: WebSocketServer;
+  private readonly token = randomBytes(24).toString('hex');
+  private port = 0;
+  private lastFocused = Date.now();
   /** The relay connection whose agent started the current (or last) session. */
-  private owner: WebSocket | null = null
+  private owner: WebSocket | null = null;
   /** Sockets accepted so far, to tell them apart in `trace`. */
-  private accepted = 0
+  private accepted = 0;
 
   constructor(
     private readonly controller: Controller,
@@ -76,34 +76,34 @@ export class Bridge {
   ) {}
 
   get file(): string {
-    return path.join(this.options.dir, `${process.pid}.json`)
+    return path.join(this.options.dir, `${process.pid}.json`);
   }
 
   async start(): Promise<void> {
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 })
-    this.server = server
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    this.server = server;
     await new Promise<void>((resolve, reject) => {
-      server.once("listening", resolve)
-      server.once("error", reject)
-    })
-    const address = server.address()
-    this.port = typeof address === "object" && address ? address.port : 0
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+    const address = server.address();
+    this.port = typeof address === 'object' && address ? address.port : 0;
     // A relay connects (specs/Resume.tla, `Connect`).
-    server.on("connection", (ws) => this.accept(ws))
+    server.on('connection', (ws) => this.accept(ws));
     // specs/Discovery.tla, `OpenWindow`: if the write fails, the window runs, and no relay finds it.
-    this.writeDiscovery()
+    this.writeDiscovery();
   }
 
   /** Call when the window gains focus, so relays prefer it among windows with the same folder. */
   focused(): void {
-    this.lastFocused = Date.now()
+    this.lastFocused = Date.now();
     // specs/Discovery.tla, `Focus`; after a write that failed, `ListWindow`.
-    this.writeDiscovery()
+    this.writeDiscovery();
   }
 
   /** Call when the workspace folders change. */
   writeDiscovery(): void {
-    if (!this.server) return
+    if (!this.server) return;
     const discovery: Discovery = {
       pid: process.pid,
       workspaceFolders: this.options.workspaceFolders(),
@@ -111,162 +111,162 @@ export class Bridge {
       token: this.token,
       protocolVersion: PROTOCOL_VERSION,
       lastFocused: this.lastFocused,
-    }
+    };
     // Reported, not thrown: it runs on every focus, and the server works without it (#9).
     try {
-      fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 })
+      fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 });
       // Written beside it, then renamed over it, so a relay reading it never sees it half written
       // (#72, `AtomicWrite` in specs/Discovery.tla). Not a `.json`, so relays don't read the temporary one.
-      const written = `${this.file}.tmp`
-      fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 })
-      fs.renameSync(written, this.file)
+      const written = `${this.file}.tmp`;
+      fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 });
+      fs.renameSync(written, this.file);
     } catch (e) {
-      this.options.failed?.(e)
+      this.options.failed?.(e);
     }
   }
 
   dispose(): void {
     // specs/Discovery.tla, `CloseWindow`: the file goes with the window.
     try {
-      fs.unlinkSync(this.file)
+      fs.unlinkSync(this.file);
     } catch {
       // Already gone.
     }
-    for (const client of this.server?.clients ?? []) client.terminate()
-    this.server?.close()
-    this.server = undefined
+    for (const client of this.server?.clients ?? []) client.terminate();
+    this.server?.close();
+    this.server = undefined;
   }
 
   private accept(ws: WebSocket): void {
-    let authenticated = false
-    const calls = new Map<number, AbortController>()
-    const socket = ++this.accepted
-    const trace = this.options.trace
+    let authenticated = false;
+    const calls = new Map<number, AbortController>();
+    const socket = ++this.accepted;
+    const trace = this.options.trace;
     const send = (m: EditorMessage) => {
-      const open = ws.readyState === ws.OPEN
-      trace?.(`socket ${socket} ${RIGHT_ARROW} ${describe(m)}${open ? "" : " (not sent: closed)"}`)
-      if (open) ws.send(JSON.stringify(m))
-    }
+      const open = ws.readyState === ws.OPEN;
+      trace?.(`socket ${socket} ${RIGHT_ARROW} ${describe(m)}${open ? '' : ' (not sent: closed)'}`);
+      if (open) ws.send(JSON.stringify(m));
+    };
 
-    ws.on("message", (data) => {
+    ws.on('message', (data) => {
       // A frame that isn't a message is dropped (#30).
-      const m = parseRelayMessage(data)
-      if (!m) return
-      trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(m)}`)
+      const m = parseRelayMessage(data);
+      if (!m) return;
+      trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(m)}`);
       if (!authenticated) {
-        if (m.type !== "hello" || !this.tokenMatches(m.token)) {
-          send({ type: "rejected", reason: "Authentication failed." })
-          ws.close()
+        if (m.type !== 'hello' || !this.tokenMatches(m.token)) {
+          send({ type: 'rejected', reason: 'Authentication failed.' });
+          ws.close();
         } else if (m.protocolVersion !== PROTOCOL_VERSION) {
           send({
-            type: "rejected",
+            type: 'rejected',
             reason: `Protocol version mismatch (editor ${PROTOCOL_VERSION}, relay ${m.protocolVersion}). The extension was updated: reload the VS Code window and restart the agent.`,
-          })
-          ws.close()
+          });
+          ws.close();
         } else {
-          authenticated = true
-          send({ type: "welcome" })
+          authenticated = true;
+          send({ type: 'welcome' });
         }
-        return
+        return;
       }
-      if (m.type === "cancel") {
-        calls.get(m.id)?.abort()
-      } else if (m.type === "return") {
+      if (m.type === 'cancel') {
+        calls.get(m.id)?.abort();
+      } else if (m.type === 'return') {
         // specs/Bridge.tla, `Restore`: only the owner's socket brings its session's report back.
-        if (this.owner === ws) this.controller.restore(m.report, m.mayRepeat === true)
-      } else if (m.type === "call") {
-        const abort = new AbortController()
-        calls.set(m.id, abort)
+        if (this.owner === ws) this.controller.restore(m.report, m.mayRepeat === true);
+      } else if (m.type === 'call') {
+        const abort = new AbortController();
+        calls.set(m.id, abort);
         this.dispatch(ws, m.tool, m.args ?? {}, abort.signal)
           .then(
-            (result) => send({ type: "result", id: m.id, result }),
+            (result) => send({ type: 'result', id: m.id, result }),
             (e: unknown) =>
               send({
-                type: "error",
+                type: 'error',
                 id: m.id,
-                code: e instanceof ToolError ? e.code : "internal",
+                code: e instanceof ToolError ? e.code : 'internal',
                 message: e instanceof Error ? e.message : String(e),
               }),
           )
-          .finally(() => calls.delete(m.id))
+          .finally(() => calls.delete(m.id));
       }
-    })
+    });
 
-    ws.on("close", () => {
-      trace?.(`socket ${socket} closed`)
+    ws.on('close', () => {
+      trace?.(`socket ${socket} closed`);
       // specs/Bridge.tla, `Close`: the owner's socket gone, the session is suspended, or closed if it ended.
-      for (const abort of calls.values()) abort.abort()
+      for (const abort of calls.values()) abort.abort();
       if (this.owner === ws) {
-        this.owner = null
-        this.controller.disconnect()
+        this.owner = null;
+        this.controller.disconnect();
       }
-    })
+    });
   }
 
   private async dispatch(ws: WebSocket, tool: ToolName, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
-    const c = this.controller
-    if (tool === "start") {
+    const c = this.controller;
+    if (tool === 'start') {
       // specs/Bridge.tla, `BeginStart`: refused while another socket's session is active.
       if (c.isActive && !c.isSuspended && this.owner !== ws) {
-        throw new ToolError("session_active", "Another agent is already pairing in this editor window.")
+        throw new ToolError('session_active', 'Another agent is already pairing in this editor window.');
       }
-      const report = await c.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules))
+      const report = await c.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules));
       // specs/Bridge.tla, `FinishStart`: the socket may have closed while the session started, when its close handler didn't own it yet:
       // suspend the session rather than leave it to no one (#42, #25). From here to `owner`, nothing awaits. The owner is
       // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
-        this.owner = null
-        c.disconnect()
-        throw new ToolError("no_session", "The connection closed while the session started.")
+        this.owner = null;
+        c.disconnect();
+        throw new ToolError('no_session', 'The connection closed while the session started.');
       }
-      this.owner = ws
-      return report
+      this.owner = ws;
+      return report;
     }
     if (this.owner !== ws) {
-      throw new ToolError("no_session", "No pairing session is active. Call `start` to begin one.")
+      throw new ToolError('no_session', 'No pairing session is active. Call `start` to begin one.');
     }
     switch (tool) {
-      case "step":
-        if (!Array.isArray(args.actions)) throw new ToolError("invalid_arguments", "`actions` must be an array.")
+      case 'step':
+        if (!Array.isArray(args.actions)) throw new ToolError('invalid_arguments', '`actions` must be an array.');
         // Each action is checked as it's rehearsed and played; the relay's schema checked them too.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return c.step(args.actions as Action[], signal)
-      case "listen":
-        return c.listen(signal)
-      case "end":
-        return c.end(optionalString(args.summary), signal)
-      case "read":
-        if (typeof args.file !== "string") throw new ToolError("invalid_arguments", "`file` must be a string.")
-        return c.read(args.file, optionalNumber(args.from_line), optionalNumber(args.to_line))
-      case "calibrate": {
-        if (typeof args.title !== "string" || typeof args.file !== "string") {
-          throw new ToolError("invalid_arguments", "`title` and `file` must be strings.")
+        return c.step(args.actions as Action[], signal);
+      case 'listen':
+        return c.listen(signal);
+      case 'end':
+        return c.end(optionalString(args.summary), signal);
+      case 'read':
+        if (typeof args.file !== 'string') throw new ToolError('invalid_arguments', '`file` must be a string.');
+        return c.read(args.file, optionalNumber(args.from_line), optionalNumber(args.to_line));
+      case 'calibrate': {
+        if (typeof args.title !== 'string' || typeof args.file !== 'string') {
+          throw new ToolError('invalid_arguments', '`title` and `file` must be strings.');
         }
-        const notice = optionalString(args.notice)
-        const text = fs.readFileSync(c.resolveFile(args.file), "utf8")
-        return c.calibrate({ title: args.title, text, ...(notice ? { notice } : {}) })
+        const notice = optionalString(args.notice);
+        const text = fs.readFileSync(c.resolveFile(args.file), 'utf8');
+        return c.calibrate({ title: args.title, text, ...(notice ? { notice } : {}) });
       }
       default:
-        throw new ToolError("invalid_arguments", `Unknown tool: ${String(tool)}`)
+        throw new ToolError('invalid_arguments', `Unknown tool: ${String(tool)}`);
     }
   }
 
   private tokenMatches(token: unknown): boolean {
-    if (typeof token !== "string") return false
-    const a = Buffer.from(token)
-    const b = Buffer.from(this.token)
-    return a.length === b.length && timingSafeEqual(a, b)
+    if (typeof token !== 'string') return false;
+    const a = Buffer.from(token);
+    const b = Buffer.from(this.token);
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 }
 
 function optionalString(v: unknown): string | undefined {
-  return typeof v === "string" ? v : undefined
+  return typeof v === 'string' ? v : undefined;
 }
 
 function optionalStrings(v: unknown): string[] | undefined {
-  return Array.isArray(v) && v.every((s) => typeof s === "string") ? v : undefined
+  return Array.isArray(v) && v.every((s) => typeof s === 'string') ? v : undefined;
 }
 
 function optionalNumber(v: unknown): number | undefined {
-  return typeof v === "number" ? v : undefined
+  return typeof v === 'number' ? v : undefined;
 }

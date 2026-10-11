@@ -1,9 +1,9 @@
-import * as nodePath from "node:path"
-import { vi } from "vitest"
-import { withinFolder } from "@ai-pair/protocol"
-import { defaultConfig, type Config } from "../src/config"
-import { Controller } from "../src/controller"
-import { MissingFile } from "../src/ports"
+import * as nodePath from 'node:path';
+import { vi } from 'vitest';
+import { withinFolder } from '@ai-pair/protocol';
+import { defaultConfig, type Config } from '../src/config';
+import { Controller } from '../src/controller';
+import { MissingFile } from '../src/ports';
 import type {
   AgentState,
   CommandOutcome,
@@ -14,142 +14,142 @@ import type {
   PanelEvent,
   PanelPort,
   RunOptions,
-} from "../src/ports"
+} from '../src/ports';
 
 /** `/project` in this platform's form (`C:\project` on Windows), as the controller resolves it. */
-const ROOT = nodePath.resolve("/project")
+const ROOT = nodePath.resolve('/project');
 
 export class FakeEditor implements EditorPort {
-  files = new Map<string, string>()
-  dirty = new Set<string>()
-  saved: string[] = []
-  edits: { file: string; offset: number; deleteLength: number; text: string; options: EditOptions }[] = []
-  shown: string[] = []
-  cursor: CursorView | null = null
-  state: AgentState | null = null
-  point: { file: string; start: number; end: number } | null = null
-  controller!: Controller
+  files = new Map<string, string>();
+  dirty = new Set<string>();
+  saved: string[] = [];
+  edits: { file: string; offset: number; deleteLength: number; text: string; options: EditOptions }[] = [];
+  shown: string[] = [];
+  cursor: CursorView | null = null;
+  state: AgentState | null = null;
+  point: { file: string; start: number; end: number } | null = null;
+  controller!: Controller;
 
   resolvePath(file: string): string {
-    return nodePath.resolve(ROOT, file)
+    return nodePath.resolve(ROOT, file);
   }
   displayPath(file: string): string {
-    const inside = withinFolder(ROOT, file)
-    return inside === undefined ? file : nodePath.relative(ROOT, inside)
+    const inside = withinFolder(ROOT, file);
+    return inside === undefined ? file : nodePath.relative(ROOT, inside);
   }
   async getText(file: string): Promise<string> {
-    const text = this.files.get(file)
-    if (text === undefined) throw new MissingFile(file)
-    return text
+    const text = this.files.get(file);
+    if (text === undefined) throw new MissingFile(file);
+    return text;
   }
   /** Files the editor stores with CRLF, whatever they contain so far. */
-  crlf = new Set<string>()
+  crlf = new Set<string>();
   async eol(file: string): Promise<string> {
-    return this.crlf.has(file) ? "\r\n" : "\n"
+    return this.crlf.has(file) ? '\r\n' : '\n';
   }
   async isDirty(file: string): Promise<boolean> {
-    return this.dirty.has(file)
+    return this.dirty.has(file);
   }
   async show(file: string): Promise<void> {
-    if (!this.files.has(file)) this.files.set(file, "")
-    if (this.shown.at(-1) !== file) this.shown.push(file)
+    if (!this.files.has(file)) this.files.set(file, '');
+    if (this.shown.at(-1) !== file) this.shown.push(file);
   }
   async edit(file: string, offset: number, deleteLength: number, text: string, options: EditOptions): Promise<void> {
-    const old = await this.getText(file)
-    this.files.set(file, old.slice(0, offset) + text + old.slice(offset + deleteLength))
-    this.dirty.add(file)
-    this.edits.push({ file, offset, deleteLength, text, options })
+    const old = await this.getText(file);
+    this.files.set(file, old.slice(0, offset) + text + old.slice(offset + deleteLength));
+    this.dirty.add(file);
+    this.edits.push({ file, offset, deleteLength, text, options });
   }
   async save(file: string): Promise<void> {
-    this.dirty.delete(file)
-    this.saved.push(file)
+    this.dirty.delete(file);
+    this.saved.push(file);
   }
-  focus: Focus = "cursor"
+  focus: Focus = 'cursor';
   renderCursor(cursor: CursorView | null, state: AgentState, focus: Focus): void {
-    this.cursor = cursor
-    this.state = state
-    this.focus = focus
+    this.cursor = cursor;
+    this.state = state;
+    this.focus = focus;
   }
   renderPoint(point: { file: string; start: number; end: number } | null): void {
-    this.point = point
+    this.point = point;
   }
-  reveals = 0
+  reveals = 0;
   /** What the view was following at the last reveal. */
-  revealedFocus: Focus | null = null
+  revealedFocus: Focus | null = null;
   reveal(): void {
-    this.reveals++
-    this.revealedFocus = this.focus
+    this.reveals++;
+    this.revealedFocus = this.focus;
   }
-  follows = 0
+  follows = 0;
   follow(): void {
-    this.follows++
+    this.follows++;
   }
 
   /** `unsaved`: the files with unsaved changes when the command started. */
-  commands: { command: string; options: RunOptions; unsaved: string[] }[] = []
+  commands: { command: string; options: RunOptions; unsaved: string[] }[] = [];
   /**
    * How each command behaves: its terminal takes `startMs` to get ready, then the command takes `ms`
    * and exits with `exitCode`, having printed `output`.
    */
-  commandScript: Record<string, { ms: number; startMs?: number; exitCode?: number; output?: string }> = {}
+  commandScript: Record<string, { ms: number; startMs?: number; exitCode?: number; output?: string }> = {};
   async runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
-    const script = this.commandScript[command] ?? { ms: 0, exitCode: 0 }
+    const script = this.commandScript[command] ?? { ms: 0, exitCode: 0 };
     if (script.startMs) {
       await new Promise<void>((resolve) => {
-        setTimeout(resolve, script.startMs)
-        options.signal.addEventListener("abort", () => resolve())
-      })
-      if (options.signal.aborted) return { output: "", notStarted: true }
+        setTimeout(resolve, script.startMs);
+        options.signal.addEventListener('abort', () => resolve());
+      });
+      if (options.signal.aborted) return { output: '', notStarted: true };
     }
-    this.commands.push({ command, options, unsaved: [...this.dirty] })
-    const output = script.output ?? ""
-    const started = Date.now()
+    this.commands.push({ command, options, unsaved: [...this.dirty] });
+    const output = script.output ?? '';
+    const started = Date.now();
     const finished = await new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => resolve(script.ms <= options.waitMs), Math.min(script.ms, options.waitMs))
-      options.signal.addEventListener("abort", () => {
-        clearTimeout(timer)
-        resolve(false)
-      })
-    })
-    if (finished) return { exitCode: script.exitCode, output, shell: "bash" }
+      const timer = setTimeout(() => resolve(script.ms <= options.waitMs), Math.min(script.ms, options.waitMs));
+      options.signal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        resolve(false);
+      });
+    });
+    if (finished) return { exitCode: script.exitCode, output, shell: 'bash' };
     const exited = new Promise<number | undefined>((resolve) => {
-      setTimeout(() => resolve(script.exitCode), Math.max(0, script.ms - (Date.now() - started)))
-    })
-    return { output, running: true, exited }
+      setTimeout(() => resolve(script.exitCode), Math.max(0, script.ms - (Date.now() - started)));
+    });
+    return { output, running: true, exited };
   }
 
   /** The programmer types into a file. */
   userEdit(name: string, offset: number, deleteLength: number, text: string): void {
-    this.change("programmer", name, offset, deleteLength, text)
+    this.change('programmer', name, offset, deleteLength, text);
   }
 
   /** Something other than the programmer changes a file: a tool, a formatter. */
   otherEdit(name: string, offset: number, deleteLength: number, text: string): void {
-    this.change("other", name, offset, deleteLength, text)
+    this.change('other', name, offset, deleteLength, text);
   }
 
-  private change(by: "programmer" | "other", name: string, offset: number, deleteLength: number, text: string): void {
-    const file = this.resolvePath(name)
-    const before = this.files.get(file) ?? ""
-    const after = before.slice(0, offset) + text + before.slice(offset + deleteLength)
-    this.files.set(file, after)
-    const changes = [{ offset, deleteLength, text }]
-    if (by === "programmer") this.controller.userEdit(file, before, after, changes)
-    else this.controller.otherEdit(file, before, after, changes)
+  private change(by: 'programmer' | 'other', name: string, offset: number, deleteLength: number, text: string): void {
+    const file = this.resolvePath(name);
+    const before = this.files.get(file) ?? '';
+    const after = before.slice(0, offset) + text + before.slice(offset + deleteLength);
+    this.files.set(file, after);
+    const changes = [{ offset, deleteLength, text }];
+    if (by === 'programmer') this.controller.userEdit(file, before, after, changes);
+    else this.controller.otherEdit(file, before, after, changes);
   }
 
   text(name: string): string {
-    return this.files.get(this.resolvePath(name)) ?? ""
+    return this.files.get(this.resolvePath(name)) ?? '';
   }
 }
 
 export class FakePanel implements PanelPort {
-  events: PanelEvent[] = []
+  events: PanelEvent[] = [];
   post(event: PanelEvent): void {
-    this.events.push(event)
+    this.events.push(event);
   }
   says(): string[] {
-    return this.events.flatMap((e) => (e.type === "say" ? [e.text] : []))
+    return this.events.flatMap((e) => (e.type === 'say' ? [e.text] : []));
   }
 }
 
@@ -174,46 +174,46 @@ export const testConfig: Config = {
   },
   navigatorIdleMs: 1000,
   random: () => 0.5,
-}
+};
 
 export function setup(files: Record<string, string> = {}, config: Partial<Config> = {}) {
-  const editor = new FakeEditor()
-  const panel = new FakePanel()
-  for (const [name, text] of Object.entries(files)) editor.files.set(editor.resolvePath(name), text)
-  const controller = new Controller(editor, panel, { ...testConfig, ...config })
-  editor.controller = controller
-  return { editor, panel, controller }
+  const editor = new FakeEditor();
+  const panel = new FakePanel();
+  for (const [name, text] of Object.entries(files)) editor.files.set(editor.resolvePath(name), text);
+  const controller = new Controller(editor, panel, { ...testConfig, ...config });
+  editor.controller = controller;
+  return { editor, panel, controller };
 }
 
 /** Tracks a promise so tests can check whether it has settled yet. */
 export function track<T>(promise: Promise<T>) {
-  const t = { done: false, value: undefined as T | undefined, error: undefined as unknown }
+  const t = { done: false, value: undefined as T | undefined, error: undefined as unknown };
   promise.then(
     (v) => {
-      t.done = true
-      t.value = v
+      t.done = true;
+      t.value = v;
     },
     (e) => {
-      t.done = true
-      t.error = e
+      t.done = true;
+      t.error = e;
     },
-  )
-  return t
+  );
+  return t;
 }
 
 /** Advances fake time until the promise settles. */
 export async function until<T>(promise: Promise<T>, maxMs = 120_000): Promise<T> {
-  const t = track(promise)
+  const t = track(promise);
   for (let elapsed = 0; !t.done && elapsed < maxMs; elapsed += 10) {
-    await vi.advanceTimersByTimeAsync(10)
+    await vi.advanceTimersByTimeAsync(10);
   }
-  if (!t.done) throw new Error(`Still pending after ${maxMs} ms`)
-  if (t.error !== undefined) throw t.error
+  if (!t.done) throw new Error(`Still pending after ${maxMs} ms`);
+  if (t.error !== undefined) throw t.error;
   // `track` keeps the value of the promise it was given, a `T`.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return t.value as T
+  return t.value as T;
 }
 
 export async function advance(ms: number): Promise<void> {
-  await vi.advanceTimersByTimeAsync(ms)
+  await vi.advanceTimersByTimeAsync(ms);
 }

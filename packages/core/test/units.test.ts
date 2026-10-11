@@ -1,259 +1,259 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { CURSOR_MARKER } from "@ai-pair/protocol"
-import { resolveSpan, resolveSpot } from "../src/places"
-import { applyChange, LineIds } from "../src/lines"
-import { boundedDiff, MAX_DIFF_LINES } from "../src/diff"
-import { planTyping, readingTime } from "../src/typing"
-import { terminalText } from "../src/text"
-import { samePath, withinFolder, type PathStyle } from "../src/paths"
-import { displayPath } from "../src/player"
-import { Timeline } from "../src/timeline"
-import { FakeEditor } from "./fake"
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CURSOR_MARKER } from '@ai-pair/protocol';
+import { resolveSpan, resolveSpot } from '../src/places';
+import { applyChange, LineIds } from '../src/lines';
+import { boundedDiff, MAX_DIFF_LINES } from '../src/diff';
+import { planTyping, readingTime } from '../src/typing';
+import { terminalText } from '../src/text';
+import { samePath, withinFolder, type PathStyle } from '../src/paths';
+import { displayPath } from '../src/player';
+import { Timeline } from '../src/timeline';
+import { FakeEditor } from './fake';
 
 // Terminal output as VS Code's shell integration reports it: OSC 633 marks, and ANSI colors.
-const COMMAND_OUTPUT_START = "\x1b]633;C\x07"
-const COMMAND_FINISHED_OK = "\x1b]633;D;0\x07"
-const GREEN = "\x1b[32m"
-const RESET_COLOR = "\x1b[0m"
+const COMMAND_OUTPUT_START = '\x1b]633;C\x07';
+const COMMAND_FINISHED_OK = '\x1b]633;D;0\x07';
+const GREEN = '\x1b[32m';
+const RESET_COLOR = '\x1b[0m';
 // Line redraws, as Prettier and npm write them.
-const ERASE_LINE = "\x1b[2K"
-const ERASE_TO_LINE_END = "\x1b[0K"
-const CURSOR_TO_COLUMN_1 = "\x1b[1G"
+const ERASE_LINE = '\x1b[2K';
+const ERASE_TO_LINE_END = '\x1b[0K';
+const CURSOR_TO_COLUMN_1 = '\x1b[1G';
 
-describe("terminal text", () => {
-  it("drops colors and shell integration sequences, and resolves progress overwrites", () => {
-    const raw = `${COMMAND_OUTPUT_START}${GREEN}ok${RESET_COLOR} 4 passed\r\n 10%\r 50%\r100%\r\n${COMMAND_FINISHED_OK}`
-    expect(terminalText(raw)).toBe("ok 4 passed\n100%")
-  })
+describe('terminal text', () => {
+  it('drops colors and shell integration sequences, and resolves progress overwrites', () => {
+    const raw = `${COMMAND_OUTPUT_START}${GREEN}ok${RESET_COLOR} 4 passed\r\n 10%\r 50%\r100%\r\n${COMMAND_FINISHED_OK}`;
+    expect(terminalText(raw)).toBe('ok 4 passed\n100%');
+  });
 
-  it("resolves a line redrawn by moving the cursor to column 1", () => {
-    const prettier = `Checking formatting...\r\na.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}b.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}All matched files use Prettier code style!\r\n`
-    const npmSpinner = `/${CURSOR_TO_COLUMN_1}${ERASE_TO_LINE_END}`
-    expect(terminalText(prettier + npmSpinner)).toBe("Checking formatting...\nAll matched files use Prettier code style!")
-  })
-})
+  it('resolves a line redrawn by moving the cursor to column 1', () => {
+    const prettier = `Checking formatting...\r\na.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}b.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}All matched files use Prettier code style!\r\n`;
+    const npmSpinner = `/${CURSOR_TO_COLUMN_1}${ERASE_TO_LINE_END}`;
+    expect(terminalText(prettier + npmSpinner)).toBe('Checking formatting...\nAll matched files use Prettier code style!');
+  });
+});
 
-describe("paths", () => {
-  const windows: PathStyle = { ignoreCase: true, sep: "\\" }
-  const mac: PathStyle = { ignoreCase: true, sep: "/" }
-  const linux: PathStyle = { ignoreCase: false, sep: "/" }
+describe('paths', () => {
+  const windows: PathStyle = { ignoreCase: true, sep: '\\' };
+  const mac: PathStyle = { ignoreCase: true, sep: '/' };
+  const linux: PathStyle = { ignoreCase: false, sep: '/' };
 
-  it("ignores case on Windows and macOS, not on Linux", () => {
-    expect(samePath("C:\\Users\\me\\a.ts", "c:\\users\\me\\a.ts", windows)).toBe(true)
-    expect(samePath("/Users/me/A.ts", "/users/me/a.ts", mac)).toBe(true)
-    expect(samePath("/home/me/A.ts", "/home/me/a.ts", linux)).toBe(false)
-  })
+  it('ignores case on Windows and macOS, not on Linux', () => {
+    expect(samePath('C:\\Users\\me\\a.ts', 'c:\\users\\me\\a.ts', windows)).toBe(true);
+    expect(samePath('/Users/me/A.ts', '/users/me/a.ts', mac)).toBe(true);
+    expect(samePath('/home/me/A.ts', '/home/me/a.ts', linux)).toBe(false);
+  });
 
-  it("spells a file inside a folder the way the folder is spelled", () => {
-    const folder = "c:\\Users\\me\\Desktop\\proj"
-    expect(withinFolder(folder, "C:\\users\\me\\desktop\\proj\\src\\A.ts", windows)).toBe("c:\\Users\\me\\Desktop\\proj\\src\\A.ts")
-    expect(withinFolder(folder, "C:\\USERS\\ME\\DESKTOP\\PROJ", windows)).toBe(folder)
-    expect(withinFolder("/Users/me/Proj", "/users/me/proj/a.ts", mac)).toBe("/Users/me/Proj/a.ts")
-    expect(withinFolder("/home/me/proj", "/home/me/proj/a.ts", linux)).toBe("/home/me/proj/a.ts")
-  })
+  it('spells a file inside a folder the way the folder is spelled', () => {
+    const folder = 'c:\\Users\\me\\Desktop\\proj';
+    expect(withinFolder(folder, 'C:\\users\\me\\desktop\\proj\\src\\A.ts', windows)).toBe('c:\\Users\\me\\Desktop\\proj\\src\\A.ts');
+    expect(withinFolder(folder, 'C:\\USERS\\ME\\DESKTOP\\PROJ', windows)).toBe(folder);
+    expect(withinFolder('/Users/me/Proj', '/users/me/proj/a.ts', mac)).toBe('/Users/me/Proj/a.ts');
+    expect(withinFolder('/home/me/proj', '/home/me/proj/a.ts', linux)).toBe('/home/me/proj/a.ts');
+  });
 
-  it("leaves files outside the folder alone", () => {
-    expect(withinFolder("c:\\proj", "c:\\project\\a.ts", windows)).toBeUndefined()
-    expect(withinFolder("c:\\proj", "d:\\proj\\a.ts", windows)).toBeUndefined()
-    expect(withinFolder("/home/me/Proj", "/home/me/proj/a.ts", linux)).toBeUndefined()
-  })
+  it('leaves files outside the folder alone', () => {
+    expect(withinFolder('c:\\proj', 'c:\\project\\a.ts', windows)).toBeUndefined();
+    expect(withinFolder('c:\\proj', 'd:\\proj\\a.ts', windows)).toBeUndefined();
+    expect(withinFolder('/home/me/Proj', '/home/me/proj/a.ts', linux)).toBeUndefined();
+  });
 
-  it("shows a file in a folder whose name starts with two dots by its path in the root (#5)", () => {
-    const editor = new FakeEditor()
-    expect(displayPath(editor, "/proj", "/proj/..cache/a.ts")).toBe("..cache/a.ts")
-    expect(displayPath(editor, "/proj", "/other/a.ts")).toBe("/other/a.ts")
-  })
+  it('shows a file in a folder whose name starts with two dots by its path in the root (#5)', () => {
+    const editor = new FakeEditor();
+    expect(displayPath(editor, '/proj', '/proj/..cache/a.ts')).toBe('..cache/a.ts');
+    expect(displayPath(editor, '/proj', '/other/a.ts')).toBe('/other/a.ts');
+  });
 
-  it("handles a folder that is a drive root", () => {
-    expect(withinFolder("c:\\", "C:\\proj\\a.ts", windows)).toBe("c:\\proj\\a.ts")
-    expect(withinFolder("/", "/home/me/a.ts", linux)).toBe("/home/me/a.ts")
-  })
-})
+  it('handles a folder that is a drive root', () => {
+    expect(withinFolder('c:\\', 'C:\\proj\\a.ts', windows)).toBe('c:\\proj\\a.ts');
+    expect(withinFolder('/', '/home/me/a.ts', linux)).toBe('/home/me/a.ts');
+  });
+});
 
-describe("places", () => {
-  const text = "a = 1\nb = 1\nc = 1\n"
+describe('places', () => {
+  const text = 'a = 1\nb = 1\nc = 1\n';
 
   it("finds a span's text on its line", () => {
-    expect(resolveSpan(text, { line: 2, text: "b = " })).toEqual({ ok: true, range: { start: 6, end: 10 } })
+    expect(resolveSpan(text, { line: 2, text: 'b = ' })).toEqual({ ok: true, range: { start: 6, end: 10 } });
     // Only on its line: elsewhere, it's listed.
-    expect(resolveSpan(text, { line: 2, text: "1" })).toEqual({ ok: true, range: { start: 10, end: 11 } })
-    expect(resolveSpan(text, { line: 1, text: "c = 1" })).toMatchObject({
+    expect(resolveSpan(text, { line: 2, text: '1' })).toEqual({ ok: true, range: { start: 10, end: 11 } });
+    expect(resolveSpan(text, { line: 1, text: 'c = 1' })).toMatchObject({
       ok: false,
-      kind: "not_found",
-      message: "The text isn't on line 1: line 1 reads \"a = 1\". It's on these lines:",
-      candidates: [{ line: 3, context: "c = 1" }],
-    })
-    expect(resolveSpan(text, { line: 1, text: "d" })).toMatchObject({
+      kind: 'not_found',
+      message: 'The text isn\'t on line 1: line 1 reads "a = 1". It\'s on these lines:',
+      candidates: [{ line: 3, context: 'c = 1' }],
+    });
+    expect(resolveSpan(text, { line: 1, text: 'd' })).toMatchObject({
       ok: false,
-      kind: "not_found",
+      kind: 'not_found',
       message: 'Text not found: "d"; line 1 reads "a = 1"',
-    })
-    expect(resolveSpan(text, { line: 1, text: " " })).toMatchObject({
+    });
+    expect(resolveSpan(text, { line: 1, text: ' ' })).toMatchObject({
       ok: false,
-      kind: "ambiguous",
-      message: expect.stringContaining("2 times on line 1"),
-    })
-  })
+      kind: 'ambiguous',
+      message: expect.stringContaining('2 times on line 1'),
+    });
+  });
 
   it("takes a span's text starting on its line, which may go on past it", () => {
-    expect(resolveSpan(text, { line: 1, text: "1\nb" })).toEqual({ ok: true, range: { start: 4, end: 7 } })
-  })
+    expect(resolveSpan(text, { line: 1, text: '1\nb' })).toEqual({ ok: true, range: { start: 4, end: 7 } });
+  });
 
-  it("resolves a range through the first `through` after `from`", () => {
-    expect(resolveSpan(text, { line: 2, from: "b", through: "1" })).toEqual({ ok: true, range: { start: 6, end: 11 } })
-    expect(resolveSpan(text, { line: 1, from: "a", through: "c = " })).toEqual({ ok: true, range: { start: 0, end: 16 } })
-    expect(resolveSpan(text, { line: 3, from: "c", through: "b" })).toMatchObject({ ok: false, kind: "not_found" })
-  })
+  it('resolves a range through the first `through` after `from`', () => {
+    expect(resolveSpan(text, { line: 2, from: 'b', through: '1' })).toEqual({ ok: true, range: { start: 6, end: 11 } });
+    expect(resolveSpan(text, { line: 1, from: 'a', through: 'c = ' })).toEqual({ ok: true, range: { start: 0, end: 16 } });
+    expect(resolveSpan(text, { line: 3, from: 'c', through: 'b' })).toMatchObject({ ok: false, kind: 'not_found' });
+  });
 
-  it("ignores the cursor marker in a span, so code can be copied from a report", () => {
-    expect(resolveSpan(text, { line: 2, text: `b =${CURSOR_MARKER} 1` })).toEqual({ ok: true, range: { start: 6, end: 11 } })
-  })
+  it('ignores the cursor marker in a span, so code can be copied from a report', () => {
+    expect(resolveSpan(text, { line: 2, text: `b =${CURSOR_MARKER} 1` })).toEqual({ ok: true, range: { start: 6, end: 11 } });
+  });
 
-  it("resolves a spot between two texts that occur together, on its line only", () => {
-    expect(resolveSpot(text, { at: `b = ${CURSOR_MARKER}1`, line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } })
-    expect(resolveSpot(text, { at: `${CURSOR_MARKER}c`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } })
-    expect(resolveSpot(text, { at: ` = ${CURSOR_MARKER}1`, line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } })
+  it('resolves a spot between two texts that occur together, on its line only', () => {
+    expect(resolveSpot(text, { at: `b = ${CURSOR_MARKER}1`, line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } });
+    expect(resolveSpot(text, { at: `${CURSOR_MARKER}c`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } });
+    expect(resolveSpot(text, { at: ` = ${CURSOR_MARKER}1`, line: 2 })).toEqual({ ok: true, range: { start: 10, end: 10 } });
     expect(resolveSpot(text, { at: `b${CURSOR_MARKER} = `, line: 3 })).toMatchObject({
       ok: false,
-      kind: "not_found",
-      candidates: [{ line: 2, context: "b = 1" }],
-    })
+      kind: 'not_found',
+      candidates: [{ line: 2, context: 'b = 1' }],
+    });
     // The line is the one the spot is on, after a `before` that ends with a newline.
-    expect(resolveSpot(text, { at: `b = 1\n${CURSOR_MARKER}`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } })
-  })
-})
+    expect(resolveSpot(text, { at: `b = 1\n${CURSOR_MARKER}`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } });
+  });
+});
 
 /** Which line of `text` (from 1) each line is after the change, or 0 for a new one. */
 function follow(text: string, offset: number, deleteLength: number, insert: string): number[] {
-  const ids = text.split("\n").map((_, i) => -(i + 1))
-  const after = applyChange({ text, ids }, { offset, deleteLength, text: insert })
-  expect(after.text).toBe(text.slice(0, offset) + insert + text.slice(offset + deleteLength))
-  return after.ids.map((id) => (id < 0 ? -id : 0))
+  const ids = text.split('\n').map((_, i) => -(i + 1));
+  const after = applyChange({ text, ids }, { offset, deleteLength, text: insert });
+  expect(after.text).toBe(text.slice(0, offset) + insert + text.slice(offset + deleteLength));
+  return after.ids.map((id) => (id < 0 ? -id : 0));
 }
 
-describe("line identities", () => {
-  it("keeps every line in place for a change within a line", () => {
-    expect(follow("a\nb\n", 1, 0, "x")).toEqual([1, 2, 3])
-    expect(follow("a\n\nb", 2, 0, "x")).toEqual([1, 2, 3])
-  })
+describe('line identities', () => {
+  it('keeps every line in place for a change within a line', () => {
+    expect(follow('a\nb\n', 1, 0, 'x')).toEqual([1, 2, 3]);
+    expect(follow('a\n\nb', 2, 0, 'x')).toEqual([1, 2, 3]);
+  });
 
-  it("keeps a line in place when a line break is typed after it, and moves it down when one is typed before it", () => {
-    expect(follow("a\nb\n", 1, 0, "\nx")).toEqual([1, 0, 2, 3])
-    expect(follow("a\nb\n", 2, 0, "x\n")).toEqual([1, 0, 2, 3])
-    expect(follow("a\r\nb\r\n", 1, 0, "\r\nx")).toEqual([1, 0, 2, 3])
-    expect(follow("a\r\nb\r\n", 3, 0, "x\r\n")).toEqual([1, 0, 2, 3])
-  })
+  it('keeps a line in place when a line break is typed after it, and moves it down when one is typed before it', () => {
+    expect(follow('a\nb\n', 1, 0, '\nx')).toEqual([1, 0, 2, 3]);
+    expect(follow('a\nb\n', 2, 0, 'x\n')).toEqual([1, 0, 2, 3]);
+    expect(follow('a\r\nb\r\n', 1, 0, '\r\nx')).toEqual([1, 0, 2, 3]);
+    expect(follow('a\r\nb\r\n', 3, 0, 'x\r\n')).toEqual([1, 0, 2, 3]);
+  });
 
-  it("keeps the place of a line whose text is all replaced", () => {
-    expect(follow("a\nbb\nc", 2, 2, "x")).toEqual([1, 2, 3])
-    expect(follow("a\nbb\nc", 2, 2, "x\ny")).toEqual([1, 2, 0, 3])
-  })
+  it('keeps the place of a line whose text is all replaced', () => {
+    expect(follow('a\nbb\nc', 2, 2, 'x')).toEqual([1, 2, 3]);
+    expect(follow('a\nbb\nc', 2, 2, 'x\ny')).toEqual([1, 2, 0, 3]);
+  });
 
-  it("follows the text of lines joined or deleted", () => {
+  it('follows the text of lines joined or deleted', () => {
     // A whole line, with its line break.
-    expect(follow("a\nb\nc", 2, 2, "")).toEqual([1, 3])
+    expect(follow('a\nb\nc', 2, 2, '')).toEqual([1, 3]);
     // The line break before a line, with the line.
-    expect(follow("a\nb\nc", 1, 2, "")).toEqual([1, 3])
+    expect(follow('a\nb\nc', 1, 2, '')).toEqual([1, 3]);
     // Two lines joined: the first one's text is where it was.
-    expect(follow("ab\ncd", 1, 3, "")).toEqual([1])
+    expect(follow('ab\ncd', 1, 3, '')).toEqual([1]);
     // From a line's start into the next: what's left is the next one's.
-    expect(follow("ab\ncd\ne", 0, 4, "")).toEqual([2, 3])
-  })
+    expect(follow('ab\ncd\ne', 0, 4, '')).toEqual([2, 3]);
+  });
 
   it("OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151)", () => {
-    const editor = LineIds.editor()
-    const before = editor.of("a.ts", "hello\nworld\n")
-    const fork = editor.fork()
-    fork.of("a.ts", "hello\nworld\n")
-    const typed = { offset: 5, deleteLength: 0, text: "abc" }
-    fork.apply("a.ts", typed)
-    editor.apply("a.ts", typed)
+    const editor = LineIds.editor();
+    const before = editor.of('a.ts', 'hello\nworld\n');
+    const fork = editor.fork();
+    fork.of('a.ts', 'hello\nworld\n');
+    const typed = { offset: 5, deleteLength: 0, text: 'abc' };
+    fork.apply('a.ts', typed);
+    editor.apply('a.ts', typed);
     // A formatter rewrites the second line while the batch plays.
-    editor.apply("a.ts", { offset: 9, deleteLength: 5, text: "WORLD" })
-    editor.adopt(fork)
-    expect(editor.of("a.ts", "helloabc\nWORLD\n")).toEqual(before)
-  })
-})
+    editor.apply('a.ts', { offset: 9, deleteLength: 5, text: 'WORLD' });
+    editor.adopt(fork);
+    expect(editor.of('a.ts', 'helloabc\nWORLD\n')).toEqual(before);
+  });
+});
 
-describe("diffs", () => {
+describe('diffs', () => {
   it("reports a diff over MAX_DIFF_LINES by its hunks' headers, with the count of lines left out (#149)", () => {
-    expect(boundedDiff("a.ts", "a\n", "b\n")).toEqual({ diff: "@@ -1,1 +1,1 @@\n-a\n+b" })
-    const long = Array.from({ length: MAX_DIFF_LINES }, (_, i) => `line ${i}\n`).join("")
-    const bounded = boundedDiff("a.ts", "", long)
-    expect(bounded.diff).toBe(`@@ -0,0 +1,${MAX_DIFF_LINES} @@`)
-    expect(bounded.omitted).toBe(MAX_DIFF_LINES)
-  })
-})
+    expect(boundedDiff('a.ts', 'a\n', 'b\n')).toEqual({ diff: '@@ -1,1 +1,1 @@\n-a\n+b' });
+    const long = Array.from({ length: MAX_DIFF_LINES }, (_, i) => `line ${i}\n`).join('');
+    const bounded = boundedDiff('a.ts', '', long);
+    expect(bounded.diff).toBe(`@@ -0,0 +1,${MAX_DIFF_LINES} @@`);
+    expect(bounded.omitted).toBe(MAX_DIFF_LINES);
+  });
+});
 
-describe("typing", () => {
-  const cadence = { charMs: 100, jitter: 0, wordStartMs: 50, punctuationMs: 30, openBracketMs: 20, newlineMs: 250 }
-  const delays = (text: string, atLineStart = false) => planTyping(text, cadence, atLineStart, Math.random).map((c) => [c.text, c.delay])
+describe('typing', () => {
+  const cadence = { charMs: 100, jitter: 0, wordStartMs: 50, punctuationMs: 30, openBracketMs: 20, newlineMs: 250 };
+  const delays = (text: string, atLineStart = false) => planTyping(text, cadence, atLineStart, Math.random).map((c) => [c.text, c.delay]);
 
-  it("pauses as words start, and after punctuation and opening brackets", () => {
-    expect(delays("ab c(d, e")).toEqual([
-      ["a", 100],
-      ["b", 100],
-      [" ", 100],
-      ["c", 150],
-      ["(", 100],
-      ["d", 170],
-      [",", 100],
-      [" ", 130],
-      ["e", 150],
-    ])
-  })
+  it('pauses as words start, and after punctuation and opening brackets', () => {
+    expect(delays('ab c(d, e')).toEqual([
+      ['a', 100],
+      ['b', 100],
+      [' ', 100],
+      ['c', 150],
+      ['(', 100],
+      ['d', 170],
+      [',', 100],
+      [' ', 130],
+      ['e', 150],
+    ]);
+  });
 
-  it("inserts a newline together with the following indentation, then pauses", () => {
-    expect(delays("x\n  y")).toEqual([
-      ["x", 100],
-      ["\n  ", 100],
-      ["y", 400],
-    ])
-  })
+  it('inserts a newline together with the following indentation, then pauses', () => {
+    expect(delays('x\n  y')).toEqual([
+      ['x', 100],
+      ['\n  ', 100],
+      ['y', 400],
+    ]);
+  });
 
-  it("inserts leading indentation at once at the start of a line", () => {
-    expect(delays("  x", true).map(([t]) => t)).toEqual(["  ", "x"])
-    expect(delays("  x").map(([t]) => t)).toEqual([" ", " ", "x"])
-  })
+  it('inserts leading indentation at once at the start of a line', () => {
+    expect(delays('  x', true).map(([t]) => t)).toEqual(['  ', 'x']);
+    expect(delays('  x').map(([t]) => t)).toEqual([' ', ' ', 'x']);
+  });
 
-  it("scales every delay for type_fast", () => {
-    expect(planTyping("a b", cadence, false, Math.random, 0.5).map((c) => c.delay)).toEqual([50, 50, 75])
-  })
+  it('scales every delay for type_fast', () => {
+    expect(planTyping('a b', cadence, false, Math.random, 0.5).map((c) => c.delay)).toEqual([50, 50, 75]);
+  });
 
-  it("scales reading time with the character count, above a floor", () => {
-    const reading = { msPerChar: 10, minMs: 10 }
-    expect(readingTime("", reading)).toBe(10)
-    expect(readingTime("Hi.", reading)).toBe(30)
-    expect(readingTime(Array(100).fill("word").join(" "), reading)).toBe(4990)
-    expect(readingTime("word\n\n  word", reading)).toBe(90)
-  })
-})
+  it('scales reading time with the character count, above a floor', () => {
+    const reading = { msPerChar: 10, minMs: 10 };
+    expect(readingTime('', reading)).toBe(10);
+    expect(readingTime('Hi.', reading)).toBe(30);
+    expect(readingTime(Array(100).fill('word').join(' '), reading)).toBe(4990);
+    expect(readingTime('word\n\n  word', reading)).toBe(90);
+  });
+});
 
-describe("timeline", () => {
-  const SLEEP_MS = 100
-  const LONGER_SLEEP_MS = 300
+describe('timeline', () => {
+  const SLEEP_MS = 100;
+  const LONGER_SLEEP_MS = 300;
 
   beforeEach(() => {
-    vi.useFakeTimers()
-  })
+    vi.useFakeTimers();
+  });
   afterEach(() => {
-    vi.useRealTimers()
-  })
+    vi.useRealTimers();
+  });
 
-  it("ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up", async () => {
-    const timeline = new Timeline(false)
-    const results: boolean[] = []
-    void timeline.sleep(SLEEP_MS).then((completed) => results.push(completed))
-    timeline.interrupt()
-    await vi.advanceTimersByTimeAsync(SLEEP_MS)
-    expect(results).toEqual([false])
-    expect(await timeline.sleep(SLEEP_MS)).toBe(false)
+  it('ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up', async () => {
+    const timeline = new Timeline(false);
+    const results: boolean[] = [];
+    void timeline.sleep(SLEEP_MS).then((completed) => results.push(completed));
+    timeline.interrupt();
+    await vi.advanceTimersByTimeAsync(SLEEP_MS);
+    expect(results).toEqual([false]);
+    expect(await timeline.sleep(SLEEP_MS)).toBe(false);
 
-    timeline.reset()
-    void timeline.sleep(LONGER_SLEEP_MS).then((completed) => results.push(completed))
-    await vi.advanceTimersByTimeAsync(LONGER_SLEEP_MS - SLEEP_MS)
-    expect(results).toEqual([false])
-    await vi.advanceTimersByTimeAsync(SLEEP_MS)
-    expect(results).toEqual([false, true])
-  })
-})
+    timeline.reset();
+    void timeline.sleep(LONGER_SLEEP_MS).then((completed) => results.push(completed));
+    await vi.advanceTimersByTimeAsync(LONGER_SLEEP_MS - SLEEP_MS);
+    expect(results).toEqual([false]);
+    await vi.advanceTimersByTimeAsync(SLEEP_MS);
+    expect(results).toEqual([false, true]);
+  });
+});

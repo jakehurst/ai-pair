@@ -1,6 +1,6 @@
 // The MCP tool definitions: schemas and the descriptions the agent reads at the point of use.
 
-import { z } from "zod"
+import { z } from 'zod';
 import {
   ACTION_KINDS,
   actionKinds,
@@ -10,18 +10,18 @@ import {
   typeProblem,
   type MoveTarget,
   type SpanTarget,
-} from "@ai-pair/protocol"
-import { ELLIPSIS } from "@ai-pair/core/constants"
+} from '@ai-pair/protocol';
+import { ELLIPSIS } from '@ai-pair/core/constants';
 
-const file = z.string().describe("Path relative to your working directory, or absolute.")
+const file = z.string().describe('Path relative to your working directory, or absolute.');
 const line = z
   .number()
   .int()
   .optional()
   .describe(
     "The line exactly as an up-to-date `read` or report shows it: the one your cursor lands on, or the code starts on. Never count lines or guess: if you haven't seen the line's number since your batches last changed the lines above it, `read` first. A number you haven't been shown for that line is rejected. Omit it for your cursor's line.",
-  )
-const inFile = file.optional().describe("Switch to this file, only before your batch's first edit. Omit it to stay in your cursor's file.")
+  );
+const inFile = file.optional().describe("Switch to this file, only before your batch's first edit. Omit it to stay in your cursor's file.");
 
 /** A `select`'s or `point`'s code: its text on a line, or a range. */
 const Span = z
@@ -33,23 +33,23 @@ const Span = z
         .string()
         .optional()
         .describe("The code's exact text, starting on `line`; it may go on past it. Enough of it to be unique on its line."),
-      from: z.string().optional().describe("Instead of `text`, for a range: the exact text it starts with, on `line`."),
-      through: z.string().optional().describe("With `from`: the range ends with the first match of this text after `from`."),
+      from: z.string().optional().describe('Instead of `text`, for a range: the exact text it starts with, on `line`.'),
+      through: z.string().optional().describe('With `from`: the range ends with the first match of this text after `from`.'),
     },
     // zod reports unrecognized keys only on an object it matched to this schema.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    { error: (issue) => (issue.code === "unrecognized_keys" ? spanProblem(issue.input as SpanTarget) : undefined) },
+    { error: (issue) => (issue.code === 'unrecognized_keys' ? spanProblem(issue.input as SpanTarget) : undefined) },
   )
   .superRefine((span, ctx) => {
-    const problem = spanProblem(span)
-    if (problem) ctx.addIssue({ code: "custom", message: problem })
-  })
+    const problem = spanProblem(span);
+    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  });
 
 /** The text to type, with `CURSOR_MARKER` where the cursor ends. */
 const typeText = z.string({ error: (issue) => typeProblem(issue.input) }).superRefine((text, ctx) => {
-  const problem = typeProblem(text)
-  if (problem) ctx.addIssue({ code: "custom", message: problem })
-})
+  const problem = typeProblem(text);
+  if (problem) ctx.addIssue({ code: 'custom', message: problem });
+});
 
 const Action = z.union(
   [
@@ -77,7 +77,7 @@ const Action = z.union(
                 `A spot: the exact text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`"import { ${CURSOR_MARKER}type Context"\` for right before \`type Context\`. May span lines. Enough text to fit only one place on the line.`,
               ),
             to: z
-              .enum(["line_end"])
+              .enum(['line_end'])
               .optional()
               .describe(
                 "Instead of a spot: `line_end`, the end of the line. Only that: it steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
@@ -85,11 +85,11 @@ const Action = z.union(
           },
           // zod reports unrecognized keys only on an object it matched to this schema.
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          { error: (issue) => (issue.code === "unrecognized_keys" ? moveProblem(issue.input as MoveTarget) : undefined) },
+          { error: (issue) => (issue.code === 'unrecognized_keys' ? moveProblem(issue.input as MoveTarget) : undefined) },
         )
         .superRefine((m, ctx) => {
-          const problem = moveProblem(m)
-          if (problem) ctx.addIssue({ code: "custom", message: problem })
+          const problem = moveProblem(m);
+          if (problem) ctx.addIssue({ code: 'custom', message: problem });
         })
         .describe(
           `Move your cursor to a spot, \`at\`: the text around it with ${CURSOR_MARKER} where your cursor goes (\`line: 3, at: "import { ${CURSOR_MARKER}type Context"\` lands right before \`type Context\`), or to the end of the line with \`to: "line_end"\`. On \`line\`, exactly: a spot that isn't on it is rejected. Without \`line\`, on your cursor's line: that's how you step past a close you just typed on your line, e.g. \`{ to: "line_end" }\`.`,
@@ -110,7 +110,7 @@ const Action = z.union(
         "Like `type`, several times faster, for text the programmer doesn't need to read: imports, config, boilerplate. Only the speed changes: closes still come first.",
       ),
     }),
-    action({ delete: z.literal(true).describe("Delete the current selection; `select` first.") }),
+    action({ delete: z.literal(true).describe('Delete the current selection; `select` first.') }),
     action({
       point: Span.describe(
         "Highlight code without editing it or moving your cursor, to talk about it: point first, then `say` what's there. The code is given as for `select`. The programmer's view goes to the pointed code, and comes back to your cursor with your next move or edit.",
@@ -122,39 +122,39 @@ const Action = z.union(
         .describe(
           "Run a shell command in a terminal the programmer sees: tests, builds, starting the app. They may be asked to allow it. The exit code, the output and the terminal's shell come back in the batch's report; a nonzero exit fails the batch. Make it the last action of its batch.",
         ),
-      wait: z.number().optional().describe("Seconds to wait (default 120). For a server, a few: it keeps running."),
+      wait: z.number().optional().describe('Seconds to wait (default 120). For a server, a few: it keeps running.'),
     }),
   ],
   { error: actionError },
-)
+);
 
 /** An action's object: no unknown fields, and a clear message when two actions were put in one. */
 function action<T extends z.ZodRawShape>(shape: T) {
-  return z.strictObject(shape, { error: (issue) => (issue.code === "unrecognized_keys" ? combined(issue.input) : undefined) })
+  return z.strictObject(shape, { error: (issue) => (issue.code === 'unrecognized_keys' ? combined(issue.input) : undefined) });
 }
 
 /** Says what's wrong with an action that matches no variant, instead of zod's bare "Invalid input". */
 function actionError(issue: { input?: unknown }): string | undefined {
-  const input = issue.input
-  if (typeof input !== "object" || input === null || Array.isArray(input)) return undefined
-  const kinds = actionKinds(input)
-  if (kinds.length === 0) return `Not an action: each action has one of ${ACTION_KINDS.map((k) => `\`${k}\``).join(", ")}`
-  if (kinds.length > 1) return combined(input)
+  const input = issue.input;
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return undefined;
+  const kinds = actionKinds(input);
+  if (kinds.length === 0) return `Not an action: each action has one of ${ACTION_KINDS.map((k) => `\`${k}\``).join(', ')}`;
+  if (kinds.length > 1) return combined(input);
   // A malformed field fails on its type, before the action's own check gets to say what's wrong.
-  const move: unknown = "move" in input ? input.move : undefined
-  if (typeof move === "object" && move !== null) return moveProblem(move)
-  const span: unknown = "select" in input ? input.select : "point" in input ? input.point : undefined
-  if (typeof span === "object" && span !== null) return spanProblem(span)
-  if ("type" in input) return typeProblem(input.type)
-  if ("type_fast" in input) return typeProblem(input.type_fast)
-  return undefined
+  const move: unknown = 'move' in input ? input.move : undefined;
+  if (typeof move === 'object' && move !== null) return moveProblem(move);
+  const span: unknown = 'select' in input ? input.select : 'point' in input ? input.point : undefined;
+  if (typeof span === 'object' && span !== null) return spanProblem(span);
+  if ('type' in input) return typeProblem(input.type);
+  if ('type_fast' in input) return typeProblem(input.type_fast);
+  return undefined;
 }
 
 function combined(input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined
-  const kinds = actionKinds(input)
-  if (kinds.length < 2) return undefined
-  return `One action per object, got ${kinds.map((k) => `\`${k}\``).join(" and ")}: make them separate actions, in order`
+  if (typeof input !== 'object' || input === null) return undefined;
+  const kinds = actionKinds(input);
+  if (kinds.length < 2) return undefined;
+  return `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order`;
 }
 
 export const TOOLS = {
@@ -166,7 +166,7 @@ export const TOOLS = {
       cwd: z
         .string()
         .optional()
-        .describe("Your working directory, as an absolute path. The paths you give and get during the session are relative to it."),
+        .describe('Your working directory, as an absolute path. The paths you give and get during the session are relative to it.'),
     },
   },
   step: {
@@ -182,7 +182,7 @@ An empty batch waits for your queued batches without waiting for the programmer.
 
 After a report says a batch was interrupted or discarded, your cursor is where it stopped: \`read\`, then anchor the cursor with a \`move\` or \`select\` giving both \`file\` and \`line\` before anything else at the cursor, or the batch is refused with \`unanchored\`.`,
     inputSchema: {
-      actions: z.array(Action).describe("Played in order."),
+      actions: z.array(Action).describe('Played in order.'),
     },
   },
   listen: {
@@ -194,7 +194,7 @@ After a report says a batch was interrupted or discarded, your cursor is where i
     description:
       "End the session, when the programmer says they're done. Anything still queued plays out first. Afterwards the pair tools are unavailable until the next `start`; continue the conversation normally.",
     inputSchema: {
-      summary: z.string().optional().describe("One or two sentences, shown to the programmer as the closing message."),
+      summary: z.string().optional().describe('One or two sentences, shown to the programmer as the closing message.'),
     },
   },
   read: {
@@ -212,7 +212,7 @@ After a report says a batch was interrupted or discarded, your cursor is where i
     inputSchema: {
       title: z.string().describe("The passage's name, shown to the programmer."),
       file: file.describe("The file holding the passage's text, relative to your working directory or absolute."),
-      notice: z.string().optional().describe("Shown with the passage, outside the timed text: a license notice, or where it is from."),
+      notice: z.string().optional().describe('Shown with the passage, outside the timed text: a license notice, or where it is from.'),
     },
   },
-} as const
+} as const;

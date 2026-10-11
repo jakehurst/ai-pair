@@ -2,15 +2,15 @@
 // its line, say) is reported at once, instead of when the batch plays, minutes later. It's the same
 // player as real playback, on a stage that plays in a copy of the editor, instantly and silently.
 
-import type { Action, BatchResult } from "@ai-pair/protocol"
-import type { Config } from "./config"
-import type { LineIds, Sighting } from "./lines"
-import { Player, transformScene, type Scene } from "./player"
-import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort } from "./ports"
-import { instant } from "./timeline"
+import type { Action, BatchResult } from '@ai-pair/protocol';
+import type { Config } from './config';
+import type { LineIds, Sighting } from './lines';
+import { Player, transformScene, type Scene } from './player';
+import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort } from './ports';
+import { instant } from './timeline';
 
 /** What playing batches leaves behind: the scene, the text of each file they edited, and its lines. `edits`: this batch's own. */
-export type Rehearsal = { scene: Scene; texts: Map<string, string>; lines: LineIds; edits: Set<string> }
+export type Rehearsal = { scene: Scene; texts: Map<string, string>; lines: LineIds; edits: Set<string> };
 
 /**
  * Plays `actions` in memory, starting from `from`. Commands don't run, and succeed; a `move` goes
@@ -29,9 +29,9 @@ export async function rehearse(
     cursor: from.scene.cursor && { ...from.scene.cursor },
     selection: from.scene.selection && { ...from.scene.selection },
     point: from.scene.point && { ...from.scene.point },
-  }
-  const memory = new MemoryEditor(editor, new Map(from.texts))
-  const lines = from.lines.fork()
+  };
+  const memory = new MemoryEditor(editor, new Map(from.texts));
+  const lines = from.lines.fork();
   const player = new Player(scene, {
     editor: memory,
     panel: silent,
@@ -43,9 +43,9 @@ export async function rehearse(
     confirm: () => Promise.resolve(true),
     lines,
     knows,
-  })
-  const { result, sightings } = await player.play(0, actions)
-  return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } }
+  });
+  const { result, sightings } = await player.play(0, actions);
+  return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } };
 }
 
 /**
@@ -54,16 +54,16 @@ export async function rehearse(
  * an identity of its own, unlike the one the agent is shown (specs/Rehearsal.tla, `ShareIds`).
  */
 export function followChange(r: Rehearsal, file: string, after: string, changes: Change[]): void {
-  for (const change of changes) transformScene(r.scene, file, change)
-  r.lines.forget(file)
-  if (r.texts.has(file)) r.texts.set(file, after)
+  for (const change of changes) transformScene(r.scene, file, change);
+  r.lines.forget(file);
+  if (r.texts.has(file)) r.texts.set(file, after);
 }
 
-const silent: PanelPort = { post: () => {} }
+const silent: PanelPort = { post: () => {} };
 
 /** A copy of the editor: files it has edited are its own, the rest are read from the real one. */
 class MemoryEditor implements EditorPort {
-  readonly edits = new Set<string>()
+  readonly edits = new Set<string>();
 
   constructor(
     private readonly real: EditorPort,
@@ -71,45 +71,45 @@ class MemoryEditor implements EditorPort {
   ) {}
 
   resolvePath(file: string): string {
-    return this.real.resolvePath(file)
+    return this.real.resolvePath(file);
   }
 
   displayPath(file: string): string {
-    return this.real.displayPath(file)
+    return this.real.displayPath(file);
   }
 
   async getText(file: string): Promise<string> {
-    return this.texts.get(file) ?? (await this.real.getText(file))
+    return this.texts.get(file) ?? (await this.real.getText(file));
   }
 
   async eol(file: string): Promise<string> {
     try {
-      return await this.real.eol(file)
+      return await this.real.eol(file);
     } catch {
       // Only created in memory.
-      return "\n"
+      return '\n';
     }
   }
 
   async isDirty(): Promise<boolean> {
-    return false
+    return false;
   }
 
   async show(file: string): Promise<void> {
-    if (this.texts.has(file)) return
+    if (this.texts.has(file)) return;
     try {
-      await this.real.getText(file)
+      await this.real.getText(file);
     } catch (e) {
       // Showing a file creates it.
-      if (!(e instanceof MissingFile)) throw e
-      this.texts.set(file, "")
+      if (!(e instanceof MissingFile)) throw e;
+      this.texts.set(file, '');
     }
   }
 
   async edit(file: string, offset: number, deleteLength: number, text: string): Promise<void> {
-    const old = await this.getText(file)
-    this.texts.set(file, old.slice(0, offset) + text + old.slice(offset + deleteLength))
-    this.edits.add(file)
+    const old = await this.getText(file);
+    this.texts.set(file, old.slice(0, offset) + text + old.slice(offset + deleteLength));
+    this.edits.add(file);
   }
 
   async save(): Promise<void> {}
@@ -119,6 +119,6 @@ class MemoryEditor implements EditorPort {
   follow(): void {}
 
   async runCommand(): Promise<CommandOutcome> {
-    return { exitCode: 0, output: "" }
+    return { exitCode: 0, output: '' };
   }
 }

@@ -9,9 +9,9 @@
     "unicorn/require-post-message-target-origin": "off"
   },
   "overrides": [
-    // Google's TypeScript Style Guide (#134): the scripts only, until #133 brings the packages to it.
+    // Google's TypeScript Style Guide (#134, #133).
     {
-      "files": ["scripts/**/*.ts", "packages/vscode/scripts/*.mts"],
+      "files": ["**/*.ts", "**/*.mts"],
       "plugins": ["eslint", "typescript", "unicorn", "oxc", "import"],
       "rules": {
         "eslint/func-style": ["error", "declaration"],

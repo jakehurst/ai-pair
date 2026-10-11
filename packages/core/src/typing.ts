@@ -1,16 +1,16 @@
 // Typing cadence and reading time. The numbers are in timing.ts.
 
-import type { Cadence, Reading } from "./timing"
+import type { Cadence, Reading } from './timing';
 
 /** A piece of text inserted in one edit, after waiting `delay` ms. */
-export type Chunk = { text: string; delay: number }
+export type Chunk = { text: string; delay: number };
 
-const PUNCTUATION = new Set([",", ";", ":"])
-const OPEN_BRACKETS = new Set(["(", "[", "{"])
-const WORD = /[\p{L}\p{N}_]/u
+const PUNCTUATION = new Set([',', ';', ':']);
+const OPEN_BRACKETS = new Set(['(', '[', '{']);
+const WORD = /[\p{L}\p{N}_]/u;
 
 function isIndent(ch: string | undefined): boolean {
-  return ch === " " || ch === "\t"
+  return ch === ' ' || ch === '\t';
 }
 
 /**
@@ -22,54 +22,54 @@ function isIndent(ch: string | undefined): boolean {
  * punctuation, opening brackets, and newlines.
  */
 export function planTyping(text: string, cadence: Cadence, atLineStart: boolean, random: () => number, scale = 1): Chunk[] {
-  const chars = Array.from(text)
-  const chunks: Chunk[] = []
-  let pause = 0
-  let previous: string | undefined
-  let i = 0
+  const chars = Array.from(text);
+  const chunks: Chunk[] = [];
+  let pause = 0;
+  let previous: string | undefined;
+  let i = 0;
 
   // specs/Typing.tla, `IndentOf`.
   const takeIndent = (): string => {
-    let indent = ""
-    while (isIndent(chars[i])) indent += chars[i++]
-    return indent
-  }
+    let indent = '';
+    while (isIndent(chars[i])) indent += chars[i++];
+    return indent;
+  };
 
   // specs/Typing.tla, `Plan`: the indentation at the very start is one chunk first.
   if (atLineStart) {
-    const indent = takeIndent()
+    const indent = takeIndent();
     if (indent) {
-      chunks.push({ text: indent, delay: 0 })
-      previous = " "
+      chunks.push({ text: indent, delay: 0 });
+      previous = ' ';
     }
   }
 
   // specs/Typing.tla, `Loop`.
   while (i < chars.length) {
-    const ch = chars[i++]!
-    const wordStart = previous !== undefined && !WORD.test(previous) && WORD.test(ch)
-    const delay = cadence.charMs * (1 + (random() * 2 - 1) * cadence.jitter) + (wordStart ? cadence.wordStartMs : 0) + pause
-    if (ch === "\n") {
-      const indent = takeIndent()
-      chunks.push({ text: ch + indent, delay: delay * scale })
-      pause = cadence.newlineMs
-      previous = indent ? " " : "\n"
+    const ch = chars[i++]!;
+    const wordStart = previous !== undefined && !WORD.test(previous) && WORD.test(ch);
+    const delay = cadence.charMs * (1 + (random() * 2 - 1) * cadence.jitter) + (wordStart ? cadence.wordStartMs : 0) + pause;
+    if (ch === '\n') {
+      const indent = takeIndent();
+      chunks.push({ text: ch + indent, delay: delay * scale });
+      pause = cadence.newlineMs;
+      previous = indent ? ' ' : '\n';
     } else {
-      chunks.push({ text: ch, delay: delay * scale })
-      pause = PUNCTUATION.has(ch) ? cadence.punctuationMs : OPEN_BRACKETS.has(ch) ? cadence.openBracketMs : 0
-      previous = ch
+      chunks.push({ text: ch, delay: delay * scale });
+      pause = PUNCTUATION.has(ch) ? cadence.punctuationMs : OPEN_BRACKETS.has(ch) ? cadence.openBracketMs : 0;
+      previous = ch;
     }
   }
-  return chunks
+  return chunks;
 }
 
 /** The characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
 export function readingChars(text: string): number {
-  return text.trim().replace(/\s+/g, " ").length
+  return text.trim().replace(/\s+/g, ' ').length;
 }
 
 /** How long a say pauses: per character of its text, at least the floor, so each message gets its own time. */
 export function readingTime(text: string, reading: Reading): number {
-  const chars = readingChars(text)
-  return Math.max(reading.minMs, chars * reading.msPerChar)
+  const chars = readingChars(text);
+  return Math.max(reading.minMs, chars * reading.msPerChar);
 }
