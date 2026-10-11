@@ -1,14 +1,22 @@
 # TLA+ specs
 
-Models of the code's state machines, checked with TLC (issue #19). Run them all with:
+Models of the code's state machines, checked with TLC (issue #19). Run them all
+with:
 
 ```sh
 specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 ```
 
-[COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the spec that models it, or says why it has none.
+[COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the
+spec that models it, or says why it has none.
 
-CI runs `check.sh` on every push to `main` and every pull request (`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it is on `main`, and has to pass. Regressions are caught by the unit and integration tests. A spec's constants that switch a fix on or off still say which bug each one fixed; the configs that reproduced those bugs were dropped once the fixes were in.
+CI runs `check.sh` on every push to `main` and every pull request
+(`.github/workflows/ci.yml`), with TLA+ tools 1.7.4. `check.sh` runs TLC on
+every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it
+is on `main`, and has to pass. Regressions are caught by the unit and
+integration tests. A spec's constants that switch a fix on or off still say
+which bug each one fixed; the configs that reproduced those bugs were dropped
+once the fixes were in.
 
 ## Results
 
@@ -52,13 +60,15 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 
 `Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
 
-Each violation TLC found was checked against the code step by step before it was reported. The traces are in the issues.
+Each violation TLC found was checked against the code step by step before it was
+reported. The traces are in the issues.
 
 ## Specs and the code they model
 
 ### `Serialize`: the chain of tool calls
 
-`packages/core/src/controller.ts`. A constant `Fixed` switches the abort check at the top of `block()` (#1).
+`packages/core/src/controller.ts`. A constant `Fixed` switches the abort check
+at the top of `block()` (#1).
 
 | Spec | Code |
 |---|---|
@@ -72,7 +82,16 @@ Each violation TLC found was checked against the code step by step before it was
 
 ### `Wire`: the relay's side of the WebSocket
 
-`packages/relay/src/link.ts`, with the editor's replies from `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse` (#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67). The agent's MCP client is modeled too: it drops an answer once it has canceled, and it sends a cancel even after it took the answer, since the SDK never removes its abort listener. So the relay can't tell whether the agent saw a report whose cancel came after its answer. The fix for #67 delivers it at least once: the relay hands it back with `mayRepeat`, and the next report says it may repeat an earlier one (`RepeatsMarked`).
+`packages/relay/src/link.ts`, with the editor's replies from
+`packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse`
+(#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked
+in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67). The agent's MCP
+client is modeled too: it drops an answer once it has canceled, and it sends a
+cancel even after it took the answer, since the SDK never removes its abort
+listener. So the relay can't tell whether the agent saw a report whose cancel
+came after its answer. The fix for #67 delivers it at least once: the relay
+hands it back with `mayRepeat`, and the next report says it may repeat an
+earlier one (`RepeatsMarked`).
 
 | Spec | Code |
 |---|---|
@@ -87,7 +106,8 @@ Each violation TLC found was checked against the code step by step before it was
 
 ### `Panel`: the history
 
-The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #18.
+The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code
+since #18.
 
 | Spec | Code |
 |---|---|
@@ -98,7 +118,9 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 
 ### `PanelScroll`: the history's scroll position
 
-`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139. The constant `ScrollOn` says which entries scroll the history to its top; the code is `"you"`.
+`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139. The
+constant `ScrollOn` says which entries scroll the history to its top; the code
+is `"you"`.
 
 | Spec | Code |
 |---|---|
@@ -115,7 +137,8 @@ Each invariant was proved to bite with a mutation, run in TLC and then reverted:
 | `ScrollOn = "all"` | `KeepsPlace` |
 | `Scroll` reaches `Len(history)` | `InRange` |
 
-Every invariant names the test that proves the code obeys it; the test's title carries the invariant's name:
+Every invariant names the test that proves the code obeys it; the test's title
+carries the invariant's name:
 
 | Invariant | Proved by |
 |---|---|
@@ -125,7 +148,8 @@ Every invariant names the test that proves the code obeys it; the test's title c
 
 ### `PanelReplay`: the panel's log and its replay
 
-`post` and `ready` in `packages/vscode/src/panel.ts`, and the page's `setActive`. `KeepSession` is the fix for #54.
+`post` and `ready` in `packages/vscode/src/panel.ts`, and the page's
+`setActive`. `KeepSession` is the fix for #54.
 
 | Spec | Code |
 |---|---|
@@ -134,7 +158,21 @@ Every invariant names the test that proves the code obeys it; the test's title c
 
 ### `Controller`: what reaches the agent
 
-`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, at least once since #67: nothing reaches the agent twice in a report not marked `repeated` (`NoUnmarkedRepeat`), and everything reaches it (`BatchesDelivered`, `EventsDelivered`, `QuietDelivered`). S2 (`PlaysKnowingEvents`), S3 (`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the relay sending a call only once every cancelled call on the socket has settled, so a `return` reaches the editor before the next call. `RestoreEnded` is the fix for #60: `restore()` working on a session the programmer ended, and putting a closed one back. `MarkHeld` and `DrainHeld` fix two bugs this spec found, each needing two rejections held at once, which a cancel after an answer allows. Each held rejection now keeps its own repeat mark, where before only the first report after them was marked. And a session the programmer ended stays open until its held rejections are out, one per report, where before it closed with the first.
+`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, at
+least once since #67: nothing reaches the agent twice in a report not marked
+`repeated` (`NoUnmarkedRepeat`), and everything reaches it (`BatchesDelivered`,
+`EventsDelivered`, `QuietDelivered`). S2 (`PlaysKnowingEvents`), S3
+(`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a
+call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`).
+`RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the
+relay sending a call only once every cancelled call on the socket has settled,
+so a `return` reaches the editor before the next call. `RestoreEnded` is the fix
+for #60: `restore()` working on a session the programmer ended, and putting a
+closed one back. `MarkHeld` and `DrainHeld` fix two bugs this spec found, each
+needing two rejections held at once, which a cancel after an answer allows. Each
+held rejection now keeps its own repeat mark, where before only the first report
+after them was marked. And a session the programmer ended stays open until its
+held rejections are out, one per report, where before it closed with the first.
 
 | Spec | Code |
 |---|---|
@@ -151,7 +189,11 @@ Every invariant names the test that proves the code obeys it; the test's title c
 
 ### `Discovery`: finding a window
 
-`writeDiscovery`, `focused` and `dispose` in `bridge.ts`, `findWindows` and `open` in `link.ts`. `CheckFiles` is the fix for #31. `AtomicWrite` is the fix for #72: a window rewrites its file each time it gains focus, and written in place, a relay reading it mid-write skipped it. `locate` switching windows mid-session is `Close` in `Wire`.
+`writeDiscovery`, `focused` and `dispose` in `bridge.ts`, `findWindows` and
+`open` in `link.ts`. `CheckFiles` is the fix for #31. `AtomicWrite` is the fix
+for #72: a window rewrites its file each time it gains focus, and written in
+place, a relay reading it mid-write skipped it. `locate` switching windows
+mid-session is `Close` in `Wire`.
 
 | Spec | Code |
 |---|---|
@@ -164,7 +206,11 @@ Every invariant names the test that proves the code obeys it; the test's title c
 
 ### `EditorAdapter`: who made a change
 
-`edit`, `save`, `onChange`, and `byProgrammer` in `packages/vscode/src/editor.ts`, which call the controller's `userEdit` or `otherEdit`. `FlushBeforeSave` is the fix for #40. VS Code delivers a change event before the call that made it resolves, and replies after the events sent before them: one channel, in order.
+`edit`, `save`, `onChange`, and `byProgrammer` in
+`packages/vscode/src/editor.ts`, which call the controller's `userEdit` or
+`otherEdit`. `FlushBeforeSave` is the fix for #40. VS Code delivers a change
+event before the call that made it resolves, and replies after the events sent
+before them: one channel, in order.
 
 | Spec | Code |
 |---|---|
@@ -173,11 +219,15 @@ Every invariant names the test that proves the code obeys it; the test's title c
 | `SaveStart`, `Participant`, `ParticipantsDone`, `SaveDone` | `save()`: the round trip, `saving`, the save participants (format on save), the write |
 | `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
 
-A keystroke made while the save participants run can't be told from their edits, since VS Code doesn't say who made a change. The spec allows that one wrong attribution by name (`"programmer during save"`).
+A keystroke made while the save participants run can't be told from their edits,
+since VS Code doesn't say who made a change. The spec allows that one wrong
+attribution by name (`"programmer during save"`).
 
 ### `FollowMode`: our own navigation against looking away
 
-`show`, `selfNav`, and `onActiveEditor` in `packages/vscode/src/editor.ts`, with a `move` that shows its file before the agent cursor moves there. `HoldWhileShowing` is the fix for #56.
+`show`, `selfNav`, and `onActiveEditor` in `packages/vscode/src/editor.ts`, with
+a `move` that shows its file before the agent cursor moves there.
+`HoldWhileShowing` is the fix for #56.
 
 | Spec | Code |
 |---|---|
@@ -187,7 +237,8 @@ A keystroke made while the save participants run can't be told from their edits,
 
 ### `Bridge`: who drives the session
 
-`dispatch` and the socket's `close` handler in `packages/core/src/bridge.ts`, with the controller's session. `CheckOpen` is the fix for #42.
+`dispatch` and the socket's `close` handler in `packages/core/src/bridge.ts`,
+with the controller's session. `CheckOpen` is the fix for #42.
 
 | Spec | Code |
 |---|---|
@@ -199,7 +250,10 @@ A keystroke made while the save participants run can't be told from their edits,
 
 ### `Timeline`: pausing
 
-`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause` and `Controller.resume`, and where they come from: the Pause button, the reply box's draft, sending a reply, and the turn button (`panel.ts`), the Toggle Pause command (`extension.ts`), and looking away (`editor.ts`).
+`packages/core/src/timeline.ts`, with the pause reasons in `Controller.pause`
+and `Controller.resume`, and where they come from: the Pause button, the reply
+box's draft, sending a reply, and the turn button (`panel.ts`), the Toggle Pause
+command (`extension.ts`), and looking away (`editor.ts`).
 
 | Spec | Code |
 |---|---|
@@ -207,11 +261,16 @@ A keystroke made while the save participants run can't be told from their edits,
 | `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 
-A pause lasts until a resume, as PROTOCOL.md says: looking back at the code doesn't end the `away` pause, and the agent isn't told about pauses.
+A pause lasts until a resume, as PROTOCOL.md says: looking back at the code
+doesn't end the `away` pause, and the agent isn't told about pauses.
 
 ### `Anchor`: the cursor after a discarded batch
 
-`step` and `snapshot` in `packages/core/src/controller.ts`. The agent plans a batch against where the one before would have ended; when that one is interrupted or discarded, the cursor is where it stopped (#112). `Guard` switches the refusal; with `FALSE`, TLC violates `NoMisplacedEdit` in two steps: `Discard`, `Unanchored`.
+`step` and `snapshot` in `packages/core/src/controller.ts`. The agent plans a
+batch against where the one before would have ended; when that one is
+interrupted or discarded, the cursor is where it stopped (#112). `Guard`
+switches the refusal; with `FALSE`, TLC violates `NoMisplacedEdit` in two steps:
+`Discard`, `Unanchored`.
 
 | Spec | Code |
 |---|---|
@@ -221,7 +280,13 @@ A pause lasts until a resume, as PROTOCOL.md says: looking back at the code does
 
 ### `Calibration`: calibrating the reading speed
 
-The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, the `calibrate` pair tool in `bridge.ts`, the setting the rate is stored in, written by `extension.ts`, and the `say` pause that reads it in `player.ts`. Issue #109. The constant `AwaitStore` switches whether playback resumes before or after the stored rate has been applied; with `FALSE`, TLC violates `FreshRate` in five steps: `Supply`, `Go`, `Finish`, then a `SayStart` timed with the default rate.
+The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`,
+the `calibrate` pair tool in `bridge.ts`, the setting the rate is stored in,
+written by `extension.ts`, and the `say` pause that reads it in `player.ts`.
+Issue #109. The constant `AwaitStore` switches whether playback resumes before
+or after the stored rate has been applied; with `FALSE`, TLC violates
+`FreshRate` in five steps: `Supply`, `Go`, `Finish`, then a `SayStart` timed
+with the default rate.
 
 | Spec | Code |
 |---|---|
@@ -233,7 +298,17 @@ The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, t
 
 ### `PointFocus`: the view on a reply and on Resume
 
-`resume` in `packages/core/src/controller.ts` and the `reply` message in `packages/vscode/src/panel.ts`, with the scene's `focus` from `player.ts` and the away pause from `editor.ts`. Found while working on #109: the view followed a point until the next cursor action, so a reveal after the programmer had looked away brought back a point from long ago, reopening a file they had closed. `DropStaleFocus` switches that fix; with `FALSE`, TLC violates `NoStaleReveal` in three steps: `Point`, `LookAway`, `Resume`. Issue #125: every typed reply revealed the target, since typing a draft pauses playback and a reply lifts the pause, so a reply reopened a file the programmer had closed or took them off the one they had switched to. `RevealOnReply` switches that fix; with `TRUE`, TLC violates `ReplyKeepsView` in two steps: `LookAway`, `Reply`.
+`resume` in `packages/core/src/controller.ts` and the `reply` message in
+`packages/vscode/src/panel.ts`, with the scene's `focus` from `player.ts` and
+the away pause from `editor.ts`. Found while working on #109: the view followed
+a point until the next cursor action, so a reveal after the programmer had
+looked away brought back a point from long ago, reopening a file they had
+closed. `DropStaleFocus` switches that fix; with `FALSE`, TLC violates
+`NoStaleReveal` in three steps: `Point`, `LookAway`, `Resume`. Issue #125: every
+typed reply revealed the target, since typing a draft pauses playback and a
+reply lifts the pause, so a reply reopened a file the programmer had closed or
+took them off the one they had switched to. `RevealOnReply` switches that fix;
+with `TRUE`, TLC violates `ReplyKeepsView` in two steps: `LookAway`, `Reply`.
 
 | Spec | Code |
 |---|---|
@@ -243,7 +318,8 @@ The calibration flow in `packages/vscode/src/webview/panel.ts` and `panel.ts`, t
 | `Reply` | the panel's `reply`: `resume(undefined, { reveal: false })`, then `userMessage`; a stale point is dropped, and nothing is revealed |
 | `Resume` | the Resume button: `resume()`: with an away pause among the reasons and the focus on a point, the focus returns to the cursor and the editor is rendered before `reveal` |
 
-Each invariant was proved to bite with a mutation of a copy of the model; each mutation failed on the invariant named and no other:
+Each invariant was proved to bite with a mutation of a copy of the model; each
+mutation failed on the invariant named and no other:
 
 | Mutation | Breaks |
 |---|---|
@@ -251,7 +327,8 @@ Each invariant was proved to bite with a mutation of a copy of the model; each m
 | `DropStaleFocus = FALSE` | `NoStaleReveal` |
 | `CursorAction` leaves the active editor | `CursorShown` |
 
-Every invariant names the test that proves the code obeys it; the test's title carries the invariant's name:
+Every invariant names the test that proves the code obeys it; the test's title
+carries the invariant's name:
 
 | Invariant | Proved by |
 |---|---|
@@ -261,7 +338,28 @@ Every invariant names the test that proves the code obeys it; the test's title c
 
 ### `Start`: the Start a session button
 
-`packages/vscode/src/panel.ts` (`askStart`, the `ready` and `start` messages), `setup.ts` (`claudeStarter`), and `webview/panel.ts` (`canStart`, the button), with `extension.ts` asking again after Set Up Agent. Issue #107. A page asks once as it loads; the answer comes later, from Claude Code's configuration read at once and VS Code's command list awaited; pages come and go; the environment flips. Two constants switch fixes the model found before the code was reviewed against it. `DropStale`: the panel posted every answer to whatever view it had; with `FALSE`, TLC violates `OwnAnswer` in three steps: `Ready` (page 2 loads), then page 1's `Answer` lands on page 2. `ReaskOnSetUp`: the page asked only as it loaded; with `FALSE`, TLC violates `Reasked` in three steps: `Answer` (hidden), then `Flip` sets Claude Code up with nothing pending. Issue #115 added how a start lands. `InTerminal`: the starter ran Claude Code's open command, which brings Claude Code to the front with the prompt unsent and writes `panel` to `claudeCode.preferredLocation`; with `FALSE`, TLC violates `KeepsLocation` and `StaysOnPair` in two steps: `Answer` shows the button, then `Click`. `OneAgent`: a second start while the first agent runs; with `FALSE`, TLC violates `OneAtATime`. Issue #118 added the note the click shows, Starting a session with Claude Code, until a session starts. `NoteOnClick`: the page changed nothing until the agent's `start` landed; with `FALSE`, TLC violates `Acknowledged` on the first `Click`. `ClearOnExit`: the note went only with a session, so a CLI that exited without starting one left it up; with `FALSE`, TLC violates `Settles`: `Click`, then `Exit`, and the note stays.
+`packages/vscode/src/panel.ts` (`askStart`, the `ready` and `start` messages),
+`setup.ts` (`claudeStarter`), and `webview/panel.ts` (`canStart`, the button),
+with `extension.ts` asking again after Set Up Agent. Issue #107. A page asks
+once as it loads; the answer comes later, from Claude Code's configuration read
+at once and VS Code's command list awaited; pages come and go; the environment
+flips. Two constants switch fixes the model found before the code was reviewed
+against it. `DropStale`: the panel posted every answer to whatever view it had;
+with `FALSE`, TLC violates `OwnAnswer` in three steps: `Ready` (page 2 loads),
+then page 1's `Answer` lands on page 2. `ReaskOnSetUp`: the page asked only as
+it loaded; with `FALSE`, TLC violates `Reasked` in three steps: `Answer`
+(hidden), then `Flip` sets Claude Code up with nothing pending. Issue #115 added
+how a start lands. `InTerminal`: the starter ran Claude Code's open command,
+which brings Claude Code to the front with the prompt unsent and writes `panel`
+to `claudeCode.preferredLocation`; with `FALSE`, TLC violates `KeepsLocation`
+and `StaysOnPair` in two steps: `Answer` shows the button, then `Click`.
+`OneAgent`: a second start while the first agent runs; with `FALSE`, TLC
+violates `OneAtATime`. Issue #118 added the note the click shows, Starting a
+session with Claude Code, until a session starts. `NoteOnClick`: the page
+changed nothing until the agent's `start` landed; with `FALSE`, TLC violates
+`Acknowledged` on the first `Click`. `ClearOnExit`: the note went only with a
+session, so a CLI that exited without starting one left it up; with `FALSE`, TLC
+violates `Settles`: `Click`, then `Exit`, and the note stays.
 
 | Spec | Code |
 |---|---|
@@ -275,7 +373,10 @@ Every invariant names the test that proves the code obeys it; the test's title c
 | `AgentStart` | the `session` event reaching the page: `handle`'s `session` case hides the note |
 | `AgentEnd` | the session ending: the idle view and its button are back |
 
-Each property was proved to bite with a mutation of a copy of the model, and each mutation failed on the properties named and no others, and passed with them left out (all but `Click` unbounded, whose state space has no end without `TypeOK`):
+Each property was proved to bite with a mutation of a copy of the model, and
+each mutation failed on the properties named and no others, and passed with them
+left out (all but `Click` unbounded, whose state space has no end without
+`TypeOK`):
 
 | Mutation | Breaks |
 |---|---|
@@ -298,7 +399,8 @@ Each property was proved to bite with a mutation of a copy of the model, and eac
 | `Dispose` leaves the note | `NoteUntilSession` |
 | `Click` during a session | `NoteUntilSession` |
 
-Every property names the test that proves the code obeys it; the test's title carries the property's name:
+Every property names the test that proves the code obeys it; the test's title
+carries the property's name:
 
 | Property | Proved by |
 |---|---|
@@ -320,7 +422,14 @@ Every property names the test that proves the code obeys it; the test's title ca
 
 ### `Actions`: what an interrupted batch reports as unplayed
 
-S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is its steps between awaits, read from the code: awaits, checks of a sleep's or `confirm`'s result or of `notStarted`, and effects the programmer sees. An interrupt comes at any await. Two defenses keep S14. A `type` cut after a chunk returns only what's left of it (`RestOnly`), and a `run` interrupted while its command keeps running counts as played (`ConsumeRun`). Unit tests cover both: "returns what's left of a type cut inside its second part" and "stops waiting when the programmer interrupts, reporting the command as still running".
+S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is
+its steps between awaits, read from the code: awaits, checks of a sleep's or
+`confirm`'s result or of `notStarted`, and effects the programmer sees. An
+interrupt comes at any await. Two defenses keep S14. A `type` cut after a chunk
+returns only what's left of it (`RestOnly`), and a `run` interrupted while its
+command keeps running counts as played (`ConsumeRun`). Unit tests cover both:
+"returns what's left of a type cut inside its second part" and "stops waiting
+when the programmer interrupts, reporting the command as still running".
 
 | Spec | Code |
 |---|---|
@@ -331,7 +440,9 @@ S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is 
 
 ### `Player`: a delete while the programmer edits
 
-The `delete` action in `packages/core/src/player.ts`, between its awaits, while the programmer types in front of the selection or behind it. `ReadAfterAwait` and `CheckInterrupt` are the fix for #49.
+The `delete` action in `packages/core/src/player.ts`, between its awaits, while
+the programmer types in front of the selection or behind it. `ReadAfterAwait`
+and `CheckInterrupt` are the fix for #49.
 
 | Spec | Code |
 |---|---|
@@ -340,7 +451,11 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 
 ### `BatchFile`: the file each action of a batch acts in
 
-`names`, `fileOf`, `type` and `delete` in `packages/core/src/player.ts`, over every sequence of up to 4 actions, each with `file` of `a`, `b`, or none, from any cursor. A `point` names a file without moving the cursor, so with the cursor elsewhere an action without `file` looked in the cursor's file, and a `type` or `delete` edited it. `FallBackToNamed` and `CursorInNamed` are the fix for #58.
+`names`, `fileOf`, `type` and `delete` in `packages/core/src/player.ts`, over
+every sequence of up to 4 actions, each with `file` of `a`, `b`, or none, from
+any cursor. A `point` names a file without moving the cursor, so with the cursor
+elsewhere an action without `file` looked in the cursor's file, and a `type` or
+`delete` edited it. `FallBackToNamed` and `CursorInNamed` are the fix for #58.
 
 | Spec | Code |
 |---|---|
@@ -350,7 +465,11 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 
 ### `Draft`: the reply box's pause, across the view's page
 
-`packages/vscode/src/webview/panel.ts` (`syncDraft`, `takeDraft`) and `panel.ts` (`draft`, `reply`, `ready`, `onDidDispose`), with `Controller.pause` and `resume`. A draft in the reply box pauses playback for the reason "reply". `ClearOnReady` is the fix for #69: a new page (`ready`) and a disposed view have no draft, so they remove that reason.
+`packages/vscode/src/webview/panel.ts` (`syncDraft`, `takeDraft`) and `panel.ts`
+(`draft`, `reply`, `ready`, `onDidDispose`), with `Controller.pause` and
+`resume`. A draft in the reply box pauses playback for the reason "reply".
+`ClearOnReady` is the fix for #69: a new page (`ready`) and a disposed view have
+no draft, so they remove that reason.
 
 | Spec | Code |
 |---|---|
@@ -360,7 +479,12 @@ The `delete` action in `packages/core/src/player.ts`, between its awaits, while 
 
 ### `RunBox`: the panel's run box
 
-One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and the page's `case "run"` and `setActive` in `webview/panel.ts`. Every way a run ends posts a phase other than `confirm` and `running`, which clears the box: skipped or interrupted at the confirmation (`declined`), a command that never started or threw (`declined`), and one that ran (`done`, `background`). A session ending clears it too.
+One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and
+the page's `case "run"` and `setActive` in `webview/panel.ts`. Every way a run
+ends posts a phase other than `confirm` and `running`, which clears the box:
+skipped or interrupted at the confirmation (`declined`), a command that never
+started or threw (`declined`), and one that ran (`done`, `background`). A
+session ending clears it too.
 
 | Spec | Code |
 |---|---|
@@ -371,7 +495,14 @@ One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and t
 
 ### `FileText`: the text the session takes for a file
 
-`getText` and `show` in `packages/vscode/src/editor.ts`, for #88 and #89. One file, on disk or absent, and a document VS Code may hold for it, with or without a tab. VS Code keeps a document after its file is deleted, and reloads one without unsaved changes some time after its file changes. `Fixed` is the fix for both: a document with unsaved changes is the programmer's text; otherwise a file not on disk is `MissingFile`; and `show` creates a missing file by emptying and saving a document VS Code kept for it, never one with unsaved changes (`KeepsUnsaved`).
+`getText` and `show` in `packages/vscode/src/editor.ts`, for #88 and #89. One
+file, on disk or absent, and a document VS Code may hold for it, with or without
+a tab. VS Code keeps a document after its file is deleted, and reloads one
+without unsaved changes some time after its file changes. `Fixed` is the fix for
+both: a document with unsaved changes is the programmer's text; otherwise a file
+not on disk is `MissingFile`; and `show` creates a missing file by emptying and
+saving a document VS Code kept for it, never one with unsaved changes
+(`KeepsUnsaved`).
 
 | Spec | Code |
 |---|---|
@@ -382,7 +513,14 @@ One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and t
 
 ### `Outside`: marking files changed outside the protocol
 
-The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts` in `packages/vscode/src`. One file, written by VS Code's saves, by the extension's own `show`, and by anything else; a watcher that reports writes late and merges them. The code marks a file when a group of writes settles, if the file differs from the text it knows: the last VS Code wrote, or the programmer saw. A timing assumption: VS Code tells of a save (`onDidSaveTextDocument`) within milliseconds, before the group settles, and nothing the programmer does falls in between.
+The feature of #15, specified before its code: `outside.ts` and
+`outsideWatch.ts` in `packages/vscode/src`. One file, written by VS Code's
+saves, by the extension's own `show`, and by anything else; a watcher that
+reports writes late and merges them. The code marks a file when a group of
+writes settles, if the file differs from the text it knows: the last VS Code
+wrote, or the programmer saw. A timing assumption: VS Code tells of a save
+(`onDidSaveTextDocument`) within milliseconds, before the group settles, and
+nothing the programmer does falls in between.
 
 | Spec | Code |
 |---|---|
@@ -394,11 +532,28 @@ The feature of #15, specified before its code: `outside.ts` and `outsideWatch.ts
 
 ### `ProjectGuide`: which project guides `start` reads
 
-The feature of #23, specified before its code: `projectGuides` in `packages/relay/src/guide.ts`. Checked over every small tree, as `ASSUME`s: walking up from the working directory to the workspace folder gives exactly the guides on that path that git doesn't ignore, outer first, and none above the folder. Walking past the folder, or reading an ignored guide, is caught.
+The feature of #23, specified before its code: `projectGuides` in
+`packages/relay/src/guide.ts`. Checked over every small tree, as `ASSUME`s:
+walking up from the working directory to the workspace folder gives exactly the
+guides on that path that git doesn't ignore, outer first, and none above the
+folder. Walking past the folder, or reading an ignored guide, is caught.
 
 ### `Resume`: a session that waits for its agent
 
-The feature of #25, specified before its code: `disconnect`, `start`, `resumeSession`, `saved`, `revive` and `endSession` in `packages/core/src/controller.ts`, with the extension saving the session in the workspace's storage (`extension.ts`). A session whose agent disconnects, or that the window reloads with, is suspended, not ended, and waits until the programmer ends it or a `start` resumes it. Checked: a `start` from its directory resumes the same session (`ResumesSame`); it leaves the suspended state only to resume, end, or give way to a session from another directory (`Waits`); the storage holds the session as it is (`SavedIsCurrent`); a message isn't lost while it waits, or across a reload (`NotLost`); and the panel shows the session as it is (`ShownIsState`; #138: after a reload, the replayed history showed a suspended session as live). The spec saves with every change; the code saves 200 ms after the last one and again as the window goes, so a reload within 200 ms of a change relies on that last save.
+The feature of #25, specified before its code: `disconnect`, `start`,
+`resumeSession`, `saved`, `revive` and `endSession` in
+`packages/core/src/controller.ts`, with the extension saving the session in the
+workspace's storage (`extension.ts`). A session whose agent disconnects, or that
+the window reloads with, is suspended, not ended, and waits until the programmer
+ends it or a `start` resumes it. Checked: a `start` from its directory resumes
+the same session (`ResumesSame`); it leaves the suspended state only to resume,
+end, or give way to a session from another directory (`Waits`); the storage
+holds the session as it is (`SavedIsCurrent`); a message isn't lost while it
+waits, or across a reload (`NotLost`); and the panel shows the session as it is
+(`ShownIsState`; #138: after a reload, the replayed history showed a suspended
+session as live). The spec saves with every change; the code saves 200 ms after
+the last one and again as the window goes, so a reload within 200 ms of a change
+relies on that last save.
 
 | Spec | Code |
 |---|---|
@@ -429,7 +584,12 @@ Each property was proved to bite with a mutation of a copy of the model:
 
 ### `Navigator`: the programmer's edits, reported when they pause
 
-`userEdit`, the navigator timer, `ready` for `listen`, and `snapshot` in `packages/core/src/controller.ts`. During the programmer's turn, a `listen` returns for their edits only once they pause typing (`navigatorIdleMs` after their last edit), so the agent comments on a whole thought. `ResetReady` is the fix: an edit takes back `navigatorReady`, which a pause before it set, so a `listen` made after the programmer resumes typing waits for their next pause.
+`userEdit`, the navigator timer, `ready` for `listen`, and `snapshot` in
+`packages/core/src/controller.ts`. During the programmer's turn, a `listen`
+returns for their edits only once they pause typing (`navigatorIdleMs` after
+their last edit), so the agent comments on a whole thought. `ResetReady` is the
+fix: an edit takes back `navigatorReady`, which a pause before it set, so a
+`listen` made after the programmer resumes typing waits for their next pause.
 
 | Spec | Code |
 |---|---|
@@ -439,7 +599,16 @@ Each property was proved to bite with a mutation of a copy of the model:
 
 ### `ListenGrace`: "Your move" between two idle listens
 
-`state`, `finishCall`, `block`, and `close` in `packages/core/src/controller.ts`. Issue #126: a `listen` that times out at `maxBlockMs` with nothing to report leaves no call open until the agent's next `listen`, a few seconds later, and the status showed "Agent is thinking" in that gap. `Grace` is the fix: such a timeout keeps the status "listening" for `listenGraceMs`, until the agent's next call, or until the programmer does something that wakes a `listen`. The grace changes only the status, not when a call returns or what a report holds, so no other spec changes. `Scroll` reads the status only through `FOLLOWING` in `editor.ts`, which holds both "thinking" and "listening".
+`state`, `finishCall`, `block`, and `close` in
+`packages/core/src/controller.ts`. Issue #126: a `listen` that times out at
+`maxBlockMs` with nothing to report leaves no call open until the agent's next
+`listen`, a few seconds later, and the status showed "Agent is thinking" in that
+gap. `Grace` is the fix: such a timeout keeps the status "listening" for
+`listenGraceMs`, until the agent's next call, or until the programmer does
+something that wakes a `listen`. The grace changes only the status, not when a
+call returns or what a report holds, so no other spec changes. `Scroll` reads
+the status only through `FOLLOWING` in `editor.ts`, which holds both "thinking"
+and "listening".
 
 | Spec | Code |
 |---|---|
@@ -472,7 +641,14 @@ Every property names the test that proves the code obeys it:
 
 ### `EditEvents`: an edit undone, in the report
 
-`recordEdit`, `otherEdit`, and `snapshot` in `packages/core/src/controller.ts`, for one file. A report has one edit event per file, its diff from the file's text at the first edit since the last report. An edit that interrupts (the programmer's, or a tool's to a file the queued batches edit) discards the agent's batches. `KeepInterrupts` is the fix: such an edit is reported even when the file ends up as it was, with an empty diff, so the agent knows why its batches were discarded. A tool's net-zero edit that interrupted nothing is still left out.
+`recordEdit`, `otherEdit`, and `snapshot` in `packages/core/src/controller.ts`,
+for one file. A report has one edit event per file, its diff from the file's
+text at the first edit since the last report. An edit that interrupts (the
+programmer's, or a tool's to a file the queued batches edit) discards the
+agent's batches. `KeepInterrupts` is the fix: such an edit is reported even when
+the file ends up as it was, with an empty diff, so the agent knows why its
+batches were discarded. A tool's net-zero edit that interrupted nothing is still
+left out.
 
 | Spec | Code |
 |---|---|
@@ -481,7 +657,19 @@ Every property names the test that proves the code obeys it:
 
 ### `Scroll`: follow mode's scrolling
 
-`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in `packages/vscode/src/editor.ts`, with `comfortable` and `landing` from `view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when the state stops following: a pause, or a command running. A pause ends in `resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut short goes on once the command is done, from `renderCursor`; before it, the view stayed where the glide stopped, with the target possibly out of view. The programmer's turn drops it. `beyond` is `editor.scrollBeyondLastLine`, either way: with it on (the default), the last line can scroll to the top. How long a glide takes (#123: `glideMs` in `controller.ts`, from the timing and the playback speed) is not modeled: a `Frame` carries no time, and `Move` and `Leave` can come between any two frames, so a longer or shorter glide is a run the model already has.
+`renderCursor`, `follow`, `keepInView`, `scroll`, and `glide` in
+`packages/vscode/src/editor.ts`, with `comfortable` and `landing` from
+`view.ts`, and `resume`'s `reveal` in `controller.ts`. A glide stops early when
+the state stops following: a pause, or a command running. A pause ends in
+`resume`, which reveals the target. `CatchUp` is the fix: a glide a command cut
+short goes on once the command is done, from `renderCursor`; before it, the view
+stayed where the glide stopped, with the target possibly out of view. The
+programmer's turn drops it. `beyond` is `editor.scrollBeyondLastLine`, either
+way: with it on (the default), the last line can scroll to the top. How long a
+glide takes (#123: `glideMs` in `controller.ts`, from the timing and the
+playback speed) is not modeled: a `Frame` carries no time, and `Move` and
+`Leave` can come between any two frames, so a longer or shorter glide is a run
+the model already has.
 
 | Spec | Code |
 |---|---|
@@ -491,7 +679,12 @@ Every property names the test that proves the code obeys it:
 
 ### `Turns`: only talk during the programmer's turn
 
-S6 in `packages/core/src/player.ts`: `perform` checks the turn as each action starts, a turn change interrupts (`takeTurn`, `handBack` in `controller.ts`), and each action that edits checks for an interrupt after its awaits, before its effect. A batch may start at any time, from either turn, which is more than the controller allows. `DeleteChecks` is the fix for #49, which also let a `delete` take effect after the programmer took the turn.
+S6 in `packages/core/src/player.ts`: `perform` checks the turn as each action
+starts, a turn change interrupts (`takeTurn`, `handBack` in `controller.ts`),
+and each action that edits checks for an interrupt after its awaits, before its
+effect. A batch may start at any time, from either turn, which is more than the
+controller allows. `DeleteChecks` is the fix for #49, which also let a `delete`
+take effect after the programmer took the turn.
 
 | Spec | Code |
 |---|---|
@@ -502,7 +695,12 @@ S6 in `packages/core/src/player.ts`: `perform` checks the turn as each action st
 
 ### `Reload`: a file changed on disk
 
-S10 and S11 for `otherEdit` and `recordEdit` in `packages/core/src/controller.ts`, with the change VS Code reports when it reloads a document from disk. Measured in an integration run, that is one change from the first line that differs to the last, unchanged lines included. `Refine` is the fix for #65: `lineChanges` in `diff.ts` splits it into one change per run of changed lines.
+S10 and S11 for `otherEdit` and `recordEdit` in
+`packages/core/src/controller.ts`, with the change VS Code reports when it
+reloads a document from disk. Measured in an integration run, that is one change
+from the first line that differs to the last, unchanged lines included. `Refine`
+is the fix for #65: `lineChanges` in `diff.ts` splits it into one change per run
+of changed lines.
 
 | Spec | Code |
 |---|---|
@@ -511,7 +709,19 @@ S10 and S11 for `otherEdit` and `recordEdit` in `packages/core/src/controller.ts
 
 ### `Rehearsal`: line identities across a rehearsal
 
-S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player's `knows`. Each line has a ghost, which line it really is, next to the tracker's id, and changes are whole lines inserted or deleted or an edit within a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change by others to a file the queue edits interrupts it (`OtherInterrupts`), and `adopt` takes the fork's ids only for a text that reads as in the fork (`AdoptChecksText`). Up to two batches are queued, each rehearsed from the one before. `ReadIsStart`: right after a read, the agent's next batch is checked against what it was shown. `ShareIds` is the fix for a bug this spec found: `followChange` gave a queued batch's fork its own id for a line a tool inserted, unlike the editor's id the agent was shown, so a line the agent had just read was refused. Now the fork drops its copy of the file's ids, and reads the editor's.
+S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the
+player's `knows`. Each line has a ghost, which line it really is, next to the
+tracker's id, and changes are whole lines inserted or deleted or an edit within
+a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change
+by others to a file the queue edits interrupts it (`OtherInterrupts`), and
+`adopt` takes the fork's ids only for a text that reads as in the fork
+(`AdoptChecksText`). Up to two batches are queued, each rehearsed from the one
+before. `ReadIsStart`: right after a read, the agent's next batch is checked
+against what it was shown. `ShareIds` is the fix for a bug this spec found:
+`followChange` gave a queued batch's fork its own id for a line a tool inserted,
+unlike the editor's id the agent was shown, so a line the agent had just read
+was refused. Now the fork drops its copy of the file's ids, and reads the
+editor's.
 
 | Spec | Code |
 |---|---|
@@ -523,7 +733,8 @@ S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player'
 
 ### `Terminals`: running commands
 
-`packages/vscode/src/terminal.ts`: `acquire`, the wait for shell integration, the command, and what ends each wait.
+`packages/vscode/src/terminal.ts`: `acquire`, the wait for shell integration,
+the command, and what ends each wait.
 
 | Spec | Code |
 |---|---|
@@ -536,7 +747,10 @@ S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the player'
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`
 
-These have no state or concurrency, so each spec is a model of the function and `ASSUME`s that TLC checks over every small input. Each also has an exhaustive test that checks the same properties on the code itself, so the model and the code are held to one contract.
+These have no state or concurrency, so each spec is a model of the function and
+`ASSUME`s that TLC checks over every small input. Each also has an exhaustive
+test that checks the same properties on the code itself, so the model and the
+code are held to one contract.
 
 | Spec | Code | Contract | Test |
 |---|---|---|---|
@@ -546,7 +760,8 @@ These have no state or concurrency, so each spec is a model of the function and 
 
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
-These three contracts from #19 are about what the code accepts or writes, not about states, so they are tests on the code, not TLA+.
+These three contracts from #19 are about what the code accepts or writes, not
+about states, so they are tests on the code, not TLA+.
 
 | Contract | Test |
 |---|---|
@@ -556,4 +771,5 @@ These three contracts from #19 are about what the code accepts or writes, not ab
 
 ## Keeping specs and code in step
 
-Nothing ties a spec to its code but the tables above. When code in one of the files above changes, update its spec, and run `specs/check.sh`.
+Nothing ties a spec to its code but the tables above. When code in one of the
+files above changes, update its spec, and run `specs/check.sh`.

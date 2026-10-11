@@ -1,6 +1,8 @@
 # What the specs cover
 
-Every source file under `packages/*/src`, function by function: the spec that models it, or why it has none (#19). The specs themselves are in [README.md](README.md).
+Every source file under `packages/*/src`, function by function: the spec that
+models it, or why it has none (#19). The specs themselves are in
+[README.md](README.md).
 
 Code goes without a spec for one of these reasons:
 

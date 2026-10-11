@@ -1,0 +1,28 @@
+// markdownlint, set to Google's Markdown style guide (#136). Prettier does not format Markdown here.
+{
+  "config": {
+    "default": true,
+    // ATX-style headings.
+    "MD003": { "style": "atx" },
+    "MD004": { "style": "consistent" },
+    // Nested list spacing: 4 columns per level, 3 spaces after a bullet and 2 after a number when a list wraps or nests.
+    "MD007": { "indent": 4 },
+    "MD030": { "ul_single": 1, "ol_single": 1, "ul_multi": 3, "ol_multi": 2 },
+    // Trailing whitespace: none, not even for a line break.
+    "MD009": { "br_spaces": 0 },
+    // Character line limit: 80, except code blocks, tables, headings, and an unbreakable link.
+    "MD013": { "line_length": 80, "code_blocks": false, "tables": false, "headings": false },
+    // Use unique, complete names for headings.
+    "MD024": { "siblings_only": false },
+    // Lazy numbering for long lists, or full numbering.
+    "MD029": { "style": "one_or_ordered" },
+    // Fenced code blocks, with backticks.
+    "MD046": { "style": "fenced" },
+    "MD048": { "style": "backtick" },
+    // The guide's own example puts a bare URL in a sentence.
+    "MD034": false,
+    // Not in the guide.
+    "MD060": false,
+  },
+  "ignores": ["node_modules/**", "blueprints/notes/**"],
+}
