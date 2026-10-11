@@ -221,6 +221,7 @@ export class Player {
     // An action so far changed something the programmer sees.
     let effect = false
     for (let i = 0; i < actions.length; i++) {
+      // specs/Turns.tla, `Start`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect)
       let outcome: Outcome
       try {
@@ -279,6 +280,7 @@ export class Player {
     if (typeof named === "object") return named
     const fields = fieldsProblem(action)
     if (fields) return fail("invalid_action", fields)
+    // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
     if (s.turn === "user" && !("say" in action) && !("point" in action)) {
       return fail("not_your_turn", "During the programmer's turn, only `say` and `point` are allowed.")
     }
@@ -386,7 +388,7 @@ export class Player {
       await editor.show(file)
       this.stage.lines.of(file, await editor.getText(file))
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
-      // read the selection only now (#49).
+      // read the selection only now (#49): specs/Turns.tla, `TakeEffect`.
       if (this.stage.pacing.isInterrupted) return { kind: "interrupted" }
       if (!s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
       const { start, end } = s.selection

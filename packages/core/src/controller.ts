@@ -451,6 +451,7 @@ export class Controller {
     s.scene.focus = "cursor"
     s.events.push({ kind: "turn", to: "user" })
     this.panel.post({ type: "turn", to: "user" })
+    // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(s)
     this.update()
   }
@@ -465,6 +466,7 @@ export class Controller {
     if (selection) event.selection = this.excerpt(s, selection)
     s.events.push(event)
     this.panel.post({ type: "turn", to: "agent", message, ref: selection && this.ref(selection) })
+    // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(s)
     this.update()
   }

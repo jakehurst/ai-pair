@@ -74,7 +74,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Resume.cfg` | 2 directories, up to 3 sessions, `PostOnRevive = TRUE` | holds | 62 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
-| `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
+| `Turns.cfg` | batches of up to 2 actions, `MaxChanges = 2` turn changes | holds | 538 |
 | `Reload.cfg` | `N = 5` lines, any of them changed on disk | holds | 160 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches, up to 2 queued | holds | 34,939 |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
@@ -922,8 +922,25 @@ take effect after the programmer took the turn.
 |---|---|
 | `Begin` | `startHead`: the next batch, with `timeline.reset()` |
 | `Start` | the loop in `actions` checking `isInterrupted`; `perform` rejecting with `not_your_turn` |
-| `Effect` | the action after its awaits: `type`'s `delay` before each chunk, `delete`'s check after `show` and `getText`, `run`'s `notStarted` after `shellIntegration` |
-| `Change` | `takeTurn` or `handBack`, which call `interrupt()` |
+| `TakeEffect` | the action after its awaits: `type`'s `delay` before each chunk, `delete`'s check after `show` and `getText`, `run`'s `notStarted` after `shellIntegration` |
+| `ChangeTurn` | `takeTurn` or `handBack`, which call `interrupt()` |
+
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| an action leaves a third phase | `TypeOK` |
+| `DeleteChecks = FALSE`, the code before #49 | `OnlyTalkInTheirTurn` |
+| `Start` never moves an action on | `BatchEnds` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `OnlyTalkInTheirTurn` | `controller.test.ts`: OnlyTalkInTheirTurn: lets the agent only comment during the programmer's turn; OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing |
+| `BatchEnds` | `controller.test.ts`: BatchEnds: returns the first step immediately and blocks the second until the first finishes |
 
 ### `Reload`: a file changed on disk
 

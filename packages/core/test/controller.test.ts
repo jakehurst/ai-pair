@@ -14,7 +14,7 @@ afterEach(() => {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe("timing", () => {
-  it("returns the first step immediately and blocks the second until the first finishes", async () => {
+  it("BatchEnds: returns the first step immediately and blocks the second until the first finishes", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
 
@@ -995,7 +995,7 @@ describe("interruptions", () => {
     expect(editor.text("a.ts")).toBe("xyz\n")
   })
 
-  it("stops a delete when the programmer takes the turn while it starts, and deletes nothing", async () => {
+  it("OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing", async () => {
     const { editor, controller } = setup({ "a.ts": "keep DELETE keep\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -1235,7 +1235,7 @@ describe("turns", () => {
     expect(following.value!.events).toEqual([{ kind: "edit", file: "a.ts", diff: expect.stringContaining("+abcde"), by: "programmer" }])
   })
 
-  it("lets the agent only comment during the programmer's turn", async () => {
+  it("OnlyTalkInTheirTurn: lets the agent only comment during the programmer's turn", async () => {
     const { editor, controller } = setup({ "a.ts": "for (i <= n)\n" })
     await controller.start()
     await controller.read("a.ts")
