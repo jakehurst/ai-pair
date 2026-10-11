@@ -888,6 +888,24 @@ Each names the test that proves the code obeys it:
 | `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines' |
 | `Distinct`, `Untouched`, `WithinALine`, `BreakAtEnd`, `BreakAtStart` | the same test |
 
+#### `Places`
+
+Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `SpotsOnLine` ignores the line | `SpotOK` |
+| `ResolveSpot` takes any match on the line, not only a single one | `SpotOnlyWhenUnique` |
+| `ResolveText` ignores the line | `SpanOK` |
+| a `through` may start inside `from` | `RangeOK` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `SpotOK`, `SpotOnlyWhenUnique` | `places.exhaustive.test.ts`: SpotOK, SpotOnlyWhenUnique: resolves a spot only when one match has its marker on the line, and puts it there |
+| `SpanOK`, `RangeOK` | `places.exhaustive.test.ts`: SpanOK, RangeOK: resolves a span only when its text starts once on the line, and a range to the first `through` after it |
+
 #### `Typing`
 
 Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:

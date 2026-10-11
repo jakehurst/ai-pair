@@ -78,7 +78,8 @@ function onLine(text: string, line: number, needle: string, found: number[], wha
   }
 }
 
-/** Resolves a spot: where the cursor marker is in `at`, found by the text around it, on `line`. */
+/** Resolves a spot: where the cursor marker is in `at`, found by the text around it, on `line`
+ * (specs/Places.tla, `ResolveSpot`). */
 export function resolveSpot(text: string, spot: { at: string; line: number }): Resolution {
   const { whole, found } = findSpot(text, spot.at)
   const at = onLine(text, spot.line, whole, found, "the spot")
@@ -87,7 +88,7 @@ export function resolveSpot(text: string, spot: { at: string; line: number }): R
 
 /**
  * Resolves a span: its `text`, or `from`, starting on `line`; a range ends with the first
- * `through` after `from`.
+ * `through` after `from`. specs/Places.tla, `ResolveText` and `ResolveRange`.
  */
 export function resolveSpan(text: string, span: Span): Resolution {
   const first = unmarked(span.text ?? span.from ?? "")

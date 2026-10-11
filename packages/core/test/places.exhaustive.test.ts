@@ -28,7 +28,7 @@ const lineOf = (text: string, offset: number) => position(text, offset).line
 const lineCount = (text: string) => text.split("\n").length
 
 it(
-  "resolves a spot only when one match has its marker on the line, and puts it there",
+  "SpotOK, SpotOnlyWhenUnique: resolves a spot only when one match has its marker on the line, and puts it there",
   () => {
     for (const text of strings(5)) {
       for (const before of strings(3)) {
@@ -52,7 +52,7 @@ it(
 )
 
 it(
-  "resolves a span only when its text starts once on the line, and a range to the first `through` after it",
+  "SpanOK, RangeOK: resolves a span only when its text starts once on the line, and a range to the first `through` after it",
   () => {
     for (const text of strings(5)) {
       for (const find of strings(3)) {
