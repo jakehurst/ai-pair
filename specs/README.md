@@ -607,9 +607,31 @@ elsewhere an action without `file` looked in the cursor's file, and a `type` or
 
 | Spec | Code |
 |---|---|
-| `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete`; only `move` and `select` move the cursor |
+| `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete` |
+| `Say` | a `say`, which acts in no file |
+| `ActInFile` | `move`, `select` and `point` in the file `fileOf` gives; only `move` and `select` move the cursor |
+| `ActAtCursor` | `type` and `delete` at the cursor, rejected with it outside the named file |
 | `Reject` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file |
-| `NextBatch` | a new `Playing` for the next batch; the cursor stays |
+| `EndBatch` | a new `Playing` for the next batch; the cursor stays |
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| a rejected action's file is the string `"none"`, the sentinel before #148 | `TypeOK` |
+| `FallBackToNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
+| `CursorInNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
+| `ActAtCursor` rejects an edit in a batch that named no file | `EditAtCursorProp` |
+
+Every invariant and property names the test that proves the code obeys it; the
+test's title carries its name:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `ActsInNamedFile` | `controller.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing |
+| `EditAtCursorProp` | `controller.test.ts`: EditAtCursorProp: rejects a batch that works in more than one file at the action that switches, queueing nothing of it |
 
 ### `Draft`: the reply box's pause, across the view's page
 

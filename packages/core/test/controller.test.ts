@@ -881,7 +881,7 @@ describe("reports", () => {
     expect(report.batches[0]).toMatchObject({ status: "interrupted", unplayed: [{ type: `${CURSOR_MARKER}{}` }] })
   })
 
-  it("rejects a batch that works in more than one file at the action that switches, queueing nothing of it", async () => {
+  it("EditAtCursorProp: rejects a batch that works in more than one file at the action that switches, queueing nothing of it", async () => {
     const { controller } = setup({ "a.ts": "", "b.ts": "x" })
     await controller.start()
     await controller.read("b.ts")
@@ -905,7 +905,7 @@ describe("reports", () => {
     })
   })
 
-  it("looks in the file its batch named for an action without `file`, not the cursor's", async () => {
+  it("ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's", async () => {
     const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\nsecond\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -921,7 +921,7 @@ describe("reports", () => {
     expect(selected.rejected).toBeUndefined()
   })
 
-  it("looks in the file its batch named before the agent's cursor is in any file", async () => {
+  it("ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file", async () => {
     const { controller } = setup({ "b.ts": "b\nsecond\n" })
     await controller.start()
     await controller.read("b.ts")
@@ -929,7 +929,7 @@ describe("reports", () => {
     expect(report.rejected).toBeUndefined()
   })
 
-  it("rejects a type or delete with the cursor outside the file its batch named, editing nothing", async () => {
+  it("ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing", async () => {
     const { editor, controller } = setup({ "a.ts": "a\n", "b.ts": "b\n" })
     await controller.start()
     await controller.read("a.ts")

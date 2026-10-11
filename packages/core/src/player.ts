@@ -146,6 +146,7 @@ export class Player {
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
   async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[] }> {
+    // specs/BatchFile.tla, `EndBatch`: each batch starts with no file named and nothing edited; the cursor stays.
     const playing: Playing = { touched: new Set(), runs: [], sightings: [], edited: false, moved: false }
     this.playing = playing
     let result: BatchResult
@@ -276,6 +277,7 @@ export class Player {
         `One action per object, got ${kinds.map((k) => `\`${k}\``).join(" and ")}: make them separate actions, in order.`,
       )
     }
+    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Reject`.
     const named = this.names(action, playing)
     if (typeof named === "object") return named
     const fields = fieldsProblem(action)
@@ -284,7 +286,8 @@ export class Player {
     if (s.turn === "user" && !("say" in action) && !("point" in action)) {
       return fail("not_your_turn", "During the programmer's turn, only `say` and `point` are allowed.")
     }
-    // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file.
+    // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
+    // (specs/BatchFile.tla, `ActAtCursor`).
     const atCursor = "type" in action || "type_fast" in action || "delete" in action
     if (atCursor && playing.named !== undefined && s.cursor && s.cursor.file !== playing.named) {
       return fail(
@@ -578,7 +581,10 @@ export class Player {
     return this.stage.editor.edit(file, change.offset, change.deleteLength, change.text, options)
   }
 
-  /** The file an action names, or else the one its batch named, or else the cursor's. */
+  /**
+   * The file an action names, or else the one its batch named, or else the cursor's: `looks` in
+   * specs/BatchFile.tla, `Act`, the file `ActInFile` acts in.
+   */
   private fileOf(target: { file?: string }, playing: Playing): string | undefined {
     if (target.file !== undefined) return this.resolvePath(target.file)
     return playing.named ?? this.scene.cursor?.file
