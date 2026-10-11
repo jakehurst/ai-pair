@@ -212,7 +212,7 @@ function setNow(text: string): void {
   fileCurrent()
   current = text
   filed = false
-  ui.now.className = ""
+  ui.now.classList.remove("empty")
   ui.now.innerHTML = rich(text)
   // The agent points first, then says what's there.
   ui.ref.replaceChildren(...(pointed ? [pointed] : []))
@@ -331,7 +331,7 @@ function setState(e: Extract<PanelEvent, { type: "state" }>): void {
 function clearRun(): void {
   runId = null
   runConfirming = false
-  ui.run.className = ""
+  ui.run.classList.remove("on", "confirm")
   ui.run.removeAttribute("role")
 }
 
@@ -342,6 +342,7 @@ function setActive(on: boolean): void {
   if (!on) {
     suspended = false
     reading = null
+    // specs/RunBox.tla, End: the session ending clears the box.
     clearRun()
     closeSpeedMenu()
     closeReadingMenu()
@@ -384,7 +385,7 @@ function handle(e: ToPanel): void {
         fileCurrent()
         current = null
         state = null
-        ui.now.className = "empty"
+        ui.now.classList.add("empty")
         ui.now.textContent = "Waiting for the agent" + ELLIPSIS
         ui.ref.innerHTML = ""
         pointed = null
@@ -429,10 +430,12 @@ function handle(e: ToPanel): void {
       pointed = codeLink(RIGHT_ARROW + " " + e.file + ":" + e.line, e.file, e.line)
       return
     case "run": {
+      // specs/RunBox.tla, Show: confirm and running show the box; a phase that ends the run clears it.
       if (e.phase === "confirm" || e.phase === "running") {
         runId = e.id
         runConfirming = e.phase === "confirm"
-        ui.run.className = "on" + (runConfirming ? " confirm" : "")
+        ui.run.classList.add("on")
+        ui.run.classList.toggle("confirm", runConfirming)
         // A command waiting for the programmer's decision is announced at once (#16).
         if (runConfirming) ui.run.setAttribute("role", "alert")
         else ui.run.removeAttribute("role")

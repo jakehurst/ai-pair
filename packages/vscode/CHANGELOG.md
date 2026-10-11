@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.4
+
+- A command's output, as the agent sees it, no longer runs a tool's progress lines together.
+  Prettier's file list and npm's spinner, which redraw one line in place, now show only what
+  the line ends with.
+- The panel's styles load from a stylesheet of their own, so the panel no longer allows inline
+  styles.
+
 ## 0.4.3
 
 - The status no longer flashes "Agent is thinking" every 45 seconds while the agent is only

@@ -2,6 +2,7 @@
 !dist/extension.js
 !dist/relay.js
 !dist/panel.js
+!dist/panel.css
 !package.json
 !README.md
 !CHANGELOG.md

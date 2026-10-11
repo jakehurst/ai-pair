@@ -13,11 +13,21 @@ const COMMAND_OUTPUT_START = "\x1b]633;C\x07"
 const COMMAND_FINISHED_OK = "\x1b]633;D;0\x07"
 const GREEN = "\x1b[32m"
 const RESET_COLOR = "\x1b[0m"
+// Line redraws, as Prettier and npm write them.
+const ERASE_LINE = "\x1b[2K"
+const ERASE_TO_LINE_END = "\x1b[0K"
+const CURSOR_TO_COLUMN_1 = "\x1b[1G"
 
 describe("terminal text", () => {
   it("drops colors and shell integration sequences, and resolves progress overwrites", () => {
     const raw = `${COMMAND_OUTPUT_START}${GREEN}ok${RESET_COLOR} 4 passed\r\n 10%\r 50%\r100%\r\n${COMMAND_FINISHED_OK}`
     expect(terminalText(raw)).toBe("ok 4 passed\n100%")
+  })
+
+  it("resolves a line redrawn by moving the cursor to column 1", () => {
+    const prettier = `Checking formatting...\r\na.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}b.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}All matched files use Prettier code style!\r\n`
+    const npmSpinner = `/${CURSOR_TO_COLUMN_1}${ERASE_TO_LINE_END}`
+    expect(terminalText(prettier + npmSpinner)).toBe("Checking formatting...\nAll matched files use Prettier code style!")
   })
 })
 
