@@ -863,6 +863,26 @@ code are held to one contract.
 | `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts`, with `through` up to 2 characters (the spec: 3) |
 | `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts`, texts up to 5 characters (the spec: 7) |
 
+Each is a module of `ASSUME`s alone, with a config that only gives the
+constants (the guide's 8.7, item 6): TLC checks the `ASSUME`s and explores no
+states.
+
+#### `Typing`
+
+Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| a line feed's chunk drops the line feed | `ConcatenatesToText` |
+| an "x" shares its chunk with the character after it | `ChunksAreUnits` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `ConcatenatesToText` | `typing.exhaustive.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
+| `ChunksAreUnits` | the same test |
+
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
 These three contracts from #19 are about what the code accepts or writes, not
