@@ -2,9 +2,8 @@ import { ok } from 'node:assert/strict';
 import * as nodePath from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
-import type { SavedSession } from '../src/controller';
 import type { PanelEvent } from '../src/ports';
-import { advance, anyString, containing, matching, setup, testConfig, track, until } from './fake';
+import { advance, anyString, containing, matching, setup, testConfig, throughStorage, track, until } from './fake';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -1710,9 +1709,7 @@ describe('sessions', () => {
     await before.controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }]);
     await until(before.controller.step([]));
     before.controller.userMessage('still there?');
-    // The controller's own `saved`, through JSON, as the workspace's storage holds it.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const saved = JSON.parse(JSON.stringify(before.controller.saved)) as SavedSession;
+    const saved = throughStorage(before.controller.saved);
     const after = setup({ 'a.ts': 'one\ntwo\n' });
     after.controller.revive(saved);
     expect(after.controller.isSuspended).toBe(true);
@@ -1724,8 +1721,7 @@ describe('sessions', () => {
   it('ShownIsState: a revived session tells the panel it is suspended (#138)', async () => {
     const before = setup();
     await before.controller.start('the task');
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const saved = JSON.parse(JSON.stringify(before.controller.saved)) as SavedSession;
+    const saved = throughStorage(before.controller.saved);
     const after = setup();
     after.controller.revive(saved);
     expect(after.panel.events).toContainEqual({ type: 'session', active: true, task: 'the task', suspended: true });

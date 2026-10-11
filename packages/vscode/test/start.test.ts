@@ -44,10 +44,16 @@ function setup(starter?: { available: boolean | 'manual' }) {
   if (starter) {
     const fake: Starter = {
       available: () =>
-        starter.available === 'manual' ? new Promise((resolve) => answers.push(resolve)) : Promise.resolve(starter.available),
+        starter.available === 'manual'
+          ? new Promise((resolve) => {
+              answers.push(resolve);
+            })
+          : Promise.resolve(starter.available),
       start: () => {
         started++;
-        return new Promise((resolve) => exits.push(resolve));
+        return new Promise((resolve) => {
+          exits.push(resolve);
+        });
       },
     };
     panel.starter = fake;

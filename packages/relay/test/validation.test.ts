@@ -69,7 +69,7 @@ const actions: unknown[] = [
 
 const schema = z.object(TOOLS.step.inputSchema);
 
-/** Whether the player rejects the action as malformed, played after a move that gives it a cursor and a selection. */
+/** Returns whether the player rejects the action as malformed, played after a move that gives it a cursor and a selection. */
 async function playerRejects(action: unknown): Promise<string | undefined> {
   vi.useFakeTimers();
   try {

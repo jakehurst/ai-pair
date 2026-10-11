@@ -29,7 +29,7 @@ afterEach(async () => {
 });
 
 /**
- * A fake editor window for `folder`. It answers `hello` with `greeting`, a `welcome` unless given,
+ * Starts a fake editor window for `folder`. It answers `hello` with `greeting`, a `welcome` unless given,
  * and keeps each socket and each call for the test to act on.
  */
 async function fakeWindow(folder: string, greeting = JSON.stringify({ type: 'welcome' })) {

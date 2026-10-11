@@ -160,7 +160,7 @@ export class Controller {
   private openCalls = 0;
   private chain: Promise<unknown> = Promise.resolve();
   private nextBatchId = 1;
-  private pauseReasons = new Set<PauseReason>();
+  private readonly pauseReasons = new Set<PauseReason>();
   private speed = 1;
   private readingSpeed = 1;
   private lastPosted = '';

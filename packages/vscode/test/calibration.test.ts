@@ -32,7 +32,15 @@ function setup() {
     },
   };
   const calibration = new Calibration(host, { title: 'Sample', text: 'one two three four', notice: 'free' });
-  return { calibration, views, calls, clock, release: () => release() };
+  return {
+    calibration,
+    views,
+    calls,
+    clock,
+    release: () => {
+      release();
+    },
+  };
 }
 
 it("PauseMatchesPhase, FreshRate, StoreLands: measures the rate from go to x over the passage's characters, and holds the pause until the rate is stored", async () => {
@@ -46,7 +54,9 @@ it("PauseMatchesPhase, FreshRate, StoreLands: measures the rate from go to x ove
   expect(calibration.reply('x')).toBe(true);
   expect(calls).toEqual(['pause', 'store 25']);
   release();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
   expect(calls).toEqual(['pause', 'store 25', 'resume']);
   expect(views[2]).toEqual({ phase: 'done', msPerChar: 25, wordsPerMinute: 533 });
 });

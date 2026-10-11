@@ -189,12 +189,18 @@ export async function playDemo(controller: Controller, root: string): Promise<vo
     for (const batch of SCRIPT) {
       const report = await stepScript(controller, batch, current);
       if (report.events.some((e) => e.kind === 'end')) return;
-      if (derailed(report)) return await stopEarly(controller);
+      if (derailed(report)) {
+        await stopEarly(controller);
+        return;
+      }
     }
     // An empty batch collects the last batch's report without waiting for the programmer.
     const report = await controller.step([]);
     if (report.events.some((e) => e.kind === 'end')) return;
-    if (derailed(report)) return await stopEarly(controller);
+    if (derailed(report)) {
+      await stopEarly(controller);
+      return;
+    }
     await controller.end(SUMMARY);
   } catch (e) {
     // The session was ended or replaced.

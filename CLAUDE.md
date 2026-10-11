@@ -95,7 +95,10 @@ Set by Justine on 2026-10-07.
     esbuild's text loader needs. These rules no tool checks, so follow them
     by hand:
     -   Give an arrow function a concise body only when its value is used;
-        otherwise a block (Arrow function bodies).
+        otherwise a block (Arrow function bodies). oxlint's
+        `no-confusing-void-expression` catches a body that calls a `void`
+        function; a body whose value is of another type and still unused, such
+        as `() => list.push(x)`, it does not.
     -   Brace every loop body, and both branches of an `if` with an `else`,
         even on one line; oxlint's `curly` catches only bodies on another
         line (Control flow statements and blocks).
@@ -107,6 +110,10 @@ Set by Justine on 2026-10-07.
         versus comments).
     -   Name an unclear argument, such as a bare boolean, with a
         `/* name= */` comment (Comments when calling a function).
+    -   Reach a private member only through the class's own methods; a test
+        that needs one gets a method, like `Bridge.connections()`, not
+        `obj['member']` (Properties used outside of class lexical scope;
+        oxlint's `dot-notation` flags the bracket).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`

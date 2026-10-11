@@ -140,6 +140,11 @@ export class Bridge {
     }
   }
 
+  /** Returns the relay connections open now. */
+  connections(): ReadonlySet<WebSocket> {
+    return this.server?.clients ?? new Set();
+  }
+
   dispose(): void {
     // specs/Discovery.tla, `CloseWindow`: the file goes with the window.
     try {

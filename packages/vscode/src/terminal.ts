@@ -41,9 +41,13 @@ function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promi
     const timer = setTimeout(() => {
       done(terminal.shellIntegration);
     }, SHELL_INTEGRATION_MS);
-    cleanup.push(() => clearTimeout(timer));
+    cleanup.push(() => {
+      clearTimeout(timer);
+    });
     signal.addEventListener('abort', abort, { once: true });
-    cleanup.push(() => signal.removeEventListener('abort', abort));
+    cleanup.push(() => {
+      signal.removeEventListener('abort', abort);
+    });
   });
 }
 
@@ -62,9 +66,13 @@ function stopWaiting(ms: number, signal: AbortSignal, ended: Promise<void>): Pro
       resolve(false);
     }
     const timer = setTimeout(done, ms);
-    cleanup.push(() => clearTimeout(timer));
+    cleanup.push(() => {
+      clearTimeout(timer);
+    });
     signal.addEventListener('abort', done, { once: true });
-    cleanup.push(() => signal.removeEventListener('abort', done));
+    cleanup.push(() => {
+      signal.removeEventListener('abort', done);
+    });
     void ended.then(done);
   });
 }

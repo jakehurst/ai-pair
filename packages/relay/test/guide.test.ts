@@ -17,7 +17,7 @@ afterEach(() => {
   fs.rmSync(top, { recursive: true, force: true });
 });
 
-/** A guide in `dir`, under the test's folder. */
+/** Writes a guide in `dir`, under the test's folder, and returns its path. */
 function guide(dir: string, text: string): string {
   const file = path.join(top, dir, GUIDE_FILE);
   fs.mkdirSync(path.dirname(file), { recursive: true });

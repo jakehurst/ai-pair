@@ -128,13 +128,21 @@ it("Settles: resolves a start once its agent's terminal closes, a refused start 
   installCli();
   setUp();
   const ended: string[] = [];
-  void starter.start().then(() => ended.push('first'));
-  void starter.start().then(() => ended.push('refused'));
-  await new Promise((resolve) => setTimeout(resolve));
+  void starter.start().then(() => {
+    ended.push('first');
+  });
+  void starter.start().then(() => {
+    ended.push('refused');
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve);
+  });
   expect(ended).toEqual([]);
   const first = created[0];
   ok(first);
   close(first);
-  await new Promise((resolve) => setTimeout(resolve));
+  await new Promise((resolve) => {
+    setTimeout(resolve);
+  });
   expect(ended).toEqual(['first', 'refused']);
 });

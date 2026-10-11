@@ -305,6 +305,7 @@ function showCalibration(view: CalibrationView): void {
     case 'idle':
       setNow('Calibration canceled; the reading speed is unchanged.');
       return;
+    default:
   }
 }
 

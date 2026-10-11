@@ -576,9 +576,13 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         resolve();
       }
       let quiet = setTimeout(done, SCROLL_QUIET_MS);
-      cleanup.push(() => clearTimeout(quiet));
+      cleanup.push(() => {
+        clearTimeout(quiet);
+      });
       const max = setTimeout(done, SCROLL_MAX_MS);
-      cleanup.push(() => clearTimeout(max));
+      cleanup.push(() => {
+        clearTimeout(max);
+      });
       const changes = vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
         if (e.textEditor !== editor) return;
         if (!smooth) {

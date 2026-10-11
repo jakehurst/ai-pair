@@ -36,7 +36,9 @@ export class OutsideChanges {
   reported(file: string): void {
     if (!this.group.includes(file)) this.group.push(file);
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.settle(), GROUP_MS);
+    this.timer = setTimeout(() => {
+      void this.settle();
+    }, GROUP_MS);
   }
 
   /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */

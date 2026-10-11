@@ -220,7 +220,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'start':
         // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
         // note (Settles).
-        void this.starter?.start().then(() => this.send({ type: 'startEnded' }));
+        void this.starter?.start().then(() => {
+          this.send({ type: 'startEnded' });
+        });
         return;
       case 'openChange':
         void this.openChange(m.file);
@@ -228,6 +230,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'openUrl':
         if (/^https?:\/\//.test(m.url)) void vscode.env.openExternal(vscode.Uri.parse(m.url));
         return;
+      default:
     }
   }
 

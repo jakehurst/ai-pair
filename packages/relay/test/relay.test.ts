@@ -80,7 +80,7 @@ async function until(check: () => boolean): Promise<void> {
 
 function noop(): void {}
 
-/** A promise the test resolves by hand, to hold a method at a gate until the test says so. */
+/** Returns a promise the test resolves by hand, to hold a method at a gate until the test says so. */
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   const d = { promise: Promise.resolve(), resolve: noop };
   d.promise = new Promise<void>((r) => {
@@ -427,7 +427,7 @@ describe('relay', () => {
     });
     // The in-memory transport closing doesn't close the WebSocket by itself; the process exiting
     // does. Simulate that by disposing of every relay connection.
-    for (const c of bridge['server']?.clients ?? []) {
+    for (const c of bridge.connections() ?? []) {
       c.close();
     }
     await new Promise((r) => {
@@ -568,15 +568,15 @@ describe('discovery', () => {
   it("FindsOpen: finds the window again after the relay's socket to it closes, while it stays open", async () => {
     const client = await connect();
     expect((await call(client, 'start')).error).toBe(false);
-    for (const c of bridge['server']?.clients ?? []) {
+    for (const c of bridge.connections() ?? []) {
       c.terminate();
     }
     await new Promise((r) => {
       setTimeout(r, 50);
     });
-    expect(bridge['server']?.clients.size).toBe(0);
+    expect(bridge.connections().size).toBe(0);
     expect((await call(client, 'start')).error).toBe(false);
-    expect(bridge['server']?.clients.size).toBe(1);
+    expect(bridge.connections().size).toBe(1);
   });
 });
 

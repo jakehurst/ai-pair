@@ -100,6 +100,7 @@ export async function run(): Promise<void> {
 
   // The demo, sped up. If our own edits were mistaken for the programmer's, it would stop early.
   api.controller.setSpeed(20);
+  api.controller.setReadingSpeed(10);
   const started = Date.now();
   await api.playDemo();
   console.log(`demo played in ${Date.now() - started} ms`);
@@ -154,15 +155,21 @@ export async function run(): Promise<void> {
   assert.ok((await buffer('tool.txt')).endsWith('abc\nend'));
   await c.end();
   console.log('RightAuthor, ChangesHandled: changes by others are reported as theirs');
+  // From here, nothing is timed against the playback until the glide tests: play fast.
+  c.setSpeed(10);
 
   // A keystroke just before the agent saves is the programmer's, even though its change event is
   // handled while the save runs (#40). The test's own edit stands in for the keystroke.
   fs.writeFileSync(file('race.txt'), 'a\n');
   const race = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('race.txt')));
   await c.start('save race');
-  await race.edit((b) => b.insert(new vscode.Position(0, 1), 'b'));
+  await race.edit((b) => {
+    b.insert(new vscode.Position(0, 1), 'b');
+  });
   await c.listen();
-  const keystroke = race.edit((b) => b.insert(new vscode.Position(0, 2), 'c'));
+  const keystroke = race.edit((b) => {
+    b.insert(new vscode.Position(0, 2), 'c');
+  });
   await api.editor.save(file('race.txt'));
   await keystroke;
   const raced = await c.listen();
@@ -367,6 +374,8 @@ export async function run(): Promise<void> {
   console.log(`a listen during the programmer's typing waited ${waited} ms for their pause`);
 
   // An edit the programmer undid still comes with the batches it discarded (specs/EditEvents.tla).
+  // The programmer's edit must land while the agent is still typing: real speed.
+  c.setSpeed(1);
   fs.writeFileSync(file('undone.txt'), 'abc\n');
   const undone = await vscode.workspace.openTextDocument(file('undone.txt'));
   await vscode.window.showTextDocument(undone);
@@ -467,7 +476,7 @@ export async function run(): Promise<void> {
     asked.batches.map((b) => b.status),
     ['interrupted'],
   );
-  c.setSpeed(1);
+  c.setSpeed(10);
   await c.end();
   console.log('an interrupt while a run saves stops it, without asking');
 
@@ -499,6 +508,7 @@ export async function run(): Promise<void> {
   await vscode.window.showTextDocument(inserted);
   await c.start('inserted');
   await c.read('inserted.txt');
+  c.setReadingSpeed(1);
   await c.step([{ say: Array.from({ length: 25 }, (_, i) => `word${i}`).join(' ') }]);
   fs.writeFileSync(file('inserted.txt'), 'XX\nhello\n');
   await until(() => inserted.getText() === 'XX\nhello\n');
@@ -509,6 +519,7 @@ export async function run(): Promise<void> {
   const movedThere = await c.step([{ move: { file: 'inserted.txt', line: 1, to: 'line_end' } }]);
   assert.equal(movedThere.rejected, undefined, JSON.stringify(movedThere.rejected));
   await c.step([]);
+  c.setReadingSpeed(10);
   await c.end();
   console.log('a line a tool inserted, read while a queued batch edits other files, is accepted');
 
@@ -594,6 +605,7 @@ export async function run(): Promise<void> {
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  c.setSpeed(1);
   await c.start('interrupt test');
   await c.step([{ move: { file: 'scratch.ts', line: 1, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
   const pending = c.step([{ type: `!${CURSOR_MARKER}` }]);

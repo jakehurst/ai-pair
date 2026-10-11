@@ -108,7 +108,22 @@
         ],
         "typescript/no-empty-object-type": "error",
         "typescript/no-wrapper-object-types": "error",
-        "typescript/ban-ts-comment": "error"
+        "typescript/ban-ts-comment": "error",
+        "typescript/no-unsafe-type-assertion": "error",
+        "typescript/prefer-readonly": "error",
+        "typescript/explicit-member-accessibility": [
+          "error",
+          {
+            "accessibility": "no-public"
+          }
+        ],
+        "typescript/dot-notation": "error",
+        "typescript/prefer-for-of": "error",
+        "typescript/no-this-alias": "error",
+        "typescript/no-confusing-void-expression": "error",
+        "eslint/default-case": "error",
+        "eslint/no-fallthrough": "error",
+        "unicorn/no-static-only-class": "error"
       }
     }
   ],

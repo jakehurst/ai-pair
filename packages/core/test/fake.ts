@@ -2,7 +2,7 @@ import * as nodePath from 'node:path';
 import { expect, vi } from 'vitest';
 import { withinFolder } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
-import { Controller } from '../src/controller';
+import { Controller, type SavedSession } from '../src/controller';
 import { MissingFile } from '../src/ports';
 import type {
   AgentState,
@@ -201,6 +201,17 @@ export function setup(files: Record<string, string> = {}, config: Partial<Config
   const controller = new Controller(editor, panel, { ...testConfig, ...config });
   editor.controller = controller;
   return { editor, panel, controller };
+}
+
+function isSavedSession(v: unknown): v is SavedSession {
+  return typeof v === 'object' && v !== null && 'scene' in v && 'finished' in v && 'events' in v;
+}
+
+/** Returns `saved` as the workspace's storage hands it back: through JSON. */
+export function throughStorage(saved: SavedSession | undefined): SavedSession {
+  const parsed: unknown = JSON.parse(JSON.stringify(saved));
+  if (!isSavedSession(parsed)) throw new Error(`not a saved session: ${JSON.stringify(parsed)}`);
+  return parsed;
 }
 
 /** Tracks a promise so tests can check whether it has settled yet. */
