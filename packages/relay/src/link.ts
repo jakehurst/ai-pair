@@ -74,6 +74,7 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
   for (const f of files) {
     try {
       const d: unknown = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"))
+      // specs/Discovery.tla, `Start`: the candidates hold a Discovery (`CheckFiles`) with a live pid.
       if (isDiscovery(d) && alive(d.pid)) windows.push(d)
     } catch {
       // Being written, or garbage.
@@ -227,7 +228,8 @@ export class EditorLink {
 
   /**
    * Tries the matching windows best first. A window's file can outlive it when VS Code didn't shut
-   * down cleanly, and its pid can then belong to another process, so an unreachable one is skipped.
+   * down cleanly, and its pid can then belong to another process, so an unreachable one is skipped
+   * (specs/Discovery.tla, `Try`).
    */
   private async open(): Promise<WebSocket> {
     let first: unknown
@@ -287,6 +289,7 @@ export class EditorLink {
         if (!welcomed) reject(new RelayError("no_editor", `Couldn't connect to the editor: ${e.message}`))
       })
       ws.on("close", () => {
+        // specs/Discovery.tla, `Disconnect`: the next call opens again.
         if (this.ws === ws) this.ws = null
         if (!welcomed) reject(new RelayError("no_editor", "The editor closed the connection."))
         for (const p of calls.values()) {

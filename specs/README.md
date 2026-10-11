@@ -270,12 +270,33 @@ mid-session is `Close` in `Wire`.
 
 | Spec | Code |
 |---|---|
-| `OpenW`, `CloseW`, `Crash`, `Reuse` | a window writing its file; `dispose()` removing it; a crash leaving it; its `pid` reused |
-| `Focus`, `Written` | `focused()` -> `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
-| `OpenW` unlisted, `Listed` | the write failing (`failed`): the window runs, and no relay finds it; a later focus writing it |
+| `OpenWindow`, `CloseWindow`, `Crash`, `Reuse` | a window writing its file; `dispose()` removing it; a crash leaving it; its `pid` reused |
+| `Focus`, `FinishWrite` | `focused()` -> `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
+| `OpenWindow` unlisted, `ListWindow` | the write failing (`failed`): the window runs, and no relay finds it; a later focus writing it |
 | `Start` | `locate` -> `findWindows`: files that hold a `Discovery` with a live `pid`, and parse |
 | `Try` | `openWindow` on one candidate, best first |
 | `Disconnect` | the socket closing, so the next call opens again |
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `CloseWindow` leaves a state outside the window's states | `TypeOK` |
+| `CheckFiles = FALSE`, the code before #31 | `NoInternal` |
+| `AtomicWrite = FALSE`, the code before #72 | `FindsRunningProp` |
+| `Try` connects without setting `conn` | `ConnectedToOpen` |
+| `Try` skips every candidate | `FindsOpen` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NoInternal` | `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
+| `FindsRunningProp` | `bridge.discovery.test.ts`: FindsRunningProp: rewrites the discovery file on focus without a reader ever seeing it half written |
+| `ConnectedToOpen` | `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process |
+| `FindsOpen` | `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
 
 ### `EditorAdapter`: who made a change
 

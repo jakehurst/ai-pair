@@ -430,7 +430,7 @@ describe("discovery", () => {
     expect(findWindows(["/work/..cache"], dir).windows.map((w) => w.token)).toEqual(["w"])
   })
 
-  it("skips a window whose file outlived it, even when its pid now belongs to another process", async () => {
+  it("ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process", async () => {
     fs.writeFileSync(
       path.join(dir, "stale.json"),
       JSON.stringify({
@@ -446,11 +446,21 @@ describe("discovery", () => {
     expect((await call(client, "start")).error).toBe(false)
   })
 
-  it("skips a discovery file that parses but isn't a window's", async () => {
+  it("NoInternal: skips a discovery file that parses but isn't a window's", async () => {
     const bad = [{ pid: process.pid }, { pid: process.pid, workspaceFolders: "/project" }, [process.pid]]
     bad.forEach((d, i) => fs.writeFileSync(path.join(dir, `bad-${i}.json`), JSON.stringify(d)))
     const client = await connect()
     expect((await call(client, "start")).error).toBe(false)
+  })
+
+  it("FindsOpen: finds the window again after the relay's socket to it closes, while it stays open", async () => {
+    const client = await connect()
+    expect((await call(client, "start")).error).toBe(false)
+    for (const c of bridge["server"]?.clients ?? []) c.terminate()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(bridge["server"]?.clients.size).toBe(0)
+    expect((await call(client, "start")).error).toBe(false)
+    expect(bridge["server"]?.clients.size).toBe(1)
   })
 })
 

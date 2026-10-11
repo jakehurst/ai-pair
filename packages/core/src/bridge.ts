@@ -89,12 +89,14 @@ export class Bridge {
     const address = server.address()
     this.port = typeof address === "object" && address ? address.port : 0
     server.on("connection", (ws) => this.accept(ws))
+    // specs/Discovery.tla, `OpenWindow`: if the write fails, the window runs, and no relay finds it.
     this.writeDiscovery()
   }
 
   /** Call when the window gains focus, so relays prefer it among windows with the same folder. */
   focused(): void {
     this.lastFocused = Date.now()
+    // specs/Discovery.tla, `Focus`; after a write that failed, `ListWindow`.
     this.writeDiscovery()
   }
 
@@ -113,7 +115,7 @@ export class Bridge {
     try {
       fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 })
       // Written beside it, then renamed over it, so a relay reading it never sees it half written
-      // (#72). Not a `.json`, so relays don't read the temporary one.
+      // (#72, `AtomicWrite` in specs/Discovery.tla). Not a `.json`, so relays don't read the temporary one.
       const written = `${this.file}.tmp`
       fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 })
       fs.renameSync(written, this.file)
@@ -123,6 +125,7 @@ export class Bridge {
   }
 
   dispose(): void {
+    // specs/Discovery.tla, `CloseWindow`: the file goes with the window.
     try {
       fs.unlinkSync(this.file)
     } catch {

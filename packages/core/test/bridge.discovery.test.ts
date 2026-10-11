@@ -23,7 +23,7 @@ while (Atomics.load(stop, 0) === 0) {
 parentPort.postMessage({ reads, broken })
 `
 
-it("rewrites the discovery file on focus without a reader ever seeing it half written", async () => {
+it("FindsRunningProp: rewrites the discovery file on focus without a reader ever seeing it half written", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-pair-discovery-"))
   const bridge = new Bridge(new Controller(new FakeEditor(), new FakePanel(), testConfig), { dir, workspaceFolders: () => ["/project"] })
   await bridge.start()
