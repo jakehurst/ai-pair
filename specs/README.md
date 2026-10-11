@@ -53,40 +53,40 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
-| `Serialize.cfg` | `N = 2` calls, each empty or not | holds | 709 |
-| `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
+| `Serialize.cfg` | `NumCalls = 2` calls, each empty or not | holds | 709 |
+| `Wire.cfg` | `MaxSockets = 2` sockets, `MaxCalls = 2` calls | holds | 24,714 |
 | `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
 | `PanelScroll.cfg` | `MaxEntries = 5`, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
-| `Controller.cfg` | `B = 2` batches, `E = 1` event, `Q = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
-| `Discovery.cfg` | `W = 2` windows, one junk file, a write that may fail | holds | 217 |
-| `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
-| `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
-| `Bridge.cfg` | `S = 2` sockets | holds | 76 |
+| `Controller.cfg` | `NumBatches = 2` batches, `NumEvents = 1` event, `NumQuietEdits = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
+| `Discovery.cfg` | `NumWindows = 2` windows, one junk file, a write that may fail | holds | 217 |
+| `EditorAdapter.cfg` | `MaxChanges = 5` changes | holds | 311 |
+| `FollowMode.cfg` | one move to another file, the programmer looking away, `HoldWhileShowing = TRUE` | holds | 13 |
+| `Bridge.cfg` | `NumSockets = 2` sockets | holds | 76 |
 | `Draft.cfg` | `MaxViews = 3` pages | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, `MaxSteps = 4` changes | holds | 123 |
 | `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 564 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxSteps = 4` | holds | 516 |
-| `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
+| `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxChanges = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
-| `Resume.cfg` | 2 directories, up to 3 sessions, `PostOnRevive = TRUE` | holds | 62 |
-| `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
-| `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
+| `Resume.cfg` | 2 directories, `MaxIds = 3` sessions, `PostOnRevive = TRUE` | holds | 62 |
+| `Timeline.cfg` | `MaxSleeps = 3` sleeps | holds | 88 |
+| `Terminals.cfg` | `MaxTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxChanges = 2` turn changes | holds | 538 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk | holds | 160 |
-| `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches, up to 2 queued | holds | 34,939 |
-| `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
+| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxBatches = 2` batches, `MaxQueued = 2` queued | holds | 35,031 |
+| `BatchFile.cfg` | files `a` and `b`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE` | holds | 121 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
-| `Player.cfg` | `Edits = 2` | holds | 26 |
+| `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
-| `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
+| `Start.cfg` | `MaxPages = 3`, `MaxFlips = 2`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE` | holds | 12 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
