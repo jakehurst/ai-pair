@@ -16,6 +16,9 @@ const SCRIPT = "../src/webview/panel"
 /** `post`: what the page posts to the extension. */
 export async function loadPage(post: (message: { type: string }) => void = () => {}): Promise<void> {
   const html = panelHtml("vscode-resource:", "panel.css", "panel.js")
+  // The tests need no styles, and the stylesheet would be fetched from a server that isn't there.
+  window.happyDOM.settings.disableCSSFileLoading = true
+  window.happyDOM.settings.handleDisabledFileLoadingAsSuccess = true
   // Parsed, without its script element: the script runs as the module below.
   const page = new window.DOMParser().parseFromString(html, "text/html")
   for (const script of page.querySelectorAll("script")) script.remove()
