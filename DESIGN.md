@@ -49,12 +49,13 @@ Layout, top to bottom:
 1.  **The band**, a full-width area on the editor's background, holding
     everything about now:
     -   **Its header**: the agent's state (a colored dot and a few words: *Agent
-        is typing*, *Read this*, *Needs you*, *Your turn*), and the controls,
-        compact and quiet, as icons without fills: Pause/Resume, Interrupt, My
-        turn, the speed, End. During the programmer's turn, Pause and Interrupt
-        give way to Hand back, the one labeled control, since it's the main
-        action then. The speed opens a menu of 0.4x to 3.0x. The agent's color
-        is on the dot only, never on the controls.
+        is typing*, *Read this*, *Needs you*, *Your turn*, *Agent isn't
+        listening* once it has made no call for a listen's timeout), and the
+        controls, compact and quiet, as icons without fills: Pause/Resume,
+        Interrupt, My turn, the speed, End. During the programmer's turn, Pause
+        and Interrupt give way to Hand back, the one labeled control, since it's
+        the main action then. The speed opens a menu of 0.4x to 3.0x. The
+        agent's color is on the dot only, never on the controls.
     -   **The current message**, in large text (about 1.3 times the editor font,
         *tunable*), high contrast. Its **top edge is fixed**, right under the
         header; its height grows downward with the message length. A new message

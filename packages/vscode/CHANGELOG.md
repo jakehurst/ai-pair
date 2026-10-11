@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.9
+
+-   When the agent has made no call for a listen's timeout (45 seconds), the
+    panel says *Agent isn't listening*, so you can tell it has stopped,
+    instead of seeing *Agent is thinking* (#149).
+-   When playback is paused, every report says so and why (you pressed
+    Pause, you're typing a reply, you're looking at another file, or a
+    calibration), so the agent knows its batches are waiting (#149).
+-   A very long edit, over 200 lines of diff, reaches the agent as the line
+    ranges it changed, and the agent reads the file, so a report stays small
+    enough for it to read (#149).
+-   The **AI Pair** output logs each session's interactions at the Info level:
+    statuses, batches, pauses and their reasons, interrupts, edits, and each
+    report with its size, so a log shows where a session went wrong (#149).
+
 ## 0.6.8
 
 -   Fixed: `npm run test:integration` failed at once when run from a terminal
