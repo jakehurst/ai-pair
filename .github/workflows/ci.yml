@@ -1,5 +1,5 @@
 # Lint, type check, and unit tests; the integration test in a real VS Code, downloaded, on a
-# virtual display; and the TLA+ specs (#7, #19).
+# virtual display; the TLA+ specs (#7, #19); and the Swift lint and type check, on macOS (#137).
 name: CI
 
 on:
@@ -25,6 +25,14 @@ jobs:
       - run: npm run check:ascii
       - run: npm run typecheck
       - run: npm test
+
+  swift:
+    # Xcode has swift-format, and the SDK with the frameworks the script imports.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm run lint:swift
+      - run: npm run typecheck:swift
 
   integration:
     runs-on: ubuntu-latest
