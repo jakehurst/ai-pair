@@ -1161,11 +1161,30 @@ the command, and what ends each wait.
 | Spec | Code |
 |---|---|
 | `Start` | `acquire()`: a terminal that isn't busy, whose shell is alive, in the run's directory, or a new one there; `busy = true`. The signal may have fired before (an interrupt during the save) |
-| `Integrated`, `AbortBeforeStart`, `ClosedWhileWaiting` | `shellIntegration()`: integration or its timer; the signal; a terminal closed meanwhile (VS Code throws for its `sendText`) |
+| `ExecuteCommand`, `AbortBeforeStart`, `RejectClosed` | `shellIntegration()`: integration or its timer, then `executeCommand`; the signal; a terminal closed meanwhile (VS Code throws for its `sendText`) |
 | `End`, `StopWaiting`, `Close` | `onDidEndTerminalShellExecution`; `stopWaiting` (the wait or an interrupt); `onDidCloseTerminal` |
-| `NoIntegration` | the timer fires with no integration: the command is typed in (`sendText`), and the terminal stays busy for good |
-| `AlreadyAborted` | a signal that fired before the run: `shellIntegration()` returns at once, and `run()` reports `notStarted` |
+| `SendText` | the timer fires with no integration: the command is typed in (`sendText`), and the terminal stays busy for good |
+| `SkipAborted` | a signal that fired before the run: `shellIntegration()` returns at once, and `run()` reports `notStarted` |
 | `Exit` | the shell exits (`exitStatus`); the terminal stays open, and `acquire()` won't reuse it |
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Start` leaves the command a value outside `CommandStates` | `TypeOK` |
+| `Reusable` ignores `busy` | `NoReuseWhileBusy` |
+| `End` leaves its terminal busy | `FreedAfterEnd` |
+| `SendText` leaves the call running, waiting for a command nothing tracks | `RunReturns` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NoReuseWhileBusy` | `terminal.test.ts`: NoReuseWhileBusy: gives a second command a new terminal while the first one's command still runs |
+| `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd: reuses a terminal once its command ends |
+| `RunReturns` | `terminal.test.ts`: RunReturns: doesn't wait for shell integration once playback is interrupted |
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`
 
