@@ -7,6 +7,12 @@
     Three source files are renamed to snake_case (`outside_watch.ts`,
     `panel_messages.ts`, `panel_html.ts`). The code targets ES2025. The
     extension works the same.
+-   The extension says what it needs in its manifest, as VS Code asks: it
+    stays off in Restricted Mode and in a virtual workspace, since the agent
+    edits files and runs commands; each setting has its scope; the session
+    commands (pause, interrupt, turn, end, reply) are in the Command Palette
+    only during a session; the Marketplace listing has its categories and
+    keywords.
 
 ## 0.6.10
 
