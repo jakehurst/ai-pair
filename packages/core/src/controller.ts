@@ -251,6 +251,8 @@ export class Controller {
     s.suspended = true
     s.finished = [...saved.finished]
     s.events = [...saved.events]
+    // specs/Resume.tla, Reload: the replayed history may end with the session live (#138).
+    this.panel.post({ type: "session", active: true, task: s.task, suspended: true })
     this.render()
   }
 

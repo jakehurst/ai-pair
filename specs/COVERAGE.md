@@ -80,6 +80,7 @@ Code goes without a spec for one of these reasons:
 | `link.ts` | `call`, `connect`, `open`, `openWindow`, `handBack`, `close`, `locate` | `Wire` |
 | | `findWindows`, `alive`, `isDiscovery` | `Discovery` |
 | | `workspace`, `contains`, `realpath` | Pure |
+| | `EDITOR_DISCONNECTED` | Format |
 | `guide.ts` | `projectGuides` | `ProjectGuide` |
 | | `gitIgnores`, `readGuides` | Glue: git and the file system |
 | | `renderGuides` | Format |
@@ -129,6 +130,7 @@ Code goes without a spec for one of these reasons:
 | `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
+| | `handle`'s `session` case for a suspended or resumed session | `Resume` (`ShownIsState`) |
 | | `setState`, `syncStatus`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look |
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |

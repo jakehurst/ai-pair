@@ -7,7 +7,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { type WebSocket, WebSocketServer } from "ws"
 import { parseRelayMessage, PROTOCOL_VERSION } from "@ai-pair/protocol"
-import { EditorLink } from "../src/link"
+import { EDITOR_DISCONNECTED, EditorLink } from "../src/link"
 
 let dir: string
 const servers: WebSocketServer[] = []
@@ -91,6 +91,16 @@ describe("link", () => {
     expect(settled).toBe(false)
     answer(b.calls[0]!, "from b")
     expect(await second).toBe("from b")
+    link.close()
+  })
+
+  it("tells the agent to call `start` again when the editor disconnects during a call (#138)", async () => {
+    const a = await fakeWindow("/a")
+    const link = new EditorLink("/a", dir)
+    const call = link.call("listen", {})
+    await until(() => a.calls.length === 1)
+    a.sockets[0]!.close()
+    await expect(call).rejects.toMatchObject({ code: "no_editor", message: EDITOR_DISCONNECTED })
     link.close()
   })
 

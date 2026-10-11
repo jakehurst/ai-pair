@@ -32,7 +32,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
 | `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
-| `Resume.cfg` | 2 directories, up to 3 sessions | holds | 62 |
+| `Resume.cfg` | 2 directories, up to 3 sessions, `PostOnRevive = TRUE` | holds | 62 |
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, 2 turn changes | holds | 538 |
@@ -398,16 +398,34 @@ The feature of #23, specified before its code: `projectGuides` in `packages/rela
 
 ### `Resume`: a session that waits for its agent
 
-The feature of #25, specified before its code: `disconnect`, `start`, `resumeSession`, `saved`, `revive` and `endSession` in `packages/core/src/controller.ts`, with the extension saving the session in the workspace's storage (`extension.ts`). A session whose agent disconnects, or that the window reloads with, is suspended, not ended, and waits until the programmer ends it or a `start` resumes it. Checked: a `start` from its directory resumes the same session (`ResumesSame`); it leaves the suspended state only to resume, end, or give way to a session from another directory (`Waits`); the storage holds the session as it is (`SavedIsCurrent`); and a message isn't lost while it waits, or across a reload (`NotLost`). The spec saves with every change; the code saves 200 ms after the last one and again as the window goes, so a reload within 200 ms of a change relies on that last save.
+The feature of #25, specified before its code: `disconnect`, `start`, `resumeSession`, `saved`, `revive` and `endSession` in `packages/core/src/controller.ts`, with the extension saving the session in the workspace's storage (`extension.ts`). A session whose agent disconnects, or that the window reloads with, is suspended, not ended, and waits until the programmer ends it or a `start` resumes it. Checked: a `start` from its directory resumes the same session (`ResumesSame`); it leaves the suspended state only to resume, end, or give way to a session from another directory (`Waits`); the storage holds the session as it is (`SavedIsCurrent`); a message isn't lost while it waits, or across a reload (`NotLost`); and the panel shows the session as it is (`ShownIsState`; #138: after a reload, the replayed history showed a suspended session as live). The spec saves with every change; the code saves 200 ms after the last one and again as the window goes, so a reload within 200 ms of a change relies on that last save.
 
 | Spec | Code |
 |---|---|
 | `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended |
-| `Reload` | the window reloading: `activate` revives the saved session, suspended (`revive`), with the panel's history |
+| `Reload` | the window reloading: `activate` revives the saved session, suspended (`revive`), with the panel's history; `revive` posts the suspended event (`PostOnRevive`), and the page adds its divider only when the session goes between live and suspended |
 | `Start(d)` | `start`: a suspended session from `d` resumes (`resumeSession`); another directory ends it and starts a new one |
 | `ProgrammerEnd`, `AgentEnd` | `endSession`, which closes a suspended session at once; the agent's `end` |
 | `Message`, `Report` | `userMessage`, to an active or a suspended session; the next report, once the agent is back |
 | `Save` | `onChange` and `onPost`: the extension writes `saved` and the panel's history 200 ms after a change, and as the window goes |
+
+Each property was proved to bite with a mutation of a copy of the model:
+
+| Mutation | Breaks |
+|---|---|
+| `PostOnRevive = FALSE`, the code before #138 | `ShownIsState` |
+| `Message` leaves `saved` unchanged | `SavedIsCurrent` |
+| `Start(d)` never resumes: a new session from any directory | `ResumesSame` |
+| `Reload` brings back no session, checked without the invariants, which fail first | `Waits` |
+| `Reload` drops the pending message | `NotLost` |
+| `Spec` without `WF_vars(Report)` | `Arrives` |
+
+| Property | Test |
+|---|---|
+| `SavedIsCurrent`, `NotLost` | `controller.test.ts`: SavedIsCurrent, NotLost: brings back a session the window saved, suspended, after a reload |
+| `ResumesSame`, `Arrives` | `controller.test.ts`: ResumesSame, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
+| `Waits` | `controller.test.ts`: Waits: starts a new session from another directory, ending the suspended one; Waits: closes a suspended session at once when the programmer ends it |
+| `ShownIsState` | `controller.test.ts`: ShownIsState: a revived session tells the panel it is suspended; `history.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
 
 ### `Navigator`: the programmer's edits, reported when they pause
 

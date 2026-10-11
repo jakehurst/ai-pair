@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+- After a window reload, a session in progress shows as suspended in the Pair panel, with
+  the divider and the status "Suspended: waiting for the agent". Before, it looked live, and
+  messages sent then seemed to go nowhere. When the reload cuts off the agent mid-call, it is
+  told to call `start` again to resume the session, not to start a new one.
+
 ## 0.5.0
 
 - Sending a message in the Pair panel scrolls the history back to its top, so your message
