@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.3
+
+- The Pair panel's page and stylesheet follow Google's HTML/CSS Style Guide, and the page is valid
+  HTML5. CI checks both (`npm run lint:web`). The panel looks and works the same.
+
 ## 0.6.2
 
 - The repository's shell scripts follow Google's Shell Style Guide, and CI checks them with
