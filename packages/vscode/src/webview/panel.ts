@@ -159,7 +159,7 @@ function addYou(text: string | undefined, ref: Ref | undefined): void {
   const el = entry("you", text ? rich(text) : "")
   if (ref) el.append(refLink(ref))
   add(el)
-  // specs/PanelScroll.tla, You: the programmer's message scrolls the history to its top (#139).
+  // specs/PanelScroll.tla, `AddYours`: the programmer's message scrolls the history to its top (#139).
   ui.history.scrollTop = 0
 }
 

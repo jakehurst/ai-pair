@@ -1,64 +1,108 @@
------------------------------ MODULE PanelScroll -----------------------------
-\* The scroll position of the Pair panel's history: add and addYou in
-\* packages/vscode/src/webview/panel.ts. Issue #139. The history is newest first, and the
-\* browser's scroll anchoring keeps the programmer's place when an entry goes in above it.
+---- MODULE PanelScroll --------------------------------------------------------
+(******************************************************************************)
+(* The scroll position of the Pair panel's history: add and addYou in         *)
+(* packages/vscode/src/webview/panel.ts. Issue #139. The history is newest    *)
+(* first, and the browser's scroll anchoring keeps the programmer's place     *)
+(* when an entry goes in above it.                                            *)
+(******************************************************************************)
 EXTENDS Naturals, Sequences
 
 CONSTANTS
-    N,        \* how many entries in a run
-    ScrollOn  \* which entries scroll the history to its top: none, you, or all
+    MaxEntries,     \* how many entries the model adds
+    ScrollOn        \* which entries scroll the history to its top: "none",
+                    \* "you", or "all"
+
+ASSUME AssumeMaxEntries == MaxEntries \in Nat
+ASSUME AssumeScrollOn == ScrollOn \in {"none", "you", "all"}
+
+\* No entry, and no event yet. Any value that is not a time, and not an event,
+\* will do, so the config makes each a model value (6.20).
+NoEntry == CHOOSE v : v \notin Nat
+NoEvent == CHOOSE v : v \notin {"entry", "you", "scroll"}
 
 VARIABLES
-    t,        \* the time of the last entry: 1, 2, 3, ...
+    time,     \* the time of the last entry: 1, 2, 3, ...
     history,  \* the history, top first: the times of its entries
     above,    \* how many entries are scrolled out of view, above the view
-    last,     \* the last event: none, entry, you, or scroll
-    before    \* the entry at the view's top before the last event, or 0 if the view was at the top
+    last,     \* the last event: "entry", "you", "scroll", or NoEvent
+    before    \* the entry at the view's top before the last event, or NoEntry
+              \* if the view was at the top
 
-vars == <<t, history, above, last, before>>
+vars == <<time, history, above, last, before>>
 
-\* The entry at the view's top, or 0 for an empty history.
-ViewTop == IF above < Len(history) THEN history[above + 1] ELSE 0
+--------------------------------------------------------------------------------
 
-Init == t = 0 /\ history = <<>> /\ above = 0 /\ last = "none" /\ before = 0
+\* The values each variable can hold.
+TypeOK ==
+    /\ time \in Nat
+    /\ history \in Seq(Nat \ {0})
+    /\ above \in Nat
+    /\ last \in {"entry", "you", "scroll", NoEvent}
+    /\ before \in (Nat \ {0}) \cup {NoEntry}
 
-\* An entry goes in at the top. Scrolled down, anchoring keeps the same entry at the view's top.
-\* At the top, a browser may show the new entry or keep the old one, so the model allows both.
+\* The entry at the view's top, or NoEntry for an empty history.
+ViewTop == IF above < Len(history) THEN history[above + 1] ELSE NoEntry
+
+--------------------------------------------------------------------------------
+
+Init ==
+    /\ time = 0
+    /\ history = <<>>
+    /\ above = 0
+    /\ last = NoEvent
+    /\ before = NoEntry
+
+\* An entry goes in at the top. Scrolled down, anchoring keeps the same entry at
+\* the view's top. At the top, a browser may show the new entry or keep the old
+\* one, so the model allows both.
 Prepend(kind) ==
-    /\ t < N /\ t' = t + 1
-    /\ history' = <<t + 1>> \o history
-    /\ before' = IF above > 0 THEN ViewTop ELSE 0
-    /\ last' = kind
+    /\ time' = time + 1
+    /\ history' = <<time + 1>> \o history
     /\ IF ScrollOn = "all" \/ (ScrollOn = "you" /\ kind = "you")
-          THEN above' = 0
-          ELSE IF history = <<>> THEN above' = 0
-          ELSE IF above > 0 THEN above' = above + 1
-          ELSE above' \in {0, 1}
+       THEN above' = 0
+       ELSE IF history = <<>>
+            THEN above' = 0
+            ELSE IF above > 0
+                 THEN above' = above + 1
+                 ELSE above' \in {0, 1}
+    /\ last' = kind
+    /\ before' = IF above > 0 THEN ViewTop ELSE NoEntry
 
-\* The agent's message filed, a run, a divider, a change outside the editor: add.
-Entry == Prepend("entry")
+\* The agent's message filed, a run, a divider, a change outside the editor:
+\* add.
+AddEntry == Prepend("entry")
 
 \* The programmer's message: addYou.
-You == Prepend("you")
+AddYours == Prepend("you")
 
 \* The programmer scrolls the history.
 Scroll ==
     /\ history # <<>>
     /\ above' \in 0..(Len(history) - 1)
-    /\ last' = "scroll" /\ before' = 0
-    /\ UNCHANGED <<t, history>>
+    /\ last' = "scroll"
+    /\ before' = NoEntry
+    /\ UNCHANGED <<time, history>>
 
-Next == Entry \/ You \/ Scroll
+Next ==
+    \/ AddEntry
+    \/ AddYours
+    \/ Scroll
 
 Spec == Init /\ [][Next]_vars
+
+--------------------------------------------------------------------------------
 
 \* The view starts at an entry, or at the top of an empty history.
 InRange == above = 0 \/ above < Len(history)
 
-\* The programmer's message is in view as soon as it is in the history.
-YoursInView == last = "you" => above = 0
+\* The programmer's message is in view as soon as it is in the history. A panel
+\* that never scrolled would fail it, so it says something must happen.
+YoursInView == (last = "you") => (above = 0)
 
 \* An entry from the agent keeps the programmer's place in the history.
-KeepsPlace == last = "entry" /\ before # 0 => ViewTop = before
+KeepsPlace == (last = "entry" /\ before # NoEntry) => (ViewTop = before)
 
-==============================================================================
+\* Entries run out only so that the model is finite (6.8).
+Constraint == time <= MaxEntries
+
+================================================================================

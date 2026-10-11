@@ -56,7 +56,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Serialize.cfg` | `N = 2` calls, each empty or not | holds | 709 |
 | `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
 | `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
-| `PanelScroll.cfg` | `N = 5` entries, `ScrollOn = "you"` | holds | 42 |
+| `PanelScroll.cfg` | `MaxEntries = 5`, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
 | `Controller.cfg` | `B = 2` batches, `E = 1` event, `Q = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
 | `Discovery.cfg` | `W = 2` windows, one junk file, a write that may fail | holds | 217 |
@@ -176,8 +176,8 @@ is `"you"`.
 
 | Spec | Code |
 |---|---|
-| `Entry` | everything `add()` puts in but the programmer's message: the agent's message filed, runs, dividers, changes outside the editor |
-| `You` | `addYou`, for the `user` event and a `turn` event with a message: it sets `scrollTop` to 0 |
+| `AddEntry` | everything `add()` puts in but the programmer's message: the agent's message filed, runs, dividers, changes outside the editor |
+| `AddYours` | `addYou`, for the `user` event and a `turn` event with a message: it sets `scrollTop` to 0 |
 | `Scroll` | the programmer scrolling the history |
 | `above`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
 
@@ -188,6 +188,7 @@ Each invariant was proved to bite with a mutation, run in TLC and then reverted:
 | `ScrollOn = "none"`, the code before #139 | `YoursInView` |
 | `ScrollOn = "all"` | `KeepsPlace` |
 | `Scroll` reaches `Len(history)` | `InRange` |
+| an entry stamped with the old time, 0 at first | `TypeOK` |
 
 Every invariant names the test that proves the code obeys it; the test's title
 carries the invariant's name:
@@ -197,6 +198,7 @@ carries the invariant's name:
 | `YoursInView` | `history.test.ts`: YoursInView: your message scrolls the history back to its top (#139) |
 | `KeepsPlace` | `history.test.ts`: KeepsPlace: entries other than your message leave the history where you scrolled it (#139) |
 | `InRange` | Nothing: the browser keeps `scrollTop` within the history |
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
 
 ### `PanelReplay`: the panel's log and its replay
 
