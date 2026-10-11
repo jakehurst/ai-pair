@@ -42,6 +42,26 @@ describe("timing", () => {
     expect(editor.text("a.ts")).toBe("abcd")
   })
 
+  it("BlockedIsCurrent: a call waits its turn while another is blocked, and blocks only once that one has returned", async () => {
+    const { editor, controller } = setup({ "a.ts": "" }, { maxBlockMs: 1000 })
+    await controller.start()
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
+    const listening = track(controller.listen())
+    const steppingCall = controller.step([{ type: `x${CURSOR_MARKER}` }])
+    const stepping = track(steppingCall)
+    await advance(500)
+    expect(listening.done).toBe(false)
+    expect(stepping.done).toBe(false)
+    expect(editor.text("a.ts")).toBe("")
+
+    await advance(600)
+    expect(listening.value!.waiting).toBe(true)
+    const report = await until(steppingCall)
+    expect(report.submitted).toEqual({ id: 2, status: "playing" })
+    await advance(200)
+    expect(editor.text("a.ts")).toBe("x")
+  })
+
   it("returns with `waiting` after MAX_BLOCK", async () => {
     const { controller } = setup({ "a.ts": "" }, { maxBlockMs: 1000 })
     await controller.start()
@@ -1319,7 +1339,7 @@ describe("turns", () => {
 })
 
 describe("cancellation", () => {
-  it("releases a blocked call without consuming the report", async () => {
+  it("CancelReleases, ChainProgresses: releases a blocked call without consuming the report", async () => {
     const { controller } = setup({ "a.ts": "" })
     await controller.start()
     await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
@@ -1338,7 +1358,7 @@ describe("cancellation", () => {
     expect(report.events).toEqual([{ kind: "message", text: "hello" }])
   })
 
-  it("keeps a cancelled step's batch queued and reports it later", async () => {
+  it("CancelKeepsBatch: keeps a cancelled step's batch queued and reports it later", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
     await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `ab${CURSOR_MARKER}` }])
@@ -1359,12 +1379,12 @@ describe("cancellation", () => {
     ])
   })
 
-  it("cancels a step whose abort arrives during its rehearsal", async () => {
+  it("CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
-    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "ab\u{258c}" }])
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `ab${CURSOR_MARKER}` }])
     const abort = new AbortController()
-    const second = track(controller.step([{ type: "c\u{258c}" }], abort.signal))
+    const second = track(controller.step([{ type: `c${CURSOR_MARKER}` }], abort.signal))
     await Promise.resolve()
     abort.abort()
     await advance(10)
@@ -1378,6 +1398,28 @@ describe("cancellation", () => {
       [1, "completed"],
       [2, "completed"],
     ])
+  })
+
+  it("CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch", async () => {
+    const { editor, controller } = setup({ "a.ts": "" }, { maxBlockMs: 1000 })
+    await controller.start()
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }])
+    const listening = track(controller.listen())
+    const abort = new AbortController()
+    const waiting = track(controller.step([{ type: `x${CURSOR_MARKER}` }], abort.signal))
+    await advance(10)
+    abort.abort()
+    await advance(10)
+    // It settles when its turn comes, once the listen before it has returned.
+    expect(waiting.done).toBe(false)
+
+    await advance(1000)
+    expect(listening.done).toBe(true)
+    expect(waiting.error).toMatchObject({ code: "cancelled" })
+    await advance(500)
+    expect(editor.text("a.ts")).toBe("")
+    const report = await until(controller.step([]))
+    expect(report.batches).toEqual([])
   })
 
   it("reports a returned rejection again, discarding steps until it has", async () => {

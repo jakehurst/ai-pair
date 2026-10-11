@@ -104,12 +104,37 @@ at the top of `block()` (#1).
 | Spec | Code |
 |---|---|
 | `Guard` | `serialize`: `guarded` checks `signal.aborted` once the call before has settled |
-| `Rehearsed` | `step`: an empty step blocks with no batch; else `await this.rehearse(...)`, the batch pushed onto the queue, or discarded when `stale` or ended, then `block()` |
-| `RehearseFails` | `rejectBatch`: the call answers with the rejection at once; an abort meanwhile ends it with that, not `cancelled` |
+| `Rehearse` | `step`: an empty step blocks with no batch; else `await this.rehearse(...)`, the batch pushed onto the queue, or discarded when `stale` or ended, then `block()` |
+| `Reject` | `rejectBatch`: the call answers with the rejection at once; an abort meanwhile ends it with that, not `cancelled` |
 | `Abort` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Play` | the player finishing batches in queue order |
-| `Ready`, `Timeout`, `Commit` | `finishCall` from `ready()` or the `maxBlockMs` timer; clears `this.call` |
+| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()` or the `maxBlockMs` timer; clears `this.call` |
 | `Resolve` | `withCursor(...).then(call.resolve)`: the report handed back after the commit |
+| `Finished` | every call settled: the agent makes no more calls |
+
+Each invariant was proved to bite with a mutation of a copy of the model, run
+in TLC and then reverted. A stalled chain also leaves a call aborted while it
+waits uncanceled, so its mutation breaks CancelReleases as well, and it ran
+with the deadlock check off, since TLC otherwise stops first at the deadlock:
+
+| Mutation | Breaks |
+|---|---|
+| `Commit` leaves `current` at 0, the old sentinel | `TypeOK` |
+| `Guard` runs a call without waiting for the calls before it | `BlockedIsCurrent` |
+| an abort of a blocked call takes its batch off the queue | `CancelKeepsBatch` |
+| `Fixed = FALSE`, the code at 57ac07f | `CancelReleases` |
+| the chain runs a call only after the calls before it were reported, as `this.chain.then(guarded)` with no rejection handler would | `ChainProgresses`, `CancelReleases` |
+
+Every invariant and property names the test that proves the code obeys it; the
+test's title carries its name:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `BlockedIsCurrent` | `controller.test.ts`: BlockedIsCurrent: a call waits its turn while another is blocked, and blocks only once that one has returned |
+| `CancelKeepsBatch` | `controller.test.ts`: CancelKeepsBatch: keeps a cancelled step's batch queued and reports it later; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
+| `CancelReleases` | `controller.test.ts`: CancelReleases, ChainProgresses: releases a blocked call without consuming the report; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
+| `ChainProgresses` | `controller.test.ts`: CancelReleases, ChainProgresses: releases a blocked call without consuming the report |
 
 ### `Wire`: the relay's side of the WebSocket
 

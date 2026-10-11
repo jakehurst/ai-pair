@@ -272,6 +272,7 @@ export class Controller {
       const rehearsal = s.stale || s.ended ? undefined : await this.rehearse(s, actions)
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it.
       const current = rehearsal && !s.stale && !s.ended
+      // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current && rehearsal.result.status === "failed") return this.rejectBatch(s, actions, rehearsal)
       const batch: Batch = { id: this.nextBatchId++, actions, state: "queued", after: rehearsal?.after }
       if (current) {
@@ -645,6 +646,7 @@ export class Controller {
 
   /** Runs tool calls one at a time. A call cancelled while waiting its turn never runs. */
   private serialize<T>(signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+    // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
     const guarded = () => (signal?.aborted ? Promise.reject(cancelled()) : fn())
     const run = this.chain.then(guarded, guarded)
     this.chain = run.catch(() => {})
@@ -694,7 +696,7 @@ export class Controller {
    * report, so nothing is lost: a submitted batch stays queued and is reported on the next call.
    */
   private block(kind: Call["kind"], opts: { batch?: Batch; summary?: string }, signal?: AbortSignal): Promise<Report> {
-    // An abort that fired while the batch was rehearsed won't fire again.
+    // An abort that fired while the batch was rehearsed won't fire again (specs/Serialize.tla, `Rehearse`).
     if (signal?.aborted) return Promise.reject(cancelled())
     return new Promise((resolve, reject) => {
       const call: Call = {
@@ -702,11 +704,12 @@ export class Controller {
         ...opts,
         resolve,
         reject,
-        // specs/Navigator.tla, `Timeout`, for a listen.
+        // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `TimeOut`.
         timer: setTimeout(() => this.finishCall(true), this.config.maxBlockMs),
       }
       this.endGrace()
       this.call = call
+      // specs/Serialize.tla, `Abort`: the listener releases the call only while it is this.call.
       signal?.addEventListener("abort", () => {
         if (this.call !== call) return
         this.call = null
@@ -743,6 +746,7 @@ export class Controller {
   private pump(): void {
     const call = this.call
     const s = this.session
+    // specs/Serialize.tla, `Finish`.
     if (call && s && this.ready(call, s)) this.finishCall(false)
   }
 
@@ -750,6 +754,7 @@ export class Controller {
   private finishCall(timedOut: boolean): void {
     const call = this.call
     if (!call) return
+    // specs/Serialize.tla, `Commit`.
     this.call = null
     clearTimeout(call.timer)
     const s = this.session
@@ -772,6 +777,7 @@ export class Controller {
     const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected
     if (call.kind === "listen" && report.waiting && empty) this.startGrace()
     this.render()
+    // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
     void this.withCursor(s, report).then(call.resolve, () => call.resolve(report))
   }
 
@@ -916,6 +922,7 @@ export class Controller {
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with.
         if (result.status === "completed" && batch.after) s.lines.adopt(batch.after.lines)
         for (const sighting of sightings) this.saw(s, s.lines, sighting)
+        // specs/Serialize.tla, `Play`: batches finish in queue order.
         batch.state = "done"
         batch.result = result
         s.queue = s.queue.filter((b) => b !== batch)
