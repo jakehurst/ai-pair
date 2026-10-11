@@ -639,6 +639,27 @@ and `CheckInterrupt` are the fix for #49.
 |---|---|
 | `Begin`, `Finish` | the delete: before #49 it copied the selection, then awaited `show` and `getText` |
 | `TypeBefore`, `TypeAfter` | a programmer's edit: `transform` moves the live selection, and the edit interrupts |
+| `Finished` | the delete is done; the run ends |
+
+Each invariant and property was proved to bite with a mutation of a copy of
+the model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Finish` stops with a third outcome, "stopped" | `TypeOK` |
+| `Finish` deletes one past the selection | `DeletesTheSelection` |
+| `ReadAfterAwait = FALSE`, `CheckInterrupt = FALSE`, the code before #49 | `DeletesTheSelection` |
+| `CheckInterrupt = FALSE` | `EditInterrupts` |
+| no fairness on `Finish` | `DeleteEnds` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `DeletesTheSelection` | `controller.test.ts`: DeletesTheSelection: replaces a selection by typing, and deletes a selection |
+| `EditInterrupts` | `controller.test.ts`: EditInterrupts: stops a delete when the programmer edits while it starts, and deletes nothing |
+| `DeleteEnds` | `controller.test.ts`: DeleteEnds: a delete held at its awaits ends once they return, removing the selected text |
 
 ### `BatchFile`: the file each action of a batch acts in
 

@@ -393,6 +393,7 @@ export class Controller {
     if (!s) return
     this.recordEdit(s, file, before, after, changes, "programmer")
     if (s.scene.turn === "agent") {
+      // specs/Player.tla, `TypeBefore` and `TypeAfter`: the edit interrupts playback.
       this.interrupt(s)
     } else {
       // Typing again: the pause the timer marked is over, so wait for the next (specs/Navigator.tla, `Edit`).

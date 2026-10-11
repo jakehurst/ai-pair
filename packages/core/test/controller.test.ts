@@ -360,7 +360,7 @@ describe("editing", () => {
     expect(await problem({ line: 1, to: "end" })).toContain('`to` is `"line_end"`')
   })
 
-  it("replaces a selection by typing, and deletes a selection", async () => {
+  it("DeletesTheSelection: replaces a selection by typing, and deletes a selection", async () => {
     const { editor, controller } = setup({ "a.ts": "const a = 1\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -1041,7 +1041,33 @@ describe("interruptions", () => {
     expect(report.batches).toMatchObject([{ id: 1, status: "interrupted", unplayed: [{ delete: true }] }])
   })
 
-  it("stops a delete when the programmer edits while it starts, and deletes nothing", async () => {
+  it("DeleteEnds: a delete held at its awaits ends once they return, removing the selected text", async () => {
+    const { editor, controller } = setup({ "a.ts": "keep DELETE keep\n" })
+    await controller.start()
+    await controller.read("a.ts")
+    // Holds the delete at its show(), as in the test below.
+    const show = editor.show.bind(editor)
+    let open!: () => void, reached!: () => void
+    const gate = new Promise<void>((r) => (open = r))
+    const atGate = new Promise<void>((r) => (reached = r))
+    let calls = 0
+    editor.show = async (file) => {
+      if (++calls === 2) {
+        reached()
+        await gate
+      }
+      return show(file)
+    }
+    void controller.step([{ select: { file: "a.ts", line: 1, text: "DELETE" } }, { delete: true }])
+    await until(atGate)
+    editor.show = show
+    open()
+    const report = await until(controller.step([]))
+    expect(editor.text("a.ts")).toBe("keep  keep\n")
+    expect(report.batches).toMatchObject([{ id: 1, status: "completed" }])
+  })
+
+  it("EditInterrupts: stops a delete when the programmer edits while it starts, and deletes nothing", async () => {
     const { editor, controller } = setup({ "a.ts": "keep DELETE keep\n" })
     await controller.start()
     await controller.read("a.ts")

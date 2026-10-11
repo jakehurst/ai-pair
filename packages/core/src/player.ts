@@ -210,7 +210,10 @@ export class Player {
     return { code, sighting: { file, text, lines: numbers } }
   }
 
-  /** Keeps the positions playback holds in place through a change someone else made. */
+  /**
+   * Keeps the positions playback holds in place through a change someone else made: specs/Player.tla,
+   * `TypeBefore` moves the selection, `TypeAfter` does not.
+   */
   transform(file: string, change: Change): void {
     transformScene(this.scene, file, change)
     const map = mapThrough(change)
@@ -390,10 +393,11 @@ export class Player {
     if ("delete" in action) {
       if (!s.cursor || !s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
       const { file } = s.cursor
+      // specs/Player.tla, `Begin`: the delete awaits show() and getText().
       await editor.show(file)
       this.stage.lines.of(file, await editor.getText(file))
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
-      // read the selection only now (#49): specs/Turns.tla, `TakeEffect`.
+      // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: "interrupted" }
       if (!s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
       const { start, end } = s.selection
