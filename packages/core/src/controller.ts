@@ -121,6 +121,11 @@ export class Controller {
   private call: Call | null = null
   /** After a `listen` that timed out empty, the status stays "listening" until this fires (specs/ListenGrace.tla). */
   private grace: ReturnType<typeof setTimeout> | null = null
+  /** Armed while no call is open; when it fires, the status is "absent" (specs/ListenGrace.tla, `GoQuiet`, #149). */
+  private quiet: ReturnType<typeof setTimeout> | null = null
+  private absent = false
+  /** Tool calls that have arrived and not settled: the quiet starts when the last one does. */
+  private openCalls = 0
   private chain: Promise<unknown> = Promise.resolve()
   private nextBatchId = 1
   private pauseReasons = new Set<string>()
@@ -306,6 +311,8 @@ export class Controller {
   /** Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
   async read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
     const s = this.requireSession()
+    // `Call` and `GoQuiet` in specs/ListenGrace.tla: a read is a call too, settled at once.
+    if (this.openCalls === 0) this.startQuiet()
     const path = this.resolvePath(s, file)
     const planned = this.planned(s, path)
     const text = planned ?? (await this.textOrMissing(s, path))
@@ -652,10 +659,19 @@ export class Controller {
 
   /** Runs tool calls one at a time. A call cancelled while waiting its turn never runs. */
   private serialize<T>(signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+    // `Call` in specs/ListenGrace.tla: the agent is calling, so it's listening.
+    this.openCalls++
+    this.endQuiet()
     // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
     const guarded = () => (signal?.aborted ? Promise.reject(cancelled()) : fn())
     const run = this.chain.then(guarded, guarded)
     this.chain = run.catch(() => {})
+    // `GoQuiet` in specs/ListenGrace.tla: once the last open call settles, no call is open until the agent makes the next.
+    const settled = () => {
+      this.openCalls--
+      if (this.openCalls === 0 && this.session) this.startQuiet()
+    }
+    void run.then(settled, settled)
     return run
   }
 
@@ -807,6 +823,25 @@ export class Controller {
     this.grace = null
   }
 
+  /** `GoQuiet` in specs/ListenGrace.tla: with no call open for absentMs, the agent isn't listening (#149). */
+  private startQuiet(): void {
+    this.endQuiet()
+    this.quiet = setTimeout(() => {
+      this.quiet = null
+      this.absent = true
+      this.render()
+    }, this.config.absentMs)
+  }
+
+  /** `Call` in specs/ListenGrace.tla: a new call ends the quiet. */
+  private endQuiet(): void {
+    if (this.quiet) clearTimeout(this.quiet)
+    this.quiet = null
+    if (!this.absent) return
+    this.absent = false
+    this.render()
+  }
+
   /** Adds the cursor's line to the report, unless it's where the agent last saw it, in a report's code or cursor. */
   private async withCursor(s: Session, report: Report): Promise<Report> {
     for (const b of report.batches) {
@@ -890,6 +925,7 @@ export class Controller {
     s.timeline.interrupt()
     clearTimeout(s.navigatorTimer)
     this.endGrace()
+    this.endQuiet()
     this.editor.renderPoint(null)
     this.render()
   }
@@ -992,9 +1028,9 @@ export class Controller {
     if (!s || s.scene.turn === "user") return "navigator"
     if (this.pauseReasons.size > 0) return "paused"
     if (s.queue.length > 0) return s.player.reading ? "read" : s.player.commandRunning ? "running" : "typing"
-    // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace.
+    // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace, then "absent" once quiet.
     const waiting = this.grace !== null && !s.events.some(interrupting)
-    return this.call?.kind === "listen" || waiting ? "listening" : "thinking"
+    return this.call?.kind === "listen" || waiting ? "listening" : this.absent ? "absent" : "thinking"
   }
 
   private render(): void {

@@ -87,7 +87,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `MaxPages = 3`, `MaxFlips = 2`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
-| `ListenGrace.cfg` | unbounded, `Grace = TRUE` | holds | 12 |
+| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE` | holds | 20 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -1093,18 +1093,22 @@ Every invariant and property names the test that proves the code obeys it:
 gap. `Grace` is the fix: such a timeout keeps the status "listening" for
 `listenGraceMs`, until the agent's next call, or until the programmer does
 something that wakes a `listen`. The grace changes only the status, not when a
-call returns or what a report holds, so no other spec changes. `Scroll` reads
-the status only through `FOLLOWING` in `editor.ts`, which holds both "thinking"
-and "listening".
+call returns or what a report holds, so no other spec changes. Issue #149: an
+agent that stopped calling left the status at "Agent is thinking", so the
+programmer could not tell it was gone. `ShowAbsent` is the fix: once no call
+has been open for `absentMs`, the status is "absent" ("Agent isn't listening")
+until the agent calls again. `Scroll` reads the status only through `FOLLOWING`
+in `editor.ts`, which holds "thinking", "absent", and "listening".
 
 | Spec | Code |
 |---|---|
 | `Status` | `state()` with the queue empty |
-| `Call` | `block()` ending the grace with `endGrace` as the call opens; `close` too |
+| `Call` | a tool call arriving: `serialize` counting it in `openCalls` and ending the quiet with `endQuiet`, or `read`; `block()` ending the grace with `endGrace` for a call that waits; `close` ends both |
 | `TimeOut` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
 | `Return` | `finishCall` with anything else |
 | `Act` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
+| `GoQuiet` | the quiet timer firing `absentMs` after the last open call settled: `startQuiet`, from `serialize` once `openCalls` is 0, and from `read` |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
 model, run in TLC and then reverted:
@@ -1117,6 +1121,8 @@ model, run in TLC and then reverted:
 | `Return` starts the grace too | `NoFalseYourMove` |
 | `Expire` leaves the grace set | `GraceEnds` |
 | `Call` leaves the grace set | `NoYourMoveInOtherCall` |
+| `ShowAbsent = FALSE`, the code before #149 | `AbsentShows` |
+| `Call` leaves `quiet` set, checked without `NoYourMoveInOtherCall`, which it breaks first | `AbsentWithoutCall` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1128,6 +1134,8 @@ Every invariant and property names the test that proves the code obeys it:
 | `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove: shows thinking when a listen times out with a batch to report |
 | `NoYourMoveAfterAct` | `controller.test.ts`: NoYourMoveAfterAct: shows thinking when the programmer sends a message during the grace |
 | `NoYourMoveInOtherCall` | `controller.test.ts`: NoYourMoveInOtherCall: shows thinking after a step during the grace |
+| `AbsentWithoutCall` | `controller.test.ts`: AbsentWithoutCall: stops saying the agent isn't listening as soon as it calls (#149) |
+| `AbsentShows` | `controller.test.ts`: AbsentShows: says the agent isn't listening once no call has been open for absentMs (#149) |
 
 ### `EditEvents`: an edit undone, in the report
 

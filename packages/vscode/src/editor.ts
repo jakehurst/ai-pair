@@ -27,7 +27,7 @@ type OwnEdit = { offset: number; deleteLength: number; text: string }
 type Target = { file: string; offset: number }
 
 /** States in which the programmer's view follows the agent cursor. */
-const FOLLOWING: ReadonlySet<AgentState> = new Set(["typing", "read", "thinking", "listening"])
+const FOLLOWING: ReadonlySet<AgentState> = new Set(["typing", "read", "thinking", "absent", "listening"])
 
 /** View changes within this long after our own navigation are ours, not the programmer's. */
 const SELF_NAV_MS = 400

@@ -2056,6 +2056,7 @@ describe("changes by others, while batches are queued", () => {
 describe("listen grace (specs/ListenGrace.tla)", () => {
   const MAX_BLOCK_MS = 1000
   const GRACE_MS = 5000
+  const ABSENT_MS = 20_000
 
   async function timedOut() {
     const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS })
@@ -2095,6 +2096,27 @@ describe("listen grace (specs/ListenGrace.tla)", () => {
 
   it("NoYourMoveInOtherCall: shows thinking after a step during the grace", async () => {
     const { editor, controller } = await timedOut()
+    await until(controller.step([]))
+    expect(editor.state).toBe("thinking")
+  })
+
+  it("AbsentShows: says the agent isn't listening once no call has been open for absentMs (#149)", async () => {
+    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS, absentMs: ABSENT_MS })
+    await controller.start()
+    await advance(ABSENT_MS - 1)
+    expect(editor.state).toBe("thinking")
+    await advance(1)
+    expect(editor.state).toBe("absent")
+  })
+
+  it("AbsentWithoutCall: stops saying the agent isn't listening as soon as it calls (#149)", async () => {
+    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS, absentMs: ABSENT_MS })
+    await controller.start()
+    await advance(ABSENT_MS)
+    expect(editor.state).toBe("absent")
+    const listening = controller.listen()
+    expect(editor.state).toBe("thinking")
+    await until(listening)
     await until(controller.step([]))
     expect(editor.state).toBe("thinking")
   })

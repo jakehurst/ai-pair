@@ -9,6 +9,8 @@ export type Config = {
   navigatorIdleMs: number
   /** After a `listen` that timed out with nothing to report, how long the status stays "Your move" (#126). */
   listenGraceMs: number
+  /** With no call open this long, the panel says the agent isn't listening (#149). */
+  absentMs: number
   timing: Timing
   random: () => number
   /** Ask the programmer before each `run`. */
@@ -22,6 +24,7 @@ export const defaultConfig: Config = {
   maxBlockMs: 45_000,
   navigatorIdleMs: 3000,
   listenGraceMs: 10_000,
+  absentMs: 45_000,
   timing: defaultTiming,
   random: Math.random,
   confirmCommands: true,
