@@ -85,6 +85,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: "calibration", view })
   }
 
+  // specs/PanelReplay.tla, `Post`: the event onto the log, the oldest cut beyond MAX_LOG.
   post(event: PanelEvent): void {
     this.log.push(event)
     if (this.log.length > MAX_LOG) {

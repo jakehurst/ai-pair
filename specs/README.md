@@ -57,7 +57,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
 | `Panel.cfg` | `N = 5` events | holds | 21 |
 | `PanelScroll.cfg` | `N = 5` entries, `ScrollOn = "you"` | holds | 42 |
-| `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
+| `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
 | `Controller.cfg` | `B = 2` batches, `E = 1` event, `Q = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
 | `Discovery.cfg` | `W = 2` windows, one junk file, a write that may fail | holds | 217 |
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
@@ -186,6 +186,25 @@ carries the invariant's name:
 |---|---|
 | `Post(e)` | `post()`: the event onto `log`, the oldest cut beyond `MAX_LOG`, the last `session` event kept |
 | `ReplayShowsSession` | a view created now: `ready` -> `replay`, its session state from the log's last `session` event |
+
+Each invariant was proved to bite with a mutation, run in TLC and then
+reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Post` sets `live` to every event, "other" too | `TypeOK` |
+| `KeepSession = FALSE`, the code before #54 | `ReplayShowsSession` |
+| `Post` never cuts the log | `Bounded` |
+| `Post` leaves a non-session event off the log | `LogsPosts` |
+
+Every invariant names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `ReplayShowsSession` | `replay.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
+| `Bounded` | `replay.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
+| `LogsPosts` | `replay.test.ts`: LogsPosts: a posted event is on the log a new view replays |
 
 ### `Controller`: what reaches the agent
 
