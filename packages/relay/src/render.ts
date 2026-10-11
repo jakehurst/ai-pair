@@ -1,8 +1,19 @@
 // What the agent reads: reports and files as text, with code as numbered lines instead of JSON
 // strings full of escapes. See "Reports" in PROTOCOL.md.
 
-import type { BatchError, BatchResult, Code, Event, Excerpt, FileContent, Report, RunResult } from "@ai-pair/protocol"
+import type { BatchError, BatchResult, Code, Event, Excerpt, FileContent, PauseReason, Report, RunResult } from "@ai-pair/protocol"
 import { ELLIPSIS, RANGE_DASH } from "@ai-pair/core/constants"
+
+/** What holds playback, for each pause reason, as the agent reads it (#149). */
+const PAUSE_REASONS: Record<PauseReason, string> = {
+  user: "the programmer pressed Pause",
+  reply: "the programmer is typing a reply",
+  away: "the programmer is looking at another file, or scrolled away from your cursor",
+  calibrate: "the programmer is calibrating their reading speed",
+}
+
+/** Who made an edit the programmer didn't make. */
+const OTHER_EDITOR = "A tool, a formatter, or something on disk"
 
 export type ReportingTool = "start" | "step" | "listen" | "end" | "calibrate"
 
@@ -28,6 +39,10 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   if (report.submitted) sections.push(`Batch ${report.submitted.id} is ${report.submitted.status}.`)
   if (report.rejected) sections.push(renderRejected(report.rejected))
   if (report.cursor) sections.push(`Your cursor, in ${report.cursor.file}:\n${renderCode(report.cursor)}`)
+  if (report.paused) {
+    const why = report.paused.map((r) => PAUSE_REASONS[r]).join("; ")
+    sections.push(`Playback is paused: ${why}. Your batches wait until the programmer resumes.`)
+  }
   if (report.waiting) {
     sections.push(tool === "listen" ? "Nothing has happened yet. Call `listen` again." : "Nothing has finished yet. Carry on as usual.")
   }
@@ -51,8 +66,12 @@ function renderEvent(e: Event): string {
       return `The programmer said:\n${quote(e.text)}${e.selection ? `\n${renderExcerpt(e.selection)}` : ""}`
     case "edit":
       if (e.diff === "") {
-        const who = e.by === "other" ? "A tool, a formatter, or something on disk" : "The programmer"
+        const who = e.by === "other" ? OTHER_EDITOR : "The programmer"
         return `${who} edited ${e.file}, then changed it back: no net change.`
+      }
+      if (e.omitted !== undefined) {
+        const who = e.by === "other" ? OTHER_EDITOR : "The programmer"
+        return `${who} changed ${e.file} in these places, too much to show (${e.omitted} lines of diff left out). \`read\` the file for its text:\n${e.diff}`
       }
       if (e.by === "other") return `${e.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${e.diff}`
       return `The programmer edited ${e.file}:\n${e.diff}`

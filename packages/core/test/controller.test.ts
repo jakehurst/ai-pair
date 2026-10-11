@@ -2056,6 +2056,7 @@ describe("changes by others, while batches are queued", () => {
 describe("listen grace (specs/ListenGrace.tla)", () => {
   const MAX_BLOCK_MS = 1000
   const GRACE_MS = 5000
+  const ABSENT_MS = 20_000
 
   async function timedOut() {
     const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS })
@@ -2097,5 +2098,72 @@ describe("listen grace (specs/ListenGrace.tla)", () => {
     const { editor, controller } = await timedOut()
     await until(controller.step([]))
     expect(editor.state).toBe("thinking")
+  })
+
+  it("AbsentShows: says the agent isn't listening once no call has been open for absentMs (#149)", async () => {
+    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS, absentMs: ABSENT_MS })
+    await controller.start()
+    await advance(ABSENT_MS - 1)
+    expect(editor.state).toBe("thinking")
+    await advance(1)
+    expect(editor.state).toBe("absent")
+  })
+
+  it("AbsentWithoutCall: stops saying the agent isn't listening as soon as it calls (#149)", async () => {
+    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS, absentMs: ABSENT_MS })
+    await controller.start()
+    await advance(ABSENT_MS)
+    expect(editor.state).toBe("absent")
+    const listening = controller.listen()
+    expect(editor.state).toBe("thinking")
+    await until(listening)
+    await until(controller.step([]))
+    expect(editor.state).toBe("thinking")
+  })
+})
+
+describe("pauses and the log (#149)", () => {
+  it("tells the agent playback is paused, and why, until the programmer resumes", async () => {
+    const { controller } = setup({ "a.ts": "" }, { maxBlockMs: 1000 })
+    await controller.start()
+    controller.pause("away")
+    const held = await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }]))
+    expect(held.paused).toEqual(["away"])
+    controller.resume("away")
+    const report = await until(controller.listen())
+    expect(report.paused).toBeUndefined()
+  })
+
+  it("logs the session, each pause and resume once, each batch, and each report with its size", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    const lines: string[] = []
+    controller.trace = (line) => lines.push(line)
+    await controller.start()
+    controller.pause("reply")
+    controller.pause("reply")
+    controller.resume()
+    await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }]))
+    await until(controller.step([]))
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        "session started",
+        "pause reply",
+        "resume all",
+        "batch 1 queued: 2 actions",
+        "batch 1 playing",
+        "batch 1 completed",
+      ]),
+    )
+    expect(lines.filter((line) => line === "pause reply")).toHaveLength(1)
+    expect(lines).toContainEqual(expect.stringMatching(/^report to step: batches \[1 completed\], events \[\], \d+ chars$/))
+  })
+
+  it("reports a long edit by its line ranges, not the whole diff", async () => {
+    const { editor, controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const listening = controller.listen()
+    editor.userEdit("a.ts", 0, 0, "x\n".repeat(300))
+    const report = await until(listening)
+    expect(report.events).toEqual([{ kind: "edit", file: "a.ts", diff: "@@ -0,0 +1,300 @@", by: "programmer", omitted: 300 }])
   })
 })

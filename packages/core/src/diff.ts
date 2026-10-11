@@ -1,11 +1,23 @@
 import { createPatch, diffLines } from "diff"
 import type { Change } from "./ports"
 
+/** A diff longer than this many lines is reported by its hunks' headers alone: the agent reads the file (#149). */
+export const MAX_DIFF_LINES = 200
+
 /** A unified diff of the change, hunks only (the file is named in the event). */
 export function fileDiff(file: string, before: string, after: string): string {
   const patch = createPatch(file, before, after, undefined, undefined, { context: 2 })
   const firstHunk = patch.indexOf("\n@@")
   return firstHunk === -1 ? "" : patch.slice(firstHunk + 1).trimEnd()
+}
+
+/** `fileDiff`, bounded: over MAX_DIFF_LINES, only its hunks' headers, and how many lines were left out. */
+export function boundedDiff(file: string, before: string, after: string): { diff: string; omitted?: number } {
+  const diff = fileDiff(file, before, after)
+  const lines = diff.split("\n")
+  if (lines.length <= MAX_DIFF_LINES) return { diff }
+  const headers = lines.filter((line) => line.startsWith("@@"))
+  return { diff: headers.join("\n"), omitted: lines.length - headers.length }
 }
 
 /**

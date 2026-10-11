@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -157,7 +157,7 @@
         "aiPair.trace": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Log every frame between the editor and the agent, and every panel message, to the **AI Pair** output at the Info level, which VS Code shows by default. Without it they're at Trace, hidden unless **Developer: Set Log Level** sets it, which a reinstall resets."
+          "markdownDescription": "The **AI Pair** output always logs each session's interactions at the Info level: statuses, batches, pauses and resumes with their reasons, interrupts, edits, and each report with its size. This also logs every frame between the editor and the agent, and every panel message, at the Info level, which VS Code shows by default. Without it they're at Trace, hidden unless **Developer: Set Log Level** sets it, which a reinstall resets."
         }
       }
     },

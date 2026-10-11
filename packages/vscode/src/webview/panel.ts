@@ -291,6 +291,7 @@ const STATUS: Record<AgentState, [string, string]> = {
   read: ["read", "Read this"],
   running: ["", "Running a command"],
   thinking: ["dim", "Agent is thinking"],
+  absent: ["dim", "Agent isn't listening"],
   paused: ["dim", "Paused"],
   listening: ["ring", "Your move"],
   navigator: ["ring", "Your turn"],

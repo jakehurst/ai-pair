@@ -142,9 +142,11 @@ Rules:
 During the agent's turn, the programmer's view **follows the agent cursor**, so
 every `move` is visible to them, or, right after a `point`, the pointed code.
 
-Playback pauses when the programmer presses Pause, navigates away, or starts
-typing a reply, until they resume. **Pausing is not an event**: the agent isn't
-told, its blocked call just waits longer (subject to `MAX_BLOCK`).
+Playback pauses when the programmer presses Pause, navigates away, starts typing
+a reply, or calibrates their reading speed, until they resume. **Pausing is not
+an event**: it wakes no call, and a blocked call just waits longer (subject to
+`MAX_BLOCK`). But every report made while playback is paused says so, with the
+reasons (`paused`), so the agent knows its batches are held (#149).
 
 ## Tools
 
@@ -520,6 +522,7 @@ type Report = {
   waiting?: true              // returned due to MAX_BLOCK
   repeated?: true             // part of it may repeat a report the agent saw: a call it canceled had returned (#67)
   resumed?: true              // start only: it resumed a suspended session (#25)
+  paused?: ("user" | "reply" | "away" | "calibrate")[]  // playback is paused, for these reasons (#149)
 }
 
 type BatchResult = {
@@ -559,7 +562,7 @@ type Code = {                 // the cursor marked with ▌ in its line
 ```ts
 type Event =
   | { kind: "message", text: string, selection?: Excerpt }
-  | { kind: "edit", file: string, diff: string, by: "programmer" | "other" }
+  | { kind: "edit", file: string, diff: string, by: "programmer" | "other", omitted?: number }
   | { kind: "interrupt" }
   | { kind: "turn", to: "agent" | "user", message?: string, selection?: Excerpt }
   | { kind: "end" }
@@ -593,6 +596,9 @@ edits near the agent cursor, may come later.)
     interrupts, since they were planned against the text before it: a formatter
     when a batch saves, say. Changes by others to any other file don't
     interrupt, and don't make `listen` return.
+    A diff longer than 200 lines comes as its hunks' headers alone, the line
+    ranges it changed, with `omitted` saying how many lines were left out: the
+    agent reads the file for the text (#149).
 -   `end`: the programmer ended the session. Playback stops and the session is
     over: this is its final report, and further calls fail with `no_session`.
 

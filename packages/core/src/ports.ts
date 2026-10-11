@@ -2,7 +2,7 @@
 
 import type { Excerpt, Turn } from "@ai-pair/protocol"
 
-export type AgentState = "typing" | "read" | "running" | "thinking" | "paused" | "listening" | "navigator"
+export type AgentState = "typing" | "read" | "running" | "thinking" | "absent" | "paused" | "listening" | "navigator"
 
 /** What follow mode keeps in the programmer's view: the agent cursor, or the code it last pointed at. */
 export type Focus = "cursor" | "point"

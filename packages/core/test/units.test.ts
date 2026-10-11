@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CURSOR_MARKER } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot } from "../src/places"
 import { applyChange, LineIds } from "../src/lines"
+import { boundedDiff, MAX_DIFF_LINES } from "../src/diff"
 import { planTyping, readingTime } from "../src/typing"
 import { terminalText } from "../src/text"
 import { samePath, withinFolder, type PathStyle } from "../src/paths"
@@ -171,6 +172,16 @@ describe("line identities", () => {
     editor.apply("a.ts", { offset: 9, deleteLength: 5, text: "WORLD" })
     editor.adopt(fork)
     expect(editor.of("a.ts", "helloabc\nWORLD\n")).toEqual(before)
+  })
+})
+
+describe("diffs", () => {
+  it("reports a diff over MAX_DIFF_LINES by its hunks' headers, with the count of lines left out (#149)", () => {
+    expect(boundedDiff("a.ts", "a\n", "b\n")).toEqual({ diff: "@@ -1,1 +1,1 @@\n-a\n+b" })
+    const long = Array.from({ length: MAX_DIFF_LINES }, (_, i) => `line ${i}\n`).join("")
+    const bounded = boundedDiff("a.ts", "", long)
+    expect(bounded.diff).toBe(`@@ -0,0 +1,${MAX_DIFF_LINES} @@`)
+    expect(bounded.omitted).toBe(MAX_DIFF_LINES)
   })
 })
 
