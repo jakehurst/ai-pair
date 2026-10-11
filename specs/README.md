@@ -83,7 +83,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
-| `Anchor.cfg` | `N = 4` batches, `Guard = TRUE` | holds | 46 |
+| `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, 2 replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
@@ -320,13 +320,30 @@ doesn't end the `away` pause, and the agent isn't told about pauses.
 batch against where the one before would have ended; when that one is
 interrupted or discarded, the cursor is where it stopped (#112). `Guard`
 switches the refusal; with `FALSE`, TLC violates `NoMisplacedEdit` in two steps:
-`Discard`, `Unanchored`.
+`Discard`, `SubmitUnanchored`.
 
 | Spec | Code |
 |---|---|
 | `Discard` | a report with a batch not completed sets `anchorNeeded` |
-| `Anchored` | a batch whose first action at the cursor is a `move` or `select` with `file` and `line`: accepted, and the flag cleared |
-| `Unanchored` | any other action at the cursor first: refused with `unanchored` while the flag holds |
+| `SubmitAnchored` | a batch whose first action at the cursor is a `move` or `select` with `file` and `line`: accepted, and the flag cleared |
+| `SubmitUnanchored` | any other action at the cursor first: refused with `unanchored` while the flag holds |
+
+Each invariant was proved to bite with a mutation, run in TLC and then
+reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Discard` leaves the cursor at a fourth place | `TypeOK` |
+| `Guard = FALSE`, the code before #112 | `NoMisplacedEdit` |
+| the guard refuses every unanchored batch, pending or not | `AcceptsUnanchored` |
+
+Every invariant names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NoMisplacedEdit` | `controller.test.ts`: NoMisplacedEdit, AcceptsUnanchored: refuses a batch after a discarded one unless it anchors the cursor with a file and line (specs/Anchor.tla) |
+| `AcceptsUnanchored` | the same test |
 
 ### `Calibration`: calibrating the reading speed
 

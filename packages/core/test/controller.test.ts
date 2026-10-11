@@ -965,7 +965,7 @@ describe("interruptions", () => {
     expect(report.batches).toMatchObject([{ status: "discarded", unplayed: [{ say: "Typed." }] }])
   })
 
-  it("refuses a batch after a discarded one unless it anchors the cursor with a file and line (specs/Anchor.tla)", async () => {
+  it("NoMisplacedEdit, AcceptsUnanchored: refuses a batch after a discarded one unless it anchors the cursor with a file and line (specs/Anchor.tla)", async () => {
     const { editor, controller } = setup({ "a.ts": "x\n" })
     await controller.start()
     await controller.read("a.ts")

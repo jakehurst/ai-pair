@@ -261,7 +261,8 @@ export class Controller {
       const s = this.requireSession()
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block("step", {}, signal)
-      // After a report said a batch stopped short, the first action at the cursor must anchor it (#112, specs/Anchor.tla).
+      // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
+      // specs/Anchor.tla, `SubmitAnchored` and `SubmitUnanchored`).
       const anchor = cursorAnchor(actions)
       if (s.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(s, actions, anchor.index)
       // Played in memory first, so what would fail is reported now, not when the batch plays.
@@ -806,7 +807,8 @@ export class Controller {
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
   private snapshot(s: Session, submitted: Batch | undefined, waiting: boolean): Report {
     const batches = s.finished.toSorted((a, b) => a.id - b.id)
-    // The agent planned against where these would have ended; the cursor is where they stopped (#112, specs/Anchor.tla).
+    // The agent planned against where these would have ended; the cursor is where they stopped (#112,
+    // specs/Anchor.tla, `Discard`; a batch that completed is `Complete`).
     if (batches.some((b) => b.status !== "completed")) s.anchorNeeded = true
     const events: Event[] = []
     for (const e of s.events) {
