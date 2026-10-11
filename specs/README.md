@@ -12,7 +12,7 @@ spec that models it, or says why it has none.
 
 The specs and their configs follow the
 [TLA+ style guide](tlaplus-style-guide.md) (#148). `npm run lint:tla`
-(`scripts/lint-tla.ts`) checks the rules a script can check, in CI's `check`
+(`scripts/lint_tla.ts`) checks the rules a script can check, in CI's `check`
 job.
 
 CI runs `check.sh` on every push to `main` and every pull request

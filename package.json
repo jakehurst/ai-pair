@@ -19,13 +19,13 @@
     "lint": "oxlint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:ascii": "node scripts/check-ascii.ts",
+    "check:ascii": "node scripts/check_ascii.ts",
     "lint:swift": "swift format lint --strict --recursive packages/vscode/scripts",
     "typecheck:swift": "swiftc -typecheck -warnings-as-errors packages/vscode/scripts/icon.swift",
     "lint:sh": "bash scripts/lint_shell.sh",
-    "lint:web": "node scripts/lint-web.ts",
+    "lint:web": "node scripts/lint_web.ts",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
-    "lint:tla": "node scripts/lint-tla.ts"
+    "lint:tla": "node scripts/lint_tla.ts"
   },
   "devDependencies": {
     "@stylistic/stylelint-plugin": "^5.3.0",

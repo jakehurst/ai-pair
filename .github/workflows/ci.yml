@@ -61,7 +61,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Download VS Code
-        run: echo "VSCODE_BIN=$(node scripts/vscode-bin.mts | tail -1)" >> "$GITHUB_ENV"
+        run: echo "VSCODE_BIN=$(node scripts/vscode_bin.mts | tail -1)" >> "$GITHUB_ENV"
         working-directory: packages/vscode
       - name: Run the integration test
         run: xvfb-run -a npm run test:integration
