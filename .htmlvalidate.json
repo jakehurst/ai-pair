@@ -1,0 +1,11 @@
+{
+  "extends": ["html-validate:recommended"],
+  "rules": {
+    "doctype-style": ["error", { "style": "lowercase" }],
+    "attr-quotes": ["error", { "style": "double" }],
+    "id-pattern": ["error", { "pattern": "/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/" }],
+    "class-pattern": ["error", { "pattern": "kebabcase" }],
+    "no-style-tag": "error",
+    "no-implicit-close": "off"
+  }
+}

@@ -4,11 +4,11 @@
 import { beforeEach, expect, it } from "vitest"
 import type { Window } from "happy-dom"
 import { LABEL_SEPARATOR } from "@ai-pair/core/constants"
-import { loadPage } from "./page"
+import { loadPage, ui } from "./page"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const { window, document } = globalThis as unknown as { window: Window; document: Window["document"] }
+const { window } = globalThis as unknown as { window: Window }
 
 /** How far down a test scrolls the history before an entry comes in. */
 const SCROLLED = 120
@@ -22,13 +22,13 @@ function send(event: object): void {
 }
 
 function history(): string[] {
-  return [...document.querySelectorAll("#history .entry")].map((e) => e.textContent ?? "")
+  return [...historyView().querySelectorAll(".entry")].map((e) => e.textContent ?? "")
 }
 
 /** The history's element, which scrolls. */
 function historyView() {
-  const view = document.getElementById("history")
-  if (!view) throw new Error("The page has no #history")
+  const view = ui("history")
+  if (!view) throw new Error('The page has no [data-ui="history"]')
   return view
 }
 
@@ -58,7 +58,7 @@ it("keeps a suspended session's history, and says when it waits for the agent an
   send({ type: "session", active: true })
   send({ type: "say", text: "A" })
   send({ type: "session", active: true, suspended: true })
-  expect(document.querySelector("#status-text")?.textContent).toBe("Suspended: waiting for the agent")
+  expect(ui("status-text")?.textContent).toBe("Suspended: waiting for the agent")
   send({ type: "session", active: true, resumed: true })
   expect(history()).toEqual([
     "The agent is back: session resumed",
@@ -77,7 +77,7 @@ it("ShownIsState: a session revived after a reload shows as suspended (#138)", (
     ],
   })
   send({ type: "session", active: true, suspended: true })
-  expect(document.querySelector("#status-text")?.textContent).toBe("Suspended: waiting for the agent")
+  expect(ui("status-text")?.textContent).toBe("Suspended: waiting for the agent")
   expect(history()).toEqual(["The agent disconnected: the session waits for it", "A", "Session started"])
 })
 

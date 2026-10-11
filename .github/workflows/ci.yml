@@ -1,6 +1,6 @@
-# Lint, type check, unit tests, and the shell scripts' style (#135); the integration test
-# in a real VS Code, downloaded, on a virtual display; the TLA+ specs (#7, #19); and the
-# Swift lint and type check, on macOS (#137).
+# Lint, type check, unit tests, and the style of the shell scripts (#135) and the panel's HTML and
+# CSS (#132); the integration test in a real VS Code, downloaded, on a virtual display; the TLA+
+# specs (#7, #19); and the Swift lint and type check, on macOS (#137).
 name: CI
 
 on:
@@ -32,6 +32,12 @@ jobs:
           chmod +x "$RUNNER_TEMP/shfmt"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - run: npm run lint:sh
+      # vnu, the Nu Html Checker, runs on Java.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm run lint:web
       - run: npm run typecheck
       - run: npm test
 

@@ -3,7 +3,7 @@
 
 import { beforeEach, expect, it } from "vitest"
 import type { Window } from "happy-dom"
-import { loadPage } from "./page"
+import { loadPage, ui } from "./page"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -13,8 +13,8 @@ beforeEach(async () => {
   await loadPage()
 })
 
-const text = (id: string): string => document.getElementById(id)?.textContent ?? ""
-const has = (id: string, attribute: string): boolean => document.getElementById(id)?.hasAttribute(attribute) ?? false
+const text = (name: string): string => ui(name)?.textContent ?? ""
+const has = (name: string, attribute: string): boolean => ui(name)?.hasAttribute(attribute) ?? false
 
 function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent("message", { data: event }))

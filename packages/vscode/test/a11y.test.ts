@@ -4,7 +4,7 @@
 
 import { beforeEach, expect, it } from "vitest"
 import type { Window } from "happy-dom"
-import { loadPage } from "./page"
+import { loadPage, ui } from "./page"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -52,9 +52,9 @@ it("activates a link without following its href", () => {
 })
 
 it("announces the agent's narration and the state, and a command waiting for a decision at once", () => {
-  expect(document.getElementById("now-text")!.getAttribute("aria-live")).toBe("polite")
-  expect(document.getElementById("status-text")!.getAttribute("role")).toBe("status")
-  const run = document.getElementById("run")!
+  expect(ui("now-text")!.getAttribute("aria-live")).toBe("polite")
+  expect(ui("status-text")!.getAttribute("role")).toBe("status")
+  const run = ui("run")!
   send({ type: "session", active: true })
   send({ type: "run", id: 1, command: "npm test", phase: "confirm" })
   expect(run.getAttribute("role")).toBe("alert")
@@ -69,9 +69,9 @@ it("lists files changed outside the editor, each a link to its diff (#15)", () =
   send({ type: "session", active: true })
   send({ type: "outside", files: ["src/a.ts"] })
   send({ type: "outside", files: ["b.ts", "c.ts"] })
-  const entries = [...document.querySelectorAll("#history .outside")].map((e) => e.textContent)
+  const entries = [...ui("history")!.querySelectorAll(".outside")].map((e) => e.textContent)
   expect(entries).toEqual(["2 files changed outside the editor: b.ts, c.ts", "src/a.ts changed outside the editor"])
-  const link = document.querySelector('#history .outside a[href="#"]')!
+  const link = ui("history")!.querySelector('.outside a[href="#"]')!
   link.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
   expect(posted.at(-1)).toEqual({ type: "openChange", file: "b.ts" })
 })

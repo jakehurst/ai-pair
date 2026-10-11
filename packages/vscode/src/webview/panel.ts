@@ -10,10 +10,10 @@ declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void }
 
 const vscode = acquireVsCodeApi()
 
-/** The page's element with `id`, as the element it is. */
-function $<T extends HTMLElement>(id: string, type: abstract new () => T): T {
-  const el = document.getElementById(id)
-  if (!(el instanceof type)) throw new Error(`The panel has no ${type.name} #${id}`)
+/** The page's element marked `data-ui="name"`, as the element it is. */
+function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
+  const el = document.querySelector(`[data-ui="${name}"]`)
+  if (!(el instanceof type)) throw new Error(`The panel has no ${type.name} [data-ui="${name}"]`)
   return el
 }
 

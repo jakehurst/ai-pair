@@ -92,6 +92,7 @@ run("npm", ["run", "format:check"])
 run("npm", ["run", "lint:swift"])
 run("npm", ["run", "typecheck:swift"])
 run("npm", ["run", "lint:sh"])
+run("npm", ["run", "lint:web"])
 run("npm", ["run", "test:integration"])
 
 if (version !== current) {

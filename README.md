@@ -218,6 +218,7 @@ npm run check:ascii       # every tracked file is ASCII, apart from scripts/chec
 npm run lint:swift        # Swift to Google's Swift Style Guide, with Xcode's swift-format (macOS)
 npm run typecheck:swift   # the Swift icon script compiles without warnings (macOS)
 npm run lint:sh           # shell scripts to Google's Shell Style Guide (needs ShellCheck and shfmt)
+npm run lint:web          # the panel's HTML and CSS to Google's HTML/CSS Style Guide, and valid HTML5 (needs Java)
 npm run build             # development build of the extension
 npm run test:integration  # plays a session inside a real, isolated VS Code (macOS; VSCODE_BIN for another)
 npm run test:coverage     # the unit tests, with coverage

@@ -56,6 +56,16 @@ Set by Justine on 2026-10-07.
   - Read command output into a loop with a here-string or process substitution, not a pipe into `while` (Pipes to While).
   - Use a builtin where one does the job: `[[ "${out}" == *'text'* ]]`, not `grep -q` (Builtin Commands vs. External Commands).
   - Keep to bash 3.2, which macOS ships: no `declare -A`, `mapfile` or `readarray`, or `${var,,}`.
+- **The panel's HTML and CSS follow Google's HTML/CSS Style Guide** (https://google.github.io/styleguide/htmlcssguide.html, #132), and the page is valid HTML5. `npm run lint:web` runs Stylelint (`stylelint.config.mjs`) on `panel.css`, then `scripts/lint-web.mjs`: html-validate (`.htmlvalidate.json`) and the W3C's Nu Html Checker (vnu) on the page as `panelHtml` renders it, vnu on `panel.css`, and the 140-column limit on `panelHtml.ts`. It runs in CI's `check` job. These rules no tool checks, so follow them by hand:
+  - Give the script its hooks as `data-ui` attributes, and styling as classes; no `id`s, which `panel.test.ts` checks (id Attributes).
+  - Use each element for its purpose: a `button` for an action, an `a` for a link, a heading for a heading (Semantics).
+  - Leave out every optional tag: `</li>`, `</p>`, `<head>`, `<body>`; keep a start tag that carries an attribute, like `<html lang>` (Optional Tags).
+  - Wrap a tag that would pass 140 columns with one attribute per line, and keep its content against `>` so no whitespace enters the DOM (HTML Line-Wrapping).
+  - Write characters as themselves, not as entity references, except `<`, `&`, and invisible ones (Entity References).
+  - Name classes for what the element is, as short as that allows (Class Naming, Class Name Style).
+  - No `@charset` in a stylesheet (Encoding); Stylelint's ban on it does not fire.
+  - No user agent detection and no CSS hacks (Hacks).
+  - Group the stylesheet into sections, each under a `/* Section */` comment (Section Comments).
 
 ## Versioning
 
