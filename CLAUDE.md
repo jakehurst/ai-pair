@@ -44,6 +44,18 @@ Set by Justine on 2026-10-07.
   - Where the guide allows a force unwrap or `try!` (an invariant the code guarantees, or a literal checked only by the programmer), write a comment saying why it is safe, and a `// swift-format-ignore: NeverForceUnwrap` or `NeverUseForceTry` line above the statement (Force Unwrapping, Error Types).
   - Give a literal its type with `as` or a type annotation, not an initializer: `50 as UInt8`, not `UInt8(50)` (Numeric and String Literals).
   - Use the trapping operators (`+`, not `&+`) unless the arithmetic is meant to wrap, and define no new operators (Trapping vs. Overflowing Arithmetic, Defining New Operators).
+- **Shell scripts follow Google's Shell Style Guide** (https://google.github.io/styleguide/shellguide.html, #135). `npm run lint:sh` (`scripts/lint_shell.sh`) runs ShellCheck with the optional checks in `.shellcheckrc`, shfmt with the settings in `.editorconfig`, and checks the `#!/bin/bash` first line, lowercase file names, 80 columns, and 100 lines; it runs in CI's `check` job. These rules no tool checks, so follow them by hand:
+  - Run scripts with `bash`, never `sh`: `bash scripts/integration.sh` (Which Shell to Use).
+  - Send error messages to stderr (STDOUT vs STDERR).
+  - Give a function that is not short and obvious a header comment with its description, Globals, Arguments, Outputs, and Returns (Function Comments).
+  - Keep functions together below the constants; once a script has a function, put its main code in a `main` function, called last as `main "$@"` (Function Location, main).
+  - Name constants and exported variables in uppercase and make them `readonly`, at the top where possible; other names in lowercase with underscores; `local` inside functions (Naming Conventions, Use Local Variables).
+  - Compare with `==` in `[[ ]]`, not `=`, and numbers with `(( ))` (Testing Strings, Arithmetic).
+  - Give a filename glob an explicit path: `./*.cfg`, not `*.cfg` (Wildcard Expansion of Filenames).
+  - Keep lists of arguments in arrays, never in a string split unquoted; no `eval`, no aliases (Arrays, Eval, Aliases).
+  - Read command output into a loop with a here-string or process substitution, not a pipe into `while` (Pipes to While).
+  - Use a builtin where one does the job: `[[ "${out}" == *'text'* ]]`, not `grep -q` (Builtin Commands vs. External Commands).
+  - Keep to bash 3.2, which macOS ships: no `declare -A`, `mapfile` or `readarray`, or `${var,,}`.
 
 ## Versioning
 
