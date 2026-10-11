@@ -592,7 +592,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * The document for a file, as the session takes it (#88, #89). One with unsaved changes is the
    * programmer's text, whether its file still exists or not. Otherwise the file on disk decides:
    * VS Code keeps a document after its file is deleted, with the text it had, so a file that isn't
-   * on disk is `MissingFile`, whatever document there is.
+   * on disk is `MissingFile`, whatever document there is. specs/FileText.tla, `GetText`.
    */
   private async document(file: string): Promise<vscode.TextDocument> {
     const doc = this.openDocument(file)
@@ -613,7 +613,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   /**
    * Creates a missing file, empty. A document VS Code kept for it when it was deleted is emptied and
    * saved, which creates the file, so the two agree at once rather than when VS Code reloads it. One
-   * with unsaved changes is left as it is: the programmer's text (#88).
+   * with unsaved changes is left as it is: the programmer's text (#88). specs/FileText.tla,
+   * `Show`.
    */
   private async create(file: string): Promise<void> {
     if (await this.exists(file)) return

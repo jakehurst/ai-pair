@@ -295,7 +295,9 @@ export async function run(): Promise<void> {
   assert.deepEqual((await c.read("unsaved-88.txt")).lines, [{ number: 1, text: "ab" }])
   await unsaved.save()
   await c.end()
-  console.log("missing and deleted files read as missing, and are created empty")
+  console.log(
+    "NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty",
+  )
 
   // A file written on disk outside the protocol is marked, during a session, until it's opened; a
   // save and a file the agent created aren't (#15, specs/Outside.tla).

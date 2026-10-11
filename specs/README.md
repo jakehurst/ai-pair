@@ -65,7 +65,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Bridge.cfg` | `S = 2` sockets | holds | 76 |
 | `Draft.cfg` | `MaxViews = 3` pages | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
-| `FileText.cfg` | one file, 4 changes | holds | 123 |
+| `FileText.cfg` | one file, `MaxSteps = 4` changes | holds | 123 |
 | `Outside.cfg` | one file, 5 contents | holds | 564 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxSteps = 4` | holds | 516 |
@@ -646,7 +646,7 @@ without unsaved changes some time after its file changes. `Fixed` is the fix for
 both: a document with unsaved changes is the programmer's text; otherwise a file
 not on disk is `MissingFile`; and `show` creates a missing file by emptying and
 saving a document VS Code kept for it, never one with unsaved changes
-(`KeepsUnsaved`).
+(`KeepsUnsavedProp`).
 
 | Spec | Code |
 |---|---|
@@ -654,6 +654,24 @@ saving a document VS Code kept for it, never one with unsaved changes
 | `Open`, `Close`, `Edit`, `Save`, `Reload` | VS Code's documents: opened by anything, dropped, edited, saved (recreating a deleted file), reloaded |
 | `Write`, `Delete` | the file changed or deleted on disk |
 | `Show` | `show` -> `create`, for a `move` to the file |
+
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `show` writes a text outside `Texts` | `TypeOK` |
+| `Fixed = FALSE`, the code before #88 and #89 | `NotStale` |
+| the fixed `getText` throws for an empty file with no document | `MissingIsReported` |
+| `show` writes a file that is not empty | `CreatedIsEmpty` |
+| the fixed `show` keeps the old guard, so it empties unsaved text | `KeepsUnsavedProp` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NotStale`, `MissingIsReported`, `CreatedIsEmpty`, `KeepsUnsavedProp` | `integration.ts`, in VS Code: NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty |
 
 ### `Outside`: marking files changed outside the protocol
 
