@@ -124,7 +124,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
     view.onDidDispose(() => {
       if (this.view === view) this.view = undefined
-      // Its draft went with it, and so does the pause the draft asked for (#69).
+      // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
       this.controller?.resume("reply")
       this.calibration?.cancel()
     })
@@ -142,7 +142,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     )
     switch (m.type) {
       case "ready":
-        // A new page has an empty draft (#69).
+        // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
         c?.resume("reply")
         this.send({ type: "replay", events: this.log })
         this.showSpeed(this.speed.get())
@@ -159,13 +159,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return
       case "reply":
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
-        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125).
+        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
+        // `ResumeAll`).
         if (this.calibration?.reply(m.text)) return
         c?.resume(undefined, { reveal: false })
         c?.userMessage(m.text, m.attach ? this.selection.current() : undefined)
         return
       case "draft":
-        // Typing a reply pauses playback, the way a pair stops when you start talking.
+        // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
         if (m.empty) c?.resume("reply")
         else c?.pause("reply")
         return
@@ -173,6 +174,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         c?.pause()
         return
       case "resume":
+        // specs/Draft.tla, `ResumeAll`: resume() with no reason ends every pause.
         c?.resume()
         return
       case "interrupt":

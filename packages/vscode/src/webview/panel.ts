@@ -490,6 +490,7 @@ function handle(e: ToPanel): void {
 window.addEventListener("message", (m: MessageEvent) => handle(m.data as ToPanel))
 
 let draftEmpty = true
+// specs/Draft.tla, `Type` and `Clear`: posts `draft` when the box's emptiness changes.
 function syncDraft(): void {
   const empty = ui.reply.value.trim() === ""
   ui.reply.style.height = "auto"

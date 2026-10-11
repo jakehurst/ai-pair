@@ -508,6 +508,23 @@ no draft, so they remove that reason.
 | `ResumeAll` | the Resume button, sending a reply, or the turn button: `resume()` with no reason |
 | `Dispose`, `Ready` | `onDidDispose`; a page loaded, in a new view or by "Reload Webviews", posting `ready` |
 
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Dispose` sets the view to a third state, "closed" | `TypeOK` |
+| `ClearOnReady = FALSE`, the code before #69 | `ReplyMeansDraft` |
+| `Type` leaves the pause as it was | `DraftPausesProp` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `ReplyMeansDraft` | `draft.test.ts`: ReplyMeansDraft: ends the draft's pause when the view is disposed with it; ReplyMeansDraft: ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for |
+| `DraftPausesProp` | `draft.test.ts`: DraftPausesProp: a draft in the reply box pauses playback |
+
 ### `RunBox`: the panel's run box
 
 One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and

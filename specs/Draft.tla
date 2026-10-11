@@ -105,6 +105,10 @@ Spec == Init /\ [][Next]_vars
 \* The "reply" pause holds only while a live page has a draft.
 ReplyMeansDraft == reply => (view = "live" /\ draft)
 
+\* A draft pauses playback: a step that gives the page a draft raises the
+\* "reply" pause. A panel that ignored drafts would fail it.
+DraftPausesProp == [][(~draft /\ draft') => reply']_vars
+
 \* Pages run out only so that the model is finite (6.8); the panel has no limit.
 Constraint == views <= MaxViews
 
