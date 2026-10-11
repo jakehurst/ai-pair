@@ -27,6 +27,7 @@ function newlines(text: string, from = 0, to = text.length): number {
  * The version after `change`. A line keeps its identity wherever its text goes: typing a line
  * break after it leaves it in place, one before it moves it down. A line whose text is all
  * replaced keeps its place; lines the change makes are new.
+ * specs/LineIdentity.tla, `Apply`, checks it over every small text and change.
  */
 export function applyChange(v: Version, change: Change): Version {
   const { text } = v

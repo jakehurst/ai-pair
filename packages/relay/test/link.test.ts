@@ -66,7 +66,7 @@ async function until(check: () => boolean): Promise<void> {
 }
 
 describe("link", () => {
-  it("rejects a call only when the socket it was sent on closes", async () => {
+  it("OwnCloseOnly: rejects a call only when the socket it was sent on closes", async () => {
     const a = await fakeWindow("/a")
     const b = await fakeWindow("/b")
     const link = new EditorLink("/a", dir)
@@ -94,7 +94,7 @@ describe("link", () => {
     link.close()
   })
 
-  it("tells the agent to call `start` again when the editor disconnects during a call (#138)", async () => {
+  it("CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138)", async () => {
     const a = await fakeWindow("/a")
     const link = new EditorLink("/a", dir)
     const call = link.call("listen", {})
@@ -104,21 +104,21 @@ describe("link", () => {
     link.close()
   })
 
-  it("fails to connect, without crashing, when a window answers with a frame that is not JSON", async () => {
+  it("RelayStaysUp: fails to connect, without crashing, when a window answers with a frame that is not JSON", async () => {
     await fakeWindow("/a", "not json")
     const link = new EditorLink("/a", dir)
     await expect(link.call("read", {})).rejects.toMatchObject({ code: "no_editor" })
   })
 
   for (const frame of ["null", "42", '"text"', "[]", '{ "kind": "welcome" }']) {
-    it(`fails to connect, without crashing, when a window answers with JSON that isn't a message: ${frame}`, async () => {
+    it(`RelayStaysUp: fails to connect, without crashing, when a window answers with JSON that isn't a message: ${frame}`, async () => {
       await fakeWindow("/a", frame)
       const link = new EditorLink("/a", dir)
       await expect(link.call("read", {})).rejects.toMatchObject({ code: "no_editor" })
     })
   }
 
-  it("drops a frame that is not JSON after the welcome", async () => {
+  it("RelayStaysUp: drops a frame that is not JSON after the welcome", async () => {
     const a = await fakeWindow("/a")
     const link = new EditorLink("/a", dir)
     const call = link.call("read", {})
@@ -129,7 +129,7 @@ describe("link", () => {
     link.close()
   })
 
-  it("doesn't send a call that was cancelled before it went out", async () => {
+  it("NoReportLost: doesn't send a call that was cancelled before it went out", async () => {
     const a = await fakeWindow("/a")
     const link = new EditorLink("/a", dir)
     const abort = new AbortController()
@@ -145,7 +145,7 @@ describe("link", () => {
     link.close()
   })
 
-  it("sends the next call only after a cancelled call's report is handed back", async () => {
+  it("PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59)", async () => {
     const a = await fakeWindow("/a")
     const link = new EditorLink("/a", dir)
     const abort = new AbortController()

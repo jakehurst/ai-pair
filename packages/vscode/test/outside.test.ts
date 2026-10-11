@@ -36,14 +36,14 @@ async function settle(): Promise<void> {
 }
 
 describe("OutsideChanges", () => {
-  it("marks a file written outside once its writes settle, and reports it", async () => {
+  it("Marks: marks a file written outside once its writes settle, and reports it", async () => {
     written("/p/a.ts", "x")
     expect(outside.isMarked("/p/a.ts")).toBe(false)
     await settle()
     expect([outside.isMarked("/p/a.ts"), redraws, reports]).toEqual([true, [["/p/a.ts"]], [["/p/a.ts"]]])
   })
 
-  it("doesn't mark a save, or a file the extension created", async () => {
+  it("NoFalseMark: doesn't mark a save, or a file the extension created", async () => {
     written("/p/a.ts", "saved")
     // VS Code tells of its save after the write, but before the group settles.
     outside.saved("/p/a.ts", "saved")
@@ -53,14 +53,14 @@ describe("OutsideChanges", () => {
     expect([outside.isMarked("/p/a.ts"), outside.isMarked("/p/new.ts"), reports]).toEqual([false, false, []])
   })
 
-  it("marks a write the watcher reports in one event with a save (the afterSave rule misses it)", async () => {
+  it("Marks: marks a write the watcher reports in one event with a save (the afterSave rule misses it)", async () => {
     outside.saved("/p/a.ts", "saved")
     written("/p/a.ts", "written outside after the save")
     await settle()
     expect(outside.isMarked("/p/a.ts")).toBe(true)
   })
 
-  it("clears the mark when the programmer sees the file, and a late event for what they saw doesn't bring it back", async () => {
+  it("NoFalseMark: clears the mark when the programmer sees the file, and a late event for what they saw doesn't bring it back", async () => {
     written("/p/a.ts", "x")
     await settle()
     outside.seen("/p/a.ts", "x")
@@ -70,7 +70,7 @@ describe("OutsideChanges", () => {
     expect(outside.isMarked("/p/a.ts")).toBe(false)
   })
 
-  it("doesn't mark a file the programmer saw before its writes settled", async () => {
+  it("NoFalseMark: doesn't mark a file the programmer saw before its writes settled", async () => {
     written("/p/a.ts", "x")
     outside.seen("/p/a.ts", "x")
     await settle()

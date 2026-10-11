@@ -24,7 +24,7 @@ export function gitIgnores(file: string): boolean {
 /**
  * The project guides from `root` down to `cwd`, outer first, that git doesn't ignore: walking up
  * from `cwd`, it stops once it has looked in `root`, so none above the workspace folder is read
- * (specs/ProjectGuide.tla).
+ * (specs/ProjectGuide.tla: the loop is `Walk`, and the result `Found`).
  */
 export function projectGuides(cwd: string, root: string, ignored = gitIgnores): string[] {
   const found: string[] = []

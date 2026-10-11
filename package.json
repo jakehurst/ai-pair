@@ -23,7 +23,8 @@
     "typecheck:swift": "swiftc -typecheck -warnings-as-errors packages/vscode/scripts/icon.swift",
     "lint:sh": "bash scripts/lint_shell.sh",
     "lint:web": "stylelint packages/vscode/src/webview/panel.css && node scripts/lint-web.mjs",
-    "lint:md": "markdownlint-cli2 \"**/*.md\""
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "lint:tla": "node scripts/lint-tla.mjs"
   },
   "devDependencies": {
     "@stylistic/stylelint-plugin": "^5.3.0",

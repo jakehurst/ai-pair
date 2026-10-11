@@ -19,6 +19,7 @@ export class PairTerminals implements vscode.Disposable {
 
   constructor() {
     this.disposables = [
+      // specs/Terminals.tla, `Close`: a terminal the programmer closes is forgotten.
       vscode.window.onDidCloseTerminal((t) => {
         const i = this.owned.findIndex((o) => o.terminal === t)
         if (i !== -1) this.owned.splice(i, 1)
@@ -33,16 +34,19 @@ export class PairTerminals implements vscode.Disposable {
     terminal.show(true)
 
     const integration = await shellIntegration(terminal, options.signal)
+    // specs/Terminals.tla: `AbortBeforeStart`, or `SkipAborted` when the signal fired before the run.
     if (options.signal.aborted) {
       owned.busy = false
       return { output: "", notStarted: true }
     }
     if (!integration) {
-      // Without shell integration we can't tell when it ends, so the terminal is never reused.
+      // Without shell integration we can't tell when it ends, so the terminal is never reused (specs/Terminals.tla, `SendText`).
+      // A terminal closed meanwhile makes `sendText` throw, and `run` rejects (`RejectClosed`).
       terminal.sendText(command)
       return { output: "[output not captured: this terminal has no shell integration]" }
     }
 
+    // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`Close`), and the terminal is free.
     let execution: vscode.TerminalShellExecution | undefined
     let exitCode: number | undefined
     const ended = new Promise<void>((resolve) => {
@@ -62,6 +66,7 @@ export class PairTerminals implements vscode.Disposable {
     })
     void ended.then(() => (owned.busy = false))
 
+    // specs/Terminals.tla, `ExecuteCommand`.
     const started = integration.executeCommand(command)
     execution = started
     const output = new Tail(MAX_OUTPUT * 4)
@@ -75,6 +80,7 @@ export class PairTerminals implements vscode.Disposable {
     return outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended })
   }
 
+  // specs/Terminals.tla, `Start`: a terminal that isn't busy, whose shell is alive (`Exit`), in the directory, else a new one.
   private acquire(cwd: string): Owned {
     const idle = this.owned.find((o) => {
       const at = o.terminal.shellIntegration?.cwd?.fsPath ?? o.cwd
@@ -112,7 +118,7 @@ function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promi
   })
 }
 
-/** Resolves `false` when the wait is over or playback is interrupted. */
+/** Resolves `false` when the wait is over or playback is interrupted (specs/Terminals.tla, `StopWaiting`). */
 function stopWaiting(ms: number, signal: AbortSignal, ended: Promise<void>): Promise<false> {
   return new Promise((resolve) => {
     if (signal.aborted) return resolve(false)

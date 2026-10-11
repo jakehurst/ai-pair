@@ -36,13 +36,13 @@ export class Timeline {
     return this.abort.signal
   }
 
-  /** Clears the interruption, for the next batch. */
+  /** Clears the interruption, for the next batch (specs/Timeline.tla, `Reset`). */
   reset(): void {
     this.interrupted = false
     if (this.abort.signal.aborted) this.abort = new AbortController()
   }
 
-  /** Waits `ms` of unpaused time. Resolves `false` if interrupted. */
+  /** Waits `ms` of unpaused time. Resolves `false` if interrupted (specs/Timeline.tla, `Sleep`). */
   sleep(ms: number): Promise<boolean> {
     if (this.interrupted) return Promise.resolve(false)
     return new Promise((resolve) => {
@@ -51,6 +51,7 @@ export class Timeline {
     })
   }
 
+  /** Stops the pending sleep's timer, keeping what is left (specs/Timeline.tla, `Pause`). */
   pause(): void {
     if (this.paused) return
     this.paused = true
@@ -62,12 +63,14 @@ export class Timeline {
     }
   }
 
+  /** Starts the pending sleep's timer again (specs/Timeline.tla, `Resume`, once no pause reason is left). */
   resume(): void {
     if (!this.paused) return
     this.paused = false
     if (this.pending && this.pending.timer === undefined) this.arm(this.pending)
   }
 
+  /** Resolves the pending sleep `false`, and later ones too until `reset` (specs/Timeline.tla, `Interrupt`). */
   interrupt(): void {
     this.interrupted = true
     this.abort.abort()
@@ -80,6 +83,7 @@ export class Timeline {
 
   private arm(p: Pending): void {
     p.startedAt = Date.now()
+    // specs/Timeline.tla, `Fire`: the sleep resolves `true`.
     p.timer = setTimeout(() => {
       if (this.pending === p) this.pending = null
       p.resolve(true)

@@ -139,7 +139,7 @@ export async function run(): Promise<void> {
   )
   assert.ok((await buffer("tool.txt")).endsWith("abc\nend"))
   await c.end()
-  console.log("changes by others are reported as theirs")
+  console.log("RightAuthor, ChangesHandled: changes by others are reported as theirs")
 
   // A keystroke just before the agent saves is the programmer's, even though its change event is
   // handled while the save runs (#40). The test's own edit stands in for the keystroke.
@@ -157,7 +157,7 @@ export async function run(): Promise<void> {
     ["race.txt programmer"],
   )
   await c.end()
-  console.log("a keystroke just before a save is the programmer's")
+  console.log("RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's")
 
   // Our own move to another file doesn't pause playback, however long VS Code takes to show it (#56).
   // With no window after our navigation, only the hold while show() awaits covers it.
@@ -173,7 +173,7 @@ export async function run(): Promise<void> {
   )
   await c.read("follow-b.txt")
   api.editor.selfNavMs = 0
-  await c.step([{ move: { file: "follow-b.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+  await c.step([{ move: { file: "follow-b.txt", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }])
   const moved = await c.step([])
   api.editor.selfNavMs = 400
   assert.equal(c.isPaused, false, "paused by our own move")
@@ -183,7 +183,7 @@ export async function run(): Promise<void> {
   )
   assert.equal(await buffer("follow-b.txt"), "bx\n")
   await c.end()
-  console.log("our own move to another file doesn't pause")
+  console.log("NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause")
 
   // An action without `file` acts in the file its batch named, not the cursor's (#58).
   fs.writeFileSync(file("named-a.txt"), "a\n")
@@ -200,7 +200,7 @@ export async function run(): Promise<void> {
     ["completed"],
   )
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, file("named-b.txt"))
-  const outside = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { type: "y\u{258c}" }])
+  const outside = await c.step([{ point: { file: "named-b.txt", line: 1, text: "b" } }, { type: `y${CURSOR_MARKER}` }])
   assert.equal(outside.rejected?.error.kind, "invalid_action")
   await c.step([])
   assert.equal(await buffer("named-a.txt"), "a\n")
@@ -223,7 +223,9 @@ export async function run(): Promise<void> {
   await sleep(300)
   c.userMessage("stop")
   cancelListen.abort()
-  const restored = await relayed("step", { actions: [{ move: { file: "return.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }] })
+  const restored = await relayed("step", {
+    actions: [{ move: { file: "return.txt", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }],
+  })
   assert.deepEqual(
     restored.events.map((e) => e.kind),
     ["message"],
@@ -278,7 +280,7 @@ export async function run(): Promise<void> {
   assert.equal(stale.getText(), "old\n")
   fs.unlinkSync(file("stale-88.txt"))
   await assert.rejects(c.read("stale-88.txt"), missing)
-  const recreated = await c.step([{ move: { file: "stale-88.txt", line: 1, to: "line_end" } }, { type: "new\u{258c}" }])
+  const recreated = await c.step([{ move: { file: "stale-88.txt", line: 1, to: "line_end" } }, { type: `new${CURSOR_MARKER}` }])
   assert.equal(recreated.rejected, undefined)
   const played = (await c.step([])).batches
   assert.deepEqual(
@@ -295,7 +297,9 @@ export async function run(): Promise<void> {
   assert.deepEqual((await c.read("unsaved-88.txt")).lines, [{ number: 1, text: "ab" }])
   await unsaved.save()
   await c.end()
-  console.log("missing and deleted files read as missing, and are created empty")
+  console.log(
+    "NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty",
+  )
 
   // A file written on disk outside the protocol is marked, during a session, until it's opened; a
   // save and a file the agent created aren't (#15, specs/Outside.tla).
@@ -308,7 +312,7 @@ export async function run(): Promise<void> {
   await until(() => api.outside.isMarked(file("outside-written.txt")))
   await insertAsProgrammer(savedDoc.uri, new vscode.Position(0, 1), "b")
   await savedDoc.save()
-  await c.step([{ move: { file: "outside-new.txt", line: 1, to: "line_end" } }, { type: "x\u{258c}" }])
+  await c.step([{ move: { file: "outside-new.txt", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }])
   await c.step([])
   // Past the group's settling, and the watcher's own delay.
   await sleep(2000)
@@ -353,7 +357,7 @@ export async function run(): Promise<void> {
   await c.start("undone")
   await c.read("undone.txt")
   // The first step returns at once; nothing waits for a report while the programmer types and undoes.
-  await c.step([{ move: { file: "undone.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(100)}\u{258c}` }])
+  await c.step([{ move: { file: "undone.txt", line: 1, to: "line_end" } }, { type_fast: `${"x".repeat(100)}${CURSOR_MARKER}` }])
   await sleep(800)
   await insertAsProgrammer(undone.uri, new vscode.Position(0, 0), "#")
   const undo = new vscode.WorkspaceEdit()
@@ -400,7 +404,7 @@ export async function run(): Promise<void> {
   c.setSpeed(1)
   await c.end()
   await ai.update("confirmCommands", undefined, vscode.ConfigurationTarget.Global)
-  console.log(`a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
+  console.log(`Settles: a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
 
   // The follow scroll's glide takes its time from the playback speed (#123): at SLOW, a glide of
   // LONG_GLIDE_MS takes a second, part way at SAMPLE_MS; at FAST it takes 100 ms, done by then.
@@ -435,7 +439,7 @@ export async function run(): Promise<void> {
   await c.read("asked.txt")
   const interrupting = vscode.workspace.onWillSaveTextDocument(() => c.userInterrupt())
   c.setSpeed(20)
-  await c.step([{ move: { file: "asked.txt", line: 1, to: "line_end" } }, { type: "b\u{258c}" }, { run: "true" }])
+  await c.step([{ move: { file: "asked.txt", line: 1, to: "line_end" } }, { type: `b${CURSOR_MARKER}` }, { run: "true" }])
   const asked = await Promise.race([c.listen(), sleep(3000).then(() => undefined)])
   interrupting.dispose()
   assert.ok(asked, "listen is still waiting")
@@ -459,7 +463,7 @@ export async function run(): Promise<void> {
     if (++eols === 2) c.userInterrupt()
     return eol(f)
   }
-  await c.step([{ type: "\u{258c}" }, { say: "Typed." }])
+  await c.step([{ type: CURSOR_MARKER }, { say: "Typed." }])
   const untyped = await c.listen()
   api.editor.eol = eol
   assert.deepEqual(
@@ -504,7 +508,7 @@ export async function run(): Promise<void> {
   c.revive(kept)
   const revived = await c.start("kept")
   assert.equal(revived.resumed, true)
-  assert.match(revived.cursor?.lines.find((l) => l.text.includes("\u{258c}"))?.text ?? "", /two/)
+  assert.match(revived.cursor?.lines.find((l) => l.text.includes(CURSOR_MARKER))?.text ?? "", /two/)
   await c.end()
   console.log("a session saved while suspended resumes, with its cursor")
 

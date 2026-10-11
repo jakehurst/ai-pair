@@ -12,7 +12,8 @@ export function fileDiff(file: string, before: string, after: string): string {
  * Splits each change into one per run of changed lines, leaving the same text. VS Code reloads a
  * file changed on disk with one change from the first line that differs to the last, so the
  * unchanged lines between them would lose their identities, and positions on them would move (#65).
- * `changes` apply in order, each to the result of the previous, and so do the ones returned.
+ * `changes` apply in order, each to the result of the previous, and so do the ones returned. specs/Reload.tla,
+ * `Runs`.
  */
 export function lineChanges(before: string, changes: Change[]): Change[] {
   const split: Change[] = []

@@ -34,7 +34,7 @@ function replay(panel: NarrationPanel): PanelEvent[] {
   return sent.find((m) => m.type === "replay")!.events!
 }
 
-it("keeps the session's start in the log however many events follow it", () => {
+it("ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it", () => {
   const panel = new NarrationPanel(
     (f) => f,
     { get: () => 1, set: () => {} },
@@ -49,7 +49,7 @@ it("keeps the session's start in the log however many events follow it", () => {
   expect(events.length).toBeLessThanOrEqual(401)
 })
 
-it("replays the session's end when that is the last session event", () => {
+it("ReplayShowsSession: replays the session's end when that is the last session event", () => {
   const panel = new NarrationPanel(
     (f) => f,
     { get: () => 1, set: () => {} },
@@ -60,4 +60,15 @@ it("replays the session's end when that is the last session event", () => {
   panel.post({ type: "session", active: false, reason: "user" })
   for (let i = 0; i < 1000; i++) panel.post({ type: "say", text: `message ${i}` })
   expect(replay(panel).filter((e) => e.type === "session")).toEqual([{ type: "session", active: false, reason: "user" }])
+})
+
+it("LogsPosts: a posted event is on the log a new view replays", () => {
+  const panel = new NarrationPanel(
+    (f) => f,
+    { get: () => 1, set: () => {} },
+    { get: () => 1, set: () => {} },
+    { current: () => undefined, ref: () => undefined },
+  )
+  panel.post({ type: "say", text: "hello" })
+  expect(replay(panel)).toEqual([{ type: "say", text: "hello" }])
 })

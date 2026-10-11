@@ -2,6 +2,7 @@
 // model, here on the code itself.
 
 import { expect, it } from "vitest"
+import { CURSOR_MARKER } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot } from "../src/places"
 import { position } from "../src/text"
 
@@ -9,7 +10,6 @@ import { position } from "../src/text"
 const EXHAUSTIVE_MS = 30_000
 
 const CHARS = ["x", "y", "\n"]
-const M = "\u{258c}"
 
 function strings(max: number): string[] {
   const all = [""]
@@ -28,16 +28,16 @@ const lineOf = (text: string, offset: number) => position(text, offset).line
 const lineCount = (text: string) => text.split("\n").length
 
 it(
-  "resolves a spot only when one match has its marker on the line, and puts it there",
+  "SpotOK, SpotOnlyWhenUnique: resolves a spot only when one match has its marker on the line, and puts it there",
   () => {
     for (const text of strings(5)) {
       for (const before of strings(3)) {
         for (const after of strings(3 - before.length)) {
           const marks = starts(text, before + after).map((s) => s + before.length)
           for (let line = 1; line <= lineCount(text); line++) {
-            const r = resolveSpot(text, { at: before + M + after, line })
+            const r = resolveSpot(text, { at: before + CURSOR_MARKER + after, line })
             const here = marks.filter((o) => lineOf(text, o) === line)
-            const at = `${JSON.stringify(text)} ${JSON.stringify(before + M + after)} line ${line}`
+            const at = `${JSON.stringify(text)} ${JSON.stringify(before + CURSOR_MARKER + after)} line ${line}`
             expect(r.ok, at).toBe(here.length === 1)
             if (r.ok) {
               expect(r.range.start, at).toBe(here[0])
@@ -52,7 +52,7 @@ it(
 )
 
 it(
-  "resolves a span only when its text starts once on the line, and a range to the first `through` after it",
+  "SpanOK, RangeOK: resolves a span only when its text starts once on the line, and a range to the first `through` after it",
   () => {
     for (const text of strings(5)) {
       for (const find of strings(3)) {

@@ -24,7 +24,7 @@ function guide(dir: string, text: string): string {
   return file
 }
 
-it("reads the guides from the workspace folder down to the working directory, outer first", () => {
+it("Exactly, OuterFirst, Contained: reads the guides from the workspace folder down to the working directory, outer first", () => {
   guide("", "above the folder")
   const outer = guide("ws", "outer")
   guide("ws/other", "off the path")
@@ -34,7 +34,7 @@ it("reads the guides from the workspace folder down to the working directory, ou
   expect(projectGuides(path.join(top, "ws"), path.join(top, "ws"))).toEqual([outer])
 })
 
-it("leaves out a guide git ignores, and keeps one checked in though .gitignore names it", () => {
+it("Exactly, Contained: leaves out a guide git ignores, and keeps one checked in though .gitignore names it", () => {
   const git = (...args: string[]) => execFileSync("git", args, { cwd: path.join(top, "ws"), stdio: "ignore" })
   const outer = guide("ws", "outer")
   guide("ws/app", "ignored")

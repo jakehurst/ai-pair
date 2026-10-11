@@ -146,6 +146,7 @@ export class Player {
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
   async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[] }> {
+    // specs/BatchFile.tla, `EndBatch`: each batch starts with no file named and nothing edited; the cursor stays.
     const playing: Playing = { touched: new Set(), runs: [], sightings: [], edited: false, moved: false }
     this.playing = playing
     let result: BatchResult
@@ -209,7 +210,10 @@ export class Player {
     return { code, sighting: { file, text, lines: numbers } }
   }
 
-  /** Keeps the positions playback holds in place through a change someone else made. */
+  /**
+   * Keeps the positions playback holds in place through a change someone else made: specs/Player.tla,
+   * `TypeBefore` moves the selection, `TypeAfter` does not.
+   */
   transform(file: string, change: Change): void {
     transformScene(this.scene, file, change)
     const map = mapThrough(change)
@@ -220,7 +224,9 @@ export class Player {
   private async actions(id: number, actions: Action[], playing: Playing): Promise<BatchResult> {
     // An action so far changed something the programmer sees.
     let effect = false
+    // specs/Actions.tla: `perform` takes an action's steps (`Proceed`, `TakeEffect`), and each pass after it is `FinishAction`.
     for (let i = 0; i < actions.length; i++) {
+      // specs/Turns.tla, `Start`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect)
       let outcome: Outcome
       try {
@@ -244,10 +250,11 @@ export class Player {
       }
       if (!outcome.nothing) effect = true
     }
+    // specs/Actions.tla, `Complete`.
     return { id, status: "completed" }
   }
 
-  /** An interrupted batch. With no visible effect yet, it counts as discarded. */
+  /** An interrupted batch (specs/Actions.tla, `Stop`). With no visible effect yet, it counts as discarded. */
   private stopped(id: number, unplayed: Action[], effect: boolean): BatchResult {
     const result: BatchResult = { id, status: effect ? "interrupted" : "discarded" }
     if (unplayed.length > 0) result.unplayed = unplayed
@@ -275,14 +282,17 @@ export class Player {
         `One action per object, got ${kinds.map((k) => `\`${k}\``).join(" and ")}: make them separate actions, in order.`,
       )
     }
+    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Reject`.
     const named = this.names(action, playing)
     if (typeof named === "object") return named
     const fields = fieldsProblem(action)
     if (fields) return fail("invalid_action", fields)
+    // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
     if (s.turn === "user" && !("say" in action) && !("point" in action)) {
       return fail("not_your_turn", "During the programmer's turn, only `say` and `point` are allowed.")
     }
-    // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file.
+    // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
+    // (specs/BatchFile.tla, `ActAtCursor`).
     const atCursor = "type" in action || "type_fast" in action || "delete" in action
     if (atCursor && playing.named !== undefined && s.cursor && s.cursor.file !== playing.named) {
       return fail(
@@ -297,6 +307,7 @@ export class Player {
     const lookingBack = cursorAction && s.focus === "point"
     const farBack = lookingBack && s.pointFar
     if (lookingBack) {
+      // specs/PointFocus.tla, `ActAtCursor`: the view comes back to the cursor.
       s.focus = "cursor"
       if (farBack && !("move" in action) && named === undefined && s.cursor && this.fileOf({}, playing) === s.cursor.file) {
         await editor.show(s.cursor.file)
@@ -308,6 +319,7 @@ export class Player {
 
     if ("say" in action) {
       panel.post({ type: "say", text: action.say })
+      // specs/Calibration.tla, `StartSay`: timed with the rate in force now; the sleep's end is `EndSay`.
       const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed()
       this.reading = true
       panel.post({ type: "reading", ms })
@@ -325,6 +337,7 @@ export class Player {
       const file = this.fileOf(m, playing)
       if (!file) return fail("no_cursor", "Your cursor isn't in a file yet; give `file`.")
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: "interrupted" }
+      // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
       await editor.show(file)
       const at = m.at
       const where = await this.locate(file, m.line, "move", at === undefined ? undefined : (text) => spotCandidates(text, at))
@@ -382,10 +395,11 @@ export class Player {
     if ("delete" in action) {
       if (!s.cursor || !s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
       const { file } = s.cursor
+      // specs/Player.tla, `Begin`: the delete awaits show() and getText().
       await editor.show(file)
       this.stage.lines.of(file, await editor.getText(file))
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
-      // read the selection only now (#49).
+      // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: "interrupted" }
       if (!s.selection) return fail("no_selection", "Nothing is selected; `select` first.")
       const { start, end } = s.selection
@@ -413,7 +427,8 @@ export class Player {
       s.point = { file, start: span.start, end: span.end }
       const pointLine = position(span.text, span.start).line
       if (s.turn === "agent") {
-        // The view goes to the pointed code, so the `say` about it plays while the programmer looks at it.
+        // The view goes to the pointed code, so the `say` about it plays while the programmer looks at it
+        // (specs/PointFocus.tla, `Point`).
         const cursorLine = s.cursor?.file === file ? position(span.text, s.cursor.offset).line : undefined
         s.pointFar = cursorLine === undefined || Math.abs(cursorLine - pointLine) > timing.nearLines
         s.focus = "point"
@@ -438,6 +453,7 @@ export class Player {
     if (typeof command !== "string" || command.trim() === "") return fail("invalid_action", "`run` needs a command.")
     // Commands read files from disk, so the batch's edits so far go there first.
     const unsaved = await this.save(playing)
+    // specs/RunBox.tla, `FailSave`: a failed save posts nothing.
     if (unsaved.length > 0) {
       const which = unsaved.map((u) => `${u.file} (${u.error})`).join(", ")
       return fail(
@@ -449,6 +465,7 @@ export class Player {
     const signal = this.stage.pacing.signal
 
     if (config.confirmCommands && !s.allowedCommands.has(command)) {
+      // specs/RunBox.tla, `SaveAndConfirm`.
       panel.post({ type: "run", id, command, phase: "confirm" })
       this.reading = true
       this.stage.render()
@@ -456,6 +473,7 @@ export class Player {
       this.reading = false
       this.stage.render()
       if (!go || signal.aborted) {
+        // specs/RunBox.tla, `Decline`.
         panel.post({ type: "run", id, command, phase: "declined" })
         if (signal.aborted) return { kind: "interrupted" }
         return fail("command_declined", "The programmer declined to run this command.")
@@ -464,9 +482,11 @@ export class Player {
 
     const requested = action.wait !== undefined ? action.wait * 1000 : config.runWaitMs
     const waitMs = Math.max(0, Math.min(config.maxRunWaitMs, requested))
+    // specs/RunBox.tla, `SaveAndRun`, or `Go` after a confirm.
     panel.post({ type: "run", id, command, phase: "running" })
     this.commandRunning = true
     this.stage.render()
+    // specs/RunBox.tla, `FinishCommand`: done or background when it ran, declined when it never started or threw.
     let outcome
     try {
       outcome = await editor.runCommand(command, { cwd: s.root ?? editor.resolvePath("."), waitMs, signal })
@@ -498,6 +518,7 @@ export class Player {
       )
     }
 
+    // specs/Actions.tla, `StopWhileRunning`: the command runs on, so it counts as played.
     if (outcome.running && signal.aborted) return { kind: "interrupted", consumed: true }
     if (result.exit_code !== undefined && result.exit_code !== 0) {
       return { kind: "error", error: "command_failed", message: `The command exited with ${result.exit_code}.`, consumed: true }
@@ -527,6 +548,7 @@ export class Player {
     let typed = ""
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]!
+      // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
       if (!(await this.delay(chunk.delay))) {
         if (typed === "") return { kind: "interrupted" }
         const rest =
@@ -567,7 +589,10 @@ export class Player {
     return this.stage.editor.edit(file, change.offset, change.deleteLength, change.text, options)
   }
 
-  /** The file an action names, or else the one its batch named, or else the cursor's. */
+  /**
+   * The file an action names, or else the one its batch named, or else the cursor's: `looks` in
+   * specs/BatchFile.tla, `Act`, the file `ActInFile` acts in.
+   */
   private fileOf(target: { file?: string }, playing: Playing): string | undefined {
     if (target.file !== undefined) return this.resolvePath(target.file)
     return playing.named ?? this.scene.cursor?.file
@@ -642,7 +667,8 @@ export class Player {
   /**
    * An action on a line whose number the agent may have worked out instead of being shown, if it
    * isn't one it knows. Says what the line reads now, and where what it looks for is, which it's
-   * shown then. An empty file's one line needs no showing.
+   * shown then. An empty file's one line needs no showing. In a rehearsal, `knows` taking the
+   * number is specs/Rehearsal.tla, `Accept`.
    */
   private unseen(
     file: string,

@@ -28,12 +28,14 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   let previous: string | undefined
   let i = 0
 
+  // specs/Typing.tla, `IndentOf`.
   const takeIndent = (): string => {
     let indent = ""
     while (isIndent(chars[i])) indent += chars[i++]
     return indent
   }
 
+  // specs/Typing.tla, `Plan`: the indentation at the very start is one chunk first.
   if (atLineStart) {
     const indent = takeIndent()
     if (indent) {
@@ -42,6 +44,7 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
     }
   }
 
+  // specs/Typing.tla, `Loop`.
   while (i < chars.length) {
     const ch = chars[i++]!
     const wordStart = previous !== undefined && !WORD.test(previous) && WORD.test(ch)

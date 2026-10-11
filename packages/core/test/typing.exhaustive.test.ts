@@ -11,7 +11,7 @@ const EXHAUSTIVE_MS = 30_000
 const CHARS = ["x", " ", "\t", "\n", "("]
 
 it(
-  "splits text into chunks that concatenate to it, each one character or a line break with its indentation",
+  "ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation",
   () => {
     let texts = [""]
     for (let n = 1; n <= 5; n++) texts = [...texts, ...texts.filter((t) => t.length === n - 1).flatMap((t) => CHARS.map((c) => t + c))]

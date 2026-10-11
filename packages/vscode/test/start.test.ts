@@ -53,7 +53,7 @@ function setup(starter?: { available: boolean | "manual" }) {
   return { panel, started: () => started, answer: (i: number, value: boolean) => answers[i]?.(value), exit: (i: number) => exits[i]?.() }
 }
 
-it("tells a new page whether it can start a session (Offered)", async () => {
+it("Offered: tells a new page whether it can start a session", async () => {
   const { panel } = setup({ available: true })
   const view = open(panel)
   view.send({ type: "ready" })
@@ -61,7 +61,7 @@ it("tells a new page whether it can start a session (Offered)", async () => {
   expect(view.posted).toContainEqual({ type: "canStart", value: true })
 })
 
-it("tells the page nothing without a starter, so the button stays hidden (ClicksNeedButton)", async () => {
+it("ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden", async () => {
   const { panel } = setup()
   const view = open(panel)
   view.send({ type: "ready" })
@@ -69,7 +69,7 @@ it("tells the page nothing without a starter, so the button stays hidden (Clicks
   expect(view.posted.some((m) => "type" in m && m.type === "canStart")).toBe(false)
 })
 
-it("runs the starter once per start from the page (RunsAreClicks)", () => {
+it("RunsAreClicks: runs the starter once per start from the page", () => {
   const { panel, started } = setup({ available: true })
   const view = open(panel)
   view.send({ type: "start" })
@@ -77,7 +77,7 @@ it("runs the starter once per start from the page (RunsAreClicks)", () => {
   expect(started()).toBe(2)
 })
 
-it("tells the page once the agent a start ran has exited (Settles)", async () => {
+it("Settles: tells the page once the agent a start ran has exited", async () => {
   const { panel, exit } = setup({ available: true })
   const view = open(panel)
   view.send({ type: "start" })
@@ -88,7 +88,7 @@ it("tells the page once the agent a start ran has exited (Settles)", async () =>
   expect(view.posted).toContainEqual({ type: "startEnded" })
 })
 
-it("asks again after Set Up Agent, so the button appears without a reload (Reasked)", async () => {
+it("ReaskedProp: asks again after Set Up Agent, so the button appears without a reload", async () => {
   const { panel } = setup({ available: true })
   const view = open(panel)
   view.send({ type: "ready" })
@@ -98,7 +98,7 @@ it("asks again after Set Up Agent, so the button appears without a reload (Reask
   expect(view.posted.filter((m) => "type" in m && m.type === "canStart")).toHaveLength(2)
 })
 
-it("drops the answer of a page replaced before it landed, so it cannot set its successor's button (OwnAnswer)", async () => {
+it("OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button", async () => {
   const { panel, answer } = setup({ available: "manual" })
   const view = open(panel)
   view.send({ type: "ready" })

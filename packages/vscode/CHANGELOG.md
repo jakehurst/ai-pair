@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.5
+
+-   Fixed: when the agent's connection closed while its `start` was still
+    running, a different agent whose session had ended could keep control of
+    the new, suspended session and drive it. The suspended session now has no
+    owner until an agent starts again. Found by the `Bridge` spec's model
+    checking (#148).
+-   The TLA+ specs follow the TLA+ style guide in `specs/`, and CI checks the
+    rules a script can check (`npm run lint:tla`). Every spec now has a type
+    invariant, a property that says something must happen, a mutation that
+    proves each property can fail, and a test named for each property it
+    proves. Every test writes the agent's cursor marker by name.
+
 ## 0.6.4
 
 -   The repository's Markdown, this changelog and the Marketplace README

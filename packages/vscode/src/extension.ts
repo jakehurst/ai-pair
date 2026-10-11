@@ -79,7 +79,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       now: () => Date.now(),
       pause: () => controller.pause("calibrate"),
       resume: () => controller.resume("calibrate"),
-      // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla.
+      // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla, and
+      // setTiming below is `ApplyRate`.
       store: async (msPerChar) => {
         const timing = config().get<TimingOverrides>("timing", {})
         await config().update("timing", { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global)
@@ -97,7 +98,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
-  // specs/Resume.tla): saved shortly after each change, and once more as the window goes.
+  // specs/Resume.tla, `Reload`): saved shortly after each change, and once more as the window goes (`Save`).
   const saved = context.workspaceState.get<SavedSession>(SAVED_SESSION)
   if (saved) {
     panel.restoreHistory(context.workspaceState.get<PanelEvent[]>(SAVED_HISTORY) ?? [])
@@ -130,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const launcher = writeLauncher(context.extensionPath)
   const starter = claudeStarter(launcher)
   panel.starter = starter
-  // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, Flip).
+  // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, `FlipSetUp`).
   const setUp = () => setUpAgent(launcher).then(() => panel.askStart())
   registerServerProvider(context)
 

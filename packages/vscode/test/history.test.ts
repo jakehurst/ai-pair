@@ -32,7 +32,7 @@ function historyView() {
   return view
 }
 
-it("puts a reply above the agent message it answers", () => {
+it("NewestFirst, NoneLost: puts a reply above the agent message it answers", () => {
   send({ type: "session", active: true })
   send({ type: "say", text: "A" })
   send({ type: "user", text: "R" })
@@ -40,7 +40,7 @@ it("puts a reply above the agent message it answers", () => {
   expect(history()).toEqual(["R", "A", "Session started"])
 })
 
-it("files the current message once, before anything added while it was current", () => {
+it("NoDuplicates, NewestFirst: files the current message once, before anything added while it was current", () => {
   send({ type: "session", active: true })
   send({ type: "say", text: "A" })
   send({ type: "user", text: "R" })

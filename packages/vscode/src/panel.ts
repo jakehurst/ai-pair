@@ -40,9 +40,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   /**
    * Asks the starter whether a session can be started from here, and tells the page: for each new
-   * page, and again after Set Up Agent (specs/Start.tla, Ready and Flip with ReaskOnSetUp). Only the
-   * latest question's answer reaches the page, so a page replaced before its answer landed cannot
-   * set the button on its successor (DropStale).
+   * page, and again after Set Up Agent (specs/Start.tla, `LoadPage`, and `FlipSetUp` with ReaskOnSetUp).
+   * Only the latest question's answer reaches the page, so a page replaced before its answer landed
+   * cannot set the button on its successor (`Answer` with DropStale).
    */
   askStart(): void {
     const asked = ++this.asked
@@ -85,6 +85,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: "calibration", view })
   }
 
+  // specs/PanelReplay.tla, `Post`: the event onto the log, the oldest cut beyond MAX_LOG.
   post(event: PanelEvent): void {
     this.log.push(event)
     if (this.log.length > MAX_LOG) {
@@ -123,8 +124,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.html = panelHtml(view.webview.cspSource, style, script)
     view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
     view.onDidDispose(() => {
+      // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) this.view = undefined
-      // Its draft went with it, and so does the pause the draft asked for (#69).
+      // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
       this.controller?.resume("reply")
       this.calibration?.cancel()
     })
@@ -142,12 +144,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     )
     switch (m.type) {
       case "ready":
-        // A new page has an empty draft (#69).
+        // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
         c?.resume("reply")
         this.send({ type: "replay", events: this.log })
         this.showSpeed(this.speed.get())
         this.showReadingSpeed(this.readingSpeed.get())
         this.showSelection(this.selection.ref())
+        // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart()
         return
       case "speed":
@@ -159,13 +162,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return
       case "reply":
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
-        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125).
+        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
+        // `ResumeAll`).
         if (this.calibration?.reply(m.text)) return
         c?.resume(undefined, { reveal: false })
         c?.userMessage(m.text, m.attach ? this.selection.current() : undefined)
         return
       case "draft":
-        // Typing a reply pauses playback, the way a pair stops when you start talking.
+        // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
         if (m.empty) c?.resume("reply")
         else c?.pause("reply")
         return
@@ -173,6 +177,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         c?.pause()
         return
       case "resume":
+        // specs/Draft.tla, `ResumeAll`: resume() with no reason ends every pause.
         c?.resume()
         return
       case "interrupt":
@@ -202,8 +207,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command)
         return
       case "start":
-        // specs/Start.tla, Click: one run per click. Exit: the agent is done, and the page drops its note
-        // (Settles).
+        // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
+        // note (Settles).
         void this.starter?.start().then(() => this.send({ type: "startEnded" }))
         return
       case "openChange":

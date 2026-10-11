@@ -111,12 +111,12 @@ describe("relay", () => {
   it("types a backslash-u sequence as its six characters, not as the character it names", async () => {
     const client = await connect()
     await call(client, "start")
-    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "\\u0041\u{258c}" }] })
+    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `\\u0041${CURSOR_MARKER}` }] })
     await call(client, "step", { actions: [] })
     expect(editor.text("src/a.ts")).toBe("\\u0041")
   })
 
-  it("runs a session: start with the guide, pipelined steps, read, end", async () => {
+  it("StartOpensSession: runs a session: start with the guide, pipelined steps, read, end", async () => {
     const client = await connect()
     const started = await call(client, "start", { task: "test" })
     expect(started.error).toBe(false)
@@ -193,7 +193,7 @@ describe("relay", () => {
     expect(nothing.text).toMatch(/Give the code: `text`, or `from` and `through`/)
   })
 
-  it("lets only one agent pair in a window at a time", async () => {
+  it("OwnedByOpenSocket: lets only one agent pair in a window at a time", async () => {
     const one = await connect()
     const two = await connect()
     await call(one, "start")
@@ -201,9 +201,21 @@ describe("relay", () => {
     expect((await call(two, "listen")).text).toMatch(/^no_session:/)
   })
 
+  it("EndedOwned: gives a session the programmer ended to its owner's next call, which closes it", async () => {
+    const one = await connect()
+    const two = await connect()
+    await call(one, "start")
+    controller.endSession()
+    expect((await call(two, "listen")).text).toMatch(/^no_session:/)
+    const ended = await call(one, "listen")
+    expect(ended.error).toBe(false)
+    expect(ended.text).toMatch(/programmer ended the session/)
+    expect((await call(one, "listen")).text).toMatch(/^no_session:/)
+  })
+
   // The programmer acts right after the cancellation, before it reaches the editor, so the
   // cancelled call returns their message. It must still reach the agent.
-  it("cancels a blocked call without losing the report, even when racing", async () => {
+  it("EventsDelivered: cancels a blocked call without losing the report, even when racing", async () => {
     const client = await connect()
     await call(client, "start")
     await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }] })
@@ -234,7 +246,7 @@ describe("relay", () => {
     ])
   })
 
-  it("hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
+  it("DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
     // The relay's answers to the agent, held while the test says so.
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
     const server = createServer(new EditorLink("/project/src", dir), "THE GUIDE", "/project/src")
@@ -266,7 +278,7 @@ describe("relay", () => {
     expect(again.text).toMatch(/may repeat/)
   })
 
-  it("delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
+  it("RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
     const client = await connect()
     await call(client, "start")
     const abort = new AbortController()
@@ -296,7 +308,7 @@ describe("relay", () => {
     expect((await call(client, "listen")).text).toMatch(/hello/)
   })
 
-  it("reports the rejection of a step cancelled during its rehearsal", async () => {
+  it("BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28)", async () => {
     const client = await connect()
     await call(client, "start")
     // Holds the rehearsal at its first read of the file, so the cancel arrives during it.
@@ -331,7 +343,7 @@ describe("relay", () => {
     raw.close()
   })
 
-  it("doesn't leave a session to a socket that closed while it started", async () => {
+  it("OwnedByOpenSocket: doesn't leave a session to a socket that closed while it started", async () => {
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
     const { port, token } = findWindows(["/project"], dir).windows[0]!
     const start = controller.start.bind(controller)
@@ -360,7 +372,7 @@ describe("relay", () => {
     expect((await call(client, "start")).error).toBe(false)
   })
 
-  it("suspends the session when the agent's harness goes away, and resumes it for the next agent (#25)", async () => {
+  it("SuspendedUnowned: suspends the session when the agent's harness goes away, and resumes it for the next agent (#25)", async () => {
     const client = await connect()
     await call(client, "start")
     await client.close()
@@ -374,6 +386,39 @@ describe("relay", () => {
     const next = await call(await connect(), "start")
     expect(next.error).toBe(false)
     expect(next.text).toMatch(/resumed[\s\S]*Read the files/)
+  })
+
+  it("SuspendedUnowned: a start whose socket closes while it runs leaves the suspended session to no one, even after another socket's session ended", async () => {
+    const one = await connect()
+    await call(one, "start", { task: "one" })
+    controller.endSession()
+    // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
+    const { port, token } = findWindows(["/project"], dir).windows[0]!
+    const start = controller.start.bind(controller)
+    let open!: () => void, reached!: () => void
+    const gate = new Promise<void>((r) => (open = r))
+    const atGate = new Promise<void>((r) => (reached = r))
+    controller.start = async (...args) => {
+      reached()
+      await gate
+      return start(...args)
+    }
+    const raw = new WebSocket(`ws://127.0.0.1:${port}`)
+    await new Promise((r) => raw.once("open", r))
+    raw.send(JSON.stringify({ type: "hello", token, protocolVersion: PROTOCOL_VERSION }))
+    raw.send(JSON.stringify({ type: "call", id: 1, tool: "start", args: { task: "two" } }))
+    await atGate
+    raw.close()
+    await new Promise((r) => raw.once("close", r))
+    await new Promise((r) => setTimeout(r, 50))
+    controller.start = start
+    open()
+    await new Promise((r) => setTimeout(r, 50))
+
+    // The session it started is suspended, and the socket that owned the ended one can't drive it.
+    expect(controller.isSuspended).toBe(true)
+    const step = await call(one, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }] })
+    expect(step.text).toMatch(/^no_session:/)
   })
 
   it("explains when no editor has the project open", async () => {
@@ -430,7 +475,7 @@ describe("discovery", () => {
     expect(findWindows(["/work/..cache"], dir).windows.map((w) => w.token)).toEqual(["w"])
   })
 
-  it("skips a window whose file outlived it, even when its pid now belongs to another process", async () => {
+  it("ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process", async () => {
     fs.writeFileSync(
       path.join(dir, "stale.json"),
       JSON.stringify({
@@ -446,11 +491,21 @@ describe("discovery", () => {
     expect((await call(client, "start")).error).toBe(false)
   })
 
-  it("skips a discovery file that parses but isn't a window's", async () => {
+  it("NoInternal: skips a discovery file that parses but isn't a window's", async () => {
     const bad = [{ pid: process.pid }, { pid: process.pid, workspaceFolders: "/project" }, [process.pid]]
     bad.forEach((d, i) => fs.writeFileSync(path.join(dir, `bad-${i}.json`), JSON.stringify(d)))
     const client = await connect()
     expect((await call(client, "start")).error).toBe(false)
+  })
+
+  it("FindsOpen: finds the window again after the relay's socket to it closes, while it stays open", async () => {
+    const client = await connect()
+    expect((await call(client, "start")).error).toBe(false)
+    for (const c of bridge["server"]?.clients ?? []) c.terminate()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(bridge["server"]?.clients.size).toBe(0)
+    expect((await call(client, "start")).error).toBe(false)
+    expect(bridge["server"]?.clients.size).toBe(1)
   })
 })
 

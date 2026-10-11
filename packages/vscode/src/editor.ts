@@ -200,7 +200,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const uri = vscode.Uri.file(file)
     await this.create(file)
     if (this.visibleEditor(file)) return
-    // The change of active editor comes before showTextDocument's reply, however long that takes.
+    // The change of active editor comes before showTextDocument's reply, however long that takes
+    // (specs/FollowMode.tla, `StartShow` with `HoldWhileShowing`, then `ShowFile`).
     this.showing++
     try {
       const doc = await vscode.workspace.openTextDocument(uri)
@@ -210,6 +211,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         viewColumn: vscode.window.activeTextEditor?.viewColumn,
       })
     } finally {
+      // specs/FollowMode.tla, `Resolve`: the held window gets its SELF_NAV_MS from now (`Expire`).
       this.showing--
       this.selfNav()
     }
@@ -220,6 +222,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const entry: OwnEdit = { offset, deleteLength, text }
     const pending = this.own.get(file) ?? []
     this.own.set(file, pending)
+    // specs/EditorAdapter.tla, `Edit`: the entry is in `own` before VS Code applies the edit.
     pending.push(entry)
     try {
       if (editor) {
@@ -236,6 +239,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         if (!(await vscode.workspace.applyEdit(edit))) throw new Error("The edit was rejected.")
       }
     } finally {
+      // `ResolveEdit`: the entry goes, if its event didn't take it.
       const i = pending.indexOf(entry)
       if (i !== -1) pending.splice(i, 1)
     }
@@ -245,13 +249,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const doc = this.openDocument(file)
     if (!doc?.isDirty) return
     // First a round trip to the main thread: its answer comes after every change event VS Code sent
-    // before it, so a change made before this save is handled before `saving` says otherwise (#40).
+    // before it, so a change made before this save is handled before `saving` says otherwise (#40):
+    // specs/EditorAdapter.tla, `StartSave`.
     await vscode.workspace.fs.stat(doc.uri)
     this.saving.add(file)
     try {
+      // The save participants run (`RunParticipant`, `FinishParticipants`), then the file is written.
       // A save that fails, say because the file on disk is newer, resolves to false instead of throwing.
       if (!(await doc.save())) throw new Error("the editor didn't save it; the file on disk may have changed")
     } finally {
+      // `FinishSave`: save() resolves after every change event before it.
       this.saving.delete(file)
     }
   }
@@ -267,7 +274,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.redraw()
     if (!changed) return
     // A scroll a command cut short goes on once it's done; a pause's end reveals the target anyway,
-    // and the programmer's turn is theirs to look where they like (specs/Scroll.tla).
+    // and the programmer's turn is theirs to look where they like. specs/Scroll.tla: leaving the
+    // following states is `Leave`, and coming back `Return`.
     if (state === "navigator") this.cut = false
     else if (this.cut && FOLLOWING.has(state)) {
       this.cut = false
@@ -281,11 +289,13 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   reveal(): void {
+    // specs/Scroll.tla, `Return`: a pause ends in `resume`, which reveals the target.
     const target = this.target()
     if (target) void this.show(target.file).then(() => this.follow())
   }
 
   follow(): void {
+    // specs/Scroll.tla, `Move`: the player calls this once an action moves the target.
     const target = this.target()
     if (target && FOLLOWING.has(this.state)) this.keepInView(target)
   }
@@ -349,6 +359,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       .toSorted((a, b) => b.rangeOffset - a.rangeOffset)
       .map((c) => ({ offset: c.rangeOffset, deleteLength: c.rangeLength, text: c.text }))
 
+    // specs/EditorAdapter.tla, `Handle`: the agent's edit in flight, or else `byProgrammer` decides.
     const pending = this.own.get(file)
     if (pending && isOwnEdit(changes, pending[0])) {
       pending.shift()
@@ -382,6 +393,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   // Looking away from what the view follows pauses playback: the cursor, or the code it points at.
 
   private onActiveEditor(editor: vscode.TextEditor | undefined): void {
+    // specs/PointFocus.tla: away from the target is `LookAway`; no editor at all (`CloseTab`) pauses nothing.
+    // specs/FollowMode.tla, `Handle`: a change during our own navigation pauses nothing.
     if (editor?.document.uri.scheme === "file") this.onSelectionChange(editor)
     const target = this.target()
     if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return
@@ -431,6 +444,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * Code can do knowing its viewport, so the lines above it are half of the viewport's; then on, from
    * where the target is by then. Afterwards, catches up with the target if it moved to another line
    * meanwhile. Only then: a landing the editor can't reach would otherwise be tried again and again.
+   * specs/Scroll.tla, `Glide`.
    */
   private async scroll(editor: vscode.TextEditor, line: number, height?: number): Promise<void> {
     this.scrolling = true
@@ -469,6 +483,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (editor.visibleRanges[0]?.start.line !== from) await this.revealTop(editor, from, height)
     const started = Date.now()
     let top = from
+    // specs/Scroll.tla, `Glide`: each frame nearer the landing, until the state stops following.
     while (top !== to) {
       await new Promise((resolve) => setTimeout(resolve, FRAME_MS))
       if (!FOLLOWING.has(this.state)) {
@@ -592,7 +607,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * The document for a file, as the session takes it (#88, #89). One with unsaved changes is the
    * programmer's text, whether its file still exists or not. Otherwise the file on disk decides:
    * VS Code keeps a document after its file is deleted, with the text it had, so a file that isn't
-   * on disk is `MissingFile`, whatever document there is.
+   * on disk is `MissingFile`, whatever document there is. specs/FileText.tla, `GetText`.
    */
   private async document(file: string): Promise<vscode.TextDocument> {
     const doc = this.openDocument(file)
@@ -613,7 +628,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   /**
    * Creates a missing file, empty. A document VS Code kept for it when it was deleted is emptied and
    * saved, which creates the file, so the two agree at once rather than when VS Code reloads it. One
-   * with unsaved changes is left as it is: the programmer's text (#88).
+   * with unsaved changes is left as it is: the programmer's text (#88). specs/FileText.tla,
+   * `Show`.
    */
   private async create(file: string): Promise<void> {
     if (await this.exists(file)) return

@@ -42,7 +42,15 @@ function setup() {
   return { controller, panel }
 }
 
-it("ends the draft's pause when the view is disposed with it", () => {
+it("DraftPausesProp: a draft in the reply box pauses playback", () => {
+  const { controller, panel } = setup()
+  const view = open(panel)
+  expect(controller.isPaused).toBe(false)
+  view.send({ type: "draft", empty: false })
+  expect(controller.isPaused).toBe(true)
+})
+
+it("ReplyMeansDraft: ends the draft's pause when the view is disposed with it", () => {
   const { controller, panel } = setup()
   const view = open(panel)
   view.send({ type: "draft", empty: false })
@@ -51,7 +59,7 @@ it("ends the draft's pause when the view is disposed with it", () => {
   expect(controller.isPaused).toBe(false)
 })
 
-it("ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for", () => {
+it("ReplyMeansDraft: ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for", () => {
   const { controller, panel } = setup()
   const view = open(panel)
   view.send({ type: "draft", empty: false })

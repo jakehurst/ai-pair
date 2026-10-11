@@ -99,13 +99,15 @@ const rich = (s: string) =>
     .join("")
 
 function add(el: HTMLElement): HTMLElement {
-  // Newest first: the current message came before this entry, so it goes in first.
+  // Newest first: the current message came before this entry, so it goes in first
+  // (specs/Panel.tla, `AddEntry`).
   fileCurrent()
   ui.history.prepend(el)
   return el
 }
 
-/** Puts the current message into the history, once: when the next entry comes, or when it is replaced. */
+/** Puts the current message into the history, once: when the next entry comes, or when it is replaced
+ * (specs/Panel.tla, `Flushed`). */
 function fileCurrent(): void {
   if (current !== null && !filed) ui.history.prepend(entry("agent", rich(current)))
   filed = true
@@ -157,7 +159,7 @@ function addYou(text: string | undefined, ref: Ref | undefined): void {
   const el = entry("you", text ? rich(text) : "")
   if (ref) el.append(refLink(ref))
   add(el)
-  // specs/PanelScroll.tla, You: the programmer's message scrolls the history to its top (#139).
+  // specs/PanelScroll.tla, `AddYours`: the programmer's message scrolls the history to its top (#139).
   ui.history.scrollTop = 0
 }
 
@@ -210,6 +212,7 @@ function arrive(el: HTMLElement): void {
   el.classList.add("arrive")
 }
 
+// specs/Panel.tla, `Say`.
 function setNow(text: string): void {
   fileCurrent()
   current = text
@@ -344,7 +347,7 @@ function setActive(on: boolean): void {
   if (!on) {
     suspended = false
     reading = null
-    // specs/RunBox.tla, End: the session ending clears the box.
+    // specs/RunBox.tla, `EndSession`: the session ending clears the box.
     clearRun()
     closeSpeedMenu()
     closeReadingMenu()
@@ -364,16 +367,17 @@ function handle(e: ToPanel): void {
       replaying = false
       return
     case "canStart":
-      // specs/Start.tla, Answer: the button shows exactly what the extension answered.
+      // specs/Start.tla, `Answer`: the button shows exactly what the extension answered.
       ui.start.hidden = !e.value
       return
     case "startEnded":
-      // specs/Start.tla, Exit: the agent is done, session or not (Settles).
+      // specs/Start.tla, `Exit`: the agent is done, session or not (Settles).
       ui.starting.hidden = true
       return
     case "session":
+      // specs/Panel.tla, `ChangeSession`: the band is filed, and a divider goes on top.
       if (e.active) {
-        // specs/Start.tla, AgentStart: a session clears the note (NoteUntilSession).
+        // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
         ui.starting.hidden = true
         if (e.suspended || e.resumed) {
           // The same session: its agent gone, or back (#25).
@@ -405,6 +409,7 @@ function handle(e: ToPanel): void {
         ui.idleTitle.textContent = e.reason === "disconnected" ? "The agent disconnected" : "Session ended"
         ui.idleSummary.innerHTML = e.summary ? rich(e.summary) : ""
         ui.idleText.textContent = "Ask your agent to pair again."
+        // specs/Start.tla, `EndSession`: the idle view, and its button, are back.
         setActive(false)
       }
       return
@@ -490,6 +495,7 @@ function handle(e: ToPanel): void {
 window.addEventListener("message", (m: MessageEvent) => handle(m.data as ToPanel))
 
 let draftEmpty = true
+// specs/Draft.tla, `Type` and `Clear`: posts `draft` when the box's emptiness changes.
 function syncDraft(): void {
   const empty = ui.reply.value.trim() === ""
   ui.reply.style.height = "auto"
@@ -706,7 +712,7 @@ document.addEventListener("click", (e) => {
 
 // Start a session: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115).
 ui.start.addEventListener("click", () => {
-  // specs/Start.tla, Click: the note shows at once (Acknowledged).
+  // specs/Start.tla, `Click`: the note shows at once (AcknowledgedProp).
   ui.starting.hidden = false
   vscode.postMessage({ type: "start" })
 })

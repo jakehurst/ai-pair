@@ -37,7 +37,10 @@ type PendingEvent = Exclude<Event, { kind: "edit" }> | EditEvent
 /** `interrupted`: a change the programmer didn't make, to a file the playing or queued batches edit. */
 type EditEvent = { kind: "edit"; file: string; by: "programmer" | "other"; diff?: string; interrupted?: true }
 
-/** Everything interrupts, except changes the programmer didn't make to files no batch is going to edit. */
+/**
+ * Everything interrupts, except changes the programmer didn't make to files no batch is going to edit. An event it
+ * holds for is `Act` in specs/ListenGrace.tla.
+ */
 function interrupting(e: PendingEvent): boolean {
   return e.kind !== "edit" || e.by === "programmer" || e.interrupted === true
 }
@@ -142,7 +145,7 @@ export class Controller {
       const at = root && this.editor.resolvePath(root)
       const waiting = this.session
       if (waiting?.suspended) {
-        // Its agent is back, from its directory: it carries on where it left off (#25, specs/Resume.tla).
+        // Its agent is back, from its directory: it carries on where it left off (#25, specs/Resume.tla, `Start`).
         if (waiting.scene.root === at) return this.resumeSession(waiting, rules)
         // Another directory: another session, which ends the one waiting.
         this.close(waiting)
@@ -222,7 +225,7 @@ export class Controller {
 
   /**
    * The session as the window saves it in the workspace's storage, to bring it back suspended after a
-   * reload (#25, specs/Resume.tla); none once it has ended. Edits aren't kept: their diffs need the
+   * reload (#25, specs/Resume.tla, `Save`); none once it has ended. Edits aren't kept: their diffs need the
    * text from before them, and the agent reads its files again when it resumes.
    */
   get saved(): SavedSession | undefined {
@@ -251,7 +254,7 @@ export class Controller {
     s.suspended = true
     s.finished = [...saved.finished]
     s.events = [...saved.events]
-    // specs/Resume.tla, Reload: the replayed history may end with the session live (#138).
+    // specs/Resume.tla, `Reload`: the replayed history may end with the session live (#138).
     this.panel.post({ type: "session", active: true, task: s.task, suspended: true })
     this.render()
   }
@@ -261,13 +264,16 @@ export class Controller {
       const s = this.requireSession()
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block("step", {}, signal)
-      // After a report said a batch stopped short, the first action at the cursor must anchor it (#112, specs/Anchor.tla).
+      // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
+      // specs/Anchor.tla, `SubmitAnchored` and `SubmitUnanchored`).
       const anchor = cursorAnchor(actions)
       if (s.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(s, actions, anchor.index)
-      // Played in memory first, so what would fail is reported now, not when the batch plays.
+      // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
       const rehearsal = s.stale || s.ended ? undefined : await this.rehearse(s, actions)
-      // An interruption arriving meanwhile discards it, like any batch planned without knowing about it.
+      // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
+      // (specs/Controller.tla: `FailRehearsal`, else `PassRehearsal`).
       const current = rehearsal && !s.stale && !s.ended
+      // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current && rehearsal.result.status === "failed") return this.rejectBatch(s, actions, rehearsal)
       const batch: Batch = { id: this.nextBatchId++, actions, state: "queued", after: rehearsal?.after }
       if (current) {
@@ -281,6 +287,7 @@ export class Controller {
     })
   }
 
+  /** `Listen` in specs/Controller.tla. */
   listen(signal?: AbortSignal): Promise<Report> {
     return this.serialize(signal, () => {
       this.requireSession()
@@ -288,6 +295,7 @@ export class Controller {
     })
   }
 
+  /** specs/Resume.tla, `EndByAgent`. */
   end(summary?: string, signal?: AbortSignal): Promise<Report> {
     return this.serialize(signal, () => {
       this.requireSession()
@@ -305,7 +313,7 @@ export class Controller {
     const from = Math.max(1, fromLine ?? 1)
     const to = Math.min(lines.length, toLine ?? lines.length)
     const numbers = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
-    // As the queued batches leave the file, if they edit it.
+    // As the queued batches leave the file, if they edit it (specs/Rehearsal.tla, `Read`).
     this.saw(s, planned !== undefined ? s.queue.at(-1)!.after!.lines : s.lines, { file: path, text, lines: numbers })
     const content: FileContent = {
       file: this.displayPath(s, path),
@@ -341,7 +349,7 @@ export class Controller {
    * `mayRepeat`: or the cancellation came after the answer, and the agent may have seen it (#67).
    */
   restore(report: Report, mayRepeat = false): void {
-    // Also once the session ended, or the report closed it: the next call takes the report again,
+    // `Restore` in specs/Controller.tla. Also once the session ended, or the report closed it: the next call takes the report again,
     // and closes the session again (#60).
     const s = this.session ?? this.closed
     if (!s) return
@@ -364,7 +372,10 @@ export class Controller {
 
   // ---- Programmer input --------------------------------------------------
 
-  /** `selection`: code the programmer had selected, sent along with the message. */
+  /**
+   * `selection`: code the programmer had selected, sent along with the message. To an active or a suspended session
+   * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
+   */
   userMessage(text: string, selection?: SharedSelection): void {
     const s = this.activeSession()
     if (!s) return
@@ -389,12 +400,15 @@ export class Controller {
     if (!s) return
     this.recordEdit(s, file, before, after, changes, "programmer")
     if (s.scene.turn === "agent") {
+      // specs/Player.tla, `TypeBefore` and `TypeAfter`: the edit interrupts playback.
       this.interrupt(s)
     } else {
-      // Typing again: the pause the timer marked is over, so wait for the next (specs/Navigator.tla).
+      // Interrupting nothing (specs/Controller.tla, `EditQuietly`). Typing again: the pause the timer marked is
+      // over, so wait for the next (specs/Navigator.tla, `Edit`).
       s.navigatorReady = false
       clearTimeout(s.navigatorTimer)
       s.navigatorTimer = setTimeout(() => {
+        // specs/Navigator.tla, `Fire`.
         s.navigatorReady = true
         this.pump()
       }, this.config.navigatorIdleMs)
@@ -405,7 +419,8 @@ export class Controller {
   /**
    * A change the programmer didn't make: by a tool, a formatter, or on disk. It interrupts if the
    * playing or queued batches edit the file, since they were planned against the text before it.
-   * Otherwise it's just reported, and the queued rehearsals follow it.
+   * Otherwise it's just reported, and the queued rehearsals follow it. A file changed
+   * on disk: specs/Reload.tla, `Reload`.
    */
   otherEdit(file: string, before: string, after: string, reported: Change[]): void {
     const s = this.activeSession()
@@ -413,7 +428,8 @@ export class Controller {
     // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
     const changes = lineChanges(before, reported)
     const planned = s.queue.some((b) => b.after?.edits.has(file))
-    // The queued rehearsals follow it, reading the file's line identities from the editor.
+    // The queued rehearsals follow it, reading the file's line identities from the editor (specs/Rehearsal.tla,
+    // `EditAsOther`).
     if (!planned) for (const b of s.queue) if (b.after) followChange(b.after, file, after, changes)
     this.recordEdit(s, file, before, after, changes, "other")
     if (planned) {
@@ -424,7 +440,8 @@ export class Controller {
     this.update()
   }
 
-  /** Edits to a file are reported as one diff, as the programmer's if any of them was. */
+  /** Edits to a file are reported as one diff, as the programmer's if any of them was
+   * (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`). */
   private recordEdit(s: Session, file: string, before: string, after: string, changes: Change[], by: EditEvent["by"]): void {
     s.lines.of(file, before)
     for (const change of changes) {
@@ -448,6 +465,7 @@ export class Controller {
     s.scene.focus = "cursor"
     s.events.push({ kind: "turn", to: "user" })
     this.panel.post({ type: "turn", to: "user" })
+    // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(s)
     this.update()
   }
@@ -462,19 +480,22 @@ export class Controller {
     if (selection) event.selection = this.excerpt(s, selection)
     s.events.push(event)
     this.panel.post({ type: "turn", to: "agent", message, ref: selection && this.ref(selection) })
+    // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(s)
     this.update()
   }
 
+  /** specs/Resume.tla, `EndByProgrammer`: active or suspended. */
   endSession(): void {
     const s = this.activeSession()
     if (!s) return
     if (s.suspended) {
-      // No agent is there to take a final report: it's over now.
+      // No agent is there to take a final report: it's over now (specs/Bridge.tla, `EndSuspended`).
       this.close(s)
       this.panel.post({ type: "session", active: false, reason: "user" })
       return
     }
+    // `EndSession` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
     s.ended = true
     s.events.push({ kind: "end" })
     this.interrupt(s)
@@ -484,7 +505,7 @@ export class Controller {
 
   /**
    * The agent is gone (the relay disconnected). Its session waits, suspended, for a `start` from its
-   * directory, or for the programmer to end it (#25, specs/Resume.tla).
+   * directory, or for the programmer to end it (#25, specs/Resume.tla, `Disconnect`).
    */
   disconnect(): void {
     const s = this.session
@@ -506,6 +527,7 @@ export class Controller {
     this.update()
   }
 
+  /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
   pause(reason = "user"): void {
     this.pauseReasons.add(reason)
     this.session?.timeline.pause()
@@ -513,8 +535,8 @@ export class Controller {
   }
 
   /**
-   * Removes one pause reason, or all of them. Playback continues when none are left. `reveal`: bring
-   * the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
+   * Removes one pause reason, or all of them. Playback continues when none are left (specs/Timeline.tla, `Resume`).
+   * `reveal`: bring the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
    * `Reply`, issue 125).
    */
   resume(reason?: string, { reveal = true }: { reveal?: boolean } = {}): void {
@@ -629,13 +651,14 @@ export class Controller {
 
   /** Runs tool calls one at a time. A call cancelled while waiting its turn never runs. */
   private serialize<T>(signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+    // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
     const guarded = () => (signal?.aborted ? Promise.reject(cancelled()) : fn())
     const run = this.chain.then(guarded, guarded)
     this.chain = run.catch(() => {})
     return run
   }
 
-  /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is. */
+  /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
   private rehearse(s: Session, actions: Action[]): ReturnType<typeof rehearse> {
     const from = s.queue.at(-1)?.after ?? { scene: s.scene, texts: new Map(), lines: s.lines, edits: new Set<string>() }
     return rehearse(this.editor, this.config, from, actions, (file, line, id) => s.seen.get(file)?.get(line) === id)
@@ -678,7 +701,7 @@ export class Controller {
    * report, so nothing is lost: a submitted batch stays queued and is reported on the next call.
    */
   private block(kind: Call["kind"], opts: { batch?: Batch; summary?: string }, signal?: AbortSignal): Promise<Report> {
-    // An abort that fired while the batch was rehearsed won't fire again.
+    // An abort that fired while the batch was rehearsed won't fire again (specs/Serialize.tla, `Rehearse`).
     if (signal?.aborted) return Promise.reject(cancelled())
     return new Promise((resolve, reject) => {
       const call: Call = {
@@ -686,10 +709,13 @@ export class Controller {
         ...opts,
         resolve,
         reject,
+        // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `TimeOut`.
         timer: setTimeout(() => this.finishCall(true), this.config.maxBlockMs),
       }
       this.endGrace()
       this.call = call
+      // specs/Serialize.tla, `Abort`: the listener releases the call only while it is this.call.
+      // `Cancel` in specs/Controller.tla: a blocked call is released at once.
       signal?.addEventListener("abort", () => {
         if (this.call !== call) return
         this.call = null
@@ -716,7 +742,7 @@ export class Controller {
         if (s.finished.some((r) => r.status !== "completed")) return true
         if (s.queue.length > 0) return false
         if (s.scene.turn === "agent") return s.events.some(interrupting)
-        // The programmer's edits during their turn wait until they pause typing.
+        // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
         return s.events.some((e) => e.kind !== "edit") || (s.navigatorReady && s.events.some(interrupting))
       default:
         throw new Error(`Unknown call: ${JSON.stringify(call.kind satisfies never)}`)
@@ -726,12 +752,15 @@ export class Controller {
   private pump(): void {
     const call = this.call
     const s = this.session
+    // specs/Serialize.tla, `Finish`.
     if (call && s && this.ready(call, s)) this.finishCall(false)
   }
 
+  /** `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
   private finishCall(timedOut: boolean): void {
     const call = this.call
     if (!call) return
+    // specs/Serialize.tla, `Commit`.
     this.call = null
     clearTimeout(call.timer)
     const s = this.session
@@ -739,11 +768,12 @@ export class Controller {
       call.reject(new ToolError("no_session", "The session has ended."))
       return
     }
-    // Nothing more to wait for once the session is ending.
+    // `Commit` in specs/Controller.tla. Nothing more to wait for once the session is ending.
     const report = this.snapshot(s, call.batch, timedOut && !s.ended && call.kind !== "end")
-    // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, DrainHeld).
+    // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
     const closing = (s.ended && s.held.length === 0) || call.kind === "end"
     if (closing) {
+      // specs/Bridge.tla, `CloseEnded`, or `CallEnd` for the agent's `end`; `this.closed` is `recent`.
       this.close(s)
       this.closed = s
       if (call.kind === "end" && !s.ended) {
@@ -754,6 +784,8 @@ export class Controller {
     const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected
     if (call.kind === "listen" && report.waiting && empty) this.startGrace()
     this.render()
+    // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
+    // `Answer` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
     void this.withCursor(s, report).then(call.resolve, () => call.resolve(report))
   }
 
@@ -806,7 +838,8 @@ export class Controller {
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
   private snapshot(s: Session, submitted: Batch | undefined, waiting: boolean): Report {
     const batches = s.finished.toSorted((a, b) => a.id - b.id)
-    // The agent planned against where these would have ended; the cursor is where they stopped (#112, specs/Anchor.tla).
+    // The agent planned against where these would have ended; the cursor is where they stopped (#112,
+    // specs/Anchor.tla, `Discard`; a batch that completed is `Complete`).
     if (batches.some((b) => b.status !== "completed")) s.anchorNeeded = true
     const events: Event[] = []
     for (const e of s.events) {
@@ -821,7 +854,7 @@ export class Controller {
       const before = s.baselines.get(e.file) ?? ""
       const after = s.latest.get(e.file) ?? before
       // An edit that interrupted stays, with no diff, though it was undone: the agent has to know
-      // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla).
+      // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla, `Report`).
       if (before === after && !interrupting(e)) continue
       const file = this.displayPath(s, e.file)
       events.push({ kind: "edit", file, diff: before === after ? "" : fileDiff(file, before, after), by: e.by })
@@ -842,7 +875,7 @@ export class Controller {
     // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
     const held = s.held.shift()
     if (held) report.rejected = held.rejected
-    // Its own mark: a report before it may have taken s.mayRepeat (specs/Controller.tla, MarkHeld).
+    // Its own mark: a report before it may have taken s.mayRepeat (specs/Controller.tla, `Commit` with MarkHeld).
     if (held?.mayRepeat) report.repeated = true
     if (s.held.length > 0) s.stale = true
     return report
@@ -865,7 +898,7 @@ export class Controller {
     s.finished.push(batch.result)
   }
 
-  /** Stops playback and discards everything queued behind it. */
+  /** Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and `EndSession`). */
   private interrupt(s: Session): void {
     s.stale = true
     for (const b of s.queue) if (b.state === "queued") this.discard(s, b)
@@ -890,17 +923,21 @@ export class Controller {
       while (this.session === s) {
         const batch = s.queue[0]
         if (!batch) break
+        // specs/Controller.tla: `Play`, then `Finish` once it has played.
         this.startHead(s)
         this.render()
         const { result, sightings } = await s.player.play(batch.id, batch.actions)
         if (this.session !== s) break
-        // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with.
+        // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
+        // (specs/Rehearsal.tla, `Play`).
         if (result.status === "completed" && batch.after) s.lines.adopt(batch.after.lines)
         for (const sighting of sightings) this.saw(s, s.lines, sighting)
+        // specs/Serialize.tla, `Play`: batches finish in queue order.
         batch.state = "done"
         batch.result = result
         s.queue = s.queue.filter((b) => b !== batch)
         s.finished.push(result)
+        // specs/Rehearsal.tla, `FailPlay`: a batch that didn't complete interrupts the queue behind it.
         if (result.status !== "completed") this.interrupt(s)
         // Mark the next batch as playing before reporting, so the report says so.
         this.startHead(s)
@@ -950,6 +987,7 @@ export class Controller {
     if (!s || s.scene.turn === "user") return "navigator"
     if (this.pauseReasons.size > 0) return "paused"
     if (s.queue.length > 0) return s.player.reading ? "read" : s.player.commandRunning ? "running" : "typing"
+    // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace.
     const waiting = this.grace !== null && !s.events.some(interrupting)
     return this.call?.kind === "listen" || waiting ? "listening" : "thinking"
   }
