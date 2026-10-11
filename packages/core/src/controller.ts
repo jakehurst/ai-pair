@@ -426,7 +426,8 @@ export class Controller {
     this.update()
   }
 
-  /** Edits to a file are reported as one diff, as the programmer's if any of them was. */
+  /** Edits to a file are reported as one diff, as the programmer's if any of them was
+   * (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`). */
   private recordEdit(s: Session, file: string, before: string, after: string, changes: Change[], by: EditEvent["by"]): void {
     s.lines.of(file, before)
     for (const change of changes) {
@@ -825,7 +826,7 @@ export class Controller {
       const before = s.baselines.get(e.file) ?? ""
       const after = s.latest.get(e.file) ?? before
       // An edit that interrupted stays, with no diff, though it was undone: the agent has to know
-      // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla).
+      // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla, `Report`).
       if (before === after && !interrupting(e)) continue
       const file = this.displayPath(s, e.file)
       events.push({ kind: "edit", file, diff: before === after ? "" : fileDiff(file, before, after), by: e.by })

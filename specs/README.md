@@ -68,7 +68,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
 | `Outside.cfg` | one file, 5 contents | holds | 564 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
-| `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
+| `EditEvents.cfg` | one file, 3 texts, `MaxSteps = 4` | holds | 516 |
 | `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, up to 3 sessions, `PostOnRevive = TRUE` | holds | 62 |
@@ -831,8 +831,25 @@ left out.
 
 | Spec | Code |
 |---|---|
-| `Programmer`, `Other` | `userEdit` and `otherEdit` -> `recordEdit`: the baseline, `by`, `interrupted` |
+| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: the baseline, `by`, `interrupted` |
 | `Report` | `snapshot`: the event, unless the file is unchanged and the edit didn't interrupt |
+
+Each invariant was proved to bite with a mutation, run in TLC and then
+reverted:
+
+| Mutation | Breaks |
+|---|---|
+| an edit to a text outside `Texts` | `TypeOK` |
+| an event only for an edit that interrupted | `NetReported` |
+| `KeepInterrupts = FALSE`, the code before | `Explained` |
+
+Every invariant names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NetReported` | `controller.test.ts`: NetReported: reports programmer edits as diffs and moves the agent cursor with them |
+| `Explained` | `controller.test.ts`: Explained: reports an interrupting edit the programmer undid, so the agent knows why its batches were discarded (specs/EditEvents.tla) |
 
 ### `Scroll`: follow mode's scrolling
 

@@ -1098,7 +1098,7 @@ describe("interruptions", () => {
     expect(editor.text("a.ts")).toBe("abc")
   })
 
-  it("reports programmer edits as diffs and moves the agent cursor with them", async () => {
+  it("NetReported: reports programmer edits as diffs and moves the agent cursor with them", async () => {
     const { editor, controller } = setup({ "a.ts": "hello\n" })
     await controller.start()
     await controller.read("a.ts")
@@ -1192,7 +1192,7 @@ describe("interruptions", () => {
 })
 
 describe("edits with no net change", () => {
-  it("reports an interrupting edit the programmer undid, so the agent knows why its batches were discarded (specs/EditEvents.tla)", async () => {
+  it("Explained: reports an interrupting edit the programmer undid, so the agent knows why its batches were discarded (specs/EditEvents.tla)", async () => {
     const { editor, controller } = setup({ "a.ts": "abc\n" })
     await controller.start()
     await controller.read("a.ts")
