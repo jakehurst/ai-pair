@@ -79,16 +79,21 @@ Set by Justine on 2026-10-07.
     `@ai-pair/protocol`, not as the literal character or an escape. Justine
     prefers not to have a special character encoded in the file (2026-10-06),
     and a named constant to a magic value (2026-10-09).
--   **The scripts are TypeScript, to Google's TypeScript Style Guide**
-    (https://google.github.io/styleguide/tsguide.html, #134). Node runs them
-    directly by stripping types, so `scripts/tsconfig.json` and
-    `packages/vscode/scripts/tsconfig.json` turn
-    on `erasableSyntaxOnly`. A script in
-    `packages/vscode/scripts/` is `.mts`, since that package stays
-    CommonJS. `npm run lint` checks them with the override in `.oxlintrc.json`,
-    `npm run format:check` with the one in `.prettierrc.json`, and
-    `npm run typecheck` with both tsconfigs, in CI's `check` job. These rules
-    no tool checks, so follow them by hand:
+-   **All TypeScript follows Google's TypeScript Style Guide**
+    (https://google.github.io/styleguide/tsguide.html, #133, #134): the
+    packages and the scripts alike. `npm run lint` checks it with the
+    override for `*.ts` and `*.mts` in `.oxlintrc.json` (type-aware, with
+    `no-use-before-define` at its default, so a function too is declared
+    above its first use), `npm run format:check` with the one in
+    `.prettierrc.json` (semicolons, single quotes), and `npm run typecheck`
+    with every tsconfig, in CI's `check` job. File names are snake_case. The
+    scripts are run by Node directly, by stripping types, so
+    `scripts/tsconfig.json` and `packages/vscode/scripts/tsconfig.json` turn
+    on `erasableSyntaxOnly`; a script in `packages/vscode/scripts/` is
+    `.mts`, since that package stays CommonJS. One exception is documented in
+    place: `packages/relay/src/md.d.ts` keeps a default export, which
+    esbuild's text loader needs. These rules no tool checks, so follow them
+    by hand:
     -   Give an arrow function a concise body only when its value is used;
         otherwise a block (Arrow function bodies).
     -   Brace every loop body, and both branches of an `if` with an `else`,

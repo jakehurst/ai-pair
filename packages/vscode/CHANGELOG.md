@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.11
+
+-   Every TypeScript file now follows Google's TypeScript Style Guide, not
+    only the scripts, and CI checks all of it with oxlint and Prettier (#133).
+    Three source files are renamed to snake_case (`outside_watch.ts`,
+    `panel_messages.ts`, `panel_html.ts`). The code targets ES2025. The
+    extension works the same.
+
 ## 0.6.10
 
 -   The repository's scripts are TypeScript now, to Google's TypeScript Style
