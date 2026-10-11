@@ -382,6 +382,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   // Looking away from what the view follows pauses playback: the cursor, or the code it points at.
 
   private onActiveEditor(editor: vscode.TextEditor | undefined): void {
+    // specs/PointFocus.tla: away from the target is `LookAway`; no editor at all (`CloseTab`) pauses nothing.
     if (editor?.document.uri.scheme === "file") this.onSelectionChange(editor)
     const target = this.target()
     if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return

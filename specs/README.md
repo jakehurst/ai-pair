@@ -85,7 +85,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
-| `PointFocus.cfg` | a point, a look-away, a closed tab, 2 replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
+| `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE` | holds | 12 |
 
@@ -421,20 +421,21 @@ with `TRUE`, TLC violates `ReplyKeepsView` in two steps: `LookAway`, `Reply`.
 
 | Spec | Code |
 |---|---|
-| `Point`, `CursorAction` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `editor.show` before each edit) |
+| `Point`, `ActAtCursor` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `editor.show` before each edit) |
 | `LookAway` | `onActiveEditor` away from the target: `pause("away")` |
 | `CloseTab` | the programmer closing the target's tab, or every tab: `onActiveEditor(undefined)` returns early, so nothing pauses |
 | `Reply` | the panel's `reply`: `resume(undefined, { reveal: false })`, then `userMessage`; a stale point is dropped, and nothing is revealed |
 | `Resume` | the Resume button: `resume()`: with an away pause among the reasons and the focus on a point, the focus returns to the cursor and the editor is rendered before `reveal` |
 
-Each invariant was proved to bite with a mutation of a copy of the model; each
-mutation failed on the invariant named and no other:
+Each invariant was proved to bite with a mutation of a copy of the model, run
+in TLC and then reverted:
 
 | Mutation | Breaks |
 |---|---|
 | `RevealOnReply = TRUE` | `ReplyKeepsView` |
 | `DropStaleFocus = FALSE` | `NoStaleReveal` |
-| `CursorAction` leaves the active editor | `CursorShown` |
+| `ActAtCursor` leaves the active editor | `CursorShown` |
+| a point to a file outside `Files` | `TypeOK` |
 
 Every invariant names the test that proves the code obeys it; the test's title
 carries the invariant's name:
@@ -444,6 +445,7 @@ carries the invariant's name:
 | `NoStaleReveal` | `controller.test.ts`: NoStaleReveal: Resume after a look-away reveals the cursor, not a point the programmer looked away from (#109) |
 | `ReplyKeepsView` | `controller.test.ts`: ReplyKeepsView: a reply resumes playback without revealing, after a look-away or with every tab closed (#125) |
 | `CursorShown` | `controller.test.ts`: CursorShown: the agent's next edit after a reply shows its file again (#125) |
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
 
 ### `Start`: the Start a session button
 

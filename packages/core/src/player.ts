@@ -299,6 +299,7 @@ export class Player {
     const lookingBack = cursorAction && s.focus === "point"
     const farBack = lookingBack && s.pointFar
     if (lookingBack) {
+      // specs/PointFocus.tla, `ActAtCursor`: the view comes back to the cursor.
       s.focus = "cursor"
       if (farBack && !("move" in action) && named === undefined && s.cursor && this.fileOf({}, playing) === s.cursor.file) {
         await editor.show(s.cursor.file)
@@ -416,7 +417,8 @@ export class Player {
       s.point = { file, start: span.start, end: span.end }
       const pointLine = position(span.text, span.start).line
       if (s.turn === "agent") {
-        // The view goes to the pointed code, so the `say` about it plays while the programmer looks at it.
+        // The view goes to the pointed code, so the `say` about it plays while the programmer looks at it
+        // (specs/PointFocus.tla, `Point`).
         const cursorLine = s.cursor?.file === file ? position(span.text, s.cursor.offset).line : undefined
         s.pointFar = cursorLine === undefined || Math.abs(cursorLine - pointLine) > timing.nearLines
         s.focus = "point"
