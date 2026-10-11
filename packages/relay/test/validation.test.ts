@@ -45,7 +45,7 @@ const actions: unknown[] = [
   ...places.span.map((select) => ({ select })),
   ...places.span.map((point) => ({ point })),
   ...places.type.map((type) => ({ type })),
-  ...places.type.map((type_fast) => ({ type_fast })),
+  ...places.type.map((text) => ({ type_fast: text })),
   { delete: true },
   { delete: false },
   { delete: 1 },

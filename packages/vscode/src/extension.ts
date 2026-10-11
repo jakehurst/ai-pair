@@ -18,6 +18,15 @@ const SAVED_SESSION = 'aiPair.session';
 const SAVED_HISTORY = 'aiPair.history';
 /** How long after a change the session is saved: changes come a keystroke at a time. */
 const SAVE_MS = 200;
+/** Whether Set Up Agent was offered once, in the global state. */
+const OFFERED_SETUP = 'aiPair.offeredSetup';
+/** The settings under `aiPair`, as `config().get` and `update` name them. */
+const SPEED = 'speed';
+const READING_SPEED = 'readingSpeed';
+const TIMING = 'timing';
+const AGENT_NAME = 'agentName';
+const CONFIRM_COMMANDS = 'confirmCommands';
+const CALIBRATION_PASSAGE = 'calibrationPassage';
 
 /** Returned from `activate`, for integration tests. */
 export interface Api {
@@ -46,20 +55,21 @@ function once<T>(f: (arg: T) => void): (arg: T) => void {
   };
 }
 
+/** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
 
-  const editor = new VsCodeEditor(root, config().get('agentName', 'Agent'));
+  const editor = new VsCodeEditor(root, config().get(AGENT_NAME, 'Agent'));
   const speed = {
-    get: () => settingSpeed(config().get<unknown>('speed', 1)),
+    get: () => settingSpeed(config().get<unknown>(SPEED, 1)),
     set: (value: number) => {
-      void config().update('speed', value, vscode.ConfigurationTarget.Global);
+      void config().update(SPEED, value, vscode.ConfigurationTarget.Global);
     },
   };
   const readingSpeed = {
-    get: () => settingSpeed(config().get<unknown>('readingSpeed', 1)),
+    get: () => settingSpeed(config().get<unknown>(READING_SPEED, 1)),
     set: (value: number) => {
-      void config().update('readingSpeed', value, vscode.ConfigurationTarget.Global);
+      void config().update(READING_SPEED, value, vscode.ConfigurationTarget.Global);
     },
   };
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
@@ -94,8 +104,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   panel.controller = controller;
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
-  controller.setTiming(config().get('timing', {}));
-  controller.setConfirmCommands(config().get('confirmCommands', true));
+  controller.setTiming(config().get(TIMING, {}));
+  controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
   function passage(): Passage {
     const chosen = config().get<Partial<Passage>>('calibrationPassage', {});
@@ -114,9 +124,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla, and
       // setTiming below is `ApplyRate`.
       store: async (msPerChar) => {
-        const timing = config().get<TimingOverrides>('timing', {});
-        await config().update('timing', { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global);
-        controller.setTiming(config().get('timing', {}));
+        const timing = config().get<TimingOverrides>(TIMING, {});
+        await config().update(TIMING, { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global);
+        controller.setTiming(config().get(TIMING, {}));
       },
       show: (view) => {
         panel.showCalibration(view);
@@ -127,7 +137,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   panel.calibration = calibration;
   controller.onCalibrate = (chosen) => {
     if (!calibration.arm(chosen)) return false;
-    void config().update('calibrationPassage', chosen, vscode.ConfigurationTarget.Global);
+    void config().update(CALIBRATION_PASSAGE, chosen, vscode.ConfigurationTarget.Global);
     return true;
   };
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel);
@@ -203,10 +213,10 @@ export function activate(context: vscode.ExtensionContext): Api {
         controller.setReadingSpeed(readingSpeed.get());
         panel.showReadingSpeed(readingSpeed.get());
       }
-      if (e.affectsConfiguration('aiPair.timing')) controller.setTiming(config().get('timing', {}));
-      if (e.affectsConfiguration('aiPair.agentName')) editor.setAgentName(config().get('agentName', 'Agent'));
+      if (e.affectsConfiguration('aiPair.timing')) controller.setTiming(config().get(TIMING, {}));
+      if (e.affectsConfiguration('aiPair.agentName')) editor.setAgentName(config().get(AGENT_NAME, 'Agent'));
       if (e.affectsConfiguration('aiPair.confirmCommands')) {
-        controller.setConfirmCommands(config().get('confirmCommands', true));
+        controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
       }
     }),
     vscode.commands.registerCommand('aiPair.playDemo', () => {
@@ -256,8 +266,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     { dispose: save },
   );
-  if (!context.globalState.get('aiPair.offeredSetup')) {
-    void context.globalState.update('aiPair.offeredSetup', true);
+  if (!context.globalState.get(OFFERED_SETUP)) {
+    void context.globalState.update(OFFERED_SETUP, true);
     void vscode.window.showInformationMessage('AI Pair is installed. Connect it to your agent?', 'Set Up Agent').then((answer) => {
       if (answer) void setUp();
     });
@@ -275,4 +285,5 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
 }
 
+/** Does nothing: every resource is disposed through the context. */
 export function deactivate(): void {}

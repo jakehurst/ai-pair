@@ -83,18 +83,18 @@ async function until(check: () => boolean): Promise<void> {
 
 describe('link', () => {
   it('OwnCloseOnly: rejects a call only when the socket it was sent on closes', async () => {
-    const a = await fakeWindow('/a');
-    const b = await fakeWindow('/b');
+    const fakeA = await fakeWindow('/a');
+    const fakeB = await fakeWindow('/b');
     const link = new EditorLink('/a', dir);
     const first = link.call('read', {});
-    await until(() => a.calls.length === 1);
-    const callOnA = a.calls[0];
+    await until(() => fakeA.calls.length === 1);
+    const callOnA = fakeA.calls[0];
     ok(callOnA);
     answer(callOnA, 'from a');
     expect(await first).toBe('from a');
 
     // Hold A's end of the closing handshake, so that A's close event comes after the call on B.
-    const socketA = a.sockets[0];
+    const socketA = fakeA.sockets[0];
     ok(socketA);
     socketA.pause();
     link.locate(['/b']);
@@ -108,14 +108,14 @@ describe('link', () => {
         settled = true;
       },
     );
-    await until(() => b.calls.length === 1);
+    await until(() => fakeB.calls.length === 1);
     socketA.resume();
     await until(() => socketA.readyState === socketA.CLOSED);
     await new Promise((r) => {
       setTimeout(r, 100);
     });
     expect(settled).toBe(false);
-    const callOnB = b.calls[0];
+    const callOnB = fakeB.calls[0];
     ok(callOnB);
     answer(callOnB, 'from b');
     expect(await second).toBe('from b');
@@ -123,11 +123,11 @@ describe('link', () => {
   });
 
   it('CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138)', async () => {
-    const a = await fakeWindow('/a');
+    const fake = await fakeWindow('/a');
     const link = new EditorLink('/a', dir);
     const call = link.call('listen', {});
-    await until(() => a.calls.length === 1);
-    const socket = a.sockets[0];
+    await until(() => fake.calls.length === 1);
+    const socket = fake.sockets[0];
     ok(socket);
     socket.close();
     await expect(call).rejects.toMatchObject({ code: 'no_editor', message: EDITOR_DISCONNECTED });
@@ -149,14 +149,14 @@ describe('link', () => {
   }
 
   it('RelayStaysUp: drops a frame that is not JSON after the welcome', async () => {
-    const a = await fakeWindow('/a');
+    const fake = await fakeWindow('/a');
     const link = new EditorLink('/a', dir);
     const call = link.call('read', {});
-    await until(() => a.calls.length === 1);
-    const socket = a.sockets[0];
+    await until(() => fake.calls.length === 1);
+    const socket = fake.sockets[0];
     ok(socket);
     socket.send('not json');
-    const first = a.calls[0];
+    const first = fake.calls[0];
     ok(first);
     answer(first, 'result');
     expect(await call).toBe('result');
@@ -164,17 +164,17 @@ describe('link', () => {
   });
 
   it("NoReportLost: doesn't send a call that was cancelled before it went out", async () => {
-    const a = await fakeWindow('/a');
+    const fake = await fakeWindow('/a');
     const link = new EditorLink('/a', dir);
     const abort = new AbortController();
     const call = link.call('listen', {}, abort.signal);
     abort.abort();
     await expect(call).rejects.toMatchObject({ code: 'cancelled' });
-    // Calls arrive in order, so a `listen` that went out would arrive before this `read`.
+    // Calls arrive in order, so fake `listen` that went out would arrive before this `read`.
     const second = link.call('read', {});
-    await until(() => a.calls.length > 0);
-    expect(a.calls.map((c) => c.tool)).toEqual(['read']);
-    const first = a.calls[0];
+    await until(() => fake.calls.length > 0);
+    expect(fake.calls.map((c) => c.tool)).toEqual(['read']);
+    const first = fake.calls[0];
     ok(first);
     answer(first, 'result');
     expect(await second).toBe('result');
@@ -182,25 +182,26 @@ describe('link', () => {
   });
 
   it("PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59)", async () => {
-    const a = await fakeWindow('/a');
+    const fake = await fakeWindow('/a');
     const link = new EditorLink('/a', dir);
     const abort = new AbortController();
+    // Aborted below; the test watches the window's side.
     void link.call('listen', {}, abort.signal).catch(() => {});
-    await until(() => a.calls.length === 1);
+    await until(() => fake.calls.length === 1);
     abort.abort();
-    await until(() => a.received.includes('cancel'));
+    await until(() => fake.received.includes('cancel'));
     // The agent's next call, made while the editor's answer to the cancelled one is on its way.
     const second = link.call('step', { actions: [] });
     await new Promise((r) => {
       setTimeout(r, 50);
     });
-    const first = a.calls[0];
+    const first = fake.calls[0];
     ok(first);
     answer(first, { batches: [], events: [], turn: 'agent' });
-    await until(() => a.calls.length === 2);
+    await until(() => fake.calls.length === 2);
     // The editor restores the report before it takes the next call.
-    expect(a.received).toEqual(['call', 'cancel', 'return', 'call']);
-    const next = a.calls[1];
+    expect(fake.received).toEqual(['call', 'cancel', 'return', 'call']);
+    const next = fake.calls[1];
     ok(next);
     answer(next, 'second');
     expect(await second).toBe('second');
@@ -208,24 +209,24 @@ describe('link', () => {
   });
 
   it('sends the next call once the editor answers a cancelled call with an error', async () => {
-    const a = await fakeWindow('/a');
+    const fake = await fakeWindow('/a');
     const link = new EditorLink('/a', dir);
     const abort = new AbortController();
     const first = link.call('listen', {}, abort.signal);
-    await until(() => a.calls.length === 1);
+    await until(() => fake.calls.length === 1);
     abort.abort();
-    await until(() => a.received.includes('cancel'));
+    await until(() => fake.received.includes('cancel'));
     const second = link.call('read', {});
     await new Promise((r) => {
       setTimeout(r, 50);
     });
-    expect(a.calls).toHaveLength(1);
-    const cancelled = a.calls[0];
+    expect(fake.calls).toHaveLength(1);
+    const cancelled = fake.calls[0];
     ok(cancelled);
     cancelled.ws.send(JSON.stringify({ type: 'error', id: cancelled.id, code: 'cancelled', message: 'The call was cancelled.' }));
     await expect(first).rejects.toMatchObject({ code: 'cancelled' });
-    await until(() => a.calls.length === 2);
-    const next = a.calls[1];
+    await until(() => fake.calls.length === 2);
+    const next = fake.calls[1];
     ok(next);
     answer(next, 'second');
     expect(await second).toBe('second');

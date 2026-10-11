@@ -30,7 +30,7 @@ describe('row', () => {
 
 describe('comfortable', () => {
   it('is out of the top and bottom quarters of the view', () => {
-    expect([3, 4, 11, 12].map((at) => comfortable(at, 16))).toEqual([false, true, true, false]);
+    expect([3, 4, 11, 12].map((at) => comfortable(at, /* height= */ 16))).toEqual([false, true, true, false]);
   });
 });
 
@@ -52,12 +52,17 @@ describe('landing', () => {
 
 describe('viewport', () => {
   it("measures the view's height where it doesn't reach the end", () => {
-    expect(viewport([{ start: 40, end: 69 }], 1000, undefined)).toEqual({ top: 40, rows: 30, atEnd: false, height: 30 });
+    expect(viewport([{ start: 40, end: 69 }], 1000, /* known= */ undefined)).toEqual({ top: 40, rows: 30, atEnd: false, height: 30 });
   });
 
   it("takes the height last seen at the document's end, where the view stops short", () => {
     expect(viewport([{ start: 990, end: 999 }], 1000, 30)).toEqual({ top: 990, rows: 10, atEnd: true, height: 30 });
-    expect(viewport([{ start: 990, end: 999 }], 1000, undefined)).toEqual({ top: 990, rows: 10, atEnd: true, height: undefined });
+    expect(viewport([{ start: 990, end: 999 }], 1000, /* known= */ undefined)).toEqual({
+      top: 990,
+      rows: 10,
+      atEnd: true,
+      height: undefined,
+    });
   });
 
   it('has none without visible ranges', () => {

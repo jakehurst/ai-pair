@@ -7,9 +7,12 @@ import type { Controller } from '@ai-pair/core';
 import { CURSOR_MARKER, type Action, type Report } from '@ai-pair/protocol';
 
 const DIR = 'ai-pair-demo/src';
+/** The demo's Express server file, in the workspace. */
 export const SERVER = `${DIR}/server.ts`;
+/** The demo's todos module, which the demo writes. */
 export const TODOS = `${DIR}/todos.ts`;
 
+/** The server file as the demo finds it, before its edits. */
 export const INITIAL_SERVER = `import express from "express";
 
 const app = express();
@@ -18,8 +21,9 @@ app.use(express.json());
 app.listen(3000, () => console.log("Listening on http://localhost:3000"));
 `;
 
-// Follows AGENT_GUIDE.md: left to right, with the close of whatever has one typed first, new lines
-// started at the end of the line above, and narration of what, why, and how right before its code.
+/**
+ * Follows AGENT_GUIDE.md: left to right, with the close of whatever has one typed first, new lines started at the end of the line above, and narration of what, why, and how right before its code.
+ */
 export const SCRIPT: Action[][] = [
   [{ say: 'Let me look at how the app is set up first.' }, { move: { file: SERVER, line: 1, at: `${CURSOR_MARKER}import express` } }],
   [
@@ -169,6 +173,7 @@ async function stopEarly(controller: Controller): Promise<void> {
   await controller.end();
 }
 
+/** Plays the scripted demo session in the workspace at `root`, stopping early if the programmer derails it. */
 export async function playDemo(controller: Controller, root: string): Promise<void> {
   if (controller.isActive) {
     void vscode.window.showWarningMessage('A pairing session is already active.');

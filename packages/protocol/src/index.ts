@@ -42,6 +42,7 @@ export interface SpanTarget {
   through?: string;
 }
 
+/** One thing the agent does in a batch: a word to the programmer, a cursor move, a selection, typing, a command. */
 export type Action =
   | { say: string }
   | { move: MoveTarget }
@@ -52,13 +53,16 @@ export type Action =
   | { point: SpanTarget }
   | { run: string; wait?: number };
 
+/** Whose turn it is: the agent plays batches, or the programmer has the keyboard. */
 export type Turn = 'agent' | 'user';
 
 /** Why playback is paused: the Pause button, a reply being typed, the programmer looking away, a calibration. */
 export type PauseReason = 'user' | 'reply' | 'away' | 'calibrate';
 
+/** How a batch ended: played to the end, cut by the programmer, stopped by an error, or never played. */
 export type BatchStatus = 'completed' | 'interrupted' | 'failed' | 'discarded';
 
+/** Why an action failed, as a code the agent can act on. */
 export type ErrorKind =
   | 'no_line'
   | 'not_found'
@@ -74,11 +78,13 @@ export type ErrorKind =
   /** After a discarded or interrupted batch, the next one did not anchor the cursor with a file and line (#112). */
   | 'unanchored';
 
+/** A line that might have been the one meant, offered after text was not found where the agent said. */
 export interface Candidate {
   line: number;
   context: string;
 }
 
+/** What a `run` action produced: the command, its output, and how it ended. */
 export interface RunResult {
   command: string;
   /** Absent when the command is still running, or its exit code couldn't be observed. */
@@ -103,12 +109,14 @@ export interface Code {
   end?: { final_newline: boolean };
 }
 
+/** The error that stopped a batch, with the lines that might have been meant. */
 export interface BatchError {
   kind: ErrorKind;
   message: string;
   candidates?: Candidate[];
 }
 
+/** A finished batch as a report describes it: its status, its code, and what was left unplayed. */
 export interface BatchResult {
   id: number;
   status: BatchStatus;
@@ -126,6 +134,7 @@ export interface BatchResult {
   unsaved?: Array<{ file: string; error: string }>;
 }
 
+/** A position in a file, by line and column, both from 1. */
 export interface LineColumn {
   line: number;
   column: number;
@@ -148,6 +157,7 @@ export interface Passage {
   notice?: string;
 }
 
+/** Something that happened in the editor since the last report: a message, an edit, an interrupt, a turn, the end. */
 export type Event =
   | { kind: 'message'; text: string; selection?: Excerpt }
   /** `other`: not by the programmer, but by a tool, a formatter, or on disk. Only the programmer's interrupt.
@@ -157,6 +167,7 @@ export type Event =
   | { kind: 'turn'; to: Turn; message?: string; selection?: Excerpt }
   | { kind: 'end' };
 
+/** The editor's answer to a tool call: the batches that finished, the events since the last report, and where the cursor is. */
 export interface Report {
   batches: BatchResult[];
   /** The batch this `step` submitted, unless it's already finished and in `batches`. */
@@ -179,6 +190,7 @@ export interface Report {
   paused?: PauseReason[];
 }
 
+/** A file as `read` returns it: its lines, whether it has unsaved changes, and how it ends. */
 export interface FileContent {
   file: string;
   dirty: boolean;
@@ -188,6 +200,7 @@ export interface FileContent {
   end?: { final_newline: boolean };
 }
 
+/** Why a tool call was refused, as a code the agent can act on. */
 export type ToolErrorCode = 'no_session' | 'session_active' | 'no_editor' | 'cancelled' | 'invalid_arguments' | 'calibration_busy';
 
 /** Returns the fields as a comma-separated list of code spans. */
@@ -220,16 +233,16 @@ function spotProblem(at: string): string | undefined {
 }
 
 /** Returns what's wrong with a `move`'s combination of fields, if anything. */
-export function moveProblem(m: MoveTarget): string | undefined {
-  if ('before' in m || 'after' in m) {
+export function moveProblem(target: MoveTarget): string | undefined {
+  if ('before' in target || 'after' in target) {
     return `A spot is one text, \`at\`: the text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`at: "import { ${CURSOR_MARKER}type Context"\`.`;
   }
-  const line = lineProblem(m.line);
+  const line = lineProblem(target.line);
   if (line) return line;
-  if (m.to !== undefined && m.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
-  if (m.at !== undefined && m.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
-  if (m.at === undefined && m.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
-  if (m.at !== undefined) return spotProblem(m.at);
+  if (target.to !== undefined && target.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
+  if (target.at !== undefined && target.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
+  if (target.at === undefined && target.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
+  if (target.at !== undefined) return spotProblem(target.at);
   return undefined;
 }
 
@@ -295,6 +308,7 @@ export function typeProblem(text: unknown): string | undefined {
   return undefined;
 }
 
+/** A refused tool call, with its code. */
 export class ToolError extends Error {
   constructor(
     readonly code: ToolErrorCode,

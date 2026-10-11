@@ -8,6 +8,7 @@
 import { readingChars } from '@ai-pair/core';
 import type { Passage } from './passage';
 
+/** Where a reading speed calibration is: not running, waiting for go, timing the passage, or saving the result. */
 export type Phase = 'idle' | 'armed' | 'reading' | 'storing';
 
 /** What the panel shows: the passage announced, the passage itself, or the result. */
@@ -33,6 +34,7 @@ export function wordsPerMinute(text: string, elapsedMs: number): number {
   return Math.round(words / (elapsedMs / 60_000));
 }
 
+/** Measures the reading speed: times the programmer reading a passage, and stores the result in the settings. */
 export class Calibration {
   phase: Phase = 'idle';
   private startedAt = 0;

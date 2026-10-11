@@ -28,7 +28,12 @@ function open(panel: NarrationPanel) {
   // Only what NarrationPanel uses.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   panel.resolveWebviewView(view as never);
-  return { posted, send: (m: object) => receive?.(m) };
+  return {
+    posted,
+    send: (m: object) => {
+      receive?.(m);
+    },
+  };
 }
 
 function setup(starter?: { available: boolean | 'manual' }) {

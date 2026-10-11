@@ -19,6 +19,7 @@ import type {
 /** `/project` in this platform's form (`C:\project` on Windows), as the controller resolves it. */
 const ROOT = nodePath.resolve('/project');
 
+/** An editor in memory: files as strings, a cursor, and a record of what the controller asked. */
 export class FakeEditor implements EditorPort {
   files = new Map<string, string>();
   dirty = new Set<string>();
@@ -28,7 +29,21 @@ export class FakeEditor implements EditorPort {
   cursor: CursorView | null = null;
   state: AgentState | null = null;
   point: { file: string; start: number; end: number } | null = null;
-  controller!: Controller;
+  controller: Controller | undefined;
+  /** Files the editor stores with CRLF, whatever they contain so far. */
+  crlf = new Set<string>();
+  focus: Focus = 'cursor';
+  reveals = 0;
+  /** What the view was following at the last reveal. */
+  revealedFocus: Focus | null = null;
+  follows = 0;
+  /** `unsaved`: the files with unsaved changes when the command started. */
+  commands: Array<{ command: string; options: RunOptions; unsaved: string[] }> = [];
+  /**
+   * How each command behaves: its terminal takes `startMs` to get ready, then the command takes `ms`
+   * and exits with `exitCode`, having printed `output`.
+   */
+  commandScript = new Map<string, { ms: number; startMs?: number; exitCode?: number; output?: string }>();
 
   resolvePath(file: string): string {
     return nodePath.resolve(ROOT, file);
@@ -42,8 +57,6 @@ export class FakeEditor implements EditorPort {
     if (text === undefined) throw new MissingFile(file);
     return text;
   }
-  /** Files the editor stores with CRLF, whatever they contain so far. */
-  crlf = new Set<string>();
   async eol(file: string): Promise<string> {
     return this.crlf.has(file) ? '\r\n' : '\n';
   }
@@ -64,7 +77,6 @@ export class FakeEditor implements EditorPort {
     this.dirty.delete(file);
     this.saved.push(file);
   }
-  focus: Focus = 'cursor';
   renderCursor(cursor: CursorView | null, state: AgentState, focus: Focus): void {
     this.cursor = cursor;
     this.state = state;
@@ -73,25 +85,14 @@ export class FakeEditor implements EditorPort {
   renderPoint(point: { file: string; start: number; end: number } | null): void {
     this.point = point;
   }
-  reveals = 0;
-  /** What the view was following at the last reveal. */
-  revealedFocus: Focus | null = null;
   reveal(): void {
     this.reveals++;
     this.revealedFocus = this.focus;
   }
-  follows = 0;
   follow(): void {
     this.follows++;
   }
 
-  /** `unsaved`: the files with unsaved changes when the command started. */
-  commands: Array<{ command: string; options: RunOptions; unsaved: string[] }> = [];
-  /**
-   * How each command behaves: its terminal takes `startMs` to get ready, then the command takes `ms`
-   * and exits with `exitCode`, having printed `output`.
-   */
-  commandScript = new Map<string, { ms: number; startMs?: number; exitCode?: number; output?: string }>();
   async runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
     const script = this.commandScript.get(command) ?? { ms: 0, exitCode: 0 };
     if (script.startMs) {
@@ -147,9 +148,9 @@ export class FakeEditor implements EditorPort {
     this.files.set(file, after);
     const changes = [{ offset, deleteLength, text }];
     if (by === 'programmer') {
-      this.controller.userEdit(file, before, after, changes);
+      this.controller?.userEdit(file, before, after, changes);
     } else {
-      this.controller.otherEdit(file, before, after, changes);
+      this.controller?.otherEdit(file, before, after, changes);
     }
   }
 
@@ -158,6 +159,7 @@ export class FakeEditor implements EditorPort {
   }
 }
 
+/** A panel that keeps every event posted to it. */
 export class FakePanel implements PanelPort {
   events: PanelEvent[] = [];
   post(event: PanelEvent): void {
@@ -208,7 +210,7 @@ function isSavedSession(v: unknown): v is SavedSession {
 }
 
 /** Returns `saved` as the workspace's storage hands it back: through JSON. */
-export function throughStorage(saved: SavedSession | undefined): SavedSession {
+export function throughStorage(saved?: SavedSession): SavedSession {
   const parsed: unknown = JSON.parse(JSON.stringify(saved));
   if (!isSavedSession(parsed)) throw new Error(`not a saved session: ${JSON.stringify(parsed)}`);
   return parsed;
@@ -216,35 +218,38 @@ export function throughStorage(saved: SavedSession | undefined): SavedSession {
 
 /** Tracks a promise so tests can check whether it has settled yet. */
 export function track<T>(promise: Promise<T>) {
-  const t = { done: false, value: undefined as T | undefined, error: undefined as unknown };
-  promise.then(
+  const tracked: { done: boolean; value: T | undefined; error: unknown } = { done: false, value: undefined, error: undefined };
+  void promise.then(
     (v) => {
-      t.done = true;
-      t.value = v;
+      tracked.done = true;
+      tracked.value = v;
     },
     (e) => {
-      t.done = true;
-      t.error = e;
+      tracked.done = true;
+      tracked.error = e;
     },
   );
-  return t;
+  return tracked;
 }
 
 /** Advances fake time until the promise settles. */
 export async function until<T>(promise: Promise<T>, maxMs = 120_000): Promise<T> {
-  const t = track(promise);
-  for (let elapsed = 0; !t.done && elapsed < maxMs; elapsed += 10) {
+  const tracked = track(promise);
+  for (let elapsed = 0; !tracked.done && elapsed < maxMs; elapsed += 10) {
     await vi.advanceTimersByTimeAsync(10);
   }
-  if (!t.done) throw new Error(`Still pending after ${maxMs} ms`);
-  if (t.error !== undefined) {
-    throw t.error instanceof Error ? t.error : new Error('The promise rejected with a value that is not an Error.', { cause: t.error });
+  if (!tracked.done) throw new Error(`Still pending after ${maxMs} ms`);
+  if (tracked.error !== undefined) {
+    throw tracked.error instanceof Error
+      ? tracked.error
+      : new Error('The promise rejected with a value that is not an Error.', { cause: tracked.error });
   }
   // `track` keeps the value of the promise it was given, a `T`.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return t.value as T;
+  return tracked.value as T;
 }
 
+/** Moves the fake timers on by `ms`, running what they fire. */
 export async function advance(ms: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(ms);
 }

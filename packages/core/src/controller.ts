@@ -146,6 +146,7 @@ function cancelled(): ToolError {
   return new ToolError('cancelled', 'The call was cancelled.');
 }
 
+/** The session: takes the agent's tool calls, queues its batches, plays them through the editor, and reports what happened. */
 export class Controller {
   private session: Session | null = null;
   /** The session the last report closed, until another starts: a report handed back puts it back. */
@@ -213,14 +214,14 @@ export class Controller {
    * Takes up a suspended session again: its turn, cursor, and history are as they were. The agent may
    * be a new conversation, so it has seen no lines: it reads them before it gives a line number.
    */
-  private resumeSession(s: Session, rules?: string[]): Promise<Report> {
-    s.suspended = false;
+  private resumeSession(session: Session, rules?: string[]): Promise<Report> {
+    session.suspended = false;
     this.trace?.('session resumed');
-    s.seen = new Map();
-    s.seenCursor = undefined;
-    this.panel.post({ type: 'session', active: true, task: s.task, resumed: true, ...(rules?.length ? { rules } : {}) });
+    session.seen = new Map();
+    session.seenCursor = undefined;
+    this.panel.post({ type: 'session', active: true, task: session.task, resumed: true, ...(rules?.length ? { rules } : {}) });
     this.render();
-    return this.withCursor(s, { ...this.snapshot(s, undefined, /* waiting= */ false), resumed: true });
+    return this.withCursor(session, { ...this.snapshot(session, undefined, /* waiting= */ false), resumed: true });
   }
 
   /** Opens a new session, the window's from now on. */
@@ -272,14 +273,14 @@ export class Controller {
    * text from before them, and the agent reads its files again when it resumes.
    */
   get saved(): SavedSession | undefined {
-    const s = this.session;
-    if (!s || s.ended) return undefined;
-    const { root, turn, cursor, selection } = s.scene;
+    const session = this.session;
+    if (!session || session.ended) return undefined;
+    const { root, turn, cursor, selection } = session.scene;
     return {
-      task: s.task,
-      scene: { root, turn, cursor, selection, allowedCommands: [...s.scene.allowedCommands] },
-      finished: s.finished,
-      events: s.events.filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
+      task: session.task,
+      scene: { root, turn, cursor, selection, allowedCommands: [...session.scene.allowedCommands] },
+      finished: session.finished,
+      events: session.events.filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
     };
   }
 
@@ -293,40 +294,40 @@ export class Controller {
       pointFar: false,
       allowedCommands: new Set(saved.scene.allowedCommands),
     };
-    const s = this.open(saved.task, scene);
-    s.suspended = true;
+    const session = this.open(saved.task, scene);
+    session.suspended = true;
     this.trace?.('session revived after a reload, suspended');
-    s.finished = [...saved.finished];
-    s.events = [...saved.events];
+    session.finished = [...saved.finished];
+    session.events = [...saved.events];
     // specs/Resume.tla, `Reload`: the replayed history may end with the session live (#138).
-    this.panel.post({ type: 'session', active: true, task: s.task, suspended: true });
+    this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.render();
   }
 
   step(actions: Action[], signal?: AbortSignal): Promise<Report> {
     return this.serialize(signal, async () => {
-      const s = this.requireSession();
+      const session = this.requireSession();
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block('step', {}, signal);
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
       // specs/Anchor.tla, `SubmitAnchored` and `SubmitUnanchored`).
       const anchor = cursorAnchor(actions);
-      if (s.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(s, anchor);
+      if (session.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(session, anchor);
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
-      const rehearsal = s.stale || s.ended ? undefined : await this.rehearse(s, actions);
+      const rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
       // (specs/Controller.tla: `FailRehearsal`, else `PassRehearsal`).
-      const current = rehearsal && !s.stale && !s.ended;
+      const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
-      if (current && rehearsal.result.status === 'failed') return this.rejectBatch(s, actions, rehearsal);
+      if (current && rehearsal.result.status === 'failed') return this.rejectBatch(session, actions, rehearsal);
       const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal?.after };
       if (current) {
-        s.queue.push(batch);
+        session.queue.push(batch);
         this.trace?.(`batch ${batch.id} queued: ${actions.length} actions`);
-        if (anchor?.anchored) s.anchorNeeded = false;
-        this.kick(s);
+        if (anchor?.anchored) session.anchorNeeded = false;
+        this.kick(session);
       } else {
-        this.discard(s, batch);
+        this.discard(session, batch);
       }
       return this.block('step', { batch }, signal);
     });
@@ -350,20 +351,20 @@ export class Controller {
 
   /** Reads a file. Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
   async read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
-    const s = this.requireSession();
+    const session = this.requireSession();
     // `Call` and `GoQuiet` in specs/ListenGrace.tla: a read is a call too, settled at once.
     if (this.openCalls === 0) this.startQuiet();
-    const path = this.resolvePath(s, file);
-    const planned = this.planned(s, path);
-    const text = planned?.text ?? (await this.textOrMissing(s, path));
+    const path = this.resolvePath(session, file);
+    const planned = this.planned(session, path);
+    const text = planned?.text ?? (await this.textOrMissing(session, path));
     const { lines, finalNewline } = fileLines(text);
     const from = Math.max(1, fromLine ?? 1);
     const to = Math.min(lines.length, toLine ?? lines.length);
     const numbers = Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i);
     // As the queued batches leave the file, if they edit it (specs/Rehearsal.tla, `Read`).
-    this.saw(s, planned?.lines ?? s.lines, { file: path, text, lines: numbers });
+    this.saw(session, planned?.lines ?? session.lines, { file: path, text, lines: numbers });
     const content: FileContent = {
-      file: this.displayPath(s, path),
+      file: this.displayPath(session, path),
       dirty: await this.editor.isDirty(path),
       lines: lines.slice(from - 1, to).map((line, i) => ({ number: from + i, text: line })),
     };
@@ -372,12 +373,12 @@ export class Controller {
   }
 
   /** Returns the file's text; a file that doesn't exist is the agent's to create, with a `move` (#89). */
-  private async textOrMissing(s: Session, path: string): Promise<string> {
+  private async textOrMissing(session: Session, path: string): Promise<string> {
     try {
       return await this.editor.getText(path);
     } catch (e) {
       if (!(e instanceof MissingFile)) throw e;
-      throw new ToolError('invalid_arguments', `${this.displayPath(s, path)} doesn't exist. A \`move\` to it creates it, empty.`);
+      throw new ToolError('invalid_arguments', `${this.displayPath(session, path)} doesn't exist. A \`move\` to it creates it, empty.`);
     }
   }
 
@@ -386,10 +387,10 @@ export class Controller {
    * the identities of its lines then: they were played in memory when queued. Not after an interruption,
    * which discards what they'd do.
    */
-  private planned(s: Session, path: string): { text: string; lines: LineIds } | undefined {
+  private planned(session: Session, path: string): { text: string; lines: LineIds } | undefined {
     // specs/Rehearsal.tla, `Read`: while `stale`, the editor's text.
-    if (s.stale) return undefined;
-    const after = s.queue.at(-1)?.after;
+    if (session.stale) return undefined;
+    const after = session.queue.at(-1)?.after;
     const text = after?.texts.get(path);
     return after && text !== undefined ? { text, lines: after.lines } : undefined;
   }
@@ -402,21 +403,21 @@ export class Controller {
   restore(report: Report, mayRepeat = false): void {
     // `Restore` in specs/Controller.tla. Also once the session ended, or the report closed it: the next call takes the report again,
     // and closes the session again (#60).
-    const s = this.session ?? this.closed;
-    if (!s) return;
+    const session = this.session ?? this.closed;
+    if (!session) return;
     if (!this.session) {
-      s.ended = true;
-      this.session = s;
+      session.ended = true;
+      this.session = session;
       this.closed = null;
     }
-    s.finished.unshift(...report.batches);
-    s.events.unshift(...report.events);
-    if (mayRepeat) s.mayRepeat = true;
-    if (report.events.some(interrupting) || report.batches.some((b) => b.status !== 'completed')) s.stale = true;
+    session.finished.unshift(...report.batches);
+    session.events.unshift(...report.events);
+    if (mayRepeat) session.mayRepeat = true;
+    if (report.events.some(interrupting) || report.batches.some((b) => b.status !== 'completed')) session.stale = true;
     // A step that never queued its batch: its rejection is the only report of it.
     if (report.rejected) {
-      s.held.push({ rejected: report.rejected, mayRepeat });
-      s.stale = true;
+      session.held.push({ rejected: report.rejected, mayRepeat });
+      session.stale = true;
     }
     this.update();
   }
@@ -428,39 +429,39 @@ export class Controller {
    * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
    */
   userMessage(text: string, selection?: SharedSelection): void {
-    const s = this.activeSession();
-    if (!s) return;
-    s.events.push(selection ? { kind: 'message', text, selection: this.excerpt(s, selection) } : { kind: 'message', text });
+    const session = this.activeSession();
+    if (!session) return;
+    session.events.push(selection ? { kind: 'message', text, selection: this.excerpt(session, selection) } : { kind: 'message', text });
     this.panel.post({ type: 'user', text, ref: selection && this.ref(selection) });
-    this.interrupt(s);
+    this.interrupt(session);
     this.update();
   }
 
   userInterrupt(): void {
-    const s = this.activeSession();
-    if (!s) return;
-    s.events.push({ kind: 'interrupt' });
+    const session = this.activeSession();
+    if (!session) return;
+    session.events.push({ kind: 'interrupt' });
     this.panel.post({ type: 'interrupt' });
-    this.interrupt(s);
+    this.interrupt(session);
     this.update();
   }
 
   /** Records a change the programmer made. `changes` are applied in order, each to the result of the previous. */
   userEdit(file: string, before: string, after: string, changes: Change[]): void {
-    const s = this.activeSession();
-    if (!s) return;
-    this.recordEdit(s, file, before, after, changes, 'programmer');
-    if (s.scene.turn === 'agent') {
+    const session = this.activeSession();
+    if (!session) return;
+    this.recordEdit(session, file, before, after, changes, 'programmer');
+    if (session.scene.turn === 'agent') {
       // specs/Player.tla, `TypeBefore` and `TypeAfter`: the edit interrupts playback.
-      this.interrupt(s);
+      this.interrupt(session);
     } else {
       // Interrupting nothing (specs/Controller.tla, `EditQuietly`). Typing again: the pause the timer marked is
       // over, so wait for the next (specs/Navigator.tla, `Edit`).
-      s.navigatorReady = false;
-      clearTimeout(s.navigatorTimer);
-      s.navigatorTimer = setTimeout(() => {
+      session.navigatorReady = false;
+      clearTimeout(session.navigatorTimer);
+      session.navigatorTimer = setTimeout(() => {
         // specs/Navigator.tla, `Fire`.
-        s.navigatorReady = true;
+        session.navigatorReady = true;
         this.pump();
       }, this.config.navigatorIdleMs);
     }
@@ -474,87 +475,87 @@ export class Controller {
    * on disk: specs/Reload.tla, `Reload`.
    */
   otherEdit(file: string, before: string, after: string, reported: Change[]): void {
-    const s = this.activeSession();
-    if (!s) return;
+    const session = this.activeSession();
+    if (!session) return;
     // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
     const changes = lineChanges(before, reported);
-    const planned = s.queue.some((b) => b.after?.edits.has(file));
+    const planned = session.queue.some((b) => b.after?.edits.has(file));
     // The queued rehearsals follow it, reading the file's line identities from the editor (specs/Rehearsal.tla,
     // `EditAsOther`).
     if (!planned) {
-      for (const b of s.queue) {
+      for (const b of session.queue) {
         if (b.after) followChange(b.after, file, after, changes);
       }
     }
-    this.recordEdit(s, file, before, after, changes, 'other');
+    this.recordEdit(session, file, before, after, changes, 'other');
     if (planned) {
-      const e = s.events.find((p): p is EditEvent => p.kind === 'edit' && p.file === file && p.diff === undefined);
+      const e = session.events.find((p): p is EditEvent => p.kind === 'edit' && p.file === file && p.diff === undefined);
       if (e) e.interrupted = true;
-      this.interrupt(s);
+      this.interrupt(session);
     }
     this.update();
   }
 
   /** Records an edit. Edits to a file are reported as one diff, as the programmer's if any of them was
    * (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`). */
-  private recordEdit(s: Session, file: string, before: string, after: string, changes: Change[], by: EditEvent['by']): void {
-    s.lines.of(file, before);
+  private recordEdit(session: Session, file: string, before: string, after: string, changes: Change[], by: EditEvent['by']): void {
+    session.lines.of(file, before);
     for (const change of changes) {
-      s.player.transform(file, change);
-      s.lines.apply(file, change);
+      session.player.transform(file, change);
+      session.lines.apply(file, change);
     }
-    if (!s.baselines.has(file)) {
-      s.baselines.set(file, before);
-      s.events.push({ kind: 'edit', file, by });
+    if (!session.baselines.has(file)) {
+      session.baselines.set(file, before);
+      session.events.push({ kind: 'edit', file, by });
       this.trace?.(`edit ${file} by ${by}`);
     } else if (by === 'programmer') {
-      const pending = s.events.find((e): e is EditEvent => e.kind === 'edit' && e.file === file && e.diff === undefined);
+      const pending = session.events.find((e): e is EditEvent => e.kind === 'edit' && e.file === file && e.diff === undefined);
       if (pending) pending.by = 'programmer';
     }
-    s.latest.set(file, after);
+    session.latest.set(file, after);
   }
 
   takeTurn(): void {
-    const s = this.activeSession();
-    if (!s || s.scene.turn === 'user') return;
-    s.scene.turn = 'user';
-    s.scene.focus = 'cursor';
-    s.events.push({ kind: 'turn', to: 'user' });
+    const session = this.activeSession();
+    if (!session || session.scene.turn === 'user') return;
+    session.scene.turn = 'user';
+    session.scene.focus = 'cursor';
+    session.events.push({ kind: 'turn', to: 'user' });
     this.panel.post({ type: 'turn', to: 'user' });
     // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
-    this.interrupt(s);
+    this.interrupt(session);
     this.update();
   }
 
   handBack(message?: string, selection?: SharedSelection): void {
-    const s = this.activeSession();
-    if (!s || s.scene.turn === 'agent') return;
-    s.scene.turn = 'agent';
-    clearTimeout(s.navigatorTimer);
+    const session = this.activeSession();
+    if (!session || session.scene.turn === 'agent') return;
+    session.scene.turn = 'agent';
+    clearTimeout(session.navigatorTimer);
     const event: Event = { kind: 'turn', to: 'agent' };
     if (message) event.message = message;
-    if (selection) event.selection = this.excerpt(s, selection);
-    s.events.push(event);
+    if (selection) event.selection = this.excerpt(session, selection);
+    session.events.push(event);
     this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
     // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
-    this.interrupt(s);
+    this.interrupt(session);
     this.update();
   }
 
   /** Ends the session, the programmer's way, active or suspended: specs/Resume.tla, `EndByProgrammer`. */
   endSession(): void {
-    const s = this.activeSession();
-    if (!s) return;
-    if (s.suspended) {
+    const session = this.activeSession();
+    if (!session) return;
+    if (session.suspended) {
       // No agent is there to take a final report: it's over now (specs/Bridge.tla, `EndSuspended`).
-      this.close(s);
+      this.close(session);
       this.panel.post({ type: 'session', active: false, reason: 'user' });
       return;
     }
     // `EndSession` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
-    s.ended = true;
-    s.events.push({ kind: 'end' });
-    this.interrupt(s);
+    session.ended = true;
+    session.events.push({ kind: 'end' });
+    this.interrupt(session);
     this.panel.post({ type: 'session', active: false, reason: 'user' });
     this.update();
   }
@@ -564,23 +565,23 @@ export class Controller {
    * directory, or for the programmer to end it (#25, specs/Resume.tla, `Disconnect`).
    */
   disconnect(): void {
-    const s = this.session;
+    const session = this.session;
     this.closed = null;
     if (this.call) {
       clearTimeout(this.call.timer);
       this.call.reject(new ToolError('no_session', 'Disconnected.'));
       this.call = null;
     }
-    if (!s) return;
-    if (s.ended) {
-      this.close(s);
+    if (!session) return;
+    if (session.ended) {
+      this.close(session);
       return;
     }
     // Nothing plays without its agent: what's queued is discarded, and reported once it's back.
-    this.interrupt(s);
-    s.suspended = true;
+    this.interrupt(session);
+    session.suspended = true;
     this.trace?.('session suspended: the agent disconnected');
-    this.panel.post({ type: 'session', active: true, task: s.task, suspended: true });
+    this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.update();
   }
 
@@ -607,16 +608,16 @@ export class Controller {
       this.pauseReasons.delete(reason);
     }
     if (this.pauseReasons.size > 0) return;
-    const s = this.session;
-    if (s) {
+    const session = this.session;
+    if (session) {
       // A point the programmer looked away from is stale: from now on the view follows the cursor,
       // not it (specs/PointFocus.tla). The editor is told before a reveal targets it.
-      if (lookedAway && s.scene.focus === 'point') {
-        s.scene.focus = 'cursor';
+      if (lookedAway && session.scene.focus === 'point') {
+        session.scene.focus = 'cursor';
         this.render();
       }
-      if (reveal && s.scene.turn === 'agent' && (s.scene.cursor || s.scene.point)) this.editor.reveal();
-      s.timeline.resume();
+      if (reveal && session.scene.turn === 'agent' && (session.scene.cursor || session.scene.point)) this.editor.reveal();
+      session.timeline.resume();
     }
     this.render();
   }
@@ -648,10 +649,10 @@ export class Controller {
 
   /** Hands a passage of the agent's own to the calibration: its `calibrate` tool. */
   calibrate(passage: Passage): Report {
-    const s = this.requireSession();
+    const session = this.requireSession();
     if (!this.onCalibrate) throw new ToolError('no_editor', 'This editor has no reading speed calibration.');
     if (!this.onCalibrate(passage)) throw new ToolError('calibration_busy', 'A calibration is already under way in the Pair panel.');
-    return { batches: [], events: [], turn: s.scene.turn };
+    return { batches: [], events: [], turn: session.scene.turn };
   }
 
   /**
@@ -659,24 +660,24 @@ export class Controller {
    * command without asking for the rest of the session.
    */
   decideRun(id: number, run: boolean, remember = false): void {
-    const s = this.session;
-    if (!s) return;
-    const c = s.confirming;
+    const session = this.session;
+    if (!session) return;
+    const c = session.confirming;
     if (c?.id !== id) return;
-    if (run && remember) s.scene.allowedCommands.add(c.command);
+    if (run && remember) session.scene.allowedCommands.add(c.command);
     c.decide(run);
   }
 
   /** Waits for the programmer's answer to a `run`, or an interruption. */
-  private confirm(s: Session, id: number, command: string): Promise<boolean> {
-    const signal = s.timeline.signal;
+  private confirm(session: Session, id: number, command: string): Promise<boolean> {
+    const signal = session.timeline.signal;
     // An interrupt during the save before it: the abort event has fired already.
     if (signal.aborted) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
       function abort(): void {
         resolve(false);
       }
-      s.confirming = {
+      session.confirming = {
         id,
         command,
         decide: (run) => {
@@ -686,7 +687,7 @@ export class Controller {
       };
       signal.addEventListener('abort', abort, { once: true });
     }).finally(() => {
-      s.confirming = undefined;
+      session.confirming = undefined;
     });
   }
 
@@ -724,6 +725,7 @@ export class Controller {
       return signal?.aborted ? Promise.reject(cancelled()) : fn();
     }
     const run = this.chain.then(guarded, guarded);
+    // The chain carries on past a call that failed; its caller got the rejection.
     this.chain = run.catch(() => {});
     // `GoQuiet` in specs/ListenGrace.tla: once the last open call settles, no call is open until the agent makes the next.
     const settled = () => {
@@ -735,13 +737,13 @@ export class Controller {
   }
 
   /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
-  private rehearse(s: Session, actions: Action[]): ReturnType<typeof rehearse> {
-    const from = s.queue.at(-1)?.after ?? { scene: s.scene, texts: new Map(), lines: s.lines, edits: new Set<string>() };
-    return rehearse(this.editor, this.config, from, actions, (file, line, id) => s.seen.get(file)?.get(line) === id);
+  private rehearse(session: Session, actions: Action[]): ReturnType<typeof rehearse> {
+    const from = session.queue.at(-1)?.after ?? { scene: session.scene, texts: new Map(), lines: session.lines, edits: new Set<string>() };
+    return rehearse(this.editor, this.config, from, actions, (file, line, id) => session.seen.get(file)?.get(line) === id);
   }
 
   /** Reports a batch that played in memory failed, without queuing it; nothing else changes. */
-  private async rejectBatch(s: Session, actions: Action[], rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
+  private async rejectBatch(session: Session, actions: Action[], rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
     const rehearsed = rehearsal.result;
     const index = actions.length - (rehearsed.unplayed?.length ?? 0) + 1;
     const action = actions[index - 1];
@@ -752,22 +754,22 @@ export class Controller {
     const rejected: NonNullable<Report['rejected']> = { index, action, error };
     if (rehearsed.code) rejected.code = rehearsed.code;
     for (const sighting of rehearsal.sightings) {
-      this.saw(s, rehearsal.after.lines, sighting);
+      this.saw(session, rehearsal.after.lines, sighting);
     }
-    const report = { ...this.snapshot(s, undefined, /* waiting= */ false), rejected };
+    const report = { ...this.snapshot(session, undefined, /* waiting= */ false), rejected };
     this.trace?.(`report to step: ${describeReport(report)}`);
     this.render();
-    return this.withCursor(s, report);
+    return this.withCursor(session, report);
   }
 
   /** Reports a batch refused for not anchoring the cursor after a discarded one, without queuing it (#112, specs/Anchor.tla). */
-  private rejectUnanchored(s: Session, anchor: CursorAnchor): Promise<Report> {
+  private rejectUnanchored(session: Session, anchor: CursorAnchor): Promise<Report> {
     const error = { kind: 'unanchored' as const, message: UNANCHORED };
     const rejected = { index: anchor.index, action: anchor.action, error };
-    const report = { ...this.snapshot(s, undefined, /* waiting= */ false), rejected };
+    const report = { ...this.snapshot(session, undefined, /* waiting= */ false), rejected };
     this.trace?.(`report to step: ${describeReport(report)}`);
     this.render();
-    return this.withCursor(s, report);
+    return this.withCursor(session, report);
   }
 
   private requireSession(): Session {
@@ -814,25 +816,25 @@ export class Controller {
     });
   }
 
-  private ready(call: Call, s: Session): boolean {
-    if (s.ended) return true;
+  private ready(call: Call, session: Session): boolean {
+    if (session.ended) return true;
     // An interrupted batch finishes promptly; wait for it, so the report says what was typed.
-    if (s.queue[0]?.state === 'playing' && s.timeline.isInterrupted) return false;
+    if (session.queue[0]?.state === 'playing' && session.timeline.isInterrupted) return false;
     switch (call.kind) {
       case 'step':
         // specs/Serialize.tla, `Finish`: a step's batch is done, or plays next (`AtHead`): the step returns once the one before it
         // has (#150).
-        if (!call.batch) return s.queue.length === 0;
-        return call.batch.state === 'done' || s.queue[0] === call.batch;
+        if (!call.batch) return session.queue.length === 0;
+        return call.batch.state === 'done' || session.queue[0] === call.batch;
       case 'end':
-        return s.queue.length === 0;
+        return session.queue.length === 0;
       case 'listen':
-        if (s.held.length > 0) return true;
-        if (s.finished.some((r) => r.status !== 'completed')) return true;
-        if (s.queue.length > 0) return false;
-        if (s.scene.turn === 'agent') return s.events.some(interrupting);
+        if (session.held.length > 0) return true;
+        if (session.finished.some((r) => r.status !== 'completed')) return true;
+        if (session.queue.length > 0) return false;
+        if (session.scene.turn === 'agent') return session.events.some(interrupting);
         // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
-        return s.events.some((e) => e.kind !== 'edit') || (s.navigatorReady && s.events.some(interrupting));
+        return session.events.some((e) => e.kind !== 'edit') || (session.navigatorReady && session.events.some(interrupting));
       default:
         throw new Error(`Unknown call: ${JSON.stringify(call.kind satisfies never)}`);
     }
@@ -840,9 +842,9 @@ export class Controller {
 
   private pump(): void {
     const call = this.call;
-    const s = this.session;
+    const session = this.session;
     // specs/Serialize.tla, `Finish`.
-    if (call && s && this.ready(call, s)) this.finishCall(/* timedOut= */ false);
+    if (call && session && this.ready(call, session)) this.finishCall(/* timedOut= */ false);
   }
 
   /** Finishes the open call with a report: `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
@@ -852,20 +854,20 @@ export class Controller {
     // specs/Serialize.tla, `Commit`.
     this.call = null;
     clearTimeout(call.timer);
-    const s = this.session;
-    if (!s) {
+    const session = this.session;
+    if (!session) {
       call.reject(new ToolError('no_session', 'The session has ended.'));
       return;
     }
     // `Commit` in specs/Controller.tla. Nothing more to wait for once the session is ending.
-    const report = this.snapshot(s, call.batch, timedOut && !s.ended && call.kind !== 'end');
+    const report = this.snapshot(session, call.batch, timedOut && !session.ended && call.kind !== 'end');
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
-    const closing = (s.ended && s.held.length === 0) || call.kind === 'end';
+    const closing = (session.ended && session.held.length === 0) || call.kind === 'end';
     if (closing) {
       // specs/Bridge.tla, `CloseEnded`, or `CallEnd` for the agent's `end`; `this.closed` is `recent`.
-      this.close(s);
-      this.closed = s;
-      if (call.kind === 'end' && !s.ended) {
+      this.close(session);
+      this.closed = session;
+      if (call.kind === 'end' && !session.ended) {
         this.panel.post({ type: 'session', active: false, reason: 'agent', summary: call.summary });
       }
     }
@@ -876,7 +878,7 @@ export class Controller {
     this.trace?.(`report to ${call.kind}: ${describeReport(report)}`);
     // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
     // `Answer` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
-    void this.withCursor(s, report).then(call.resolve, () => {
+    void this.withCursor(session, report).then(call.resolve, () => {
       call.resolve(report);
     });
   }
@@ -916,19 +918,19 @@ export class Controller {
   }
 
   /** Adds the cursor's line to the report, unless it's where the agent last saw it, in a report's code or cursor. */
-  private async withCursor(s: Session, report: Report): Promise<Report> {
+  private async withCursor(session: Session, report: Report): Promise<Report> {
     for (const b of report.batches) {
       const line = b.code?.lines.find((l) => l.text.includes(CURSOR_MARKER));
-      if (b.code && line) s.seenCursor = `${b.code.file}:${line.number}:${line.text}`;
+      if (b.code && line) session.seenCursor = `${b.code.file}:${line.number}:${line.text}`;
     }
-    if (!s.scene.cursor) return report;
-    const shown = await s.player.code({ moved: true });
+    if (!session.scene.cursor) return report;
+    const shown = await session.player.code({ moved: true });
     const line = shown?.code.lines.find((l) => l.text.includes(CURSOR_MARKER));
     if (!shown || !line) return report;
     const key = `${shown.code.file}:${line.number}:${line.text}`;
-    if (key === s.seenCursor) return report;
-    s.seenCursor = key;
-    this.saw(s, s.lines, shown.sighting);
+    if (key === session.seenCursor) return report;
+    session.seenCursor = key;
+    this.saw(session, session.lines, shown.sighting);
     return { ...report, cursor: shown.code };
   }
 
@@ -936,12 +938,12 @@ export class Controller {
    * Records that the agent was shown lines: it knows which line each number is, while it stays that line's.
    * `lines`: of the version shown, which may be a batch's, as it will play or would have.
    */
-  private saw(s: Session, lines: LineIds, { file, text, lines: numbers }: Sighting): void {
+  private saw(session: Session, lines: LineIds, { file, text, lines: numbers }: Sighting): void {
     const ids = lines.of(file, text);
-    let seen = s.seen.get(file);
+    let seen = session.seen.get(file);
     if (!seen) {
       seen = new Map<number, number>();
-      s.seen.set(file, seen);
+      session.seen.set(file, seen);
     }
     for (const n of numbers) {
       const id = ids[n - 1];
@@ -950,13 +952,13 @@ export class Controller {
   }
 
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
-  private snapshot(s: Session, submitted: Batch | undefined, waiting: boolean): Report {
-    const batches = s.finished.toSorted((a, b) => a.id - b.id);
+  private snapshot(session: Session, submitted: Batch | undefined, waiting: boolean): Report {
+    const batches = session.finished.toSorted((a, b) => a.id - b.id);
     // The agent planned against where these would have ended; the cursor is where they stopped (#112,
     // specs/Anchor.tla, `Discard`; a batch that completed is `Complete`).
-    if (batches.some((b) => b.status !== 'completed')) s.anchorNeeded = true;
+    if (batches.some((b) => b.status !== 'completed')) session.anchorNeeded = true;
     const events: Event[] = [];
-    for (const e of s.events) {
+    for (const e of session.events) {
       if (e.kind !== 'edit') {
         events.push(e);
         continue;
@@ -965,48 +967,47 @@ export class Controller {
         events.push({ kind: 'edit', file: e.file, diff: e.diff, by: e.by, ...(e.omitted === undefined ? {} : { omitted: e.omitted }) });
         continue;
       }
-      const before = s.baselines.get(e.file) ?? '';
-      const after = s.latest.get(e.file) ?? before;
+      const before = session.baselines.get(e.file) ?? '';
+      const after = session.latest.get(e.file) ?? before;
       // An edit that interrupted stays, with no diff, though it was undone: the agent has to know
       // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla, `Report`).
       if (before === after && !interrupting(e)) continue;
-      const file = this.displayPath(s, e.file);
+      const file = this.displayPath(session, e.file);
       if (before === after) {
         events.push({ kind: 'edit', file, diff: '', by: e.by });
       } else {
         events.push({ kind: 'edit', file, ...boundedDiff(file, before, after), by: e.by });
       }
     }
-    s.finished = [];
-    s.events = [];
-    s.baselines = new Map();
-    s.latest = new Map();
+    session.finished = [];
+    session.events = [];
+    session.baselines = new Map();
+    session.latest = new Map();
     // specs/Rehearsal.tla, `Report`: the agent now knows of the interrupt.
-    s.stale = false;
-    s.navigatorReady = false;
+    session.stale = false;
+    session.navigatorReady = false;
 
-    const report: Report = { batches, events, turn: s.scene.turn };
-    const b = submitted;
-    if (b && b.state !== 'done') report.submitted = { id: b.id, status: b.state };
+    const report: Report = { batches, events, turn: session.scene.turn };
+    if (submitted && submitted.state !== 'done') report.submitted = { id: submitted.id, status: submitted.state };
     if (waiting) report.waiting = true;
     // The agent's batches are held: it's told why, so it can say so or wait (#149).
     if (this.pauseReasons.size > 0) report.paused = [...this.pauseReasons];
-    if (s.mayRepeat) report.repeated = true;
-    s.mayRepeat = false;
+    if (session.mayRepeat) report.repeated = true;
+    session.mayRepeat = false;
     // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
-    const held = s.held.shift();
+    const held = session.held.shift();
     if (held) report.rejected = held.rejected;
-    // Its own mark: a report before it may have taken s.mayRepeat (specs/Controller.tla, `Commit` with MarkHeld).
+    // Its own mark: a report before it may have taken session.mayRepeat (specs/Controller.tla, `Commit` with MarkHeld).
     if (held?.mayRepeat) report.repeated = true;
-    if (s.held.length > 0) s.stale = true;
+    if (session.held.length > 0) session.stale = true;
     return report;
   }
 
-  private close(s: Session): void {
+  private close(session: Session): void {
     this.trace?.('session closed');
-    if (this.session === s) this.session = null;
-    s.timeline.interrupt();
-    clearTimeout(s.navigatorTimer);
+    if (this.session === session) this.session = null;
+    session.timeline.interrupt();
+    clearTimeout(session.navigatorTimer);
     this.endGrace();
     this.endQuiet();
     this.editor.renderPoint(null);
@@ -1015,25 +1016,25 @@ export class Controller {
 
   // ---- Queue ---------------------------------------------------------------
 
-  private discard(s: Session, batch: Batch): void {
+  private discard(session: Session, batch: Batch): void {
     batch.state = 'done';
     batch.result = { id: batch.id, status: 'discarded', unplayed: batch.actions };
-    s.finished.push(batch.result);
+    session.finished.push(batch.result);
     this.trace?.(`batch ${batch.id} discarded`);
   }
 
   /** Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and `EndSession`).
    * A batch already playing plays on and may complete (specs/Rehearsal.tla, `Interrupted`, #151). */
-  private interrupt(s: Session): void {
-    s.stale = true;
-    const discarded = s.queue.filter((b) => b.state === 'queued').map((b) => b.id);
-    const playing = s.queue.find((b) => b.state === 'playing');
+  private interrupt(session: Session): void {
+    session.stale = true;
+    const discarded = session.queue.filter((b) => b.state === 'queued').map((b) => b.id);
+    const playing = session.queue.find((b) => b.state === 'playing');
     this.trace?.(`interrupt: discarding [${discarded.join(', ')}]${playing ? `, batch ${playing.id} plays on` : ''}`);
-    for (const b of s.queue) {
-      if (b.state === 'queued') this.discard(s, b);
+    for (const b of session.queue) {
+      if (b.state === 'queued') this.discard(session, b);
     }
-    s.queue = s.queue.filter((b) => b.state !== 'done');
-    s.timeline.interrupt();
+    session.queue = session.queue.filter((b) => b.state !== 'done');
+    session.timeline.interrupt();
   }
 
   private update(): void {
@@ -1043,56 +1044,56 @@ export class Controller {
 
   // ---- Playback ------------------------------------------------------------
 
-  private kick(s: Session): void {
-    if (!s.running) void this.run(s);
+  private kick(session: Session): void {
+    if (!session.running) void this.run(session);
   }
 
-  private async run(s: Session): Promise<void> {
-    s.running = true;
+  private async run(session: Session): Promise<void> {
+    session.running = true;
     try {
-      while (this.session === s) {
-        const batch = s.queue[0];
+      while (this.session === session) {
+        const batch = session.queue[0];
         if (!batch) break;
         // specs/Controller.tla: `Play`, then `Finish` once it has played.
-        this.startHead(s);
+        this.startHead(session);
         this.render();
-        const { result, sightings } = await s.player.play(batch.id, batch.actions);
-        if (this.session !== s) break;
+        const { result, sightings } = await session.player.play(batch.id, batch.actions);
+        if (this.session !== session) break;
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
         // (specs/Rehearsal.tla, `Play`).
-        if (result.status === 'completed' && batch.after) s.lines.adopt(batch.after.lines);
+        if (result.status === 'completed' && batch.after) session.lines.adopt(batch.after.lines);
         for (const sighting of sightings) {
-          this.saw(s, s.lines, sighting);
+          this.saw(session, session.lines, sighting);
         }
         // specs/Serialize.tla, `Play`: batches finish in queue order.
         batch.state = 'done';
         batch.result = result;
         this.trace?.(`batch ${batch.id} ${result.status}`);
-        s.queue = s.queue.filter((b) => b !== batch);
-        s.finished.push(result);
+        session.queue = session.queue.filter((b) => b !== batch);
+        session.finished.push(result);
         // specs/Rehearsal.tla, `FailPlay`: a batch that didn't complete interrupts the queue behind it.
-        if (result.status !== 'completed') this.interrupt(s);
+        if (result.status !== 'completed') this.interrupt(session);
         // Mark the next batch as playing before reporting, so the report says so.
-        this.startHead(s);
+        this.startHead(session);
         this.update();
       }
     } finally {
-      s.running = false;
+      session.running = false;
     }
   }
 
-  private startHead(s: Session): void {
-    const head = s.queue[0];
+  private startHead(session: Session): void {
+    const head = session.queue[0];
     if (head?.state !== 'queued') return;
     head.state = 'playing';
     this.trace?.(`batch ${head.id} playing`);
-    s.timeline.reset();
+    session.timeline.reset();
   }
 
   // ---- Shared selections ---------------------------------------------------
 
-  private excerpt(s: Session, selection: SharedSelection): Excerpt {
-    return { ...selection, file: this.displayPath(s, selection.file) };
+  private excerpt(session: Session, selection: SharedSelection): Excerpt {
+    return { ...selection, file: this.displayPath(session, selection.file) };
   }
 
   private ref(selection: SharedSelection): Ref {
@@ -1101,42 +1102,42 @@ export class Controller {
 
   // ---- Paths ---------------------------------------------------------------
 
-  private resolvePath(s: Session, file: string): string {
-    return agentPath(this.editor, s.scene.root, file);
+  private resolvePath(session: Session, file: string): string {
+    return agentPath(this.editor, session.scene.root, file);
   }
 
-  private displayPath(s: Session, file: string): string {
-    return displayPath(this.editor, s.scene.root, file);
+  private displayPath(session: Session, file: string): string {
+    return displayPath(this.editor, session.scene.root, file);
   }
 
   // ---- Rendering -----------------------------------------------------------
 
-  private cursorView(s: Session): CursorView | null {
-    if (!s.scene.cursor) return null;
-    return s.scene.selection ? { ...s.scene.cursor, selection: s.scene.selection } : { ...s.scene.cursor };
+  private cursorView(session: Session): CursorView | null {
+    if (!session.scene.cursor) return null;
+    return session.scene.selection ? { ...session.scene.cursor, selection: session.scene.selection } : { ...session.scene.cursor };
   }
 
   private state(): AgentState {
-    const s = this.session;
-    if (!s || s.scene.turn === 'user') return 'navigator';
+    const session = this.session;
+    if (!session || session.scene.turn === 'user') return 'navigator';
     if (this.pauseReasons.size > 0) return 'paused';
-    if (s.queue.length > 0) return s.player.reading ? 'read' : s.player.commandRunning ? 'running' : 'typing';
+    if (session.queue.length > 0) return session.player.reading ? 'read' : session.player.commandRunning ? 'running' : 'typing';
     // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace, then "absent" once quiet.
-    const waiting = this.grace !== null && !s.events.some(interrupting);
+    const waiting = this.grace !== null && !session.events.some(interrupting);
     return this.call?.kind === 'listen' || waiting ? 'listening' : this.absent ? 'absent' : 'thinking';
   }
 
   private render(): void {
     this.onChange?.();
-    const s = this.activeSession();
+    const session = this.activeSession();
     const state = this.state();
-    this.editor.renderCursor(s ? this.cursorView(s) : null, state, s?.scene.focus ?? 'cursor');
-    if (!s) return;
+    this.editor.renderCursor(session ? this.cursorView(session) : null, state, session?.scene.focus ?? 'cursor');
+    if (!session) return;
     const paused = this.pauseReasons.size > 0;
-    const key = `${state}/${s.scene.turn}/${paused}`;
+    const key = `${state}/${session.scene.turn}/${paused}`;
     if (key === this.lastPosted) return;
     this.lastPosted = key;
-    this.trace?.(`status ${state}, ${s.scene.turn}'s turn${paused ? ', paused' : ''}`);
-    this.panel.post({ type: 'state', state, turn: s.scene.turn, paused });
+    this.trace?.(`status ${state}, ${session.scene.turn}'s turn${paused ? ', paused' : ''}`);
+    this.panel.post({ type: 'state', state, turn: session.scene.turn, paused });
   }
 }

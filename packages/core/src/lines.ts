@@ -45,16 +45,16 @@ function newlines(text: string, from = 0, to = text.length): number {
  * replaced keeps its place; lines the change makes are new.
  * specs/LineIdentity.tla, `Apply`, checks it over every small text and change.
  */
-export function applyChange(v: Version, change: Change): Version {
-  const { text } = v;
+export function applyChange(version: Version, change: Change): Version {
+  const { text } = version;
   const start = change.offset;
   const end = change.offset + change.deleteLength;
   const after = text.slice(0, start) + change.text + text.slice(end);
-  const a = newlines(text, 0, start);
-  const b = a + newlines(text, start, end);
-  const k = newlines(change.text);
+  const startLine = newlines(text, 0, start);
+  const endLine = startLine + newlines(text, start, end);
+  const inserted = newlines(change.text);
   // Within one line: every line keeps its place.
-  if (a === b && k === 0) return { text: after, ids: v.ids };
+  if (startLine === endLine && inserted === 0) return { text: after, ids: version.ids };
 
   const lineStart = start === 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1;
   let lineEnd = text.indexOf('\n', end);
@@ -64,14 +64,14 @@ export function applyChange(v: Version, change: Change): Version {
   const prefix = start > lineStart;
   const suffix = end < lineEnd;
 
-  const ids = Array.from({ length: k + 1 }, fresh);
+  const ids = Array.from({ length: inserted + 1 }, fresh);
   if (prefix) {
-    ids[0] = identity(v.ids, a);
-  } else if (a === b) {
-    ids[suffix ? k : 0] = identity(v.ids, a);
+    ids[0] = identity(version.ids, startLine);
+  } else if (startLine === endLine) {
+    ids[suffix ? inserted : 0] = identity(version.ids, startLine);
   }
-  if (b > a && suffix && (k > 0 || !prefix)) ids[k] = identity(v.ids, b);
-  return { text: after, ids: [...v.ids.slice(0, a), ...ids, ...v.ids.slice(b + 1)] };
+  if (endLine > startLine && suffix && (inserted > 0 || !prefix)) ids[inserted] = identity(version.ids, endLine);
+  return { text: after, ids: [...version.ids.slice(0, startLine), ...ids, ...version.ids.slice(endLine + 1)] };
 }
 
 /** The identities of the lines of files, as they're edited. */
@@ -84,7 +84,7 @@ export class LineIds {
 
   /** Returns the tracker for the files in the editor. */
   static editor(): LineIds {
-    return new LineIds(undefined, new Map());
+    return new LineIds(/* base= */ undefined, new Map());
   }
 
   /**

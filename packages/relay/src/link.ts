@@ -53,7 +53,7 @@ function contains(folder: string, file: string): boolean {
 
 function alive(pid: number): boolean {
   try {
-    process.kill(pid, 0);
+    process.kill(pid, /* signal= */ 0);
     return true;
   } catch (e) {
     return e instanceof Error && 'code' in e && e.code === 'EPERM';
@@ -61,23 +61,23 @@ function alive(pid: number): boolean {
 }
 
 /** Returns whether a discovery file holds a Discovery: one that parses but doesn't is skipped like garbage (#31). */
-function isDiscovery(d: unknown): d is Discovery {
+function isDiscovery(value: unknown): value is Discovery {
   return (
-    typeof d === 'object' &&
-    d !== null &&
-    'pid' in d &&
-    typeof d.pid === 'number' &&
-    'port' in d &&
-    typeof d.port === 'number' &&
-    'token' in d &&
-    typeof d.token === 'string' &&
-    'protocolVersion' in d &&
-    typeof d.protocolVersion === 'number' &&
-    'lastFocused' in d &&
-    typeof d.lastFocused === 'number' &&
-    'workspaceFolders' in d &&
-    Array.isArray(d.workspaceFolders) &&
-    d.workspaceFolders.every((f: unknown) => typeof f === 'string')
+    typeof value === 'object' &&
+    value !== null &&
+    'pid' in value &&
+    typeof value.pid === 'number' &&
+    'port' in value &&
+    typeof value.port === 'number' &&
+    'token' in value &&
+    typeof value.token === 'string' &&
+    'protocolVersion' in value &&
+    typeof value.protocolVersion === 'number' &&
+    'lastFocused' in value &&
+    typeof value.lastFocused === 'number' &&
+    'workspaceFolders' in value &&
+    Array.isArray(value.workspaceFolders) &&
+    value.workspaceFolders.every((f: unknown) => typeof f === 'string')
   );
 }
 
@@ -127,8 +127,8 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
 
 /** A lazily (re)connected link to the editor window for the agent's folder, `cwd` until `locate` says otherwise. */
 export class EditorLink {
-  private ws: WebSocket | null = null;
-  private connecting: Promise<WebSocket> | null = null;
+  private ws: WebSocket | undefined;
+  private connecting: Promise<WebSocket> | undefined;
   private nextId = 1;
   private readonly sockets = new WeakMap<WebSocket, SocketState>();
   /** The socket each report came over, for `handBack`. */
@@ -149,7 +149,7 @@ export class EditorLink {
       this.folder = folder;
       // specs/Wire.tla, `Close`: calls no longer go out on this socket; its close handler rejects its own.
       this.ws?.close();
-      this.ws = null;
+      this.ws = undefined;
     }
     return folder;
   }
@@ -202,6 +202,7 @@ export class EditorLink {
       () => {
         pending.cancelled = true;
         if (!calls.has(id)) return;
+        // Only its settling matters here; its outcome is the caller's.
         const settled = answer.then(
           () => {},
           () => {},
@@ -242,7 +243,7 @@ export class EditorLink {
     if (this.ws?.readyState === WebSocket.OPEN) return Promise.resolve(this.ws);
     // specs/Wire.tla, `Open`: with no socket open, one attempt at a time.
     this.connecting ??= this.open().finally(() => {
-      this.connecting = null;
+      this.connecting = undefined;
     });
     return this.connecting;
   }
@@ -279,8 +280,8 @@ export class EditorLink {
         ws.send(JSON.stringify({ type: 'hello', token: window.token, protocolVersion: PROTOCOL_VERSION }));
       });
       ws.on('message', (data) => {
-        const m = parseEditorMessage(data);
-        if (!m) {
+        const message = parseEditorMessage(data);
+        if (!message) {
           // Before the welcome, whatever is on this port isn't our editor. After it, drop the frame
           // (specs/Wire.tla, `SendGarbage`).
           if (!welcomed) {
@@ -289,26 +290,26 @@ export class EditorLink {
           }
           return;
         }
-        if (m.type === 'welcome') {
+        if (message.type === 'welcome') {
           // specs/Wire.tla, `Welcome`: calls go out on this socket.
           welcomed = true;
           this.ws = ws;
           resolve(ws);
-        } else if (m.type === 'rejected') {
-          reject(new RelayError('no_editor', m.reason));
-        } else if (m.type === 'result') {
-          const p = settle(m.id);
+        } else if (message.type === 'rejected') {
+          reject(new RelayError('no_editor', message.reason));
+        } else if (message.type === 'result') {
+          const call = settle(message.id);
           // The call returned before our cancellation reached the editor, so the agent will never
           // see this report. Hand it back to be delivered with the next one (specs/Wire.tla, `Reply`;
           // specs/Controller.tla, `Bounce`).
-          if (p?.cancelled && REPORTING.has(p.tool)) {
-            ws.send(JSON.stringify({ type: 'return', report: m.result }));
-          } else if (p && REPORTING.has(p.tool) && typeof m.result === 'object' && m.result !== null) {
-            this.answeredOn.set(m.result, ws);
+          if (call?.cancelled && REPORTING.has(call.tool)) {
+            ws.send(JSON.stringify({ type: 'return', report: message.result }));
+          } else if (call && REPORTING.has(call.tool) && typeof message.result === 'object' && message.result !== null) {
+            this.answeredOn.set(message.result, ws);
           }
-          p?.resolve(m.result);
-        } else if (m.type === 'error') {
-          settle(m.id)?.reject(new RelayError(m.code, m.message));
+          call?.resolve(message.result);
+        } else if (message.type === 'error') {
+          settle(message.id)?.reject(new RelayError(message.code, message.message));
         }
       });
       ws.on('error', (e) => {
@@ -317,7 +318,7 @@ export class EditorLink {
       // specs/Wire.tla, `HandleClose`: a close rejects only this socket's calls (#3).
       ws.on('close', () => {
         // specs/Discovery.tla, `Disconnect`: the next call opens again.
-        if (this.ws === ws) this.ws = null;
+        if (this.ws === ws) this.ws = undefined;
         if (!welcomed) reject(new RelayError('no_editor', 'The editor closed the connection.'));
         for (const p of calls.values()) {
           p.reject(new RelayError('no_editor', EDITOR_DISCONNECTED));

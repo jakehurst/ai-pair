@@ -137,6 +137,7 @@ export function transformScene(s: Scene, file: string, change: Change): void {
   if (s.point?.file === file) s.point = { file, start: map(s.point.start), end: map(s.point.end) };
 }
 
+/** Plays one batch's actions in the editor at a human pace: moves, typing, saying, running commands. */
 export class Player {
   /** In a reading pause, or waiting for the programmer to allow a command. */
   reading = false;
@@ -180,12 +181,12 @@ export class Player {
 
   /** Returns the lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
   async code({ span, moved }: { span?: Range; moved: boolean }): Promise<{ code: Code; sighting: Sighting } | undefined> {
-    const s = this.scene;
-    const file = span?.file ?? (moved ? s.cursor?.file : undefined);
+    const scene = this.scene;
+    const file = span?.file ?? (moved ? scene.cursor?.file : undefined);
     if (!file) return undefined;
     const text = await this.stage.editor.getText(file);
     const { lines, finalNewline } = fileLines(text);
-    const at = s.cursor?.file === file ? position(text, s.cursor.offset) : undefined;
+    const at = scene.cursor?.file === file ? position(text, scene.cursor.offset) : undefined;
     let from = at?.line ?? Infinity;
     let to = at?.line ?? -Infinity;
     if (span) {
@@ -280,7 +281,7 @@ export class Player {
   }
 
   private async perform(action: Action, playing: Playing): Promise<Outcome> {
-    const s = this.scene;
+    const scene = this.scene;
     const { editor, panel } = this.stage;
     const timing = this.stage.config().timing;
     const kinds = actionKinds(action);
@@ -296,29 +297,29 @@ export class Player {
     const fields = fieldsProblem(action);
     if (fields) return fail('invalid_action', fields);
     // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
-    if (s.turn === 'user' && !('say' in action) && !('point' in action)) {
+    if (scene.turn === 'user' && !('say' in action) && !('point' in action)) {
       return fail('not_your_turn', "During the programmer's turn, only `say` and `point` are allowed.");
     }
     // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
     // (specs/BatchFile.tla, `ActAtCursor`).
     const atCursor = 'type' in action || 'type_fast' in action || 'delete' in action;
-    if (atCursor && playing.named !== undefined && s.cursor && s.cursor.file !== playing.named) {
+    if (atCursor && playing.named !== undefined && scene.cursor && scene.cursor.file !== playing.named) {
       return fail(
         'invalid_action',
-        `Your cursor is in ${this.displayPath(s.cursor.file)}, but this batch works in ${this.displayPath(playing.named)}: \`move\` or \`select\` there first.`,
+        `Your cursor is in ${this.displayPath(scene.cursor.file)}, but this batch works in ${this.displayPath(playing.named)}: \`move\` or \`select\` there first.`,
       );
     }
 
     // An action at the cursor brings the view back to it from the code last pointed at. A far jump
     // back gets a far move's pause, before anything happens there; one to another file has its own.
     const cursorAction = !('say' in action) && !('point' in action) && !('run' in action);
-    const lookingBack = cursorAction && s.focus === 'point';
-    const farBack = lookingBack && s.pointFar;
+    const lookingBack = cursorAction && scene.focus === 'point';
+    const farBack = lookingBack && scene.pointFar;
     if (lookingBack) {
       // specs/PointFocus.tla, `ActAtCursor`: the view comes back to the cursor.
-      s.focus = 'cursor';
-      if (farBack && !('move' in action) && named === undefined && s.cursor && this.fileOf({}, playing) === s.cursor.file) {
-        await editor.show(s.cursor.file);
+      scene.focus = 'cursor';
+      if (farBack && !('move' in action) && named === undefined && scene.cursor && this.fileOf({}, playing) === scene.cursor.file) {
+        await editor.show(scene.cursor.file);
         this.follow();
         if (!(await this.delay(timing.afterMoveFarMs))) return { kind: 'interrupted' };
       }
@@ -339,16 +340,16 @@ export class Player {
     }
 
     if ('move' in action) {
-      const m = action.move;
-      const problem = moveProblem(m);
+      const move = action.move;
+      const problem = moveProblem(move);
       if (problem) return fail('invalid_action', problem);
-      const file = this.fileOf(m, playing);
+      const file = this.fileOf(move, playing);
       if (!file) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: 'interrupted' };
       // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
       await editor.show(file);
-      const at = m.at;
-      const where = await this.locate(file, m.line, 'move', at === undefined ? undefined : (text) => spotCandidates(text, at));
+      const at = move.at;
+      const where = await this.locate(file, move.line, 'move', at === undefined ? undefined : (text) => spotCandidates(text, at));
       if ('kind' in where) return where;
       const { text, line } = where;
       let offset: number;
@@ -363,10 +364,10 @@ export class Player {
       }
       const near =
         !farBack &&
-        s.cursor?.file === file &&
-        Math.abs(position(text, s.cursor.offset).line - position(text, offset).line) <= timing.nearLines;
-      s.cursor = { file, offset };
-      s.selection = null;
+        scene.cursor?.file === file &&
+        Math.abs(position(text, scene.cursor.offset).line - position(text, offset).line) <= timing.nearLines;
+      scene.cursor = { file, offset };
+      scene.selection = null;
       playing.moved = true;
       this.follow();
       // The pause is after the move, so the programmer sees where the cursor went before anything happens there.
@@ -384,8 +385,8 @@ export class Player {
       await editor.show(file);
       const span = await this.span(file, target, 'select');
       if ('kind' in span) return span;
-      s.cursor = { file, offset: span.end };
-      s.selection = { start: span.start, end: span.end };
+      scene.cursor = { file, offset: span.end };
+      scene.selection = { start: span.start, end: span.end };
       playing.moved = true;
       this.follow();
       await this.delay(timing.afterSelectMs);
@@ -403,20 +404,20 @@ export class Player {
     }
 
     if ('delete' in action) {
-      if (!s.cursor || !s.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
-      const { file } = s.cursor;
+      if (!scene.cursor || !scene.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
+      const { file } = scene.cursor;
       // specs/Player.tla, `Begin`: the delete awaits show() and getText().
       await editor.show(file);
       this.stage.lines.of(file, await editor.getText(file));
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
       // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: 'interrupted' };
-      if (!s.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
-      const { start, end } = s.selection;
+      if (!scene.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
+      const { start, end } = scene.selection;
       playing.edited = true;
       this.clearPoint();
-      s.cursor.offset = start;
-      s.selection = null;
+      scene.cursor.offset = start;
+      scene.selection = null;
       const change = { offset: start, deleteLength: end - start, text: '' };
       this.touch(playing, file, change);
       await this.edit(file, change, { undoStopBefore: true, undoStopAfter: true });
@@ -431,19 +432,19 @@ export class Player {
       if (problem) return fail('invalid_action', problem);
       const file = this.fileOf(target, playing);
       if (!file) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
-      if (s.turn === 'agent') await editor.show(file);
+      if (scene.turn === 'agent') await editor.show(file);
       const span = await this.span(file, target, 'point');
       if ('kind' in span) return span;
-      s.point = { file, start: span.start, end: span.end };
+      scene.point = { file, start: span.start, end: span.end };
       const pointLine = position(span.text, span.start).line;
-      if (s.turn === 'agent') {
+      if (scene.turn === 'agent') {
         // The view goes to the pointed code, so the `say` about it plays while the programmer looks at it
         // (specs/PointFocus.tla, `Point`).
-        const cursorLine = s.cursor?.file === file ? position(span.text, s.cursor.offset).line : undefined;
-        s.pointFar = cursorLine === undefined || Math.abs(cursorLine - pointLine) > timing.nearLines;
-        s.focus = 'point';
+        const cursorLine = scene.cursor?.file === file ? position(span.text, scene.cursor.offset).line : undefined;
+        scene.pointFar = cursorLine === undefined || Math.abs(cursorLine - pointLine) > timing.nearLines;
+        scene.focus = 'point';
       }
-      editor.renderPoint(s.point);
+      editor.renderPoint(scene.point);
       this.follow();
       panel.post({ type: 'point', file: editor.displayPath(file), line: pointLine });
       await this.delay(timing.afterPointMs);
@@ -456,7 +457,7 @@ export class Player {
   }
 
   private async runCommand(action: { run: string; wait?: number }, playing: Playing): Promise<Outcome> {
-    const s = this.scene;
+    const scene = this.scene;
     const { editor, panel } = this.stage;
     const config = this.stage.config();
     const command = action.run;
@@ -474,7 +475,7 @@ export class Player {
     const id = nextRunId++;
     const signal = this.stage.pacing.signal;
 
-    if (config.confirmCommands && !s.allowedCommands.has(command)) {
+    if (config.confirmCommands && !scene.allowedCommands.has(command)) {
       // specs/RunBox.tla, `SaveAndConfirm`.
       panel.post({ type: 'run', id, command, phase: 'confirm' });
       this.reading = true;
@@ -499,7 +500,7 @@ export class Player {
     // specs/RunBox.tla, `FinishCommand`: done or background when it ran, declined when it never started or threw.
     let outcome;
     try {
-      outcome = await editor.runCommand(command, { cwd: s.root ?? editor.resolvePath('.'), waitMs, signal });
+      outcome = await editor.runCommand(command, { cwd: scene.root ?? editor.resolvePath('.'), waitMs, signal });
     } catch (e) {
       panel.post({ type: 'run', id, command, phase: 'declined' });
       throw e;
@@ -526,7 +527,9 @@ export class Player {
         (exitCode) => {
           panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
         },
-        () => {},
+        () => {
+          // The terminal is gone; the panel keeps the last phase it saw.
+        },
       );
     }
 
@@ -540,10 +543,10 @@ export class Player {
 
   /** Types `before`, then `after`, then steps back to between them: to where the text had its `CURSOR_MARKER`. */
   private async type(before: string, after: string, fast: boolean, playing: Playing): Promise<Outcome> {
-    const s = this.scene;
+    const scene = this.scene;
     const { editor } = this.stage;
-    if (!s.cursor) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");
-    const cursor = s.cursor;
+    if (!scene.cursor) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");
+    const cursor = scene.cursor;
     playing.edited = true;
     await editor.show(cursor.file);
     this.clearPoint();
@@ -551,12 +554,12 @@ export class Player {
     const doc = await editor.getText(cursor.file);
     this.stage.lines.of(cursor.file, doc);
     const eol = await editor.eol(cursor.file);
-    const insertAt = s.selection ? s.selection.start : cursor.offset;
+    const insertAt = scene.selection ? scene.selection.start : cursor.offset;
     const { timing, random } = this.stage.config();
     const scale = fast ? timing.fastFactor : 1;
     const chunks = planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale);
 
-    if (chunks.length === 0 && s.selection) chunks.push({ text: '', delay: 0 });
+    if (chunks.length === 0 && scene.selection) chunks.push({ text: '', delay: 0 });
     let typed = '';
     for (const [i, chunk] of chunks.entries()) {
       // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
@@ -569,11 +572,11 @@ export class Player {
         return { kind: 'interrupted', rest: fast ? { type_fast: rest } : { type: rest } };
       }
       const insert = eol === '\n' ? chunk.text : chunk.text.replaceAll('\n', eol);
-      const start = s.selection ? s.selection.start : cursor.offset;
-      const deleteLength = s.selection ? s.selection.end - s.selection.start : 0;
+      const start = scene.selection ? scene.selection.start : cursor.offset;
+      const deleteLength = scene.selection ? scene.selection.end - scene.selection.start : 0;
       // Move the cursor before awaiting, so programmer edits arriving meanwhile transform the right position.
       cursor.offset = start + insert.length;
-      s.selection = null;
+      scene.selection = null;
       const change = { offset: start, deleteLength, text: insert };
       this.touch(playing, cursor.file, change);
       await this.edit(cursor.file, change, {
@@ -644,16 +647,16 @@ export class Player {
     file: string,
     line: number | undefined,
     action: string,
-    find: ((text: string) => Candidate[]) | undefined,
+    find?: (text: string) => Candidate[],
   ): Promise<{ text: string; line: number } | Outcome> {
-    const s = this.scene;
+    const scene = this.scene;
     const text = await this.stage.editor.getText(file);
     if (line === undefined) {
       // The cursor's line, which may be the empty one after a final newline, if it's there.
-      if (s.cursor?.file !== file) {
+      if (scene.cursor?.file !== file) {
         return fail('invalid_action', `Give \`line\`: without it, a \`${action}\` is on your cursor's line, in its file.`);
       }
-      return { text, line: position(text, s.cursor.offset).line };
+      return { text, line: position(text, scene.cursor.offset).line };
     }
     // An empty file has one line, the empty one; a newline at the end doesn't start another.
     const lines = Math.max(1, fileLines(text).lines.length);
@@ -683,13 +686,7 @@ export class Player {
    * shown then. An empty file's one line needs no showing. In a rehearsal, `knows` taking the
    * number is specs/Rehearsal.tla, `Accept`.
    */
-  private unseen(
-    file: string,
-    text: string,
-    line: number,
-    what: string,
-    find: ((text: string) => Candidate[]) | undefined,
-  ): Outcome | undefined {
+  private unseen(file: string, text: string, line: number, what: string, find?: (text: string) => Candidate[]): Outcome | undefined {
     const id = this.stage.lines.of(file, text)[line - 1];
     if (!this.stage.knows || text === '' || (id !== undefined && this.stage.knows(file, line, id))) return undefined;
     const candidates = find?.(text) ?? [];

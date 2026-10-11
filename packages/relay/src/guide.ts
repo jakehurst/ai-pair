@@ -12,6 +12,7 @@ export const GUIDE_FILE = path.join('.ai-pair', 'GUIDE.md');
 /** The most of one file read into the agent's instructions; the rest is cut, with a note. */
 export const MAX_GUIDE = 20_000;
 
+/** A project's guide for the agent: the file it was read from, and its text. */
 export interface Guide {
   file: string;
   text: string;

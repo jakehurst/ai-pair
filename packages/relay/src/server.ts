@@ -38,7 +38,7 @@ export function startPrompt(task?: string): string {
 /** Shortens a guide's path for the agent and the panel: `~` for the home folder. */
 function shownPath(file: string): string {
   const home = os.homedir();
-  return file.startsWith(home + path.sep) ? `~${file.slice(home.length)}` : file;
+  return file.startsWith(`${home}${path.sep}`) ? `~${file.slice(home.length)}` : file;
 }
 
 /**
@@ -52,7 +52,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   async function roots(): Promise<string[]> {
     if (!server.server.getClientCapabilities()?.roots) return [];
     try {
-      const listed = await server.server.listRoots(undefined, { timeout: ROOTS_MS });
+      const listed = await server.server.listRoots(/* params= */ undefined, { timeout: ROOTS_MS });
       return listed.roots.filter((r) => r.uri.startsWith('file:')).map((r) => fileURLToPath(r.uri));
     } catch {
       return [];

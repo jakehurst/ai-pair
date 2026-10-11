@@ -18,6 +18,7 @@ import {
 import type { Controller } from './controller';
 import { LEFT_ARROW, RIGHT_ARROW } from './constants';
 
+/** What a bridge needs from its window: the discovery folder, the workspace folders, and where to report. */
 export interface BridgeOptions {
   /** Where discovery files live; see `discoveryDir()`. */
   dir: string;
@@ -29,35 +30,35 @@ export interface BridgeOptions {
 }
 
 /** Returns what a report says, for `trace`: its batches, events, and flags. */
-function reported(r: unknown): string {
-  if (typeof r !== 'object' || r === null || !('batches' in r) || !('events' in r)) return '';
-  const { batches, events } = r;
+function reported(report: unknown): string {
+  if (typeof report !== 'object' || report === null || !('batches' in report) || !('events' in report)) return '';
+  const { batches, events } = report;
   const parts = [
     Array.isArray(batches)
       ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(', ')}]`
       : '',
     Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(', ')}]` : '',
   ];
-  if ('rejected' in r && r.rejected) parts.push('rejected');
-  if ('waiting' in r && r.waiting) parts.push('waiting');
+  if ('rejected' in report && report.rejected) parts.push('rejected');
+  if ('waiting' in report && report.waiting) parts.push('waiting');
   return parts.filter(Boolean).join(' ');
 }
 
 /** Returns what a frame says, for `trace`: its type and id, and for a report, what it reports. */
-function describe(m: RelayMessage | EditorMessage): string {
-  switch (m.type) {
+function describe(message: RelayMessage | EditorMessage): string {
+  switch (message.type) {
     case 'call':
-      return `call ${m.id} ${m.tool}`;
+      return `call ${message.id} ${message.tool}`;
     case 'cancel':
-      return `cancel ${m.id}`;
+      return `cancel ${message.id}`;
     case 'return':
-      return `return ${reported(m.report)}`;
+      return `return ${reported(message.report)}`;
     case 'result':
-      return `result ${m.id} ${reported(m.result)}`;
+      return `result ${message.id} ${reported(message.result)}`;
     case 'error':
-      return `error ${m.id} ${m.code}`;
+      return `error ${message.id} ${message.code}`;
     default:
-      return m.type;
+      return message.type;
   }
 }
 
@@ -73,6 +74,7 @@ function optionalNumber(v: unknown): number | undefined {
   return typeof v === 'number' ? v : undefined;
 }
 
+/** The editor's end of the relay connection: a WebSocket server on localhost that forwards tool calls to the controller, found by relays through a discovery file. */
 export class Bridge {
   private server?: WebSocketServer;
   private readonly token = randomBytes(24).toString('hex');
@@ -172,17 +174,17 @@ export class Bridge {
 
     ws.on('message', (data) => {
       // A frame that isn't a message is dropped (#30).
-      const m = parseRelayMessage(data);
-      if (!m) return;
-      trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(m)}`);
+      const message = parseRelayMessage(data);
+      if (!message) return;
+      trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(message)}`);
       if (!authenticated) {
-        if (m.type !== 'hello' || !this.tokenMatches(m.token)) {
+        if (message.type !== 'hello' || !this.tokenMatches(message.token)) {
           send({ type: 'rejected', reason: 'Authentication failed.' });
           ws.close();
-        } else if (m.protocolVersion !== PROTOCOL_VERSION) {
+        } else if (message.protocolVersion !== PROTOCOL_VERSION) {
           send({
             type: 'rejected',
-            reason: `Protocol version mismatch (editor ${PROTOCOL_VERSION}, relay ${m.protocolVersion}). The extension was updated: reload the VS Code window and restart the agent.`,
+            reason: `Protocol version mismatch (editor ${PROTOCOL_VERSION}, relay ${message.protocolVersion}). The extension was updated: reload the VS Code window and restart the agent.`,
           });
           ws.close();
         } else {
@@ -191,30 +193,30 @@ export class Bridge {
         }
         return;
       }
-      if (m.type === 'cancel') {
-        calls.get(m.id)?.abort();
-      } else if (m.type === 'return') {
+      if (message.type === 'cancel') {
+        calls.get(message.id)?.abort();
+      } else if (message.type === 'return') {
         // specs/Bridge.tla, `Restore`: only the owner's socket brings its session's report back.
-        if (this.owner === ws) this.controller.restore(m.report, m.mayRepeat === true);
-      } else if (m.type === 'call') {
+        if (this.owner === ws) this.controller.restore(message.report, message.mayRepeat === true);
+      } else if (message.type === 'call') {
         const abort = new AbortController();
-        calls.set(m.id, abort);
-        this.dispatch(ws, m.tool, m.args ?? {}, abort.signal)
+        calls.set(message.id, abort);
+        this.dispatch(ws, message.tool, message.args ?? {}, abort.signal)
           .then(
             (result) => {
-              send({ type: 'result', id: m.id, result });
+              send({ type: 'result', id: message.id, result });
             },
             (e: unknown) => {
               send({
                 type: 'error',
-                id: m.id,
+                id: message.id,
                 code: e instanceof ToolError ? e.code : 'internal',
                 message: e instanceof Error ? e.message : String(e),
               });
             },
           )
           .finally(() => {
-            calls.delete(m.id);
+            calls.delete(message.id);
           });
       }
     });
@@ -233,19 +235,19 @@ export class Bridge {
   }
 
   private async dispatch(ws: WebSocket, tool: ToolName, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
-    const c = this.controller;
+    const controller = this.controller;
     if (tool === 'start') {
       // specs/Bridge.tla, `BeginStart`: refused while another socket's session is active.
-      if (c.isActive && !c.isSuspended && this.owner !== ws) {
+      if (controller.isActive && !controller.isSuspended && this.owner !== ws) {
         throw new ToolError('session_active', 'Another agent is already pairing in this editor window.');
       }
-      const report = await c.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules));
+      const report = await controller.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules));
       // specs/Bridge.tla, `FinishStart`: the socket may have closed while the session started, when its close handler didn't own it yet:
       // suspend the session rather than leave it to no one (#42, #25). From here to `owner`, nothing awaits. The owner is
       // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
         this.owner = null;
-        c.disconnect();
+        controller.disconnect();
         throw new ToolError('no_session', 'The connection closed while the session started.');
       }
       this.owner = ws;
@@ -259,21 +261,21 @@ export class Bridge {
         if (!Array.isArray(args.actions)) throw new ToolError('invalid_arguments', '`actions` must be an array.');
         // Each action is checked as it's rehearsed and played; the relay's schema checked them too.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return c.step(args.actions as Action[], signal);
+        return controller.step(args.actions as Action[], signal);
       case 'listen':
-        return c.listen(signal);
+        return controller.listen(signal);
       case 'end':
-        return c.end(optionalString(args.summary), signal);
+        return controller.end(optionalString(args.summary), signal);
       case 'read':
         if (typeof args.file !== 'string') throw new ToolError('invalid_arguments', '`file` must be a string.');
-        return c.read(args.file, optionalNumber(args.from_line), optionalNumber(args.to_line));
+        return controller.read(args.file, optionalNumber(args.from_line), optionalNumber(args.to_line));
       case 'calibrate': {
         if (typeof args.title !== 'string' || typeof args.file !== 'string') {
           throw new ToolError('invalid_arguments', '`title` and `file` must be strings.');
         }
         const notice = optionalString(args.notice);
-        const text = fs.readFileSync(c.resolveFile(args.file), 'utf8');
-        return c.calibrate({ title: args.title, text, ...(notice ? { notice } : {}) });
+        const text = fs.readFileSync(controller.resolveFile(args.file), 'utf8');
+        return controller.calibrate({ title: args.title, text, ...(notice ? { notice } : {}) });
       }
       default:
         throw new ToolError('invalid_arguments', `Unknown tool: ${String(tool)}`);

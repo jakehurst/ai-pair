@@ -9,8 +9,8 @@ function report(r: Partial<Report>): Report {
   return { batches: [], events: [], turn: 'agent', ...r };
 }
 
-function code(final_newline: boolean) {
-  return { file: 'a.ts', lines: [{ number: 9, text: `}${CURSOR_MARKER}` }], end: { final_newline } };
+function code(finalNewline: boolean) {
+  return { file: 'a.ts', lines: [{ number: 9, text: `}${CURSOR_MARKER}` }], end: { final_newline: finalNewline } };
 }
 
 describe('reports', () => {

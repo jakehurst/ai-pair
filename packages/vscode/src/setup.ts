@@ -15,7 +15,7 @@ export const START_PROMPT = 'start pairing session';
  * The CLI's arguments: print mode, so the agent ends with its turn, which in a session is when the
  * session ends; and the pair server's tools allowed, since print mode refuses a tool that would ask.
  */
-export const START_ARGS = ['-p', START_PROMPT, '--allowedTools', `mcp__${SERVER}`];
+export const START_ARGS: readonly string[] = ['-p', START_PROMPT, '--allowedTools', `mcp__${SERVER}`];
 /** The name of the terminal the agent runs in. */
 export const START_TERMINAL = 'AI Pair: Claude Code';
 
@@ -107,6 +107,7 @@ function list(names: string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+/** Asks which agent to connect, and registers the relay's launcher with it. */
 export async function setUpAgent(launcher: string): Promise<void> {
   type Item = vscode.QuickPickItem & { id: string };
   const items: Item[] = AGENTS.map((agent) => ({
@@ -181,7 +182,7 @@ export function claudeStarter(
       exited = new Promise((resolve) => {
         exit = resolve;
       });
-      running = vscode.window.createTerminal({ name: START_TERMINAL, shellPath, shellArgs: START_ARGS, cwd, isTransient: true });
+      running = vscode.window.createTerminal({ name: START_TERMINAL, shellPath, shellArgs: [...START_ARGS], cwd, isTransient: true });
       return exited;
     },
     dispose() {

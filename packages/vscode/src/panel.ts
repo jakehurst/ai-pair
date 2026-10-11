@@ -18,6 +18,7 @@ export interface Starter {
   start(): Promise<void>;
 }
 
+/** The AI Pair view: shows the agent's narration and status, and takes the programmer's replies and controls. */
 export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   static readonly viewId = 'aiPair.narration';
   controller?: Controller;
@@ -122,6 +123,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     const style = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString() : '';
     const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString() : '';
     view.webview.html = panelHtml(view.webview.cspSource, style, script);
+    // The page posts only FromPanel messages; VS Code types them `any`.
     view.webview.onDidReceiveMessage((m: FromPanel) => {
       this.receive(m);
     });
@@ -142,15 +144,15 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     }
   }
 
-  private receive(m: FromPanel): void {
-    const c = this.controller;
+  private receive(message: FromPanel): void {
+    const controller = this.controller;
     this.trace?.(
-      `panel ${m.type}${m.type === 'reply' ? ` ${JSON.stringify(m.text)}` : m.type === 'draft' ? (m.empty ? ' empty' : ' typed') : ''}`,
+      `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
     );
-    switch (m.type) {
+    switch (message.type) {
       case 'ready':
         // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
-        c?.resume('reply');
+        controller?.resume('reply');
         this.send({ type: 'replay', events: this.log });
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
@@ -160,62 +162,62 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'speed':
         // Only the menu's speeds: the page sends no others (#17).
-        if (SPEEDS.includes(m.value)) this.speed.set(m.value);
+        if (SPEEDS.includes(message.value)) this.speed.set(message.value);
         return;
       case 'readingSpeed':
-        if (SPEEDS.includes(m.value)) this.readingSpeed.set(m.value);
+        if (SPEEDS.includes(message.value)) this.readingSpeed.set(message.value);
         return;
       case 'reply':
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
-        if (this.calibration?.reply(m.text)) return;
-        c?.resume(undefined, { reveal: false });
-        c?.userMessage(m.text, m.attach ? this.selection.current() : undefined);
+        if (this.calibration?.reply(message.text)) return;
+        controller?.resume(undefined, { reveal: false });
+        controller?.userMessage(message.text, message.attach ? this.selection.current() : undefined);
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
-        if (m.empty) {
-          c?.resume('reply');
+        if (message.empty) {
+          controller?.resume('reply');
         } else {
-          c?.pause('reply');
+          controller?.pause('reply');
         }
         return;
       case 'pause':
-        c?.pause();
+        controller?.pause();
         return;
       case 'resume':
         // specs/Draft.tla, `ResumeAll`: resume() with no reason ends every pause.
-        c?.resume();
+        controller?.resume();
         return;
       case 'interrupt':
-        c?.userInterrupt();
+        controller?.userInterrupt();
         return;
       case 'turn':
-        c?.resume();
-        if (c?.turn === 'user') {
-          c.handBack(m.message, m.attach ? this.selection.current() : undefined);
+        controller?.resume();
+        if (controller?.turn === 'user') {
+          controller.handBack(message.message, message.attach ? this.selection.current() : undefined);
         } else {
-          c?.takeTurn();
+          controller?.takeTurn();
         }
         return;
       case 'end':
-        c?.endSession();
+        controller?.endSession();
         return;
       case 'runDecision':
-        c?.decideRun(m.id, m.run, m.remember);
+        controller?.decideRun(message.id, message.run, message.remember);
         return;
       case 'open': {
-        const uri = vscode.Uri.file(this.resolvePath(m.file));
-        const position = new vscode.Position(Math.max(0, m.line - 1), 0);
+        const uri = vscode.Uri.file(this.resolvePath(message.file));
+        const position = new vscode.Position(Math.max(0, message.line - 1), 0);
         void vscode.window.showTextDocument(uri, { selection: new vscode.Range(position, position) });
         return;
       }
       case 'openFile':
-        void this.openByName(m.file);
+        void this.openByName(message.file);
         return;
       case 'command':
-        if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command);
+        if (PANEL_COMMANDS.has(message.command)) void vscode.commands.executeCommand(message.command);
         return;
       case 'start':
         // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
@@ -225,10 +227,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         });
         return;
       case 'openChange':
-        void this.openChange(m.file);
+        void this.openChange(message.file);
         return;
       case 'openUrl':
-        if (/^https?:\/\//.test(m.url)) void vscode.env.openExternal(vscode.Uri.parse(m.url));
+        if (/^https?:\/\//.test(message.url)) void vscode.env.openExternal(vscode.Uri.parse(message.url));
         return;
       default:
     }

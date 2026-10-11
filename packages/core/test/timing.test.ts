@@ -36,14 +36,14 @@ it("ignores keys that aren't timings", () => {
 it('glides longer the farther it goes, up to the cap', () => {
   const near = defaultTiming.nearLines;
   const far = defaultTiming.glideMaxMs / defaultTiming.glidePerLineMs;
-  expect(glideDuration(defaultTiming, 0, 1)).toBe(defaultTiming.glideMs);
-  expect(glideDuration(defaultTiming, near, 1)).toBe(defaultTiming.glideMs + near * defaultTiming.glidePerLineMs);
-  expect(glideDuration(defaultTiming, 2 * far, 1)).toBe(defaultTiming.glideMaxMs);
+  expect(glideDuration(defaultTiming, /* lines= */ 0, /* speed= */ 1)).toBe(defaultTiming.glideMs);
+  expect(glideDuration(defaultTiming, near, /* speed= */ 1)).toBe(defaultTiming.glideMs + near * defaultTiming.glidePerLineMs);
+  expect(glideDuration(defaultTiming, 2 * far, /* speed= */ 1)).toBe(defaultTiming.glideMaxMs);
 });
 
 it('divides the glide by the speed', () => {
   const speed = 2;
   for (const lines of [0, defaultTiming.nearLines, defaultTiming.glideMaxMs]) {
-    expect(glideDuration(defaultTiming, lines, speed)).toBe(glideDuration(defaultTiming, lines, 1) / speed);
+    expect(glideDuration(defaultTiming, lines, speed)).toBe(glideDuration(defaultTiming, lines, /* speed= */ 1) / speed);
   }
 });

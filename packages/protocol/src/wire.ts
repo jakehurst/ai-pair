@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Report, ToolErrorCode } from './index';
 
+/** The wire protocol's version; a relay and an editor must agree on it. */
 export const PROTOCOL_VERSION = 3;
 
 /** Written by each editor window to `<discoveryDir>/<pid>.json`. */
@@ -18,8 +19,10 @@ export interface Discovery {
   lastFocused: number;
 }
 
+/** The names of the tools an agent can call. */
 export type ToolName = 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate';
 
+/** A frame from the relay to the editor: a greeting, a tool call, a cancel, or a report handed back. */
 export type RelayMessage =
   | { type: 'hello'; token: string; protocolVersion: number }
   | { type: 'call'; id: number; tool: ToolName; args: Record<string, unknown> }
@@ -27,6 +30,7 @@ export type RelayMessage =
   /** A report that arrived for a call the agent had already cancelled: deliver it again. */
   | { type: 'return'; report: Report; mayRepeat?: true };
 
+/** A frame from the editor to the relay: a welcome, a refusal, or a call's result or error. */
 export type EditorMessage =
   | { type: 'welcome' }
   | { type: 'rejected'; reason: string }
@@ -46,6 +50,10 @@ export function discoveryDir(): string {
   return path.join(aiPairHome(), 'windows');
 }
 
+function hasType(m: unknown): m is { type: string } {
+  return typeof m === 'object' && m !== null && 'type' in m && typeof m.type === 'string';
+}
+
 /**
  * Returns a frame's message, or `undefined` if it isn't one: not JSON, or JSON that isn't an object
  * with a string `type` (#4, #30).
@@ -59,10 +67,7 @@ function parseFrame(data: Frame): { type: string } | undefined {
   } catch {
     return undefined;
   }
-  if (typeof m !== 'object' || m === null || !('type' in m) || typeof m.type !== 'string') return undefined;
-  // Checked just above; TypeScript doesn't narrow `m` itself from a check on its property.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return m as { type: string };
+  return hasType(m) ? m : undefined;
 }
 
 // Only `type` is checked: the other fields are taken on trust from a peer that authenticated, as they always were.

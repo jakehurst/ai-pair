@@ -35,19 +35,17 @@ describe('outcomeOf', () => {
 
   it('says a command is still running, and reads its exit code once it ends', async () => {
     const exit: { code: number | undefined } = { code: undefined };
-    let end!: () => void;
+    const ends = Promise.withResolvers<void>();
     const running = outcomeOf(tail('serving'), {
       shell: undefined,
       finished: false,
       exitCode: () => exit.code,
-      ended: new Promise((r) => {
-        end = r;
-      }),
+      ended: ends.promise,
     });
     expect(running).toMatchObject({ output: 'serving', running: true });
     expect(running.exitCode).toBeUndefined();
     exit.code = 143;
-    end();
+    ends.resolve();
     expect(await running.exited).toBe(143);
   });
 });

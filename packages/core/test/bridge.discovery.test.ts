@@ -38,7 +38,7 @@ it('FindsRunningProp: rewrites the discovery file on focus without a reader ever
   for (let i = 0; i < 5000; i++) {
     bridge.focused();
   }
-  Atomics.store(new Int32Array(stop), 0, 1);
+  Atomics.store(new Int32Array(stop), /* index= */ 0, /* value= */ 1);
   const { reads, broken } = await counted;
   await reader.terminate();
   bridge.dispose();

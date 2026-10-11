@@ -2,22 +2,26 @@
 
 import type { Excerpt, Turn } from '@ai-pair/protocol';
 
+/** What the agent is doing, as the panel shows it. */
 export type AgentState = 'typing' | 'read' | 'running' | 'thinking' | 'absent' | 'paused' | 'listening' | 'navigator';
 
 /** What follow mode keeps in the programmer's view: the agent cursor, or the code it last pointed at. */
 export type Focus = 'cursor' | 'point';
 
+/** Where the editor's cursor is, and what is selected, as offsets into the file. */
 export interface CursorView {
   file: string;
   offset: number;
   selection?: { start: number; end: number };
 }
 
+/** Where an edit puts undo stops, so the programmer undoes a batch in sensible steps. */
 export interface EditOptions {
   undoStopBefore: boolean;
   undoStopAfter: boolean;
 }
 
+/** What a command produced in the terminal, and how it ended. */
 export interface CommandOutcome {
   /** Absent while still running, or when the terminal couldn't report it. */
   exitCode?: number;
@@ -32,6 +36,7 @@ export interface CommandOutcome {
   exited?: Promise<number | undefined>;
 }
 
+/** How to run a command: where, how long to wait, and the signal that stops waiting. */
 export interface RunOptions {
   /** Directory to run in (absolute). */
   cwd: string;
@@ -44,6 +49,7 @@ export interface RunOptions {
 /** An excerpt whose `file` is absolute, as the editor knows it. */
 export type SharedSelection = Excerpt;
 
+/** A range of lines in a file, for the panel to open. */
 export interface Ref {
   file: string;
   line: number;
@@ -85,6 +91,7 @@ export interface EditorPort {
   runCommand(command: string, options: RunOptions): Promise<CommandOutcome>;
 }
 
+/** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =
   /** `rules`: the project guides the agent was given (#23). */
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true }
@@ -107,6 +114,7 @@ export type PanelEvent =
       exitCode?: number;
     };
 
+/** The narration panel, as the controller sees it. */
 export interface PanelPort {
   post(event: PanelEvent): void;
 }

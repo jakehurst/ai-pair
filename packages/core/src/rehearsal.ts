@@ -114,7 +114,7 @@ export async function rehearse(
     lines,
     knows,
   });
-  const { result, sightings } = await player.play(0, actions);
+  const { result, sightings } = await player.play(/* id= */ 0, actions);
   return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } };
 }
 

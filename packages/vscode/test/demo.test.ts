@@ -60,4 +60,4 @@ app.get("/todos", (req, res) => {
 
 app.listen(3000, () => console.log("Listening on http://localhost:3000"));
 `);
-}, 60_000);
+}, /* timeout= */ 60_000);

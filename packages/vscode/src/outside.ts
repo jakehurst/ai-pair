@@ -10,6 +10,10 @@ import { withinFolder } from '@ai-pair/protocol';
  */
 export const GROUP_MS = 500;
 
+/** Folders whose files change by the hundred, from git or a package manager: not marked. */
+const UNWATCHED = new Set(['.git', 'node_modules']);
+
+/** Marks files changed on disk by something other than VS Code or the agent, until the programmer opens them (#15). */
 export class OutsideChanges {
   private readonly marked = new Set<string>();
   /** Each file's text as VS Code last wrote it, or the programmer last saw it. */
@@ -77,9 +81,6 @@ export class OutsideChanges {
     return this.settled;
   }
 }
-
-/** Folders whose files change by the hundred, from git or a package manager: not marked. */
-const UNWATCHED = new Set(['.git', 'node_modules']);
 
 /** Returns whether a change to `file` is marked: it is in one of `folders`, and not under an unwatched folder. */
 export function watched(file: string, folders: readonly string[]): boolean {

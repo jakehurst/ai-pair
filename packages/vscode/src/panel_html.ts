@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
 /** Speeds offered in the panel's menu. The `aiPair.speed` setting takes any value in its range. */
-export const SPEEDS = [0.4, 0.6, 1, 1.5, 2, 3];
+export const SPEEDS: readonly number[] = [0.4, 0.6, 1, 1.5, 2, 3];
 
 /**
  * Returns the `aiPair.speed` setting as played: clamped to the range it declares (0.25 to 4), or 1

@@ -157,6 +157,7 @@ const actionSchema = z.union(
   { error: actionError },
 );
 
+/** The MCP tools the relay offers an agent: each one's description and input schema. */
 export const TOOLS = {
   start: {
     description:

@@ -4,6 +4,7 @@
 
 import type { Config } from 'stylelint';
 
+/** Stylelint's configuration for the panel's stylesheet. */
 export const config: Config = {
   extends: ['stylelint-config-recommended'],
   plugins: ['@stylistic/stylelint-plugin', 'stylelint-order'],

@@ -15,6 +15,7 @@ const PAUSE_REASONS: Record<PauseReason, string> = {
 /** Who made an edit the programmer didn't make. */
 const OTHER_EDITOR = 'A tool, a formatter, or something on disk';
 
+/** The tools whose result is a report, rendered as one. */
 export type ReportingTool = 'start' | 'step' | 'listen' | 'end' | 'calibrate';
 
 function longestRun(text: string, ch: string): number {
@@ -86,49 +87,51 @@ function renderRejected(r: NonNullable<Report['rejected']>): string {
   return parts.join('\n');
 }
 
-function renderBatch(b: BatchResult): string {
-  const parts = [b.code ? `Batch ${b.id} ${b.status}, in ${b.code.file}:` : `Batch ${b.id} ${b.status}.`];
-  if (b.code) parts.push(renderCode(b.code));
-  for (const run of b.runs ?? []) {
+function renderBatch(batch: BatchResult): string {
+  const parts = [batch.code ? `Batch ${batch.id} ${batch.status}, in ${batch.code.file}:` : `Batch ${batch.id} ${batch.status}.`];
+  if (batch.code) parts.push(renderCode(batch.code));
+  for (const run of batch.runs ?? []) {
     parts.push(renderRun(run));
   }
-  for (const u of b.unsaved ?? []) {
+  for (const u of batch.unsaved ?? []) {
     parts.push(
       `Couldn't save ${u.file} (${u.error}): the editor has your edits, the file on disk doesn't, so commands and your file tools see the old file. Ask the programmer to resolve it in the editor, which offers to compare or overwrite.`,
     );
   }
-  if (b.error) parts.push(renderError(b.error));
-  if (b.unplayed) {
-    const label = b.error && b.error.kind !== 'command_failed' ? 'Not played, starting with the one that failed:' : 'Not played:';
-    parts.push([label, ...b.unplayed.map((a) => `  ${JSON.stringify(a)}`)].join('\n'));
+  if (batch.error) parts.push(renderError(batch.error));
+  if (batch.unplayed) {
+    const label = batch.error && batch.error.kind !== 'command_failed' ? 'Not played, starting with the one that failed:' : 'Not played:';
+    parts.push([label, ...batch.unplayed.map((a) => `  ${JSON.stringify(a)}`)].join('\n'));
   }
   return parts.join('\n');
 }
 
-function renderEvent(e: Event): string {
-  switch (e.kind) {
+function renderEvent(event: Event): string {
+  switch (event.kind) {
     case 'message':
-      return `The programmer said:\n${quote(e.text)}${e.selection ? `\n${renderExcerpt(e.selection)}` : ''}`;
+      return `The programmer said:\n${quote(event.text)}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
     case 'edit':
-      if (e.diff === '') {
-        const who = e.by === 'other' ? OTHER_EDITOR : 'The programmer';
-        return `${who} edited ${e.file}, then changed it back: no net change.`;
+      if (event.diff === '') {
+        const who = event.by === 'other' ? OTHER_EDITOR : 'The programmer';
+        return `${who} edited ${event.file}, then changed it back: no net change.`;
       }
-      if (e.omitted !== undefined) {
-        const who = e.by === 'other' ? OTHER_EDITOR : 'The programmer';
-        return `${who} changed ${e.file} in these places, too much to show (${e.omitted} lines of diff left out). \`read\` the file for its text:\n${e.diff}`;
+      if (event.omitted !== undefined) {
+        const who = event.by === 'other' ? OTHER_EDITOR : 'The programmer';
+        return `${who} changed ${event.file} in these places, too much to show (${event.omitted} lines of diff left out). \`read\` the file for its text:\n${event.diff}`;
       }
-      if (e.by === 'other') return `${e.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${e.diff}`;
-      return `The programmer edited ${e.file}:\n${e.diff}`;
+      if (event.by === 'other') {
+        return `${event.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${event.diff}`;
+      }
+      return `The programmer edited ${event.file}:\n${event.diff}`;
     case 'interrupt':
       return 'The programmer pressed Interrupt.';
     case 'turn':
-      if (e.to === 'user') return 'The programmer took the turn.';
-      return `The programmer handed the turn back to you${e.message ? `:\n${quote(e.message)}` : '.'}${e.selection ? `\n${renderExcerpt(e.selection)}` : ''}`;
+      if (event.to === 'user') return 'The programmer took the turn.';
+      return `The programmer handed the turn back to you${event.message ? `:\n${quote(event.message)}` : '.'}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
     case 'end':
       return 'The programmer ended the session. This is the final report: stop using the pair tools.';
     default:
-      throw new Error(`Unknown event: ${JSON.stringify(e satisfies never)}`);
+      throw new Error(`Unknown event: ${JSON.stringify(event satisfies never)}`);
   }
 }
 

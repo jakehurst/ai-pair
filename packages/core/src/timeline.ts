@@ -17,15 +17,13 @@ interface Pending {
   resolve: (completed: boolean) => void;
 }
 
+/** The clock playback runs on: sleeps that a pause holds and an interrupt cuts short. */
 export class Timeline {
-  private paused = false;
   private interrupted = false;
   private pending: Pending | null = null;
   private abort = new AbortController();
 
-  constructor(paused: boolean) {
-    this.paused = paused;
-  }
+  constructor(private paused: boolean) {}
 
   get isInterrupted(): boolean {
     return this.interrupted;

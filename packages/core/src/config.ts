@@ -3,6 +3,7 @@
 
 import { defaultTiming, type Timing } from './timing';
 
+/** The controller's settings: timeouts, timing, and what commands may run. */
 export interface Config {
   maxBlockMs: number;
   /** During the programmer's turn, how long after their last edit `listen` returns. */
@@ -20,6 +21,7 @@ export interface Config {
   maxRunWaitMs: number;
 }
 
+/** The settings in force when the editor gives none. */
 export const defaultConfig: Config = {
   maxBlockMs: 45_000,
   navigatorIdleMs: 3000,

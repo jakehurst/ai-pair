@@ -3,11 +3,13 @@
 /** In `terminalText`, where a line was erased: what came before it on the line is gone. */
 const ERASED_LINE = '\x00';
 
+/** A position in text, by line and column, both from 1. */
 export interface Position {
   line: number;
   column: number;
 }
 
+/** Returns the line and column of `offset` in `text`. */
 export function position(text: string, offset: number): Position {
   let line = 1;
   let lineStart = 0;
@@ -18,7 +20,8 @@ export function position(text: string, offset: number): Position {
   return { line, column: offset - lineStart + 1 };
 }
 
-export function splitLines(text: string): string[] {
+/** Returns the lines of `text`, split on either line ending. */
+function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
 
@@ -50,6 +53,7 @@ export function lineSpan(text: string, line: number): { start: number; end: numb
   return { start, end: newline === -1 ? text.length : newline };
 }
 
+/** Returns the text of `line` (from 1), or an empty string past the end. */
 export function lineText(text: string, line: number): string {
   return splitLines(text)[line - 1] ?? '';
 }
@@ -67,6 +71,7 @@ export function lineEnd(text: string, line: number): number {
   return stop > offset && text[stop - 1] === '\r' ? stop - 1 : stop;
 }
 
+/** Returns whether `offset` is the start of a line. */
 export function isLineStart(text: string, offset: number): boolean {
   return offset === 0 || text[offset - 1] === '\n';
 }

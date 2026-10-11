@@ -219,7 +219,7 @@ describe('typing', () => {
   });
 
   it('scales every delay for type_fast', () => {
-    expect(planTyping('a b', cadence, false, Math.random, 0.5).map((c) => c.delay)).toEqual([50, 50, 75]);
+    expect(planTyping('a b', cadence, /* atLineStart= */ false, Math.random, /* scale= */ 0.5).map((c) => c.delay)).toEqual([50, 50, 75]);
   });
 
   it('scales reading time with the character count, above a floor', () => {
@@ -232,8 +232,8 @@ describe('typing', () => {
 });
 
 describe('timeline', () => {
-  const SLEEP_MS = 100;
-  const LONGER_SLEEP_MS = 300;
+  const sleepMs = 100;
+  const longerSleepMs = 300;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -245,21 +245,21 @@ describe('timeline', () => {
   it('ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up', async () => {
     const timeline = new Timeline(/* paused= */ false);
     const results: boolean[] = [];
-    void timeline.sleep(SLEEP_MS).then((completed) => {
+    void timeline.sleep(sleepMs).then((completed) => {
       results.push(completed);
     });
     timeline.interrupt();
-    await vi.advanceTimersByTimeAsync(SLEEP_MS);
+    await vi.advanceTimersByTimeAsync(sleepMs);
     expect(results).toEqual([false]);
-    expect(await timeline.sleep(SLEEP_MS)).toBe(false);
+    expect(await timeline.sleep(sleepMs)).toBe(false);
 
     timeline.reset();
-    void timeline.sleep(LONGER_SLEEP_MS).then((completed) => {
+    void timeline.sleep(longerSleepMs).then((completed) => {
       results.push(completed);
     });
-    await vi.advanceTimersByTimeAsync(LONGER_SLEEP_MS - SLEEP_MS);
+    await vi.advanceTimersByTimeAsync(longerSleepMs - sleepMs);
     expect(results).toEqual([false]);
-    await vi.advanceTimersByTimeAsync(SLEEP_MS);
+    await vi.advanceTimersByTimeAsync(sleepMs);
     expect(results).toEqual([false, true]);
   });
 });

@@ -38,6 +38,8 @@ const FOLLOWING: ReadonlySet<AgentState> = new Set(['typing', 'read', 'thinking'
 
 /** View changes within this long after our own navigation are ours, not the programmer's. */
 const SELF_NAV_MS = 400;
+/** How often the read cursor pulses. */
+const PULSE_MS = 450;
 
 /** With smooth scrolling, our own scroll has finished once the visible ranges stay unchanged this long. */
 const SCROLL_QUIET_MS = 50;
@@ -81,6 +83,7 @@ const READ = 'var(--vscode-aiPair-cursorRead)';
 const CURSOR_TEXT = 'var(--vscode-aiPair-cursorForeground)';
 const READ_TEXT = 'var(--vscode-aiPair-cursorReadForeground)';
 
+/** The controller's editor, over VS Code's API: documents, cursors, decorations, scrolling, and saves. */
 export class VsCodeEditor implements EditorPort, vscode.Disposable {
   controller?: Controller;
   /** The programmer's selection changed: what the panel offers to send along with a reply. */
@@ -132,14 +135,14 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     agentName: string,
   ) {
     this.cursorTypes = new Map([
-      ['typing', cursorDecoration(CURSOR, 'solid', 1)],
-      ['read', cursorDecoration(READ, 'solid', 1)],
-      ['readDim', cursorDecoration(CURSOR, 'solid', 0.6)],
-      ['thinking', cursorDecoration(CURSOR, 'solid', 0.45)],
-      ['running', cursorDecoration(CURSOR, 'solid', 0.6)],
-      ['paused', cursorDecoration(CURSOR, 'dashed', 0.6)],
-      ['listening', cursorDecoration(CURSOR, 'dotted', 0.8)],
-      ['navigator', cursorDecoration(CURSOR, 'dotted', 0.8)],
+      ['typing', cursorDecoration(CURSOR, 'solid', /* opacity= */ 1)],
+      ['read', cursorDecoration(READ, 'solid', /* opacity= */ 1)],
+      ['readDim', cursorDecoration(CURSOR, 'solid', /* opacity= */ 0.6)],
+      ['thinking', cursorDecoration(CURSOR, 'solid', /* opacity= */ 0.45)],
+      ['running', cursorDecoration(CURSOR, 'solid', /* opacity= */ 0.6)],
+      ['paused', cursorDecoration(CURSOR, 'dashed', /* opacity= */ 0.6)],
+      ['listening', cursorDecoration(CURSOR, 'dotted', /* opacity= */ 0.8)],
+      ['navigator', cursorDecoration(CURSOR, 'dotted', /* opacity= */ 0.8)],
     ]);
     this.setAgentName(agentName);
     for (const doc of vscode.workspace.textDocuments) {
@@ -180,14 +183,14 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       t.dispose();
     }
     this.labelTypes = new Map([
-      ['typing', labelDecoration(name, CURSOR, CURSOR_TEXT, 1)],
-      ['read', labelDecoration(name, READ, READ_TEXT, 1)],
-      ['readDim', labelDecoration(name, CURSOR, CURSOR_TEXT, 1)],
-      ['thinking', labelDecoration(name, CURSOR, CURSOR_TEXT, 0.6)],
-      ['running', labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, 0.8)],
-      ['paused', labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, 0.8)],
-      ['listening', labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, 0.8)],
-      ['navigator', labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, 0.8)],
+      ['typing', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ 1)],
+      ['read', labelDecoration(name, READ, READ_TEXT, /* opacity= */ 1)],
+      ['readDim', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ 1)],
+      ['thinking', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ 0.6)],
+      ['running', labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
+      ['paused', labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
+      ['listening', labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
+      ['navigator', labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
     ]);
     this.redraw();
   }
@@ -381,16 +384,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (doc.uri.scheme === 'file') this.mirror.set(doc.uri.fsPath, doc.getText());
   }
 
-  private onChange(e: vscode.TextDocumentChangeEvent): void {
-    const doc = e.document;
-    if (doc.uri.scheme !== 'file' || e.contentChanges.length === 0) return;
+  private onChange(event: vscode.TextDocumentChangeEvent): void {
+    const doc = event.document;
+    if (doc.uri.scheme !== 'file' || event.contentChanges.length === 0) return;
     const file = doc.uri.fsPath;
     const before = this.mirror.get(file);
     const after = doc.getText();
     this.mirror.set(file, after);
 
     // Applied from the highest offset down, each change leaves the offsets below it valid.
-    const changes: Change[] = e.contentChanges
+    const changes: Change[] = event.contentChanges
       .toSorted((a, b) => b.rangeOffset - a.rangeOffset)
       .map((c) => ({ offset: c.rangeOffset, deleteLength: c.rangeLength, text: c.text }));
 
@@ -402,7 +405,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     }
 
     if (before === undefined || !this.inWorkspace(file)) return;
-    if (this.byProgrammer(e, after)) {
+    if (this.byProgrammer(event, after)) {
       this.controller?.userEdit(file, before, after, changes);
     } else {
       this.controller?.otherEdit(file, before, after, changes);
@@ -639,7 +642,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.pulse = setInterval(() => {
       this.pulseOn = !this.pulseOn;
       this.redraw();
-    }, 450);
+    }, PULSE_MS);
   }
 
   // ---- Helpers -------------------------------------------------------------

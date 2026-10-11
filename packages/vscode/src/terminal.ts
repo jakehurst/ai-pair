@@ -83,6 +83,7 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+/** Runs the agent's commands in VS Code terminals with shell integration, and collects their output. */
 export class PairTerminals implements vscode.Disposable {
   private readonly owned: Owned[] = [];
   private readonly disposables: vscode.Disposable[];
@@ -150,7 +151,9 @@ export class PairTerminals implements vscode.Disposable {
       for await (const data of execution.read()) {
         output.push(data);
       }
-    })().catch(() => {});
+    })().catch(() => {
+      // The read ends with the terminal; `ended` reports how.
+    });
 
     const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)]);
     if (finished) await Promise.race([drained, delay(DRAIN_MS)]);

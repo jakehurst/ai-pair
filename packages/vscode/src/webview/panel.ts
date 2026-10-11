@@ -150,8 +150,10 @@ function entry(cls: string, html?: string): HTMLElement {
   return el;
 }
 
-/** Puts the current message into the history, once: when the next entry comes, or when it is replaced
- * (specs/Panel.tla, `Flushed`). */
+/**
+ * Puts the current message into the history, once: when the next entry comes, or when it is replaced
+ * (specs/Panel.tla, `Flushed`).
+ */
 function fileCurrent(): void {
   if (current !== null && !filed) ui.history.prepend(entry('agent', rich(current)));
   filed = true;
@@ -313,10 +315,10 @@ function syncReading(): void {
   ui.dot.classList.toggle('reading', reading !== null);
 }
 
-function tick(t: number): void {
+function tick(now: number): void {
   if (!reading) return;
-  if (!paused) reading.elapsed += t - reading.last;
-  reading.last = t;
+  if (!paused) reading.elapsed += now - reading.last;
+  reading.last = now;
   const f = Math.min(1, reading.elapsed / reading.ms);
   ui.dot.style.setProperty('--progress', String(f));
   if (f >= 1) {
@@ -515,18 +517,18 @@ function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, p
   }
 }
 
-function handle(e: ToPanel): void {
-  switch (e.type) {
+function handle(message: ToPanel): void {
+  switch (message.type) {
     case 'replay':
       replaying = true;
-      for (const ev of e.events) {
+      for (const ev of message.events) {
         handle(ev);
       }
       replaying = false;
       return;
     case 'canStart':
       // specs/Start.tla, `Answer`: the button shows exactly what the extension answered.
-      ui.start.hidden = !e.value;
+      ui.start.hidden = !message.value;
       return;
     case 'startEnded':
       // specs/Start.tla, `Exit`: the agent is done, session or not (Settles).
@@ -534,15 +536,15 @@ function handle(e: ToPanel): void {
       return;
     case 'session':
       // specs/Panel.tla, `ChangeSession`: the band is filed, and a divider goes on top.
-      if (e.active) {
+      if (message.active) {
         // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
         ui.starting.hidden = true;
-        if (e.suspended || e.resumed) {
+        if (message.suspended || message.resumed) {
           // The same session: its agent gone, or back (#25).
           fileCurrent();
           current = null;
           const was = suspended;
-          suspended = e.suspended === true;
+          suspended = message.suspended === true;
           // A revive repeats the suspension a disconnect already showed (#138).
           if (was !== suspended) {
             addDivider(suspended ? 'The agent disconnected: the session waits for it' : 'The agent is back: session resumed');
@@ -557,50 +559,52 @@ function handle(e: ToPanel): void {
         ui.now.textContent = `Waiting for the agent${ELLIPSIS}`;
         ui.ref.innerHTML = '';
         pointed = null;
-        addDivider(`Session started${e.task ? `: ${e.task}` : ''}${e.rules ? `${LABEL_SEPARATOR}rules from ${e.rules.join(', ')}` : ''}`);
+        addDivider(
+          `Session started${message.task ? `: ${message.task}` : ''}${message.rules ? `${LABEL_SEPARATOR}rules from ${message.rules.join(', ')}` : ''}`,
+        );
         setActive(true);
       } else {
         fileCurrent();
         current = null;
-        addDivider(ENDED[e.reason]);
-        ui.idleTitle.textContent = e.reason === 'disconnected' ? 'The agent disconnected' : 'Session ended';
-        ui.idleSummary.innerHTML = e.summary ? rich(e.summary) : '';
+        addDivider(ENDED[message.reason]);
+        ui.idleTitle.textContent = message.reason === 'disconnected' ? 'The agent disconnected' : 'Session ended';
+        ui.idleSummary.innerHTML = message.summary ? rich(message.summary) : '';
         ui.idleText.textContent = 'Ask your agent to pair again.';
         // specs/Start.tla, `EndSession`: the idle view, and its button, are back.
         setActive(false);
       }
       return;
     case 'say':
-      setNow(e.text);
+      setNow(message.text);
       return;
     case 'reading':
-      startReading(e.ms);
+      startReading(message.ms);
       return;
     case 'state':
-      setState(e);
+      setState(message);
       return;
     case 'user':
-      addYou(e.text, e.ref);
+      addYou(message.text, message.ref);
       return;
     case 'interrupt':
       addDivider('You interrupted');
       return;
     case 'outside':
-      addOutside(e.files);
+      addOutside(message.files);
       return;
     case 'turn':
-      addDivider(e.to === 'user' ? 'You took the turn' : 'You handed the turn back');
-      if (e.message || e.ref) addYou(e.message, e.ref);
-      ui.reply.placeholder = e.to === 'user' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
+      addDivider(message.to === 'user' ? 'You took the turn' : 'You handed the turn back');
+      if (message.message || message.ref) addYou(message.message, message.ref);
+      ui.reply.placeholder = message.to === 'user' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
       return;
     case 'point':
-      pointed = codeLink(`${RIGHT_ARROW} ${e.file}:${e.line}`, e.file, e.line);
+      pointed = codeLink(`${RIGHT_ARROW} ${message.file}:${message.line}`, message.file, message.line);
       return;
     case 'run': {
       // specs/RunBox.tla, Show: confirm and running show the box; a phase that ends the run clears it.
-      if (e.phase === 'confirm' || e.phase === 'running') {
-        runId = e.id;
-        runConfirming = e.phase === 'confirm';
+      if (message.phase === 'confirm' || message.phase === 'running') {
+        runId = message.id;
+        runConfirming = message.phase === 'confirm';
         ui.run.classList.add('on');
         ui.run.classList.toggle('confirm', runConfirming);
         // A command waiting for the programmer's decision is announced at once (#16).
@@ -610,26 +614,26 @@ function handle(e: ToPanel): void {
           ui.run.removeAttribute('role');
         }
         ui.runLabel.textContent = runConfirming ? 'Allow this command in the terminal?' : `Running in the terminal${ELLIPSIS}`;
-        ui.runCmd.textContent = e.command;
+        ui.runCmd.textContent = message.command;
         syncStatus();
         if (runConfirming) arrive(ui.run);
         return;
       }
-      if (e.phase === 'exited') {
+      if (message.phase === 'exited') {
         // A command left running has ended: its row says how.
-        const row = ui.history.querySelector(`.run[data-run="${e.id}"]`);
-        if (row) setOutcome(row, e.phase, e.exitCode);
+        const row = ui.history.querySelector(`.run[data-run="${message.id}"]`);
+        if (row) setOutcome(row, message.phase, message.exitCode);
         return;
       }
-      if (runId === e.id) {
+      if (runId === message.id) {
         clearRun();
         syncStatus();
       }
-      addRun(e.id, e.command, e.phase, e.exitCode);
+      addRun(message.id, message.command, message.phase, message.exitCode);
       return;
     }
     case 'selection':
-      selection = e.ref ?? null;
+      selection = message.ref ?? null;
       selectionDismissed = false;
       syncAttach();
       return;
@@ -637,16 +641,16 @@ function handle(e: ToPanel): void {
       ui.reply.focus();
       return;
     case 'speed':
-      showSpeed(ui.speed, ui.speedMenu, 'Playback speed', '', e.value);
+      showSpeed(ui.speed, ui.speedMenu, 'Playback speed', '', message.value);
       return;
     case 'readingSpeed':
-      showSpeed(ui.readingSpeed, ui.readingMenu, 'Reading speed', 'read ', e.value);
+      showSpeed(ui.readingSpeed, ui.readingMenu, 'Reading speed', 'read ', message.value);
       return;
     case 'calibration':
-      showCalibration(e.view);
+      showCalibration(message.view);
       return;
     default:
-      throw new Error(`Unknown panel message: ${JSON.stringify(e satisfies never)}`);
+      throw new Error(`Unknown panel message: ${JSON.stringify(message satisfies never)}`);
   }
 }
 

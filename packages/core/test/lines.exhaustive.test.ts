@@ -45,22 +45,22 @@ it(
             expect(after.text, at).toBe(text.slice(0, offset) + insert + text.slice(offset + deleteLength));
             expect(after.ids.length, at).toBe(lineCount(after.text));
             expect(new Set(after.ids).size, at).toBe(after.ids.length);
-            const a = text.slice(0, offset).split('\n').length - 1;
-            const b = a + (text.slice(offset, offset + deleteLength).split('\n').length - 1);
-            const shift = insert.split('\n').length - 1 - (b - a);
-            for (let i = 0; i < a; i++) {
+            const startLine = text.slice(0, offset).split('\n').length - 1;
+            const endLine = startLine + (text.slice(offset, offset + deleteLength).split('\n').length - 1);
+            const shift = insert.split('\n').length - 1 - (endLine - startLine);
+            for (let i = 0; i < startLine; i++) {
               expect(after.ids[i], at).toBe(ids[i]);
             }
-            for (let i = b + 1; i < ids.length; i++) {
+            for (let i = endLine + 1; i < ids.length; i++) {
               expect(after.ids[i + shift], at).toBe(ids[i]);
             }
-            if (a === b && !insert.includes('\n')) expect(after.ids, at).toEqual(ids);
-            // A line break at the end of a line with text leaves it in place; at its start, it moves it down.
+            if (startLine === endLine && !insert.includes('\n')) expect(after.ids, at).toEqual(ids);
+            // A line break at the end of startLine line with text leaves it in place; at its start, it moves it down.
             if (deleteLength === 0 && insert === '\n') {
               const atEnd = offset > 0 && text[offset - 1] === 'x' && (offset === text.length || text[offset] === '\n');
               const atStart = (offset === 0 || text[offset - 1] === '\n') && text[offset] === 'x';
-              if (atEnd) expect(after.ids[a], at).toBe(ids[a]);
-              if (atStart) expect(after.ids[a + 1], at).toBe(ids[a]);
+              if (atEnd) expect(after.ids[startLine], at).toBe(ids[startLine]);
+              if (atStart) expect(after.ids[startLine + 1], at).toBe(ids[startLine]);
             }
           }
         }

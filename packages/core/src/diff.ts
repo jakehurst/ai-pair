@@ -5,8 +5,8 @@ import type { Change } from './ports';
 export const MAX_DIFF_LINES = 200;
 
 /** Returns a unified diff of the change, hunks only (the file is named in the event). */
-export function fileDiff(file: string, before: string, after: string): string {
-  const patch = createPatch(file, before, after, undefined, undefined, { context: 2 });
+function fileDiff(file: string, before: string, after: string): string {
+  const patch = createPatch(file, before, after, /* oldHeader= */ undefined, /* newHeader= */ undefined, { context: 2 });
   const firstHunk = patch.indexOf('\n@@');
   return firstHunk === -1 ? '' : patch.slice(firstHunk + 1).trimEnd();
 }

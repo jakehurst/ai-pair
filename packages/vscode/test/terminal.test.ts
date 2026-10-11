@@ -19,9 +19,9 @@ interface EndEvent {
   exitCode: number | undefined;
 }
 
-const fake = vi.hoisted(() => ({
-  terminals: [] as FakeTerminal[],
-  onEnd: new Set<(e: EndEvent) => void>(),
+const fake = vi.hoisted((): { terminals: FakeTerminal[]; onEnd: Set<(e: EndEvent) => void> } => ({
+  terminals: [],
+  onEnd: new Set(),
 }));
 
 const none = { dispose: () => {} };
@@ -34,7 +34,11 @@ vi.mock('vscode', () => ({
     onDidChangeTerminalShellIntegration: () => none,
     onDidEndTerminalShellExecution: (listener: (e: EndEvent) => void) => {
       fake.onEnd.add(listener);
-      return { dispose: () => fake.onEnd.delete(listener) };
+      return {
+        dispose: () => {
+          fake.onEnd.delete(listener);
+        },
+      };
     },
     createTerminal: () => {
       const executions: Execution[] = [];
@@ -80,7 +84,7 @@ async function runPastTheWait(terminals: InstanceType<typeof PairTerminals>, com
 
 it("RunReturns: doesn't wait for shell integration once playback is interrupted", async () => {
   const interrupted = AbortSignal.abort();
-  let outcome;
+  let outcome: unknown;
   void new PairTerminals().run('npm test', { cwd: '/', waitMs: WAIT_MS, signal: interrupted }).then((o) => {
     outcome = o;
   });

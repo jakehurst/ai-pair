@@ -76,13 +76,13 @@ it(
         const found = starts(text, find);
         for (let line = 1; line <= lineCount(text) + 1; line++) {
           const here = found.filter((o) => lineOf(text, o) === line);
-          const r = resolveSpan(text, { line, text: find });
+          const resolved = resolveSpan(text, { line, text: find });
           const at = `${JSON.stringify(text)} ${JSON.stringify(find)} line ${line}`;
-          expect(r.ok, at).toBe(here.length === 1);
-          if (r.ok) {
+          expect(resolved.ok, at).toBe(here.length === 1);
+          if (resolved.ok) {
             const [first] = here;
             if (first === undefined) throw new Error(`No match on the line: ${at}`);
-            expect(r.range, at).toEqual({ start: first, end: first + find.length });
+            expect(resolved.range, at).toEqual({ start: first, end: first + find.length });
           }
           for (const through of strings(2)) {
             const range = resolveSpan(text, { line, from: find, through });

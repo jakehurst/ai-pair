@@ -23,6 +23,7 @@ export interface Reading {
   minMs: number;
 }
 
+/** Every delay playback uses: the typing cadence, the reading rate, and the pauses around moves, reads, and commands. */
 export interface Timing {
   type: Cadence;
   /** `type_fast` plays the same cadence, with every delay multiplied by this. */
@@ -52,6 +53,7 @@ export interface Timing {
   glideMaxMs: number;
 }
 
+/** The timing in force when the settings give none. */
 export const defaultTiming: Timing = {
   type: {
     charMs: 55,
@@ -76,6 +78,7 @@ export const defaultTiming: Timing = {
   glideMaxMs: 1500,
 };
 
+/** The parts of `Timing` the `aiPair.timing` setting may replace. */
 export type TimingOverrides = Partial<Omit<Timing, 'type' | 'reading'>> & {
   type?: Partial<Cadence>;
   reading?: Partial<Reading>;

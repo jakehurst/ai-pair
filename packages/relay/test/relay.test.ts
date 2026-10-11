@@ -46,7 +46,13 @@ beforeEach(async () => {
   // Its own, since the last test's bridge may still see its socket close.
   const lines: string[] = [];
   traced = lines;
-  bridge = new Bridge(controller, { dir, workspaceFolders: () => ['/project'], trace: (line) => lines.push(line) });
+  bridge = new Bridge(controller, {
+    dir,
+    workspaceFolders: () => ['/project'],
+    trace: (line) => {
+      lines.push(line);
+    },
+  });
   await bridge.start();
 });
 
@@ -58,7 +64,7 @@ afterEach(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-/** `roots`: the harness's roots, as file URLs, if it has them. */
+/** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
 async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const server = createServer(new EditorLink(cwd, dir), 'THE GUIDE', cwd);
@@ -92,7 +98,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 type Content = Array<{ type: string; text: string }>;
 
 async function call(client: Client, name: string, args: Record<string, unknown> = {}, signal?: AbortSignal) {
-  const result = await client.callTool({ name, arguments: args }, undefined, { signal });
+  const result = await client.callTool({ name, arguments: args }, /* resultSchema= */ undefined, { signal });
   // The relay answers with text parts only.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const content = result.content as Content;
@@ -280,7 +286,11 @@ describe('relay', () => {
     const send = serverSide.send.bind(serverSide);
     let hold = false;
     const held: Array<Parameters<typeof send>> = [];
-    serverSide.send = (...args) => (hold ? (held.push(args), Promise.resolve()) : send(...args));
+    serverSide.send = (...args) => {
+      if (!hold) return send(...args);
+      held.push(args);
+      return Promise.resolve();
+    };
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(clientSide);
     clients.push(client);

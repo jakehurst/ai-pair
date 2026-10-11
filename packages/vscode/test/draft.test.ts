@@ -31,7 +31,14 @@ function open(panel: NarrationPanel) {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   panel.resolveWebviewView(view as never);
   receive?.({ type: 'ready' });
-  return { send: (m: object) => receive?.(m), dispose: () => dispose?.() };
+  return {
+    send: (m: object) => {
+      receive?.(m);
+    },
+    dispose: () => {
+      dispose?.();
+    },
+  };
 }
 
 function setup() {

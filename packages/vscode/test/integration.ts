@@ -81,6 +81,7 @@ function missing(e: unknown): boolean {
   return e instanceof Error && 'code' in e && e.code === 'invalid_arguments' && /doesn't exist/.test(e.message);
 }
 
+/** Runs every scenario inside VS Code; the extension host exits with its result. */
 export async function run(): Promise<void> {
   const ext = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
   assert.ok(ext, 'extension not found');
@@ -109,8 +110,8 @@ export async function run(): Promise<void> {
   assert.equal(await disk('ai-pair-demo/src/server.ts'), EXPECTED_SERVER, 'saved after each batch');
 
   // Changes the programmer didn't make are reported, without interrupting: a tool writing to another file...
-  const c = api.controller;
-  c.setSpeed(1);
+  const controller = api.controller;
+  controller.setSpeed(1);
   async function until(done: () => boolean): Promise<void> {
     for (let i = 0; i < 100 && !done(); i++) {
       await sleep(50);
@@ -119,9 +120,9 @@ export async function run(): Promise<void> {
   }
   fs.writeFileSync(file('other.txt'), 'before\n');
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
-  await c.start('other edits');
-  await c.step([{ move: { file: 'tool.txt', line: 1, to: 'line_end' } }, { type_fast: `${'x'.repeat(200)}${CURSOR_MARKER}` }]);
-  const queued = c.step([{ type: `abc${CURSOR_MARKER}` }]);
+  await controller.start('other edits');
+  await controller.step([{ move: { file: 'tool.txt', line: 1, to: 'line_end' } }, { type_fast: `${'x'.repeat(200)}${CURSOR_MARKER}` }]);
+  const queued = controller.step([{ type: `abc${CURSOR_MARKER}` }]);
   await sleep(1500);
   fs.writeFileSync(file('other.txt'), 'after\n');
   await until(() => other.getText() === 'after\n');
@@ -131,7 +132,7 @@ export async function run(): Promise<void> {
     ['completed'],
   );
   assert.deepEqual(first.events, [{ kind: 'edit', file: 'other.txt', diff: '@@ -1,1 +1,1 @@\n-before\n+after', by: 'other' }]);
-  const toolDone = await c.step([]);
+  const toolDone = await controller.step([]);
   assert.deepEqual(
     toolDone.batches.map((b) => b.status),
     ['completed'],
@@ -140,9 +141,9 @@ export async function run(): Promise<void> {
   // ...and a save participant, trimming what the agent typed when its batch is saved: its change isn't
   // the programmer's, and the batch queued behind it, planned against the untrimmed text, is discarded.
   await vscode.workspace.getConfiguration('files').update('trimTrailingWhitespace', true, vscode.ConfigurationTarget.Global);
-  await c.step([{ type: `\nend   ${CURSOR_MARKER}` }]);
-  const trimmed = await c.step([{ type: `!${CURSOR_MARKER}` }]);
-  const trimDone = await c.step([]);
+  await controller.step([{ type: `\nend   ${CURSOR_MARKER}` }]);
+  const trimmed = await controller.step([{ type: `!${CURSOR_MARKER}` }]);
+  const trimDone = await controller.step([]);
   await vscode.workspace.getConfiguration('files').update('trimTrailingWhitespace', undefined, vscode.ConfigurationTarget.Global);
   assert.deepEqual(
     [...trimmed.batches, ...trimDone.batches].map((b) => b.status),
@@ -153,31 +154,31 @@ export async function run(): Promise<void> {
     ['tool.txt other'],
   );
   assert.ok((await buffer('tool.txt')).endsWith('abc\nend'));
-  await c.end();
+  await controller.end();
   console.log('RightAuthor, ChangesHandled: changes by others are reported as theirs');
   // From here, nothing is timed against the playback until the glide tests: play fast.
-  c.setSpeed(10);
+  controller.setSpeed(10);
 
   // A keystroke just before the agent saves is the programmer's, even though its change event is
   // handled while the save runs (#40). The test's own edit stands in for the keystroke.
   fs.writeFileSync(file('race.txt'), 'a\n');
   const race = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('race.txt')));
-  await c.start('save race');
+  await controller.start('save race');
   await race.edit((b) => {
     b.insert(new vscode.Position(0, 1), 'b');
   });
-  await c.listen();
+  await controller.listen();
   const keystroke = race.edit((b) => {
     b.insert(new vscode.Position(0, 2), 'c');
   });
   await api.editor.save(file('race.txt'));
   await keystroke;
-  const raced = await c.listen();
+  const raced = await controller.listen();
   assert.deepEqual(
     raced.events.map((e) => e.kind === 'edit' && `${e.file} ${e.by}`),
     ['race.txt programmer'],
   );
-  await c.end();
+  await controller.end();
   console.log("RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's");
 
   // Our own move to another file doesn't pause playback, however long VS Code takes to show it (#56).
@@ -185,48 +186,49 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file('follow-a.txt'), 'a\n');
   fs.writeFileSync(file('follow-b.txt'), 'b\n');
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('follow-a.txt')));
-  await c.start('follow');
-  await c.read('follow-a.txt');
-  await c.step([{ move: { file: 'follow-a.txt', line: 1, to: 'line_end' } }]);
+  await controller.start('follow');
+  await controller.read('follow-a.txt');
+  await controller.step([{ move: { file: 'follow-a.txt', line: 1, to: 'line_end' } }]);
   assert.deepEqual(
-    (await c.step([])).batches.map((b) => b.status),
+    (await controller.step([])).batches.map((b) => b.status),
     ['completed'],
   );
-  await c.read('follow-b.txt');
+  await controller.read('follow-b.txt');
+  const selfNavMs = api.editor.selfNavMs;
   api.editor.selfNavMs = 0;
-  await c.step([{ move: { file: 'follow-b.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
-  const moved = await c.step([]);
-  api.editor.selfNavMs = 400;
-  assert.equal(c.isPaused, false, 'paused by our own move');
+  await controller.step([{ move: { file: 'follow-b.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
+  const moved = await controller.step([]);
+  api.editor.selfNavMs = selfNavMs;
+  assert.equal(controller.isPaused, false, 'paused by our own move');
   assert.deepEqual(
     moved.batches.map((b) => b.status),
     ['completed'],
   );
   assert.equal(await buffer('follow-b.txt'), 'bx\n');
-  await c.end();
+  await controller.end();
   console.log("NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause");
 
   // An action without `file` acts in the file its batch named, not the cursor's (#58).
   fs.writeFileSync(file('named-a.txt'), 'a\n');
   fs.writeFileSync(file('named-b.txt'), 'b\nsecond\n');
-  await c.start('named file');
-  await c.read('named-a.txt');
-  await c.read('named-b.txt');
-  await c.step([{ move: { file: 'named-a.txt', line: 1, to: 'line_end' } }]);
-  const twice = await c.step([{ point: { file: 'named-b.txt', line: 1, text: 'b' } }, { point: { line: 2, text: 'second' } }]);
+  await controller.start('named file');
+  await controller.read('named-a.txt');
+  await controller.read('named-b.txt');
+  await controller.step([{ move: { file: 'named-a.txt', line: 1, to: 'line_end' } }]);
+  const twice = await controller.step([{ point: { file: 'named-b.txt', line: 1, text: 'b' } }, { point: { line: 2, text: 'second' } }]);
   assert.equal(twice.rejected, undefined);
-  const pointed = await c.step([]);
+  const pointed = await controller.step([]);
   assert.deepEqual(
     pointed.batches.map((b) => b.status),
     ['completed'],
   );
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, file('named-b.txt'));
-  const outside = await c.step([{ point: { file: 'named-b.txt', line: 1, text: 'b' } }, { type: `y${CURSOR_MARKER}` }]);
+  const outside = await controller.step([{ point: { file: 'named-b.txt', line: 1, text: 'b' } }, { type: `y${CURSOR_MARKER}` }]);
   assert.equal(outside.rejected?.error.kind, 'invalid_action');
-  await c.step([]);
+  await controller.step([]);
   assert.equal(await buffer('named-a.txt'), 'a\n');
   assert.equal(await buffer('named-b.txt'), 'b\nsecond\n');
-  await c.end();
+  await controller.end();
   console.log('an action without file acts in the file its batch named');
 
   // A report the agent cancelled as it returned is handed back before the agent's next call goes out,
@@ -244,7 +246,7 @@ export async function run(): Promise<void> {
   const cancelListen = new AbortController();
   void relayed('listen', {}, cancelListen.signal);
   await sleep(300);
-  c.userMessage('stop');
+  controller.userMessage('stop');
   cancelListen.abort();
   const restored = await relayed('step', {
     actions: [{ move: { file: 'return.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }],
@@ -262,8 +264,8 @@ export async function run(): Promise<void> {
   const cancelLast = new AbortController();
   void relayed('listen', {}, cancelLast.signal);
   await sleep(300);
-  c.userMessage('one more thing');
-  c.endSession();
+  controller.userMessage('one more thing');
+  controller.endSession();
   cancelLast.abort();
   const ended = await relayed('listen', {});
   assert.deepEqual(
@@ -280,32 +282,32 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file('reload.txt'), '1\n2\n3\n4\n5\n6\n');
   const reloading = await vscode.workspace.openTextDocument(file('reload.txt'));
   await vscode.window.showTextDocument(reloading);
-  await c.start('reload');
-  await c.read('reload.txt');
-  await c.step([{ select: { file: 'reload.txt', line: 3, text: '3' } }]);
-  await c.step([]);
+  await controller.start('reload');
+  await controller.read('reload.txt');
+  await controller.step([{ select: { file: 'reload.txt', line: 3, text: '3' } }]);
+  await controller.step([]);
   fs.writeFileSync(file('reload.txt'), '1\nX\n3\n4\nY\n6\n');
   await until(() => reloading.getText() === '1\nX\n3\n4\nY\n6\n');
-  const reloaded = await c.step([{ point: { file: 'reload.txt', line: 4, text: '4' } }, { delete: true }]);
+  const reloaded = await controller.step([{ point: { file: 'reload.txt', line: 4, text: '4' } }, { delete: true }]);
   assert.equal(reloaded.rejected, undefined);
-  await c.step([]);
+  await controller.step([]);
   assert.equal(await buffer('reload.txt'), '1\nX\n\n4\nY\n6\n');
-  await c.end();
+  await controller.end();
   console.log('a file changed on disk keeps the selection on its text');
 
   // A file that doesn't exist is reported as missing, and a move creates it (#89). One deleted on
   // disk while VS Code holds a document for it, as Claude Code's file tools leave one, isn't read with
   // its old text, and a move creates it empty (#88). Unsaved text for a deleted file is kept.
-  await c.start('missing files');
-  await assert.rejects(c.read('missing-89.txt'), missing);
+  await controller.start('missing files');
+  await assert.rejects(controller.read('missing-89.txt'), missing);
   fs.writeFileSync(file('stale-88.txt'), 'old\n');
   const stale = await vscode.workspace.openTextDocument(file('stale-88.txt'));
   assert.equal(stale.getText(), 'old\n');
   fs.unlinkSync(file('stale-88.txt'));
-  await assert.rejects(c.read('stale-88.txt'), missing);
-  const recreated = await c.step([{ move: { file: 'stale-88.txt', line: 1, to: 'line_end' } }, { type: `new${CURSOR_MARKER}` }]);
+  await assert.rejects(controller.read('stale-88.txt'), missing);
+  const recreated = await controller.step([{ move: { file: 'stale-88.txt', line: 1, to: 'line_end' } }, { type: `new${CURSOR_MARKER}` }]);
   assert.equal(recreated.rejected, undefined);
-  const played = (await c.step([])).batches;
+  const played = (await controller.step([])).batches;
   assert.deepEqual(
     played.map((b) => b.status),
     ['completed'],
@@ -317,9 +319,9 @@ export async function run(): Promise<void> {
   const unsaved = await vscode.workspace.openTextDocument(file('unsaved-88.txt'));
   await insertAsProgrammer(unsaved.uri, new vscode.Position(0, 1), 'b');
   fs.unlinkSync(file('unsaved-88.txt'));
-  assert.deepEqual((await c.read('unsaved-88.txt')).lines, [{ number: 1, text: 'ab' }]);
+  assert.deepEqual((await controller.read('unsaved-88.txt')).lines, [{ number: 1, text: 'ab' }]);
   await unsaved.save();
-  await c.end();
+  await controller.end();
   console.log(
     'NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty',
   );
@@ -330,13 +332,13 @@ export async function run(): Promise<void> {
   const savedDoc = await vscode.workspace.openTextDocument(file('outside-saved.txt'));
   // The watcher reports that write late; outside a session it isn't marked.
   await sleep(2000);
-  await c.start('outside');
+  await controller.start('outside');
   fs.writeFileSync(file('outside-written.txt'), 'by another tool\n');
   await until(() => api.outside.isMarked(file('outside-written.txt')));
   await insertAsProgrammer(savedDoc.uri, new vscode.Position(0, 1), 'b');
   await savedDoc.save();
-  await c.step([{ move: { file: 'outside-new.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
-  await c.step([]);
+  await controller.step([{ move: { file: 'outside-new.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
+  await controller.step([]);
   // Past the group's settling, and the watcher's own delay.
   await sleep(2000);
   assert.equal(api.outside.isMarked(file('outside-saved.txt')), false, 'a save was marked');
@@ -348,7 +350,7 @@ export async function run(): Promise<void> {
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('outside-opened.txt')));
   await sleep(2000);
   assert.equal(api.outside.isMarked(file('outside-opened.txt')), false, 'a file seen as soon as it was written was marked');
-  await c.end();
+  await controller.end();
   console.log("a file written outside is marked until it's opened; saves and new files aren't");
 
   // During the programmer's turn, a listen made after they resume typing waits for their next pause
@@ -356,45 +358,45 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file('navigator.txt'), 'abc\n');
   const navigator = await vscode.workspace.openTextDocument(file('navigator.txt'));
   await vscode.window.showTextDocument(navigator);
-  await c.start('navigator');
-  c.takeTurn();
-  await c.listen();
+  await controller.start('navigator');
+  controller.takeTurn();
+  await controller.listen();
   await insertAsProgrammer(navigator.uri, new vscode.Position(0, 3), 'd');
   await sleep(3500);
   await insertAsProgrammer(navigator.uri, new vscode.Position(0, 4), 'e');
   const listenedAt = Date.now();
-  const afterPause = await c.listen();
+  const afterPause = await controller.listen();
   const waited = Date.now() - listenedAt;
   assert.ok(waited > 2000, `listen returned ${waited} ms after the programmer typed`);
   assert.deepEqual(
     afterPause.events.map((e) => e.kind === 'edit' && e.diff.includes('+abcde')),
     [true],
   );
-  await c.end();
+  await controller.end();
   console.log(`a listen during the programmer's typing waited ${waited} ms for their pause`);
 
   // An edit the programmer undid still comes with the batches it discarded (specs/EditEvents.tla).
   // The programmer's edit must land while the agent is still typing: real speed.
-  c.setSpeed(1);
+  controller.setSpeed(1);
   fs.writeFileSync(file('undone.txt'), 'abc\n');
   const undone = await vscode.workspace.openTextDocument(file('undone.txt'));
   await vscode.window.showTextDocument(undone);
-  await c.start('undone');
-  await c.read('undone.txt');
+  await controller.start('undone');
+  await controller.read('undone.txt');
   // The first step returns at once; nothing waits for a report while the programmer types and undoes.
-  await c.step([{ move: { file: 'undone.txt', line: 1, to: 'line_end' } }, { type_fast: `${'x'.repeat(100)}${CURSOR_MARKER}` }]);
+  await controller.step([{ move: { file: 'undone.txt', line: 1, to: 'line_end' } }, { type_fast: `${'x'.repeat(100)}${CURSOR_MARKER}` }]);
   await sleep(800);
   await insertAsProgrammer(undone.uri, new vscode.Position(0, 0), '#');
   const undo = new vscode.WorkspaceEdit();
   undo.delete(undone.uri, new vscode.Range(0, 0, 0, 1));
   await vscode.workspace.applyEdit(undo);
-  const discardedReport = await c.step([]);
+  const discardedReport = await controller.step([]);
   assert.ok(
     discardedReport.batches.some((b) => b.status !== 'completed'),
     JSON.stringify(discardedReport.batches),
   );
   assert.deepEqual(discardedReport.events, [{ kind: 'edit', file: 'undone.txt', diff: '', by: 'programmer' }]);
-  await c.end();
+  await controller.end();
   console.log('an edit the programmer undid is reported with the batches it discarded');
 
   // A scroll a command cut short goes on once the command is done (specs/Scroll.tla). The moves
@@ -405,17 +407,17 @@ export async function run(): Promise<void> {
   await ai.update('timing', { glideMs: LONG_GLIDE_MS, glideMaxMs: LONG_GLIDE_MS }, vscode.ConfigurationTarget.Global);
   fs.writeFileSync(file('glide.txt'), Array.from({ length: 300 }, (_, i) => `line ${i + 1}\n`).join(''));
   const glide = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('glide.txt')));
-  c.setSpeed(20);
-  await c.start('glide');
-  await c.read('glide.txt');
+  controller.setSpeed(20);
+  await controller.start('glide');
+  await controller.read('glide.txt');
   for (const line of [150, 1]) {
-    await c.step([{ move: { file: 'glide.txt', line, to: 'line_end' } }]);
-    await c.step([]);
+    await controller.step([{ move: { file: 'glide.txt', line, to: 'line_end' } }]);
+    await controller.step([]);
     await sleep(800);
   }
   assert.equal(glide.visibleRanges[0]?.start.line, 0);
-  await c.step([{ move: { file: 'glide.txt', line: 250, to: 'line_end' } }, { run: 'sleep 1' }]);
-  const ran = await c.step([]);
+  await controller.step([{ move: { file: 'glide.txt', line: 250, to: 'line_end' } }, { run: 'sleep 1' }]);
+  const ran = await controller.step([]);
   assert.deepEqual(
     ran.batches.map((b) => b.status),
     ['completed'],
@@ -426,121 +428,121 @@ export async function run(): Promise<void> {
     glide.visibleRanges.some((r) => r.start.line <= 249 && 249 <= r.end.line),
     `line 250 not in view: ${shown.join(', ')}`,
   );
-  c.setSpeed(1);
-  await c.end();
+  controller.setSpeed(1);
+  await controller.end();
   await ai.update('confirmCommands', undefined, vscode.ConfigurationTarget.Global);
   console.log(`Settles: a scroll a command cut short went on to line 250: ${shown.join(', ')}`);
 
-  // The follow scroll's glide takes its time from the playback speed (#123): at SLOW, a glide of
-  // LONG_GLIDE_MS takes a second, part way at SAMPLE_MS; at FAST it takes 100 ms, done by then.
-  const SLOW = 10;
-  const FAST = 100;
-  const SAMPLE_MS = 300;
+  // The follow scroll's glide takes its time from the playback speed (#123): at `slow`, a glide of
+  // LONG_GLIDE_MS takes a second, part way at `sampleMs`; at `fast` it takes 100 ms, done by then.
+  const slow = 10;
+  const fast = 100;
+  const sampleMs = 300;
   function top(): number {
     return glide.visibleRanges[0]?.start.line ?? 0;
   }
   async function glideTo(line: number, speed: number): Promise<number> {
-    c.setSpeed(speed);
-    await c.step([{ move: { file: 'glide.txt', line, to: 'line_end' } }]);
-    await c.step([]);
-    await sleep(SAMPLE_MS);
+    controller.setSpeed(speed);
+    await controller.step([{ move: { file: 'glide.txt', line, to: 'line_end' } }]);
+    await controller.step([]);
+    await sleep(sampleMs);
     return top();
   }
-  await c.start('glide speed');
-  await c.read('glide.txt');
-  assert.equal(await glideTo(1, FAST), 0);
-  const midway = await glideTo(250, SLOW);
-  await sleep(LONG_GLIDE_MS / SLOW);
+  await controller.start('glide speed');
+  await controller.read('glide.txt');
+  assert.equal(await glideTo(1, fast), 0);
+  const midway = await glideTo(250, slow);
+  await sleep(LONG_GLIDE_MS / slow);
   const landed = top();
   assert.ok(midway > 0 && midway < landed, `slow glide not part way: ${midway} of ${landed}`);
-  assert.equal(await glideTo(1, FAST), 0);
-  assert.equal(await glideTo(250, FAST), landed);
-  c.setSpeed(1);
-  await c.end();
+  assert.equal(await glideTo(1, fast), 0);
+  assert.equal(await glideTo(250, fast), landed);
+  controller.setSpeed(1);
+  await controller.end();
   await ai.update('timing', undefined, vscode.ConfigurationTarget.Global);
   console.log(`a glide took its time from the speed: part way at line ${midway + 1} of ${landed + 1}`);
 
   // An interrupt while a `run` saves its files stops it, without waiting to ask the programmer.
   fs.writeFileSync(file('asked.txt'), 'a\n');
-  await c.start('asked');
-  await c.read('asked.txt');
+  await controller.start('asked');
+  await controller.read('asked.txt');
   const interrupting = vscode.workspace.onWillSaveTextDocument(() => {
-    c.userInterrupt();
+    controller.userInterrupt();
   });
-  c.setSpeed(20);
-  await c.step([{ move: { file: 'asked.txt', line: 1, to: 'line_end' } }, { type: `b${CURSOR_MARKER}` }, { run: 'true' }]);
-  const asked = await Promise.race([c.listen(), sleep(3000).then(() => undefined)]);
+  controller.setSpeed(20);
+  await controller.step([{ move: { file: 'asked.txt', line: 1, to: 'line_end' } }, { type: `b${CURSOR_MARKER}` }, { run: 'true' }]);
+  const asked = await Promise.race([controller.listen(), sleep(3000).then(() => undefined)]);
   interrupting.dispose();
   assert.ok(asked, 'listen is still waiting');
   assert.deepEqual(
     asked.batches.map((b) => b.status),
     ['interrupted'],
   );
-  c.setSpeed(10);
-  await c.end();
+  controller.setSpeed(10);
+  await controller.end();
   console.log('an interrupt while a run saves stops it, without asking');
 
   // A batch interrupted after a type with nothing to type changed nothing, so it's discarded (specs/Actions.tla).
   fs.writeFileSync(file('nothing.txt'), 'a\n');
-  await c.start('nothing');
-  await c.read('nothing.txt');
-  await c.step([{ move: { file: 'nothing.txt', line: 1, to: 'line_end' } }]);
-  await c.step([]);
+  await controller.start('nothing');
+  await controller.read('nothing.txt');
+  await controller.step([{ move: { file: 'nothing.txt', line: 1, to: 'line_end' } }]);
+  await controller.step([]);
   const eol = api.editor.eol.bind(api.editor);
   let eols = 0;
   api.editor.eol = async (f) => {
-    if (++eols === 2) c.userInterrupt();
+    if (++eols === 2) controller.userInterrupt();
     return eol(f);
   };
-  await c.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
-  const untyped = await c.listen();
+  await controller.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
+  const untyped = await controller.listen();
   api.editor.eol = eol;
   assert.deepEqual(
     untyped.batches.map((b) => b.status),
     ['discarded'],
   );
-  await c.end();
+  await controller.end();
   console.log('a batch interrupted after a type with nothing to type is discarded');
 
   // A line a tool inserts, read while a queued batch edits other files, is accepted (specs/Rehearsal.tla).
   fs.writeFileSync(file('inserted.txt'), 'hello\n');
   const inserted = await vscode.workspace.openTextDocument(file('inserted.txt'));
   await vscode.window.showTextDocument(inserted);
-  await c.start('inserted');
-  await c.read('inserted.txt');
-  c.setReadingSpeed(1);
-  await c.step([{ say: Array.from({ length: 25 }, (_, i) => `word${i}`).join(' ') }]);
+  await controller.start('inserted');
+  await controller.read('inserted.txt');
+  controller.setReadingSpeed(1);
+  await controller.step([{ say: Array.from({ length: 25 }, (_, i) => `word${i}`).join(' ') }]);
   fs.writeFileSync(file('inserted.txt'), 'XX\nhello\n');
   await until(() => inserted.getText() === 'XX\nhello\n');
   assert.deepEqual(
-    (await c.read('inserted.txt')).lines.map((l) => l.text),
+    (await controller.read('inserted.txt')).lines.map((l) => l.text),
     ['XX', 'hello'],
   );
-  const movedThere = await c.step([{ move: { file: 'inserted.txt', line: 1, to: 'line_end' } }]);
+  const movedThere = await controller.step([{ move: { file: 'inserted.txt', line: 1, to: 'line_end' } }]);
   assert.equal(movedThere.rejected, undefined, JSON.stringify(movedThere.rejected));
-  await c.step([]);
-  c.setReadingSpeed(10);
-  await c.end();
+  await controller.step([]);
+  controller.setReadingSpeed(10);
+  await controller.end();
   console.log('a line a tool inserted, read while a queued batch edits other files, is accepted');
 
   // A session the agent disconnects from waits, suspended, saved in the workspace's storage; one
   // brought back from it, as after a reload, resumes on a start from its folder (#25, specs/Resume.tla).
   fs.writeFileSync(file('kept.txt'), 'one\ntwo\n');
-  await c.start('kept');
-  await c.read('kept.txt');
-  await c.step([{ move: { file: 'kept.txt', line: 2, to: 'line_end' } }]);
-  await c.step([]);
-  c.disconnect();
-  assert.equal(c.isSuspended, true);
+  await controller.start('kept');
+  await controller.read('kept.txt');
+  await controller.step([{ move: { file: 'kept.txt', line: 2, to: 'line_end' } }]);
+  await controller.step([]);
+  controller.disconnect();
+  assert.equal(controller.isSuspended, true);
   await sleep(500);
   const kept = api.saved();
   assert.ok(kept?.scene.cursor, "the suspended session wasn't saved");
-  c.endSession();
-  c.revive(kept);
-  const revived = await c.start('kept');
+  controller.endSession();
+  controller.revive(kept);
+  const revived = await controller.start('kept');
   assert.equal(revived.resumed, true);
   assert.match(revived.cursor?.lines.find((l) => l.text.includes(CURSOR_MARKER))?.text ?? '', /two/);
-  await c.end();
+  await controller.end();
   console.log('a session saved while suspended resumes, with its cursor');
 
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
@@ -548,36 +550,36 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file('..cache/x.txt'), 'a\n');
   const dotted = await vscode.workspace.openTextDocument(file('..cache/x.txt'));
   await vscode.window.showTextDocument(dotted);
-  await c.start('dotted');
+  await controller.start('dotted');
   fs.writeFileSync(file('..cache/x.txt'), 'b\n');
   await until(() => dotted.getText() === 'b\n');
-  const dottedReport = await c.listen();
+  const dottedReport = await controller.listen();
   assert.deepEqual(
     dottedReport.events.map((e) => e.kind === 'edit' && e.file),
     ['..cache/x.txt'],
   );
-  await c.end();
+  await controller.end();
   console.log('a change in ..cache/ is reported, by its path in the workspace');
 
   // Finding short text on a line of a long file, where it matches on every line, takes no time (#2).
   fs.writeFileSync(file('long.ts'), '  foo(bar(baz(1), 2), 3);\n'.repeat(40_000));
-  await c.start('long');
-  await c.read('long.ts', 39_999, 40_000);
+  await controller.start('long');
+  await controller.read('long.ts', 39_999, 40_000);
   const finding = Date.now();
-  const found = await c.step([{ point: { file: 'long.ts', line: 40_000, text: 'foo(' } }]);
+  const found = await controller.step([{ point: { file: 'long.ts', line: 40_000, text: 'foo(' } }]);
   const findMs = Date.now() - finding;
   assert.equal(found.rejected, undefined);
   assert.ok(findMs < 2000, `the step took ${findMs} ms`);
-  await c.end();
+  await controller.end();
   console.log(`a point on line 40,000 was rehearsed in ${findMs} ms`);
 
   // The panel's page reloading takes its draft with it, and the draft's pause (#69). The test can't
   // type into the page, so it adds the pause the page's `draft` message adds.
   await vscode.commands.executeCommand('aiPair.narration.focus');
   await sleep(1000);
-  c.pause('reply');
+  controller.pause('reply');
   await vscode.commands.executeCommand('workbench.action.webview.reloadWebviewAction');
-  await until(() => !c.isPaused);
+  await until(() => !controller.isPaused);
   console.log("a reloaded panel ends its draft's pause");
 
   // The window's discovery file, rewritten on focus, is never half written for a relay reading it (#72).
@@ -590,7 +592,9 @@ export async function run(): Promise<void> {
     parentPort.postMessage({ reads, broken })`,
     { eval: true, workerData: { file: api.bridge.file, stop } },
   );
-  const counted = new Promise<{ reads: number; broken: number }>((r) => reader.once('message', r));
+  const counted = new Promise<{ reads: number; broken: number }>((r) => {
+    reader.once('message', r);
+  });
   await sleep(100);
   for (let i = 0; i < 2000; i++) {
     api.bridge.focused();
@@ -605,10 +609,10 @@ export async function run(): Promise<void> {
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = 'abcdefghijklmnopqrstuvwxyz';
-  c.setSpeed(1);
-  await c.start('interrupt test');
-  await c.step([{ move: { file: 'scratch.ts', line: 1, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
-  const pending = c.step([{ type: `!${CURSOR_MARKER}` }]);
+  controller.setSpeed(1);
+  await controller.start('interrupt test');
+  await controller.step([{ move: { file: 'scratch.ts', line: 1, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
+  const pending = controller.step([{ type: `!${CURSOR_MARKER}` }]);
   // Past the pauses around moving into a new file (~1 s), and into the typing.
   await sleep(1500);
   const doc = await vscode.workspace.openTextDocument(file('scratch.ts'));
@@ -633,7 +637,7 @@ export async function run(): Promise<void> {
     ],
     end: { final_newline: false },
   });
-  await c.end();
+  await controller.end();
   console.log(`interrupted after typing ${JSON.stringify(typed)}`);
 
   // An agent connecting the way a harness does: the launcher, over stdio, from the project folder.
@@ -666,7 +670,7 @@ export async function run(): Promise<void> {
     assert.ok(part, `${name} answered with no text`);
     return part.text;
   }
-  c.setSpeed(20);
+  controller.setSpeed(20);
   // The project's guide reaches the agent with the pairing guide (#23).
   fs.mkdirSync(file('.ai-pair'), { recursive: true });
   fs.writeFileSync(file('.ai-pair/GUIDE.md'), 'Name every test after the issue it covers.\n');
@@ -687,7 +691,7 @@ export async function run(): Promise<void> {
   const cancelAfter = new AbortController();
   const taken = agent.callTool({ name: 'listen', arguments: {} }, undefined, { signal: cancelAfter.signal });
   await sleep(300);
-  c.userMessage('seen once');
+  controller.userMessage('seen once');
   // The relay answers with text parts only.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const takenFirst = ((await taken).content as Array<{ text: string }>)[0];
@@ -719,7 +723,7 @@ export async function run(): Promise<void> {
   two.abort();
   // The cancels reach the relay, and its returns the editor, before anything else happens.
   await sleep(300);
-  c.endSession();
+  controller.endSession();
   const backs = [await toolAll('listen'), await toolAll('listen')];
   for (const [i, back] of backs.entries()) {
     assert.match(back, /may repeat/);

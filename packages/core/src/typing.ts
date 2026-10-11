@@ -29,12 +29,12 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   const chunks: Chunk[] = [];
   let pause = 0;
   let previous: string | undefined;
-  let i = 0;
+  let at = 0;
 
   // specs/Typing.tla, `IndentOf`.
   function takeIndent(): string {
     let indent = '';
-    for (let ch = chars[i]; ch !== undefined && isIndent(ch); ch = chars[++i]) {
+    for (let ch = chars[at]; ch !== undefined && isIndent(ch); ch = chars[++at]) {
       indent += ch;
     }
     return indent;
@@ -50,8 +50,8 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   }
 
   // specs/Typing.tla, `Loop`.
-  for (let ch = chars[i]; ch !== undefined; ch = chars[i]) {
-    i++;
+  for (let ch = chars[at]; ch !== undefined; ch = chars[at]) {
+    at++;
     const wordStart = previous !== undefined && !WORD.test(previous) && WORD.test(ch);
     const delay = cadence.charMs * (1 + (random() * 2 - 1) * cadence.jitter) + (wordStart ? cadence.wordStartMs : 0) + pause;
     if (ch === '\n') {

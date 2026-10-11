@@ -4,6 +4,7 @@
 
 import * as nodePath from 'node:path';
 
+/** How a platform compares paths: whether case matters, and its separator. */
 export interface PathStyle {
   ignoreCase: boolean;
   sep: string;

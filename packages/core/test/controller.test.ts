@@ -1011,7 +1011,8 @@ describe('reports', () => {
     await controller.read('a.ts');
     await controller.read('b.ts');
     await until(controller.step([{ select: { file: 'a.ts', line: 1, text: 'a' } }]));
-    for (const edit of [{ type: `y${CURSOR_MARKER}` }, { delete: true }] as Action[]) {
+    const edits: Action[] = [{ type: `y${CURSOR_MARKER}` }, { delete: true }];
+    for (const edit of edits) {
       const report = await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, edit]));
       expect(report.rejected).toMatchObject({ index: 2, error: { kind: 'invalid_action', message: containing('b.ts') } });
     }
@@ -1586,7 +1587,9 @@ describe('sessions', () => {
     await expect(controller.step([])).rejects.toMatchObject({ code: 'no_session' });
     // `read` too rejects, rather than throwing before it returns (#12).
     let reading: Promise<unknown> | undefined;
-    expect(() => (reading = controller.read('a.ts'))).not.toThrow();
+    expect(() => {
+      reading = controller.read('a.ts');
+    }).not.toThrow();
     await expect(reading).rejects.toMatchObject({ code: 'no_session' });
     await controller.start();
     await expect(controller.start()).rejects.toMatchObject({ code: 'session_active' });
@@ -1629,8 +1632,12 @@ describe('sessions', () => {
       ],
       end: { final_newline: true },
     });
-    expect(await controller.read('b.ts', 1, 1)).toEqual({ file: 'b.ts', dirty: false, lines: [{ number: 1, text: 'a' }] });
-    expect((await controller.read('b.ts', 2)).end).toEqual({ final_newline: false });
+    expect(await controller.read('b.ts', /* fromLine= */ 1, /* toLine= */ 1)).toEqual({
+      file: 'b.ts',
+      dirty: false,
+      lines: [{ number: 1, text: 'a' }],
+    });
+    expect((await controller.read('b.ts', /* fromLine= */ 2)).end).toEqual({ final_newline: false });
     expect(await controller.read('c.ts')).toEqual({ file: 'c.ts', dirty: false, lines: [], end: { final_newline: true } });
   });
 
@@ -1663,7 +1670,7 @@ describe('sessions', () => {
     const listening = controller.listen();
     await advance(1000);
     editor.files.set(file, 'XXabc');
-    editor.controller.userEdit(file, 'abc', 'XXabc', [{ offset: 0, deleteLength: 0, text: 'XX' }]);
+    editor.controller?.userEdit(file, 'abc', 'XXabc', [{ offset: 0, deleteLength: 0, text: 'XX' }]);
     const report = await until(listening);
     expect(editor.shown).toEqual([file]);
     expect(editor.cursor).toMatchObject({ file, offset: 5 });
@@ -1835,7 +1842,7 @@ describe('run', () => {
     await controller.step([{ run: 'npm start', wait: 2 }]);
     await until(controller.step([]));
     function phases(): Array<[string, number | undefined]> {
-      return panel.events.flatMap((e) => (e.type === 'run' ? [[e.phase, e.exitCode] as [string, number | undefined]] : []));
+      return panel.events.flatMap((e): Array<[string, number | undefined]> => (e.type === 'run' ? [[e.phase, e.exitCode]] : []));
     }
     expect(phases()).toEqual([
       ['running', undefined],
@@ -1937,7 +1944,7 @@ describe('run', () => {
     await controller.start();
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `y${CURSOR_MARKER}` }, { run: 'npm test' }]);
-    const report = await until(controller.listen(), 1000);
+    const report = await until(controller.listen(), /* maxMs= */ 1000);
     expect(report.batches).toMatchObject([{ id: 1, status: 'interrupted' }]);
     expect(editor.commands).toEqual([]);
   });
@@ -2088,12 +2095,12 @@ describe('changes by others, while batches are queued', () => {
 });
 
 describe('listen grace (specs/ListenGrace.tla)', () => {
-  const MAX_BLOCK_MS = 1000;
-  const GRACE_MS = 5000;
-  const ABSENT_MS = 20_000;
+  const maxBlockMs = 1000;
+  const graceMs = 5000;
+  const absentMs = 20_000;
 
   async function timedOut() {
-    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS });
+    const { editor, controller } = setup({}, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs });
     await controller.start();
     const report = await until(controller.listen());
     expect(report).toMatchObject({ waiting: true, batches: [], events: [] });
@@ -2103,18 +2110,18 @@ describe('listen grace (specs/ListenGrace.tla)', () => {
   it('NoFlicker: keeps listening after a listen times out with nothing to report', async () => {
     const { editor } = await timedOut();
     expect(editor.state).toBe('listening');
-    await advance(GRACE_MS / 2);
+    await advance(graceMs / 2);
     expect(editor.state).toBe('listening');
   });
 
   it('GraceEnds: shows thinking once the grace runs out without a call', async () => {
     const { editor } = await timedOut();
-    await advance(GRACE_MS);
+    await advance(graceMs);
     expect(editor.state).toBe('thinking');
   });
 
   it('NoFalseYourMove: shows thinking when a listen times out with a batch to report', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS });
+    const { editor, controller } = setup({ 'a.ts': '' }, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs });
     await controller.start();
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
     const report = await until(controller.listen());
@@ -2135,18 +2142,18 @@ describe('listen grace (specs/ListenGrace.tla)', () => {
   });
 
   it("AbsentShows: says the agent isn't listening once no call has been open for absentMs (#149)", async () => {
-    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS, absentMs: ABSENT_MS });
+    const { editor, controller } = setup({}, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs, absentMs: absentMs });
     await controller.start();
-    await advance(ABSENT_MS - 1);
+    await advance(absentMs - 1);
     expect(editor.state).toBe('thinking');
     await advance(1);
     expect(editor.state).toBe('absent');
   });
 
   it("AbsentWithoutCall: stops saying the agent isn't listening as soon as it calls (#149)", async () => {
-    const { editor, controller } = setup({}, { maxBlockMs: MAX_BLOCK_MS, listenGraceMs: GRACE_MS, absentMs: ABSENT_MS });
+    const { editor, controller } = setup({}, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs, absentMs: absentMs });
     await controller.start();
-    await advance(ABSENT_MS);
+    await advance(absentMs);
     expect(editor.state).toBe('absent');
     const listening = controller.listen();
     expect(editor.state).toBe('thinking');

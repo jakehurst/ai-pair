@@ -24,6 +24,7 @@ export interface Host {
   exec(file: string, args: string[]): Promise<void>;
 }
 
+/** An agent CLI the extension can connect to: how to detect it, and how to register the relay with it. */
 export interface Agent {
   id: string;
   label: string;
@@ -279,8 +280,7 @@ function tomlString(s: string): string {
   return JSON.stringify(s);
 }
 
-// ---- The agents ------------------------------------------------------------
-
+/** The agents the extension can set up, in the order the picker shows them. */
 export const AGENTS: Agent[] = [
   {
     id: 'claude',

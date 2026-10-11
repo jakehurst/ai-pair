@@ -4,11 +4,13 @@
 import { CURSOR_MARKER, type Candidate, type ErrorKind } from '@ai-pair/protocol';
 import { lineSpan, lineText, position } from './text';
 
+/** A span of text, as offsets into the file: `start` inclusive, `end` exclusive. */
 export interface Range {
   start: number;
   end: number;
 }
 
+/** Where an action lands in the file, or why it cannot: the error, and lines that might have been meant. */
 export type Resolution = { ok: true; range: Range } | { ok: false; kind: ErrorKind; message: string; candidates?: Candidate[] };
 
 /** A span on `line`: `text`, or from `from` through the first `through` after it. */

@@ -23,6 +23,7 @@ async function read(file: string): Promise<string | undefined> {
   }
 }
 
+/** Watches the workspace for files changed outside the editor, reporting them to the controller and marking them in the explorer. */
 export function watchOutside(
   controller: Controller,
   editor: VsCodeEditor,

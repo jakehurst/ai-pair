@@ -114,6 +114,17 @@ Set by Justine on 2026-10-07.
         that needs one gets a method, like `Bridge.connections()`, not
         `obj['member']` (Properties used outside of class lexical scope;
         oxlint's `dot-notation` flags the bracket).
+    -   Give every top-level export a doc comment of its own, a re-export
+        excepted (Document all top-level exports of modules).
+    -   Use a one-letter name only in a scope under ten lines; `scene`, not
+        `s`, over a long method (Identifiers, Naming style).
+    -   Name a constant inside a function in lowerCamelCase; CONSTANT_CASE is
+        for module-level values only (Constants).
+    -   Make a parameter that may be left out optional with `?`, not
+        `| undefined`, where it can be last (Optionals vs `|undefined` type).
+    -   Write documentation, a module-private function's too, as a JSDoc
+        comment, and keep `//` for implementation notes (JSDoc versus
+        comments).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`
