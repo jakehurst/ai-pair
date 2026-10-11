@@ -10,6 +10,9 @@ import { loadPage } from "./page"
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { window, document } = globalThis as unknown as { window: Window; document: Window["document"] }
 
+/** How far down a test scrolls the history before an entry comes in. */
+const SCROLLED = 120
+
 beforeEach(async () => {
   await loadPage()
 })
@@ -20,6 +23,13 @@ function send(event: object): void {
 
 function history(): string[] {
   return [...document.querySelectorAll("#history .entry")].map((e) => e.textContent ?? "")
+}
+
+/** The history's element, which scrolls. */
+function historyView() {
+  const view = document.getElementById("history")
+  if (!view) throw new Error("The page has no #history")
+  return view
 }
 
 it("puts a reply above the agent message it answers", () => {
@@ -56,4 +66,25 @@ it("keeps a suspended session's history, and says when it waits for the agent an
     "A",
     "Session started",
   ])
+})
+
+it("YoursInView: your message scrolls the history back to its top (#139)", () => {
+  send({ type: "session", active: true })
+  send({ type: "say", text: "A" })
+  historyView().scrollTop = SCROLLED
+  send({ type: "user", text: "R" })
+  expect(historyView().scrollTop).toBe(0)
+  historyView().scrollTop = SCROLLED
+  send({ type: "turn", to: "user", message: "M" })
+  expect(historyView().scrollTop).toBe(0)
+})
+
+it("KeepsPlace: entries other than your message leave the history where you scrolled it (#139)", () => {
+  send({ type: "session", active: true })
+  send({ type: "say", text: "A" })
+  historyView().scrollTop = SCROLLED
+  send({ type: "say", text: "B" })
+  send({ type: "interrupt" })
+  send({ type: "outside", files: ["a.ts"] })
+  expect(historyView().scrollTop).toBe(SCROLLED)
 })

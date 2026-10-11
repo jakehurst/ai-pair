@@ -126,7 +126,7 @@ Code goes without a spec for one of these reasons:
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
-| `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel` |
+| `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
 | | `setState`, `syncStatus`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look |

@@ -74,7 +74,10 @@ Layout, top to bottom:
    text; the programmer's replies as neutral bubbles on the right; commands
    as soft terminal rows with their outcome (exit 0, exit 1, skipped,
    still running, which changes to how it ended when it does); turn changes,
-   interrupts and session starts and ends as faint dividers.
+   interrupts and session starts and ends as faint dividers. When the
+   programmer sends a message, the history scrolls back to its top, so the
+   message is in view; other entries leave it where the programmer scrolled
+   it, so reading back isn't cut short.
 
 Without a session, the band has no header: it says there's no session and
 how to start one, and after a session, how it ended, with the agent's

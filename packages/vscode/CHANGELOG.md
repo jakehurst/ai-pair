@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Sending a message in the Pair panel scrolls the history back to its top, so your message
+  is in view even when you had scrolled down to read older entries. Entries from the agent
+  still leave the history where you scrolled it.
+
 ## 0.4.4
 
 - A command's output, as the agent sees it, no longer runs a tool's progress lines together.

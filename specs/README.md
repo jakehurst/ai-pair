@@ -17,6 +17,7 @@ CI runs `check.sh` on every push to `main` and every pull request (`.github/work
 | `Serialize.cfg` | `N = 2` calls, each empty or not | holds | 709 |
 | `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
 | `Panel.cfg` | `N = 5` events | holds | 21 |
+| `PanelScroll.cfg` | `N = 5` entries, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, 6 events | holds | 127 |
 | `Controller.cfg` | `B = 2` batches, `E = 1` event, `Q = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
 | `Discovery.cfg` | `W = 2` windows, one junk file, a write that may fail | holds | 217 |
@@ -94,6 +95,33 @@ The page, `packages/vscode/src/webview/panel.ts`. `Fix = 1` is the code since #1
 | `Entry` | `addYou`, `addRun`, `addOutside`, the interrupt and turn dividers: `add()` |
 | `Edge` | the `session` event, start and end |
 | `band`, `flag`, `Flushed` | `current`, `filed`, `fileCurrent()` |
+
+### `PanelScroll`: the history's scroll position
+
+`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139. The constant `ScrollOn` says which entries scroll the history to its top; the code is `"you"`.
+
+| Spec | Code |
+|---|---|
+| `Entry` | everything `add()` puts in but the programmer's message: the agent's message filed, runs, dividers, changes outside the editor |
+| `You` | `addYou`, for the `user` event and a `turn` event with a message: it sets `scrollTop` to 0 |
+| `Scroll` | the programmer scrolling the history |
+| `above`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
+
+Each invariant was proved to bite with a mutation, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `ScrollOn = "none"`, the code before #139 | `YoursInView` |
+| `ScrollOn = "all"` | `KeepsPlace` |
+| `Scroll` reaches `Len(history)` | `InRange` |
+
+Every invariant names the test that proves the code obeys it; the test's title carries the invariant's name:
+
+| Invariant | Proved by |
+|---|---|
+| `YoursInView` | `history.test.ts`: YoursInView: your message scrolls the history back to its top (#139) |
+| `KeepsPlace` | `history.test.ts`: KeepsPlace: entries other than your message leave the history where you scrolled it (#139) |
+| `InRange` | Nothing: the browser keeps `scrollTop` within the history |
 
 ### `PanelReplay`: the panel's log and its replay
 
