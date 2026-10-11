@@ -36,6 +36,8 @@ await esbuild.build({
   entryPoints: ["src/webview/panel.ts"],
   outfile: "dist/panel.js",
 })
+// The narration panel's page styles.
+await esbuild.build({ minify: production, logLevel: "warning", entryPoints: ["src/webview/panel.css"], outfile: "dist/panel.css" })
 // The relay tells agents the extension's version.
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"))
 await esbuild.build({

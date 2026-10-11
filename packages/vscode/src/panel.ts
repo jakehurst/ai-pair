@@ -58,7 +58,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly selection: { current: () => SharedSelection | undefined; ref: () => Ref | undefined },
     /** Called with a line for each message from the page, for diagnosing deliveries (#27). */
     private readonly trace?: (line: string) => void,
-    /** Where dist/panel.js, the page's script, is: the extension's folder. */
+    /** The extension's folder, which holds the page's dist/panel.css and dist/panel.js. */
     private readonly extensionUri?: vscode.Uri,
   ) {}
 
@@ -118,8 +118,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.view = view
     const dist = this.extensionUri && vscode.Uri.joinPath(this.extensionUri, "dist")
     view.webview.options = { enableScripts: true, localResourceRoots: dist ? [dist] : [] }
+    const style = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, "panel.css")).toString() : ""
     const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, "panel.js")).toString() : ""
-    view.webview.html = panelHtml(view.webview.cspSource, script)
+    view.webview.html = panelHtml(view.webview.cspSource, style, script)
     view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
     view.onDidDispose(() => {
       if (this.view === view) this.view = undefined
