@@ -88,6 +88,7 @@ export class Bridge {
     })
     const address = server.address()
     this.port = typeof address === "object" && address ? address.port : 0
+    // A relay connects (specs/Resume.tla, `Connect`).
     server.on("connection", (ws) => this.accept(ws))
     // specs/Discovery.tla, `OpenWindow`: if the write fails, the window runs, and no relay finds it.
     this.writeDiscovery()

@@ -98,7 +98,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel)
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
-  // specs/Resume.tla): saved shortly after each change, and once more as the window goes.
+  // specs/Resume.tla, `Reload`): saved shortly after each change, and once more as the window goes (`Save`).
   const saved = context.workspaceState.get<SavedSession>(SAVED_SESSION)
   if (saved) {
     panel.restoreHistory(context.workspaceState.get<PanelEvent[]>(SAVED_HISTORY) ?? [])

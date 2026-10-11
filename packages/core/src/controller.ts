@@ -145,7 +145,7 @@ export class Controller {
       const at = root && this.editor.resolvePath(root)
       const waiting = this.session
       if (waiting?.suspended) {
-        // Its agent is back, from its directory: it carries on where it left off (#25, specs/Resume.tla).
+        // Its agent is back, from its directory: it carries on where it left off (#25, specs/Resume.tla, `Start`).
         if (waiting.scene.root === at) return this.resumeSession(waiting, rules)
         // Another directory: another session, which ends the one waiting.
         this.close(waiting)
@@ -225,7 +225,7 @@ export class Controller {
 
   /**
    * The session as the window saves it in the workspace's storage, to bring it back suspended after a
-   * reload (#25, specs/Resume.tla); none once it has ended. Edits aren't kept: their diffs need the
+   * reload (#25, specs/Resume.tla, `Save`); none once it has ended. Edits aren't kept: their diffs need the
    * text from before them, and the agent reads its files again when it resumes.
    */
   get saved(): SavedSession | undefined {
@@ -254,7 +254,7 @@ export class Controller {
     s.suspended = true
     s.finished = [...saved.finished]
     s.events = [...saved.events]
-    // specs/Resume.tla, Reload: the replayed history may end with the session live (#138).
+    // specs/Resume.tla, `Reload`: the replayed history may end with the session live (#138).
     this.panel.post({ type: "session", active: true, task: s.task, suspended: true })
     this.render()
   }
@@ -292,6 +292,7 @@ export class Controller {
     })
   }
 
+  /** specs/Resume.tla, `EndByAgent`. */
   end(summary?: string, signal?: AbortSignal): Promise<Report> {
     return this.serialize(signal, () => {
       this.requireSession()
@@ -368,7 +369,10 @@ export class Controller {
 
   // ---- Programmer input --------------------------------------------------
 
-  /** `selection`: code the programmer had selected, sent along with the message. */
+  /**
+   * `selection`: code the programmer had selected, sent along with the message. To an active or a suspended session
+   * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
+   */
   userMessage(text: string, selection?: SharedSelection): void {
     const s = this.activeSession()
     if (!s) return
@@ -476,6 +480,7 @@ export class Controller {
     this.update()
   }
 
+  /** specs/Resume.tla, `EndByProgrammer`: active or suspended. */
   endSession(): void {
     const s = this.activeSession()
     if (!s) return
@@ -494,7 +499,7 @@ export class Controller {
 
   /**
    * The agent is gone (the relay disconnected). Its session waits, suspended, for a `start` from its
-   * directory, or for the programmer to end it (#25, specs/Resume.tla).
+   * directory, or for the programmer to end it (#25, specs/Resume.tla, `Disconnect`).
    */
   disconnect(): void {
     const s = this.session

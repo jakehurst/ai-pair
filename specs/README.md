@@ -870,10 +870,11 @@ The feature of #25, specified before its code: `disconnect`, `start`,
 workspace's storage (`extension.ts`). A session whose agent disconnects, or that
 the window reloads with, is suspended, not ended, and waits until the programmer
 ends it or a `start` resumes it. Checked: a `start` from its directory resumes
-the same session (`ResumesSame`); it leaves the suspended state only to resume,
-end, or give way to a session from another directory (`Waits`); the storage
-holds the session as it is (`SavedIsCurrent`); a message isn't lost while it
-waits, or across a reload (`NotLost`); and the panel shows the session as it is
+the same session (`ResumesSameProp`); it leaves the suspended state only to
+resume, end, or give way to a session from another directory (`WaitsProp`); the
+storage holds the session as it is (`SavedIsCurrent`); a message isn't lost
+while it waits, or across a reload (`NotLostProp`); a message the agent can be
+sent reaches it (`Arrives`); and the panel shows the session as it is
 (`ShownIsState`; #138: after a reload, the replayed history showed a suspended
 session as live). The spec saves with every change; the code saves 200 ms after
 the last one and again as the window goes, so a reload within 200 ms of a change
@@ -884,26 +885,31 @@ relies on that last save.
 | `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended |
 | `Reload` | the window reloading: `activate` revives the saved session, suspended (`revive`), with the panel's history; `revive` posts the suspended event (`PostOnRevive`), and the page adds its divider only when the session goes between live and suspended |
 | `Start(d)` | `start`: a suspended session from `d` resumes (`resumeSession`); another directory ends it and starts a new one |
-| `ProgrammerEnd`, `AgentEnd` | `endSession`, which closes a suspended session at once; the agent's `end` |
-| `Message`, `Report` | `userMessage`, to an active or a suspended session; the next report, once the agent is back |
+| `EndByProgrammer`, `EndByAgent` | `endSession`, which closes a suspended session at once; the agent's `end` |
+| `SendMessage`, `Report` | `userMessage`, to an active or a suspended session; the next report, once the agent is back |
 | `Save` | `onChange` and `onPost`: the extension writes `saved` and the panel's history 200 ms after a change, and as the window goes |
 
-Each property was proved to bite with a mutation of a copy of the model:
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
 
 | Mutation | Breaks |
 |---|---|
+| `EndByAgent` leaves a fifth state, `"closed"` | `TypeOK` |
 | `PostOnRevive = FALSE`, the code before #138 | `ShownIsState` |
-| `Message` leaves `saved` unchanged | `SavedIsCurrent` |
-| `Start(d)` never resumes: a new session from any directory | `ResumesSame` |
-| `Reload` brings back no session, checked without the invariants, which fail first | `Waits` |
-| `Reload` drops the pending message | `NotLost` |
-| `Spec` without `WF_vars(Report)` | `Arrives` |
+| `SendMessage` leaves `saved` unchanged | `SavedIsCurrent` |
+| `Start(d)` never resumes: a new session from any directory | `ResumesSameProp` |
+| `Reload` brings back no session, checked without `ShownIsState`, which fails first | `WaitsProp` |
+| `Reload` drops the pending message | `NotLostProp` |
+| `Spec` without `Fairness`, `WF_vars(Report)` | `Arrives` |
 
-| Property | Test |
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
 |---|---|
-| `SavedIsCurrent`, `NotLost` | `controller.test.ts`: SavedIsCurrent, NotLost: brings back a session the window saved, suspended, after a reload |
-| `ResumesSame`, `Arrives` | `controller.test.ts`: ResumesSame, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
-| `Waits` | `controller.test.ts`: Waits: starts a new session from another directory, ending the suspended one; Waits: closes a suspended session at once when the programmer ends it |
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: SavedIsCurrent, NotLostProp: brings back a session the window saved, suspended, after a reload |
+| `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
+| `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
 | `ShownIsState` | `controller.test.ts`: ShownIsState: a revived session tells the panel it is suspended; `history.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
 
 ### `Navigator`: the programmer's edits, reported when they pause
