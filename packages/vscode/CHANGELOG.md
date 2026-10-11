@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.8
+
+-   Fixed: `npm run test:integration` failed at once when run from a terminal
+    inside VS Code that sets `ELECTRON_RUN_AS_NODE`, such as Claude Code's. The
+    script now unsets it before starting VS Code (#152).
+
 ## 0.6.7
 
 -   The `Rehearsal` spec now covers a batch that is already playing when a

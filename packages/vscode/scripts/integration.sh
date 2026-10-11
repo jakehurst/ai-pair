@@ -25,6 +25,10 @@ npx esbuild test/integration.ts --bundle --platform=node --format=cjs \
 # split on spaces.
 read -r -a CODE_ARGS <<<"${VSCODE_ARGS:-}"
 readonly CODE_ARGS
+# A terminal inside VS Code, Claude Code's for one, can set
+# ELECTRON_RUN_AS_NODE, which runs the Code binary as plain Node: it would
+# reject every flag below (#152).
+unset ELECTRON_RUN_AS_NODE
 "${CODE}" "${CODE_ARGS[@]}" \
   --user-data-dir="${TMP}/user" \
   --extensions-dir="${TMP}/extensions" \
