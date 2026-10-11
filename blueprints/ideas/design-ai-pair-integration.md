@@ -45,22 +45,21 @@ Today `step` takes `actions` only. Add one optional field:
 step(actions, { continues?: true, argument?: string })
 ```
 
-- Default: every batch ends a block. That is the CRDD default ("every batch
-  end is a proposed boundary") and it is what the AGENT_GUIDE already asks for
-  ("one idea per batch").
-- `continues: true`: this batch and the next belong to one block. The block
-  ends at the first batch without it.
-- `argument`: the agent's reasoning for the block as written, shown at the
-  gate, after the code. See section 3.
+-   Default: every batch ends a block. That is the CRDD default ("every batch
+    end is a proposed boundary") and it is what the AGENT_GUIDE already asks for
+    ("one idea per batch").
+-   `continues: true`: this batch and the next belong to one block. The block
+    ends at the first batch without it.
+-   `argument`: the agent's reasoning for the block as written, shown at the
+    gate, after the code. See section 3.
 
 In `packages/relay/src/tools.ts` the `step` schema gains the two fields; the
-wire `call` message passes them through unchanged. `Batch` in
-`controller.ts` gains `continues: boolean` and `argument?: string`.
+wire `call` message passes them through unchanged. `Batch` in `controller.ts`
+gains `continues: boolean` and `argument?: string`.
 
 ### Human side: "Block here"
 
-A new panel control, next to Interrupt. It calls a new
-`Controller.userCut()`:
+A new panel control, next to Interrupt. It calls a new `Controller.userCut()`:
 
 ```ts
 userCut(): void {
@@ -74,8 +73,8 @@ userCut(): void {
 
 It reuses `interrupt` exactly as `userInterrupt` does. The difference is only
 what happens next: instead of the agent re-planning freely, the gate opens on
-what is on screen. The interrupted batch's `unplayed` actions come back in
-the report as they do today, so after an accept the agent can resume them.
+what is on screen. The interrupted batch's `unplayed` actions come back in the
+report as they do today, so after an accept the agent can resume them.
 
 ## 2. The gate
 
@@ -123,13 +122,13 @@ if (result.status === "completed" && !batch.continues && this.config.gate) {
 this.startHead(s)
 ```
 
-`openGate` moves `s.block` to `s.gate`, starts a fresh `s.block`, posts a
-panel event, and renders. `kick` gains `if (s.gate) return`, so queued batches
-wait. The agent is allowed to keep submitting batches while the gate is open,
-exactly as it does while a batch plays: they queue, they were rehearsed
-against the planned text, and they play after accept. On reject they are
-discarded by the existing `interrupt`, which is already what happens when the
-programmer interrupts.
+`openGate` moves `s.block` to `s.gate`, starts a fresh `s.block`, posts a panel
+event, and renders. `kick` gains `if (s.gate) return`, so queued batches wait.
+The agent is allowed to keep submitting batches while the gate is open, exactly
+as it does while a batch plays: they queue, they were rehearsed against the
+planned text, and they play after accept. On reject they are discarded by the
+existing `interrupt`, which is already what happens when the programmer
+interrupts.
 
 ### Reporting the gate to the agent
 
@@ -139,11 +138,11 @@ programmer interrupts.
 gate?: { block: number; batches: number[]; argument_shown: boolean }
 ```
 
-`ready()` is unchanged for `step` with a batch: the batch is head of the
-queue, so the call returns with `submitted: { status: "queued" }` and the
-`gate` field. The agent then calls `step([])` or `listen` to wait. `listen`
-returns when a `block` event arrives (see below). The existing 45 second
-`maxBlockMs` timeout and `waiting: true` cover long gates without change.
+`ready()` is unchanged for `step` with a batch: the batch is head of the queue,
+so the call returns with `submitted: { status: "queued" }` and the `gate` field.
+The agent then calls `step([])` or `listen` to wait. `listen` returns when a
+`block` event arrives (see below). The existing 45 second `maxBlockMs` timeout
+and `waiting: true` cover long gates without change.
 
 `renderReport` in `packages/relay/src/render.ts` renders it:
 
@@ -157,14 +156,14 @@ returns when a `block` event arrives (see below). The existing 45 second
 | { kind: "block"; id: number; decision: "accept" | "reject" | "cut" | "unlock" | "reopened"; reason?: string }
 ```
 
-Amend and redirect need no event of their own: they are the existing
-`message` and `edit` events, which the agent already handles, arriving while
-`gate` is set. The AGENT_GUIDE tells the agent what they mean in that state.
+Amend and redirect need no event of their own: they are the existing `message`
+and `edit` events, which the agent already handles, arriving while `gate` is
+set. The AGENT_GUIDE tells the agent what they mean in that state.
 
-`interrupting()` in `controller.ts` decides whether an event marks the
-session stale (which discards batches planned before it). It must treat
-`accept` as not interrupting, since accept is the one event after which the
-planned batches are still valid:
+`interrupting()` in `controller.ts` decides whether an event marks the session
+stale (which discards batches planned before it). It must treat `accept` as not
+interrupting, since accept is the one event after which the planned batches are
+still valid:
 
 ```ts
 function interrupting(e: PendingEvent): boolean {
@@ -203,8 +202,8 @@ decideBlock(id: number, decision: "accept" | "reject", reason?: string): void {
 ### Reject as revert
 
 `EditorPort` has no undo, and VS Code's undo stack is shared with the
-programmer's own edits, so reject does not use undo. It replaces each span
-the block changed with the text that was there before the block:
+programmer's own edits, so reject does not use undo. It replaces each span the
+block changed with the text that was there before the block:
 
 ```ts
 private async revert(s: Session, b: Block): Promise<void> {
@@ -218,29 +217,29 @@ private async revert(s: Session, b: Block): Promise<void> {
 
 Two existing pieces make this safe:
 
-- The span is already tracked. `Playing.span` in `player.ts` records the text
-  a batch changed and `Player.transform` keeps it in place through the
-  programmer's edits using `mapThrough`. `extendBlock` merges each completed
-  batch's span into the block's span per file (the same min/max merge
-  `Player.touch` does), and the block's spans are transformed in
-  `recordEdit` alongside the scene.
-- `before` is captured when the block's first edit to a file lands:
-  `Player.touch` is the hook, and it has the text at that moment.
+-   The span is already tracked. `Playing.span` in `player.ts` records the text
+    a batch changed and `Player.transform` keeps it in place through the
+    programmer's edits using `mapThrough`. `extendBlock` merges each completed
+    batch's span into the block's span per file (the same min/max merge
+    `Player.touch` does), and the block's spans are transformed in `recordEdit`
+    alongside the scene.
+-   `before` is captured when the block's first edit to a file lands:
+    `Player.touch` is the hook, and it has the text at that moment.
 
 Because the revert goes through `EditorPort.edit` with undo stops, the
 programmer's own Cmd+Z undoes a reject. No new port method.
 
 If the programmer edited inside the span while the block was on the table
-(`amended` is true), the panel's Reject says so and asks once before
-reverting, since the revert would take their edit with it.
+(`amended` is true), the panel's Reject says so and asks once before reverting,
+since the revert would take their edit with it.
 
 ### The panel
 
-New band state while `gate` is set: status *Your call*, with four controls
-in place of the reply box's usual position: **Accept**, **Reject**, and the
-reply box labeled *Amend or redirect*. Amend and redirect are typed, as
-today's replies are, or made by editing the code, as today's edits are. The
-header shows "Block 7, batches 12 to 13, 2 files".
+New band state while `gate` is set: status *Your call*, with four controls in
+place of the reply box's usual position: **Accept**, **Reject**, and the reply
+box labeled *Amend or redirect*. Amend and redirect are typed, as today's
+replies are, or made by editing the code, as today's edits are. The header shows
+"Block 7, batches 12 to 13, 2 files".
 
 `FromPanel` in `packages/vscode/src/panel.ts` gains:
 
@@ -257,29 +256,28 @@ header shows "Block 7, batches 12 to 13, 2 files".
     files: string[]; argument?: string; diff?: string }
 ```
 
-The webview's history already draws dividers for interrupts and turn
-changes (`addDivider` in `panelHtml.ts`). A block entry is a divider with a
-label and a disclosure showing the diff, using `fileDiff` from
-`packages/core/src/diff.ts`, which already produces unified hunks for the
-`edit` event.
+The webview's history already draws dividers for interrupts and turn changes
+(`addDivider` in `panelHtml.ts`). A block entry is a divider with a label and a
+disclosure showing the diff, using `fileDiff` from `packages/core/src/diff.ts`,
+which already produces unified hunks for the `edit` event.
 
-Keyboard: `aiPair.acceptBlock` and `aiPair.rejectBlock` commands registered
-in `extension.ts` next to `aiPair.interrupt`, so the gate can be worked
-without the mouse.
+Keyboard: `aiPair.acceptBlock` and `aiPair.rejectBlock` commands registered in
+`extension.ts` next to `aiPair.interrupt`, so the gate can be worked without the
+mouse.
 
 ## 3. The argument after the code
 
 The `argument` field on `step` is not a `say`. A `say` plays during the batch
-with a reading pause and goes into the band as the current message. The
-argument is held until the gate opens, then shown in the band under the
-block header, after the code is on screen. That is the ordering CRDD asks
-for, and it costs nothing in playback: the gate is the pause.
+with a reading pause and goes into the band as the current message. The argument
+is held until the gate opens, then shown in the band under the block header,
+after the code is on screen. That is the ordering CRDD asks for, and it costs
+nothing in playback: the gate is the pause.
 
 The argument is also stored in `Block.argument` and goes into the record.
 
-If `argument` is given on a batch with `continues: true`, it is kept and
-shown when the block ends. If several batches of one block each give one,
-the last wins; the AGENT_GUIDE says to give it once, on the last batch.
+If `argument` is given on a batch with `continues: true`, it is kept and shown
+when the block ends. If several batches of one block each give one, the last
+wins; the AGENT_GUIDE says to give it once, on the last batch.
 
 ## 4. The lock
 
@@ -293,9 +291,9 @@ predicate to `Stage`:
 locked?(file: string, start: number, end: number): { blockId: number } | undefined
 ```
 
-The controller supplies it from `s.locks`, transformed to the planned text
-the same way `s.seen` is checked against the rehearsal's `LineIds`. The
-player checks it at the three places that change text:
+The controller supplies it from `s.locks`, transformed to the planned text the
+same way `s.seen` is checked against the rehearsal's `LineIds`. The player
+checks it at the three places that change text:
 
 | Action | Where in `player.ts` | Check |
 |---|---|---|
@@ -303,8 +301,8 @@ player checks it at the three places that change text:
 | `delete` | the `delete` branch of `perform` | the selection |
 | `select` | the `select` branch of `perform` | the resolved span, since a select precedes a replace or delete |
 
-`move` and `point` inside a locked span stay allowed: reading and talking
-about accepted code is fine.
+`move` and `point` inside a locked span stay allowed: reading and talking about
+accepted code is fine.
 
 New `ErrorKind`: `"locked"`. Message, in the style of `line_not_seen`:
 
@@ -312,29 +310,29 @@ New `ErrorKind`: `"locked"`. Message, in the style of `line_not_seen`:
 > programmer. Accepted code doesn't change. If it must, say why and call
 > `listen`: the programmer can unlock it.
 
-The rehearsal fails, `Controller.reject` returns the report with `rejected`
-set, and `renderRejected` already says "Nothing of it was queued." No new
-rendering path.
+The rehearsal fails, `Controller.reject` returns the report with `rejected` set,
+and `renderRejected` already says "Nothing of it was queued." No new rendering
+path.
 
-The same check runs during real playback (the `Player` is the same class),
-which covers an edit the rehearsal could not foresee, such as a lock added
-by an accept that landed between rehearsal and play.
+The same check runs during real playback (the `Player` is the same class), which
+covers an edit the rehearsal could not foresee, such as a lock added by an
+accept that landed between rehearsal and play.
 
 ### Keeping locks in place
 
-Locks are offset ranges per file. They are transformed through every change
-in `recordEdit` (programmer and other edits) and in `Player.edit` (the
-agent's), with `mapThrough`, exactly as `Scene.point` is. A lock whose range
-collapses to zero length (the programmer deleted the block) is dropped and
-the block is marked `reopened` in the record.
+Locks are offset ranges per file. They are transformed through every change in
+`recordEdit` (programmer and other edits) and in `Player.edit` (the agent's),
+with `mapThrough`, exactly as `Scene.point` is. A lock whose range collapses to
+zero length (the programmer deleted the block) is dropped and the block is
+marked `reopened` in the record.
 
 ### The programmer's edits inside a lock
 
-`recordEdit` checks each change against `s.locks` for the file. An overlap
-means the programmer changed accepted code. The lock is removed, the block
-goes back on the table with `amended: true`, and the agent gets
-`{ kind: "block", decision: "reopened" }`. This is deliberate: the record
-never claims a span is accepted when its text has changed since.
+`recordEdit` checks each change against `s.locks` for the file. An overlap means
+the programmer changed accepted code. The lock is removed, the block goes back
+on the table with `amended: true`, and the agent gets
+`{ kind: "block", decision: "reopened" }`. This is deliberate: the record never
+claims a span is accepted when its text has changed since.
 
 ### Unlock
 
@@ -352,14 +350,13 @@ unlockBlock(id: number): void {
 }
 ```
 
-An unlocked block is on the table like a new one, with one difference: the
-agent may now edit inside its span, since the lock is gone. When it is
-accepted again, it gets a new lock covering its current span. The record
-keeps both entries.
+An unlocked block is on the table like a new one, with one difference: the agent
+may now edit inside its span, since the lock is gone. When it is accepted again,
+it gets a new lock covering its current span. The record keeps both entries.
 
-Asking for an unlock is a `say` and a `listen`, which the agent already
-does for any question. The AGENT_GUIDE adds: "To change accepted code, say
-which block and why, then `listen`."
+Asking for an unlock is a `say` and a `listen`, which the agent already does for
+any question. The AGENT_GUIDE adds: "To change accepted code, say which block
+and why, then `listen`."
 
 ## 5. The record
 
@@ -379,31 +376,29 @@ type BlockRecord = {
 }
 ```
 
-Kept in `Session.record`, not in the panel's log, since the panel log is
-capped at 400 events and replayed for rendering only.
+Kept in `Session.record`, not in the panel's log, since the panel log is capped
+at 400 events and replayed for rendering only.
 
-Export: a command `aiPair.exportRecord` writes `ai-pair-record-<date>.md`
-in the workspace root, one section per accepted block, with the diff in a
-fence and the narration, argument, and decision under it. This is the
-session's review log.
+Export: a command `aiPair.exportRecord` writes `ai-pair-record-<date>.md` in the
+workspace root, one section per accepted block, with the diff in a fence and the
+narration, argument, and decision under it. This is the session's review log.
 
 ## 6. The programmer's turn
 
 During the programmer's turn the agent is navigator and can only `say` and
 `point`. The gate works the other way around:
 
-- "That's a block" in the panel (the same Block here control, relabeled
-  during the user turn) opens a gate on the programmer's edits since the
-  last boundary. `userEdit` already accumulates them in `s.baselines` and
-  `s.latest`, so the span and `before` text are there.
-- The agent gets a `block` event with `decision: "cut"` and `turn: "user"`,
-  reviews, and says its read. The report's `gate` field tells it which
-  block.
-- The programmer accepts or rejects their own block from the panel. Accept
-  locks it against the agent's later edits, same as any block.
+-   "That's a block" in the panel (the same Block here control, relabeled during
+    the user turn) opens a gate on the programmer's edits since the last
+    boundary. `userEdit` already accumulates them in `s.baselines` and
+    `s.latest`, so the span and `before` text are there.
+-   The agent gets a `block` event with `decision: "cut"` and `turn: "user"`,
+    reviews, and says its read. The report's `gate` field tells it which block.
+-   The programmer accepts or rejects their own block from the panel. Accept
+    locks it against the agent's later edits, same as any block.
 
-No new state. The gate and lock code paths are the same; only who typed the
-text differs, and the record says so in `turn`.
+No new state. The gate and lock code paths are the same; only who typed the text
+differs, and the record says so in `turn`.
 
 ## 7. Settings and compatibility
 
@@ -412,8 +407,8 @@ text differs, and the record says so in `turn`.
 | `aiPair.gate` | off | When off, no gate opens, no locks are created, `continues` and `argument` are accepted and ignored. ai-pair users see no change. |
 | `aiPair.gateOnCut` | on | Whether Block here opens a gate (on) or acts like Interrupt (off). |
 
-Protocol version 3 becomes 4. The relay and extension already reject a
-version mismatch at `hello`.
+Protocol version 3 becomes 4. The relay and extension already reject a version
+mismatch at `hello`.
 
 ## 8. Files touched
 
@@ -435,65 +430,63 @@ version mismatch at `hello`.
 
 Untouched: `timing.ts`, `typing.ts`, `places.ts`, `lines.ts`, `text.ts`,
 `timeline.ts`, `bridge.ts`, `editor.ts`, `terminal.ts`, and the relay's
-`link.ts` and `server.ts`. The whole of playback, pacing, place resolution,
-line identity, follow mode, and discovery is unchanged.
+`link.ts` and `server.ts`. The whole of playback, pacing, place resolution, line
+identity, follow mode, and discovery is unchanged.
 
 ## 9. Tests
 
-The core has a fake editor (`packages/core/test/fake.ts`) and fake timers.
-Each addition gets controller tests in that style:
+The core has a fake editor (`packages/core/test/fake.ts`) and fake timers. Each
+addition gets controller tests in that style:
 
-- A batch without `continues` opens a gate; the next batch stays queued;
-  `step([])` returns with `gate` set.
-- `continues: true` across two batches opens one gate after the second.
-- Accept resumes the queue and the next batch plays.
-- Accept locks the span; a later `type` inside it is rejected at rehearsal
-  with `locked`; a `move` inside it is allowed.
-- Reject restores the span's text and discards the queue; the report carries
-  the `block` event with the reason and the discarded batches as `unplayed`.
-- Programmer edits inside the block on the table set `amended`; reject still
-  reverts.
-- Programmer edits inside a lock remove the lock and emit `reopened`.
-- Lock ranges follow a programmer's edit above them.
-- `userCut` mid-batch opens a gate on what played; `unplayed` is reported.
-- `unlockBlock` reopens; a `type` inside it is now allowed; accept re-locks.
-- With `aiPair.gate` off, none of the above happens and existing tests pass
-  unchanged.
+-   A batch without `continues` opens a gate; the next batch stays queued;
+    `step([])` returns with `gate` set.
+-   `continues: true` across two batches opens one gate after the second.
+-   Accept resumes the queue and the next batch plays.
+-   Accept locks the span; a later `type` inside it is rejected at rehearsal
+    with `locked`; a `move` inside it is allowed.
+-   Reject restores the span's text and discards the queue; the report carries
+    the `block` event with the reason and the discarded batches as `unplayed`.
+-   Programmer edits inside the block on the table set `amended`; reject still
+    reverts.
+-   Programmer edits inside a lock remove the lock and emit `reopened`.
+-   Lock ranges follow a programmer's edit above them.
+-   `userCut` mid-batch opens a gate on what played; `unplayed` is reported.
+-   `unlockBlock` reopens; a `type` inside it is now allowed; accept re-locks.
+-   With `aiPair.gate` off, none of the above happens and existing tests pass
+    unchanged.
 
 The VS Code integration test (`npm run test:integration`) gets one scripted
 session that accepts two blocks, rejects one, and exports the record.
 
 ## 10. Order of work
 
-1. Gate with accept only, no lock, no reject. Hold, decision event, panel
-   controls. This alone changes the experience: silence is no longer consent.
-2. Reject as revert.
-3. The lock, in rehearsal and playback, with reopen on programmer edits.
-4. Block here, and the user-turn gate.
-5. The argument field and its band placement.
-6. The record and its export.
-7. Unlock.
+1.  Gate with accept only, no lock, no reject. Hold, decision event, panel
+    controls. This alone changes the experience: silence is no longer consent.
+2.  Reject as revert.
+3.  The lock, in rehearsal and playback, with reopen on programmer edits.
+4.  Block here, and the user-turn gate.
+5.  The argument field and its band placement.
+6.  The record and its export.
+7.  Unlock.
 
 Each step leaves the tool working with the feature flag on or off.
 
 ## Open questions
 
-- **Blocks across files.** A batch works in one file, so a block spanning
-  files is several batches with `continues`. Accept locks each file's span.
-  Is one Accept for a multi-file block enough, or should each file's span
-  be shown separately in the band before accepting?
-- **Formatter on save.** ai-pair saves after each batch, and a formatter's
-  change arrives as an `other` edit. A format inside an accepted span should
-  not reopen the block. Treat `other` edits as transforming locks without
-  reopening; only `programmer` edits reopen.
-- **Lock granularity.** Offsets make a lock exact, but a block that adds a
-  function and the next block that calls it will touch adjacent text.
-  Insertions at the very end of a lock (offset equals `range.end`) should
-  be allowed, otherwise nothing can ever be appended after an accepted
-  block.
-- **The agent's native tools.** ai-pair cannot stop the agent editing a
-  file with its own Write tool outside the protocol. Such an edit arrives as
-  `other` and is marked in the explorer today. Inside a lock, it should
-  reopen the block and the history should say the agent did it outside the
-  session, since the lock is only as strong as the agent's use of the pair
-  tools.
+-   **Blocks across files.** A batch works in one file, so a block spanning
+    files is several batches with `continues`. Accept locks each file's span. Is
+    one Accept for a multi-file block enough, or should each file's span be
+    shown separately in the band before accepting?
+-   **Formatter on save.** ai-pair saves after each batch, and a formatter's
+    change arrives as an `other` edit. A format inside an accepted span should
+    not reopen the block. Treat `other` edits as transforming locks without
+    reopening; only `programmer` edits reopen.
+-   **Lock granularity.** Offsets make a lock exact, but a block that adds a
+    function and the next block that calls it will touch adjacent text.
+    Insertions at the very end of a lock (offset equals `range.end`) should be
+    allowed, otherwise nothing can ever be appended after an accepted block.
+-   **The agent's native tools.** ai-pair cannot stop the agent editing a file
+    with its own Write tool outside the protocol. Such an edit arrives as
+    `other` and is marked in the explorer today. Inside a lock, it should reopen
+    the block and the history should say the agent did it outside the session,
+    since the lock is only as strong as the agent's use of the pair tools.

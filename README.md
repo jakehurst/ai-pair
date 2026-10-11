@@ -1,6 +1,7 @@
-# <img src="packages/vscode/media/icon.png" alt="" width="40" align="top"> AI Pair Programmer
+# AI Pair Programmer
 
-**[Install it from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair)**
+**[Install it from the VS Code
+Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair)**
 
 ## For those of us who want, need, or love to stay close to the code
 
@@ -9,9 +10,10 @@
 >
 > — [Wikipedia](https://en.wikipedia.org/wiki/Mirror_neuron)
 
-**Be there for every keystroke**
+### Be there for every keystroke
 
-![The agent explains the update method in the Pair panel, then types it in the editor](media/every-keystroke.gif)
+![The agent explains the update method in the Pair panel, then types it in the
+editor](media/every-keystroke.gif)
 
 Some of us, at least some of the time, want to understand our code at a deep
 level. For that, handing a task to an agent and reviewing the diff that comes
@@ -19,50 +21,53 @@ back can be exhausting. With *AI Pair Programmer*, you're there for every
 keystroke instead, and you end up knowing the code almost as if you'd typed it
 yourself.
 
-It's pair programming where your coding agent has the keyboard. It types in
-your editor slowly enough to follow and explains what it's doing. Interrupt it
+It's pair programming where your coding agent has the keyboard. It types in your
+editor slowly enough to follow and explains what it's doing. Interrupt it
 whenever you like, or take over and let it watch you for a change.
 
-**Interrupt and steer**
+### Interrupt and steer
 
-![The programmer asks the agent to fix its imports, and it adds them at the top of the file](media/interrupt-and-steer.gif)
+![The programmer asks the agent to fix its imports, and it adds them at the top
+of the file](media/interrupt-and-steer.gif)
 
-**Watch it change its mind in real time**
+### Watch it change its mind in real time
 
-![The agent writes a comment, reconsiders, deletes it, and documents the type differently](media/change-its-mind.gif)
+![The agent writes a comment, reconsiders, deletes it, and documents the type
+differently](media/change-its-mind.gif)
 
 It's also a good way to learn a new technology, or to have the agent walk you
 through code you don't know yet.
 
-**Ask it to explain code line by line**
+### Ask it to explain code line by line
 
-![The agent walks through a function line by line, highlighting each line and explaining it in the Pair panel](media/explain-line-by-line.gif)
+![The agent walks through a function line by line, highlighting each line and
+explaining it in the Pair panel](media/explain-line-by-line.gif)
 
 It works in VS Code, with the coding agent you already use. Setup is built in
-for Claude Code, Codex, OpenCode, Gemini CLI, Cursor and GitHub Copilot, and
-any agent that supports MCP can be connected by hand.
+for Claude Code, Codex, OpenCode, Gemini CLI, Cursor and GitHub Copilot, and any
+agent that supports MCP can be connected by hand.
 
 **Note:** It works best with strong models; weaker ones tend to struggle with
 this way of working.
 
 ## How to use it
 
-Once the extension is [installed](#install) and
-[connected to your agent](#connect-your-agent), keep using your agent as usual.
-When you want to pair:
+Once the extension is [installed](#install) and [connected to your
+agent](#connect-your-agent), keep using your agent as usual. When you want to
+pair:
 
-1. Open the project in VS Code, and start your agent **in the same folder** (or
-   a subfolder of it).
-2. Ask it to pair: *"Let's pair on adding a settings page."* In Claude Code,
-   you can also run `/mcp__pair__start`. If you want to learn the technology
-   too, say so: *"...I'm new to Svelte, explain as you go."*
-   With Claude Code's CLI installed and set up, the **Pair** panel also
-   offers **Start a session**: it starts Claude Code in a hidden terminal with
-   the request already sent, and the Pair panel stays in front. The terminal
-   closes when the session ends. Until the agent starts, the panel says a session
-   is starting.
-3. The **Pair** panel opens in the secondary side bar, and the agent's cursor
-   appears in your editor.
+1.  Open the project in VS Code, and start your agent **in the same folder** (or
+    a subfolder of it).
+2.  Ask it to pair: *"Let's pair on adding a settings page."* In Claude Code,
+    you can also run `/mcp__pair__start`. If you want to learn the technology
+    too, say so: *"...I'm new to Svelte, explain as you go."* With Claude Code's
+    CLI installed and set up, the **Pair** panel also offers **Start a
+    session**: it starts Claude Code in a hidden terminal with the request
+    already sent, and the Pair panel stays in front. The terminal closes when
+    the session ends. Until the agent starts, the panel says a session is
+    starting.
+3.  The **Pair** panel opens in the secondary side bar, and the agent's cursor
+    appears in your editor.
 
 Anything you say or edit interrupts the agent, so its next move takes it into
 account. While you pair:
@@ -87,29 +92,31 @@ session that adds a small API to an Express app, which it creates in
 
 ## How it works under the hood
 
-```
+```text
 agent (Claude Code, ...) ── stdio MCP ──▶ pair-mcp ── local WebSocket ──▶ VS Code extension
 ```
 
 The agent submits small batches of actions: say, move, select, type, delete,
 point, run. The extension plays them at a human pace and reports back exactly
-what happened, including everything you did in the meantime. The agent plans
-its next batch while you watch the current one, which hides most of its
-thinking time. And it's never more than one batch ahead, so your interruptions
-land immediately.
+what happened, including everything you did in the meantime. The agent plans its
+next batch while you watch the current one, which hides most of its thinking
+time. And it's never more than one batch ahead, so your interruptions land
+immediately.
 
 The design is written up in:
 
-- [PROTOCOL.md](PROTOCOL.md): the tools and their exact semantics, as the agent sees them.
-- [AGENT_GUIDE.md](AGENT_GUIDE.md): how the agent should pair, returned to it when a session starts.
-- [DESIGN.md](DESIGN.md): what you see: the cursor, the panel, the timing.
-- [ARCHITECTURE.md](ARCHITECTURE.md): the components and how they connect.
+-   [PROTOCOL.md](PROTOCOL.md): the tools and their exact semantics, as the
+    agent sees them.
+-   [AGENT_GUIDE.md](AGENT_GUIDE.md): how the agent should pair, returned to it
+    when a session starts.
+-   [DESIGN.md](DESIGN.md): what you see: the cursor, the panel, the timing.
+-   [ARCHITECTURE.md](ARCHITECTURE.md): the components and how they connect.
 
 ## Install
 
-You need **VS Code 1.106 or newer**. Install **AI Pair** from the
-[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair): in the
-Extensions view, search for `@id:michalstrba.ai-pair`, or run:
+You need **VS Code 1.106 or newer**. Install **AI Pair** from the [VS Code
+Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair):
+in the Extensions view, search for `@id:michalstrba.ai-pair`, or run:
 
 ```sh
 code --install-extension michalstrba.ai-pair
@@ -127,36 +134,36 @@ code --install-extension ai-pair-*.vsix
 
 ## Connect your agent
 
-1. **Open a project folder in VS Code.** The extension installs the MCP server
-   your agent runs, at `~/.ai-pair/bin/pair-mcp`
-   (`%USERPROFILE%\.ai-pair\bin\pair-mcp.cmd` on Windows). It runs on
-   VS Code's own runtime, so it doesn't need Node.js.
-2. **Run *AI Pair: Set Up Agent*** from the command palette (VS Code also
-   offers this the first time the extension starts). Pick your agents; the
-   ones it finds installed are already checked. For each one, it adds a
-   server named `pair` to that agent's user-wide MCP configuration, leaving
-   everything else in the file as it was:
+1.  **Open a project folder in VS Code.** The extension installs the MCP server
+    your agent runs, at `~/.ai-pair/bin/pair-mcp`
+    (`%USERPROFILE%\.ai-pair\bin\pair-mcp.cmd` on Windows). It runs on VS Code's
+    own runtime, so it doesn't need Node.js.
+2.  **Run *AI Pair: Set Up Agent*** from the command palette (VS Code also
+    offers this the first time the extension starts). Pick your agents; the ones
+    it finds installed are already checked. For each one, it adds a server named
+    `pair` to that agent's user-wide MCP configuration, leaving everything else
+    in the file as it was:
 
-   | Agent | Where |
-   |---|---|
-   | **Claude Code** (the CLI, the IDE extensions, the Claude desktop app's Code tab) | `claude mcp add --scope user`, or `~/.claude.json` without the `claude` command |
-   | **Codex** (the CLI, the IDE extension, the app) | `~/.codex/config.toml` (or in `$CODEX_HOME`) |
-   | **OpenCode** | `~/.config/opencode/opencode.json` (`.jsonc` if you have one), on Windows too |
-   | **Gemini CLI** | `~/.gemini/settings.json` |
-   | **Cursor** | `~/.cursor/mcp.json` |
-   | **Another agent** | copies an MCP server configuration to the clipboard: a stdio server named `pair` running the launcher |
+    | Agent | Where |
+    |---|---|
+    | **Claude Code** (the CLI, the IDE extensions, the Claude desktop app's Code tab) | `claude mcp add --scope user`, or `~/.claude.json` without the `claude` command |
+    | **Codex** (the CLI, the IDE extension, the app) | `~/.codex/config.toml` (or in `$CODEX_HOME`) |
+    | **OpenCode** | `~/.config/opencode/opencode.json` (`.jsonc` if you have one), on Windows too |
+    | **Gemini CLI** | `~/.gemini/settings.json` |
+    | **Cursor** | `~/.cursor/mcp.json` |
+    | **Another agent** | copies an MCP server configuration to the clipboard: a stdio server named `pair` running the launcher |
 
-   **GitHub Copilot** in VS Code needs none of this: the extension gives it
-   the `pair` server itself.
-3. **Restart your agent** so it picks up the new server.
+    **GitHub Copilot** in VS Code needs none of this: the extension gives it the
+    `pair` server itself.
+3.  **Restart your agent** so it picks up the new server.
 
 ## Calibrate your reading speed
 
-The pause after each of the agent's messages is sized to the message, at a
-rate per character. To set that rate to your own pace, run *AI Pair: Calibrate
+The pause after each of the agent's messages is sized to the message, at a rate
+per character. To set that rate to your own pace, run *AI Pair: Calibrate
 Reading Speed*: the Pair panel shows a passage when you type `go`, you read it,
-and you type `x` the moment you finish. The rate goes into `aiPair.timing` in your
-settings. Asking the agent for another passage ("use the Rainbow Passage")
+and you type `x` the moment you finish. The rate goes into `aiPair.timing` in
+your settings. Asking the agent for another passage ("use the Rainbow Passage")
 has it fetch the text and start the calibration with it.
 
 ## Settings
@@ -176,33 +183,33 @@ Rules you and the agent settle on can live in a file, so you don't repeat them
 every session. When a session starts, the agent gets them after the pairing
 guide, and the panel's "Session started" line names the files it was given:
 
-- `~/.ai-pair/GUIDE.md`: rules for every project.
-- `.ai-pair/GUIDE.md` in a project: rules for that project. Every one from the
-  workspace folder down to the agent's working directory is read, outer first,
-  and none above the workspace folder. One that git ignores is left out; one
-  checked in always counts.
+-   `~/.ai-pair/GUIDE.md`: rules for every project.
+-   `.ai-pair/GUIDE.md` in a project: rules for that project. Every one from the
+    workspace folder down to the agent's working directory is read, outer first,
+    and none above the workspace folder. One that git ignores is left out; one
+    checked in always counts.
 
-Later files take precedence over earlier ones, and all of them over the
-pairing guide. Each is plain markdown, read up to 20,000 characters. A project's
-file goes into the agent's instructions, the same trust an agent's own
-`CLAUDE.md` or `AGENTS.md` gets.
+Later files take precedence over earlier ones, and all of them over the pairing
+guide. Each is plain markdown, read up to 20,000 characters. A project's file
+goes into the agent's instructions, the same trust an agent's own `CLAUDE.md` or
+`AGENTS.md` gets.
 
 ## Troubleshooting
 
-- **The agent says `no_editor`.** Its working directory isn't inside a folder
-  that's open in VS Code. Open that folder in VS Code, or start the agent in
-  it.
-- **The agent doesn't have the pair tools.** Restart the agent after setting
-  it up. *AI Pair: Set Up Agent* marks the agents that are set up. With
-  Claude Code, `claude mcp list` should show `pair`. With Copilot, `pair`
-  should be in *MCP: List Servers*; start it there if it isn't running.
-- **After updating the extension,** reload the VS Code window and restart the
-  agent. A session in progress waits, suspended, and the agent's next
-  `start` from the same folder resumes it.
+-   **The agent says `no_editor`.** Its working directory isn't inside a folder
+    that's open in VS Code. Open that folder in VS Code, or start the agent in
+    it.
+-   **The agent doesn't have the pair tools.** Restart the agent after setting
+    it up. *AI Pair: Set Up Agent* marks the agents that are set up. With Claude
+    Code, `claude mcp list` should show `pair`. With Copilot, `pair` should be
+    in *MCP: List Servers*; start it there if it isn't running.
+-   **After updating the extension,** reload the VS Code window and restart the
+    agent. A session in progress waits, suspended, and the agent's next `start`
+    from the same folder resumes it.
 
 ## Development
 
-```
+```text
 packages/
   protocol/   types shared by everything
   core/       editor-agnostic sessions, playback, and the local WebSocket server
@@ -219,6 +226,7 @@ npm run lint:swift        # Swift to Google's Swift Style Guide, with Xcode's sw
 npm run typecheck:swift   # the Swift icon script compiles without warnings (macOS)
 npm run lint:sh           # shell scripts to Google's Shell Style Guide (needs ShellCheck and shfmt)
 npm run lint:web          # the panel's HTML and CSS to Google's HTML/CSS Style Guide, and valid HTML5 (needs Java)
+npm run lint:md           # Markdown to Google's Markdown style guide
 npm run build             # development build of the extension
 npm run test:integration  # plays a session inside a real, isolated VS Code (macOS; VSCODE_BIN for another)
 npm run test:coverage     # the unit tests, with coverage
