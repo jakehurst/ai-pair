@@ -2157,4 +2157,13 @@ describe("pauses and the log (#149)", () => {
     expect(lines.filter((line) => line === "pause reply")).toHaveLength(1)
     expect(lines).toContainEqual(expect.stringMatching(/^report to step: batches \[1 completed\], events \[\], \d+ chars$/))
   })
+
+  it("reports a long edit by its line ranges, not the whole diff", async () => {
+    const { editor, controller } = setup({ "a.ts": "" })
+    await controller.start()
+    const listening = controller.listen()
+    editor.userEdit("a.ts", 0, 0, "x\n".repeat(300))
+    const report = await until(listening)
+    expect(report.events).toEqual([{ kind: "edit", file: "a.ts", diff: "@@ -0,0 +1,300 @@", by: "programmer", omitted: 300 }])
+  })
 })

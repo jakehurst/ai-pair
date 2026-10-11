@@ -136,8 +136,9 @@ export type Passage = {
 
 export type Event =
   | { kind: "message"; text: string; selection?: Excerpt }
-  /** `other`: not by the programmer, but by a tool, a formatter, or on disk. Only the programmer's interrupt. */
-  | { kind: "edit"; file: string; diff: string; by: "programmer" | "other" }
+  /** `other`: not by the programmer, but by a tool, a formatter, or on disk. Only the programmer's interrupt.
+   * `omitted`: the diff was too long, so `diff` has only its hunks' headers, and this many lines were left out (#149). */
+  | { kind: "edit"; file: string; diff: string; by: "programmer" | "other"; omitted?: number }
   | { kind: "interrupt" }
   | { kind: "turn"; to: Turn; message?: string; selection?: Excerpt }
   | { kind: "end" }

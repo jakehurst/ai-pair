@@ -562,7 +562,7 @@ type Code = {                 // the cursor marked with ▌ in its line
 ```ts
 type Event =
   | { kind: "message", text: string, selection?: Excerpt }
-  | { kind: "edit", file: string, diff: string, by: "programmer" | "other" }
+  | { kind: "edit", file: string, diff: string, by: "programmer" | "other", omitted?: number }
   | { kind: "interrupt" }
   | { kind: "turn", to: "agent" | "user", message?: string, selection?: Excerpt }
   | { kind: "end" }
@@ -596,6 +596,9 @@ edits near the agent cursor, may come later.)
     interrupts, since they were planned against the text before it: a formatter
     when a batch saves, say. Changes by others to any other file don't
     interrupt, and don't make `listen` return.
+    A diff longer than 200 lines comes as its hunks' headers alone, the line
+    ranges it changed, with `omitted` saying how many lines were left out: the
+    agent reads the file for the text (#149).
 -   `end`: the programmer ended the session. Playback stops and the session is
     over: this is its final report, and further calls fail with `no_session`.
 

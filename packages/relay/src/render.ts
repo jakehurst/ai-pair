@@ -12,6 +12,9 @@ const PAUSE_REASONS: Record<PauseReason, string> = {
   calibrate: "the programmer is calibrating their reading speed",
 }
 
+/** Who made an edit the programmer didn't make. */
+const OTHER_EDITOR = "A tool, a formatter, or something on disk"
+
 export type ReportingTool = "start" | "step" | "listen" | "end" | "calibrate"
 
 export function renderReport(report: Report, tool: ReportingTool): string {
@@ -63,8 +66,12 @@ function renderEvent(e: Event): string {
       return `The programmer said:\n${quote(e.text)}${e.selection ? `\n${renderExcerpt(e.selection)}` : ""}`
     case "edit":
       if (e.diff === "") {
-        const who = e.by === "other" ? "A tool, a formatter, or something on disk" : "The programmer"
+        const who = e.by === "other" ? OTHER_EDITOR : "The programmer"
         return `${who} edited ${e.file}, then changed it back: no net change.`
+      }
+      if (e.omitted !== undefined) {
+        const who = e.by === "other" ? OTHER_EDITOR : "The programmer"
+        return `${who} changed ${e.file} in these places, too much to show (${e.omitted} lines of diff left out). \`read\` the file for its text:\n${e.diff}`
       }
       if (e.by === "other") return `${e.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${e.diff}`
       return `The programmer edited ${e.file}:\n${e.diff}`

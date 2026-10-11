@@ -206,4 +206,13 @@ describe("edits with no net change", () => {
     expect(text).toMatch(/Playback is paused: the programmer is looking at another file.*; the programmer is typing a reply\./)
     expect(text.indexOf("Playback is paused")).toBeLessThan(text.indexOf("Nothing has happened yet"))
   })
+
+  it("gives a long edit's line ranges and says to read the file, instead of the whole diff (#149)", () => {
+    const text = renderReport(
+      report({ events: [{ kind: "edit", file: "a.ts", diff: "@@ -1,0 +1,300 @@", by: "other", omitted: 300 }] }),
+      "listen",
+    )
+    expect(text).toMatch(/a\.ts in these places, too much to show \(300 lines of diff left out\)\. `read` the file/)
+    expect(text).toMatch(/@@ -1,0 \+1,300 @@/)
+  })
 })

@@ -3,7 +3,7 @@
 
 import type { Action, BatchResult, Event, Excerpt, FileContent, Passage, PauseReason, Report, Turn } from "@ai-pair/protocol"
 import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
-import { fileDiff, lineChanges } from "./diff"
+import { boundedDiff, lineChanges } from "./diff"
 import { LineIds, type Sighting } from "./lines"
 import { agentPath, displayPath, Player, type Scene } from "./player"
 import {
@@ -35,7 +35,7 @@ type Batch = {
 type PendingEvent = Exclude<Event, { kind: "edit" }> | EditEvent
 
 /** `interrupted`: a change the programmer didn't make, to a file the playing or queued batches edit. */
-type EditEvent = { kind: "edit"; file: string; by: "programmer" | "other"; diff?: string; interrupted?: true }
+type EditEvent = { kind: "edit"; file: string; by: "programmer" | "other"; diff?: string; omitted?: number; interrupted?: true }
 
 /**
  * Everything interrupts, except changes the programmer didn't make to files no batch is going to edit. An event it
@@ -912,7 +912,7 @@ export class Controller {
         continue
       }
       if (e.diff !== undefined) {
-        events.push({ kind: "edit", file: e.file, diff: e.diff, by: e.by })
+        events.push({ kind: "edit", file: e.file, diff: e.diff, by: e.by, ...(e.omitted === undefined ? {} : { omitted: e.omitted }) })
         continue
       }
       const before = s.baselines.get(e.file) ?? ""
@@ -921,7 +921,8 @@ export class Controller {
       // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla, `Report`).
       if (before === after && !interrupting(e)) continue
       const file = this.displayPath(s, e.file)
-      events.push({ kind: "edit", file, diff: before === after ? "" : fileDiff(file, before, after), by: e.by })
+      if (before === after) events.push({ kind: "edit", file, diff: "", by: e.by })
+      else events.push({ kind: "edit", file, ...boundedDiff(file, before, after), by: e.by })
     }
     s.finished = []
     s.events = []
