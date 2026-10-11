@@ -379,8 +379,11 @@ function handle(e: ToPanel): void {
           // The same session: its agent gone, or back (#25).
           fileCurrent()
           current = null
+          const was = suspended
           suspended = e.suspended === true
-          addDivider(suspended ? "The agent disconnected: the session waits for it" : "The agent is back: session resumed")
+          // A revive repeats the suspension a disconnect already showed (#138).
+          if (was !== suspended)
+            addDivider(suspended ? "The agent disconnected: the session waits for it" : "The agent is back: session resumed")
           setActive(true)
           return
         }

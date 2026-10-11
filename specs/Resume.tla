@@ -7,8 +7,9 @@
 EXTENDS Naturals
 
 CONSTANTS
-    Dirs,      \* the directories an agent may start from
-    MaxIds     \* how many sessions a run starts, at most
+    Dirs,        \* the directories an agent may start from
+    MaxIds,      \* how many sessions a run starts, at most
+    PostOnRevive \* the fix of #138: `revive` tells the panel the session is suspended
 
 VARIABLES
     state,     \* the window's session: "none", "active", "suspended", "ended" (by the programmer)
@@ -16,24 +17,30 @@ VARIABLES
     dir,       \* its working directory
     conn,      \* an agent's relay is connected, and drives the session if one is active
     pending,   \* a message from the programmer the agent hasn't been sent yet
+    shown,     \* what the panel shows: "off", "live", or "suspended"
     saved      \* what the workspace's storage holds: the session as of its last change
 
-vars == <<state, id, dir, conn, pending, saved>>
+vars == <<state, id, dir, conn, pending, shown, saved>>
 
 \* The session as the extension writes it to the workspace's storage, on every change to it.
-Snapshot(s, i, d, p) == [state |-> s, id |-> i, dir |-> d, pending |-> p]
-Save == saved' = Snapshot(state', id', dir', pending')
+Snapshot(s, i, d, p, v) == [state |-> s, id |-> i, dir |-> d, pending |-> p, shown |-> v]
+Save == saved' = Snapshot(state', id', dir', pending', shown')
+
+\* What the panel shows for a session in state s.
+Shows(s) == CASE s = "active" -> "live" [] s = "suspended" -> "suspended" [] OTHER -> "off"
 
 Init ==
     /\ state = "none" /\ id = 0 /\ dir = "none" /\ conn = FALSE /\ pending = FALSE
-    /\ saved = Snapshot("none", 0, "none", FALSE)
+    /\ shown = "off"
+    /\ saved = Snapshot("none", 0, "none", FALSE, "off")
 
 \* An agent's relay connects, or its harness exits and the socket closes. A disconnect suspends
 \* the session: nothing ends it but the programmer, or another session.
-Connect == ~conn /\ conn' = TRUE /\ UNCHANGED <<state, id, dir, pending, saved>>
+Connect == ~conn /\ conn' = TRUE /\ UNCHANGED <<state, id, dir, pending, shown, saved>>
 Disconnect ==
     /\ conn /\ conn' = FALSE
     /\ state' = IF state = "active" THEN "suspended" ELSE state
+    /\ shown' = IF state = "active" THEN "suspended" ELSE shown
     /\ UNCHANGED <<id, dir, pending>> /\ Save
 
 \* The window reloads: the extension starts again from the workspace's storage, with no relay
@@ -42,6 +49,7 @@ Reload ==
     /\ conn' = FALSE
     /\ state' = IF saved.state \in {"active", "suspended"} THEN "suspended" ELSE "none"
     /\ id' = saved.id /\ dir' = saved.dir /\ pending' = saved.pending
+    /\ shown' = IF PostOnRevive /\ state' = "suspended" THEN "suspended" ELSE saved.shown
     /\ Save
 
 \* The agent's `start` from directory d: a suspended session from d resumes, the same session; any
@@ -51,23 +59,23 @@ Start(d) ==
     /\ IF state = "suspended" /\ dir = d
           THEN state' = "active" /\ UNCHANGED <<id, dir, pending>>
           ELSE id < MaxIds /\ id' = id + 1 /\ dir' = d /\ state' = "active" /\ pending' = FALSE
-    /\ UNCHANGED conn /\ Save
+    /\ UNCHANGED conn /\ shown' = "live" /\ Save
 
 \* The programmer ends the session from the panel, active or suspended; or the agent's `end`.
 ProgrammerEnd ==
-    /\ state \in {"active", "suspended"} /\ state' = "ended" /\ pending' = FALSE
+    /\ state \in {"active", "suspended"} /\ state' = "ended" /\ pending' = FALSE /\ shown' = "off"
     /\ UNCHANGED <<id, dir, conn>> /\ Save
 AgentEnd ==
-    /\ conn /\ state = "active" /\ state' = "none" /\ pending' = FALSE
+    /\ conn /\ state = "active" /\ state' = "none" /\ pending' = FALSE /\ shown' = "off"
     /\ UNCHANGED <<id, dir, conn>> /\ Save
 
 \* A message from the panel, to an active or a suspended session; a report takes it to the agent.
 Message ==
     /\ state \in {"active", "suspended"} /\ ~pending /\ pending' = TRUE
-    /\ UNCHANGED <<state, id, dir, conn>> /\ Save
+    /\ UNCHANGED <<state, id, dir, conn, shown>> /\ Save
 Report ==
     /\ conn /\ state = "active" /\ pending /\ pending' = FALSE
-    /\ UNCHANGED <<state, id, dir, conn>> /\ Save
+    /\ UNCHANGED <<state, id, dir, conn, shown>> /\ Save
 
 Next ==
     \/ Connect \/ Disconnect \/ Reload \/ \E d \in Dirs : Start(d)
@@ -76,7 +84,11 @@ Next ==
 Spec == Init /\ [][Next]_vars /\ WF_vars(Report)
 
 \* The workspace's storage holds the session as it is, so a reload loses nothing.
-SavedIsCurrent == saved = Snapshot(state, id, dir, pending)
+SavedIsCurrent == saved = Snapshot(state, id, dir, pending, shown)
+
+\* The panel shows the session as it is: never a suspended session as live, so no message is sent
+\* to an agent that isn't there without the programmer knowing (#138).
+ShownIsState == shown = Shows(state)
 
 \* A start from a suspended session's directory resumes that session: the same id.
 ResumesSame == [][state = "suspended" /\ state' = "active" /\ dir' = dir => id' = id]_vars

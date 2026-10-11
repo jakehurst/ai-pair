@@ -5,6 +5,9 @@ import * as path from "node:path"
 import WebSocket from "ws"
 import { parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, type ToolName } from "@ai-pair/protocol"
 
+/** A call's error when its window's socket closes: a reloaded window keeps the session for a `start` (#25, #138). */
+export const EDITOR_DISCONNECTED = "The editor disconnected. If its window was reloaded, call `start` again to resume the session."
+
 export class RelayError extends Error {
   constructor(
     readonly code: string,
@@ -287,7 +290,7 @@ export class EditorLink {
         if (this.ws === ws) this.ws = null
         if (!welcomed) reject(new RelayError("no_editor", "The editor closed the connection."))
         for (const p of calls.values()) {
-          p.reject(new RelayError("no_editor", "The editor disconnected. If its window was reloaded, start a new session."))
+          p.reject(new RelayError("no_editor", EDITOR_DISCONNECTED))
         }
         calls.clear()
       })

@@ -1516,7 +1516,7 @@ describe("sessions", () => {
     expect(report.cursor?.file).toBe("a.ts")
   })
 
-  it("suspends a session the agent disconnects from, and resumes it on a start from its directory (specs/Resume.tla)", async () => {
+  it("ResumesSame, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory (specs/Resume.tla)", async () => {
     const { controller } = setup({ "a.ts": "a\n" })
     await controller.start("the task")
     await controller.read("a.ts")
@@ -1530,7 +1530,7 @@ describe("sessions", () => {
     expect(resumed.cursor?.file).toBe("a.ts")
   })
 
-  it("starts a new session from another directory, ending the suspended one (specs/Resume.tla)", async () => {
+  it("Waits: starts a new session from another directory, ending the suspended one (specs/Resume.tla)", async () => {
     const { controller } = setup()
     await controller.start("one", "/a")
     controller.disconnect()
@@ -1539,7 +1539,7 @@ describe("sessions", () => {
     expect(other).toEqual({ batches: [], events: [], turn: "agent" })
   })
 
-  it("closes a suspended session at once when the programmer ends it (specs/Resume.tla)", async () => {
+  it("Waits: closes a suspended session at once when the programmer ends it (specs/Resume.tla)", async () => {
     const { controller } = setup()
     await controller.start()
     controller.disconnect()
@@ -1548,7 +1548,7 @@ describe("sessions", () => {
     expect((await until(controller.start())).resumed).toBeUndefined()
   })
 
-  it("brings back a session the window saved, suspended, after a reload (specs/Resume.tla)", async () => {
+  it("SavedIsCurrent, NotLost: brings back a session the window saved, suspended, after a reload (specs/Resume.tla)", async () => {
     const before = setup({ "a.ts": "one\ntwo\n" })
     await before.controller.start("the task")
     await before.controller.read("a.ts")
@@ -1564,6 +1564,16 @@ describe("sessions", () => {
     const resumed = await until(after.controller.start("the task"))
     expect(resumed).toMatchObject({ resumed: true, events: [{ kind: "message", text: "still there?" }] })
     expect(resumed.cursor?.lines.find((l) => l.text.includes("\u{258c}"))?.number).toBe(2)
+  })
+
+  it("ShownIsState: a revived session tells the panel it is suspended (#138)", async () => {
+    const before = setup()
+    await before.controller.start("the task")
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const saved = JSON.parse(JSON.stringify(before.controller.saved)) as SavedSession
+    const after = setup()
+    after.controller.revive(saved)
+    expect(after.panel.events).toContainEqual({ type: "session", active: true, task: "the task", suspended: true })
   })
 })
 

@@ -68,6 +68,26 @@ it("keeps a suspended session's history, and says when it waits for the agent an
   ])
 })
 
+it("ShownIsState: a session revived after a reload shows as suspended (#138)", () => {
+  send({
+    type: "replay",
+    events: [
+      { type: "session", active: true },
+      { type: "say", text: "A" },
+    ],
+  })
+  send({ type: "session", active: true, suspended: true })
+  expect(document.querySelector("#status-text")?.textContent).toBe("Suspended: waiting for the agent")
+  expect(history()).toEqual(["The agent disconnected: the session waits for it", "A", "Session started"])
+})
+
+it("ShownIsState: a revive after a disconnect shows the suspension once (#138)", () => {
+  const suspended = { type: "session", active: true, suspended: true }
+  send({ type: "replay", events: [{ type: "session", active: true }, suspended] })
+  send(suspended)
+  expect(history()).toEqual(["The agent disconnected: the session waits for it", "Session started"])
+})
+
 it("YoursInView: your message scrolls the history back to its top (#139)", () => {
   send({ type: "session", active: true })
   send({ type: "say", text: "A" })
