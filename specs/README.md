@@ -108,7 +108,7 @@ at the top of `block()` (#1).
 | `Reject` | `rejectBatch`: the call answers with the rejection at once; an abort meanwhile ends it with that, not `cancelled` |
 | `Abort` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Play` | the player finishing batches in queue order |
-| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()` or the `maxBlockMs` timer; clears `this.call` |
+| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()`, where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call` |
 | `Resolve` | `withCursor(...).then(call.resolve)`: the report handed back after the commit |
 | `Finished` | every call settled: the agent makes no more calls |
 
@@ -121,6 +121,7 @@ with the deadlock check off, since TLC otherwise stops first at the deadlock:
 |---|---|
 | `Commit` leaves `current` at 0, the old sentinel | `TypeOK` |
 | `Guard` runs a call without waiting for the calls before it | `BlockedIsCurrent` |
+| `Finish` waits for the batch to be done, the spec before #150 | `ReadyAtHead` |
 | an abort of a blocked call takes its batch off the queue | `CancelKeepsBatch` |
 | `Fixed = FALSE`, the code at 57ac07f | `CancelReleases` |
 | the chain runs a call only after the calls before it were reported, as `this.chain.then(guarded)` with no rejection handler would | `ChainProgresses`, `CancelReleases` |
@@ -132,6 +133,7 @@ test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `BlockedIsCurrent` | `controller.test.ts`: BlockedIsCurrent: a call waits its turn while another is blocked, and blocks only once that one has returned |
+| `ReadyAtHead` | `controller.test.ts`: BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes |
 | `CancelKeepsBatch` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
 | `CancelReleases` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
 | `ChainProgresses` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report |
@@ -1226,7 +1228,7 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `OnlyTalkInTheirTurn` | `controller.test.ts`: OnlyTalkInTheirTurn: lets the agent only comment during the programmer's turn; OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing |
-| `BatchEnds` | `controller.test.ts`: BatchEnds: returns the first step immediately and blocks the second until the first finishes |
+| `BatchEnds` | `controller.test.ts`: BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes |
 
 ### `Reload`: a file changed on disk
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6
+
+-   The `Serialize` spec says when a step returns as the code does: once its
+    batch is done, or plays next, so a step returns as soon as the one before
+    it has (#150). TLC checks the new `ReadyAtHead` invariant. The extension
+    works the same.
+
 ## 0.6.5
 
 -   Fixed: when the agent's connection closed while its `start` was still

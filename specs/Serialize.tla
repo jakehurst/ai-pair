@@ -74,6 +74,11 @@ TypeOK ==
     /\ empty \in [Calls -> BOOLEAN]
     /\ rejected \in [Calls -> BOOLEAN]
 
+\* The call's batch plays next: queued, with no batch before it still queued.
+AtHead(i) ==
+    /\ batch[i] = "queued"
+    /\ \A j \in 1..(i - 1) : batch[j] # "queued"
+
 \* finishCall: the blocked call commits to a report, and this.call is cleared.
 Commit(i) ==
     /\ pc' = [pc EXCEPT ![i] = "committed"]
@@ -147,18 +152,17 @@ Abort(i) ==
 
 \* The player finishes the call's batch, after every batch queued before it.
 Play(i) ==
-    /\ batch[i] = "queued"
-    /\ \A j \in 1..(i - 1) : batch[j] # "queued"
+    /\ AtHead(i)
     /\ batch' = [batch EXCEPT ![i] = "done"]
     /\ UNCHANGED <<pc, aborted, abortedAt, current, outcome, empty, rejected>>
 
 \* ready(): an empty step is ready once nothing is queued, any other once its
-\* batch is done; then finishCall.
+\* batch is done or plays next (#150); then finishCall.
 Finish(i) ==
     /\ pc[i] = "blocked"
     /\ IF empty[i]
        THEN \A j \in Calls : batch[j] # "queued"
-       ELSE batch[i] = "done"
+       ELSE batch[i] = "done" \/ AtHead(i)
     /\ Commit(i)
 
 \* The maxBlockMs timer fires, and finishCall reports what there is.
@@ -209,6 +213,12 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 \* S4: the blocked call is this.call, so at most one call is blocked.
 BlockedIsCurrent == \A i \in Calls : (pc[i] = "blocked") => (current = i)
+
+\* A blocked step whose batch plays next is ready to report (#150): a step
+\* returns once the step before it has, not once its own batch has played.
+ReadyAtHead ==
+    \A i \in Calls :
+        (pc[i] = "blocked" /\ ~empty[i] /\ AtHead(i)) => ENABLED Finish(i)
 
 \* S7: a step cancelled after Guard keeps its batch queued; one cancelled by
 \* Guard never queues it.
