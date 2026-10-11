@@ -66,7 +66,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Draft.cfg` | `MaxViews = 3` pages | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, `MaxSteps = 4` changes | holds | 123 |
-| `Outside.cfg` | one file, 5 contents | holds | 564 |
+| `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 564 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxSteps = 4` | holds | 516 |
 | `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
@@ -686,11 +686,29 @@ nothing the programmer does falls in between.
 
 | Spec | Code |
 |---|---|
-| `Save`, `Saved` | a document saved; `onDidSaveTextDocument` -> `saved` |
+| `Save`, `NotifySave` | a document saved; `onDidSaveTextDocument` -> `saved` |
 | `Create` | `show` creating a missing file -> `wrote` -> `saved` |
 | `Write` | anything else writing the file; an open document without unsaved changes reloads |
 | `Report` | the watcher's events -> `reported`; the group settles -> `settle` reads and compares |
 | `Open` | opening the file or its diff -> `seen` |
+
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted. The other rules and an unsettled decision all break
+NoFalseMark, so Marks has a mutation of its own:
+
+| Mutation | Breaks |
+|---|---|
+| an outside write leaves content 0 | `TypeOK` |
+| `Rule = "every"`, `Rule = "afterSave"`, or `Settle = FALSE` | `NoFalseMark` |
+| the content rule never marks | `Marks` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NoFalseMark` | `outside.test.ts`: NoFalseMark: doesn't mark a save, or a file the extension created; NoFalseMark: clears the mark when the programmer sees the file, and a late event for what they saw doesn't bring it back; NoFalseMark: doesn't mark a file the programmer saw before its writes settled |
+| `Marks` | `outside.test.ts`: Marks: marks a file written outside once its writes settle, and reports it; Marks: marks a write the watcher reports in one event with a save (the afterSave rule misses it) |
 
 ### `ProjectGuide`: which project guides `start` reads
 

@@ -27,19 +27,19 @@ export class OutsideChanges {
     private readonly redraw: (files: string[]) => void,
   ) {}
 
-  /** VS Code wrote `text` to the file: a document saved, or the extension creating the file. */
+  /** VS Code wrote `text` to the file: a document saved, or the extension creating the file (specs/Outside.tla, `NotifySave`, `Create`). */
   saved(file: string, text: string): void {
     this.known.set(file, text)
   }
 
-  /** The file watcher reported a write. It's decided once the group settles. */
+  /** The file watcher reported a write. It's decided once the group settles (specs/Outside.tla, `Report`). */
   reported(file: string): void {
     if (!this.group.includes(file)) this.group.push(file)
     clearTimeout(this.timer)
     this.timer = setTimeout(() => void this.settle(), GROUP_MS)
   }
 
-  /** The programmer opened the file, or its diff, and saw `text`: the mark clears. */
+  /** The programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */
   seen(file: string, text: string): void {
     this.known.set(file, text)
     if (this.marked.delete(file)) this.redraw([file])
@@ -54,7 +54,7 @@ export class OutsideChanges {
 
   /**
    * Decides a group: a file written outside the protocol is one that differs from what we know of
-   * it. The watcher reports saves too, late, and may report several writes as one.
+   * it. The watcher reports saves too, late, and may report several writes as one. specs/Outside.tla, `Report`.
    */
   private settle(): Promise<void> {
     const files = this.group
