@@ -125,7 +125,7 @@ let tipWarmUntil = 0;
 // ---- Messages as HTML ------------------------------------------------------
 
 function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESCAPES.get(c) ?? c);
+  return s.replaceAll(/[&<>"']/g, (c) => ESCAPES.get(c) ?? c);
 }
 
 function codeSpan(code: string): string {

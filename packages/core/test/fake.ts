@@ -207,6 +207,8 @@ export function setup(files: Record<string, string> = {}, config: Partial<Config
 
 /** Returns `saved` as the workspace's storage hands it back: through JSON. */
 export function throughStorage(saved?: SavedSession): SavedSession {
+  // Through JSON on purpose: that is what the storage does to it.
+  // oxlint-disable-next-line unicorn/prefer-structured-clone
   const parsed: unknown = JSON.parse(JSON.stringify(saved));
   if (!isSavedSession(parsed)) throw new Error(`not a saved session: ${JSON.stringify(parsed)}`);
   return parsed;

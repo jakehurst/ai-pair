@@ -65,13 +65,13 @@ const REPLACED: ReadonlyMap<string, string> = new Map([
   ['NEXT', 'SPECIFICATION'],
 ]);
 /** The keywords whose entries go below them, one per line (8.4, 8.5). */
-const BLOCK_KEYWORDS: readonly string[] = ['CONSTANTS', 'INVARIANTS', 'PROPERTIES'];
+const BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['CONSTANTS', 'INVARIANTS', 'PROPERTIES']);
 /** The block keywords whose entries are names, one per line (8.5). */
-const NAME_BLOCKS: readonly string[] = ['INVARIANTS', 'PROPERTIES'];
+const NAME_BLOCKS: ReadonlySet<string> = new Set(['INVARIANTS', 'PROPERTIES']);
 /** A block's entry: indented 4 spaces (8.4). */
 const ENTRY = /^ {4}\S/;
 /** The keywords a comment has to justify (7.2, 8.6). */
-const JUSTIFIED: readonly string[] = ['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW'];
+const JUSTIFIED: ReadonlySet<string> = new Set(['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW']);
 /** The deadlock check turned off, which a comment has to justify (6.13, 7.2). */
 const DEADLOCK_OFF = 'CHECK_DEADLOCK FALSE';
 
@@ -186,7 +186,7 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
     if (keyword === undefined) {
       if (code !== '' && !ENTRY.test(code)) report(i, '8.4, 8.5', 'an entry is indented 4 spaces');
       const names = code.match(IDENTIFIER) ?? [];
-      if (block !== undefined && NAME_BLOCKS.includes(block) && names.length > 1) report(i, '8.5', 'one name per line');
+      if (block !== undefined && NAME_BLOCKS.has(block) && names.length > 1) report(i, '8.5', 'one name per line');
       if (block === 'INVARIANTS') invariants.push(...names);
       return;
     }
@@ -198,9 +198,9 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
     const above = lines.findLastIndex((other, j) => j < i && !other.startsWith(LINE_COMMENT));
     if (lines[above] !== '') report(i, '8.1', 'a blank line before each keyword');
     const justified = above < i - 1 || codeOf(line) !== line;
-    if ((JUSTIFIED.includes(block) || code === DEADLOCK_OFF) && !justified) report(i, '7.2, 8.6', `${code} needs a comment saying why`);
+    if ((JUSTIFIED.has(block) || code === DEADLOCK_OFF) && !justified) report(i, '7.2, 8.6', `${code} needs a comment saying why`);
     const entries = code.slice(keyword.length).match(IDENTIFIER) ?? [];
-    if (BLOCK_KEYWORDS.includes(block) && entries.length > 0) report(i, '8.4, 8.5', 'entries go below the keyword, one per line');
+    if (BLOCK_KEYWORDS.has(block) && entries.length > 0) report(i, '8.4, 8.5', 'entries go below the keyword, one per line');
     if (block === 'INVARIANTS') invariants.push(...entries);
   });
   if (hasVariables && invariants[0] !== TYPE_OK) report(0, '6.1, 8.5', 'TypeOK is not the first invariant');

@@ -82,17 +82,17 @@ export function terminalText(raw: string): string {
   // oxlint-disable no-control-regex
   const plain = raw
     // ECMA-48: CSI G or 1G moves the cursor to column 1; CSI K or 0K erases from it to the end, CSI 2K the whole line.
-    .replace(/\x1b\[1?G\x1b\[0?K|\x1b\[2K/g, ERASED_LINE)
-    .replace(/\x1b\[1?G/g, '\r')
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1b[@-Z\\-_]/g, '');
+    .replaceAll(/\x1b\[1?G\x1b\[0?K|\x1b\[2K/g, ERASED_LINE)
+    .replaceAll(/\x1b\[1?G/g, '\r')
+    .replaceAll(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replaceAll(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replaceAll(/\x1b[@-Z\\-_]/g, '');
   return plain
-    .replace(/\r\n/g, '\n')
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .map((line) => {
       const parts = (line.split(ERASED_LINE).at(-1) ?? '').split('\r').filter((p) => p !== '');
-      return (parts.at(-1) ?? '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '').trimEnd();
+      return (parts.at(-1) ?? '').replaceAll(/[\x00-\x08\x0b-\x1f\x7f]/g, '').trimEnd();
       // oxlint-enable no-control-regex
     })
     .join('\n')

@@ -139,6 +139,11 @@ Set by Justine on 2026-10-07.
     -   Export a type that appears in an exported signature, like `Frame` in
         `parseFrame`, so a caller can name it; otherwise export only what
         another file imports (Exports).
+    -   Use no API its types mark `@deprecated`, and the modern form where
+        one exists: `replaceAll`, `.at(-1)`, `Set.has`, `structuredClone`,
+        `node:` imports. oxlint's `typescript/no-deprecated` and the
+        `unicorn/prefer-*` rules in `.oxlintrc.json` check these (set by
+        Justine on 2026-10-11).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`

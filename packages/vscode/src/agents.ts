@@ -86,7 +86,7 @@ export function which(host: Host, name: string, extra: string[] = []): string | 
 }
 
 function cmdQuoted(arg: string): string {
-  return /[\s"&|<>^()]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;
+  return /[\s"&|<>^()]/.test(arg) ? `"${arg.replaceAll('"', '""')}"` : arg;
 }
 
 /** Runs `file`; on Windows, a `.cmd` or `.bat` (an npm shim) only runs through the shell. */

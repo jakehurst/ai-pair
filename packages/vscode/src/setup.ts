@@ -104,7 +104,7 @@ export function registerServerProvider(context: vscode.ExtensionContext): void {
 }
 
 function list(names: string[]): string {
-  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
 
 /** Asks which agent to connect, and registers the relay's launcher with it. */

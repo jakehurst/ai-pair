@@ -70,7 +70,7 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
 
 /** Returns the characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
 export function readingChars(text: string): number {
-  return text.trim().replace(/\s+/g, ' ').length;
+  return text.trim().replaceAll(/\s+/g, ' ').length;
 }
 
 /** Returns how long a say pauses: per character of its text, at least the floor, so each message gets its own time. */
