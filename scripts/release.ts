@@ -25,18 +25,46 @@ interface Manifest {
   version: string;
 }
 
-const run = (cmd: string, args: string[], opts: ExecFileSyncOptions = {}) =>
+/** Runs `cmd` with `args` in the repository, its output shown. */
+function run(cmd: string, args: string[], opts: ExecFileSyncOptions = {}): void {
   execFileSync(cmd, args, { cwd: ROOT, stdio: 'inherit', ...opts });
-const read = (cmd: string, args: string[]) => execFileSync(cmd, args, { cwd: ROOT, encoding: 'utf8' }).trim();
-const manifest = (): Manifest => JSON.parse(fs.readFileSync(path.join(ROOT, MANIFEST), 'utf8'));
+}
 
+/** Runs `cmd` with `args` in the repository and returns its output, trimmed. */
+function read(cmd: string, args: string[]): string {
+  return execFileSync(cmd, args, { cwd: ROOT, encoding: 'utf8' }).trim();
+}
+
+/** Prints why the release stopped, and exits. */
 function fail(message: string): never {
   console.error(`\nFailed: ${message}`);
   process.exit(1);
 }
 
+/** Prints `message` as the heading of the next step. */
 function step(message: string) {
   console.log(`\n> ${message}`);
+}
+
+/** Checks that `value` has the manifest fields the release reads, each a string. */
+function isManifest(value: unknown): value is Manifest {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'publisher' in value &&
+    typeof value.publisher === 'string' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'version' in value &&
+    typeof value.version === 'string'
+  );
+}
+
+/** Reads the extension's manifest, failing if it lacks a field the release reads. */
+function manifest(): Manifest {
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, MANIFEST), 'utf8'));
+  if (!isManifest(parsed)) return fail(`${MANIFEST} needs a publisher, a name, and a version.`);
+  return parsed;
 }
 
 /** Splits an `x.y.z` version into its three numbers, or fails. */
@@ -46,7 +74,7 @@ function parts(version: string): [number, number, number] {
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
-/** The version after `bump`, from `current`. An exact one may be the current, for its first release. */
+/** Returns the version after `bump`, from `current`. An exact one may be the current, for its first release. */
 function next(current: string, bump: string): string {
   const [major, minor, patch] = parts(current);
   if (VERSION.test(bump)) {
@@ -61,7 +89,7 @@ function next(current: string, bump: string): string {
   return fail('Say which version: patch, minor, major, or an exact x.y.z.');
 }
 
-/** The body of the changelog's section for `version`, without its heading. */
+/** Returns the body of the changelog's section for `version`, without its heading. */
 function notes(version: string): string | undefined {
   const text = fs.readFileSync(path.join(ROOT, CHANGELOG), 'utf8');
   const sections = text.split(/^## /m).slice(1);
@@ -86,13 +114,15 @@ const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encodi
 const unexpected = dirty.filter((line) => line.slice(3) !== CHANGELOG);
 if (unexpected.length) fail(`Commit or stash these first; only ${CHANGELOG} may have changes:\n${unexpected.join('\n')}`);
 run('git', ['fetch', '--quiet', '--tags', 'origin', 'main']);
-if (read('git', ['rev-parse', 'HEAD']) !== read('git', ['rev-parse', 'origin/main']))
+if (read('git', ['rev-parse', 'HEAD']) !== read('git', ['rev-parse', 'origin/main'])) {
   fail("main isn't the same as origin/main: pull or push first.");
+}
 if (read('git', ['tag', '--list', tag])) fail(`${tag} is already tagged.`);
 const changes = notes(version);
 if (!changes) fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`);
-if (!read('vsce', ['ls-publishers']).split('\n').includes(publisher))
+if (!read('vsce', ['ls-publishers']).split('\n').includes(publisher)) {
   fail(`vsce has no token for the publisher ${publisher}: run \`vsce login ${publisher}\`.`);
+}
 run('gh', ['auth', 'status'], { stdio: 'ignore' });
 
 step('Testing');

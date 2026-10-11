@@ -56,20 +56,20 @@ const CONFIG = [
 /** A case: the guide's section, the break, and a change that breaks that rule alone. */
 type Case = [rule: string, description: string, from: string, to: string];
 
-/** `text` with `from` replaced by `to`; throws if `from` is not in it, so a case cannot pass by changing nothing. */
+/** Returns `text` with `from` replaced by `to`; throws if `from` is not in it, so a case cannot pass by changing nothing. */
 function edit(text: string, from: string, to: string): string {
   if (!text.includes(from)) throw new Error(`not in the fake spec: ${from}`);
   return text.replace(from, to);
 }
 
-/** The guide sections that `problems` cite, in order. */
+/** Returns the guide sections that `problems` cite, in order. */
 function rules(problems: Problem[]): string[] {
   return problems.map((problem) => problem.rule);
 }
 
 it('reports nothing for a module and a config that follow the guide', () => {
   expect(checkModule('Fake', MODULE)).toEqual([]);
-  expect(checkConfig(CONFIG, true)).toEqual([]);
+  expect(checkConfig(CONFIG, /* hasVariables= */ true)).toEqual([]);
 });
 
 /** For each rule, the section, the break, and a change to MODULE that breaks that rule alone. */
@@ -89,8 +89,8 @@ const MODULE_CASES: readonly Case[] = [
   ['6.1', 'no TypeOK', 'TypeOK ==', 'TypeInvariant =='],
 ];
 
-it.each(MODULE_CASES)('reports %s for %s in a module', (rule, _description, from, to) => {
-  expect(rules(checkModule('Fake', edit(MODULE, from, to)))).toEqual([rule]);
+it.each(MODULE_CASES)('reports %s for %s in a module', (rule, description, from, to) => {
+  expect(rules(checkModule('Fake', edit(MODULE, from, to))), description).toEqual([rule]);
 });
 
 /** For each rule, the section, the break, and a change to CONFIG that breaks that rule alone. */
@@ -113,10 +113,10 @@ const CONFIG_CASES: readonly Case[] = [
   ['4.2', 'a line over the column limit', 'Expected to pass.', 'Expected to pass.'.padEnd(COLUMN_LIMIT, '.')],
 ];
 
-it.each(CONFIG_CASES)('reports %s for %s in a config', (rule, _description, from, to) => {
-  expect(rules(checkConfig(edit(CONFIG, from, to), true))).toEqual([rule]);
+it.each(CONFIG_CASES)('reports %s for %s in a config', (rule, description, from, to) => {
+  expect(rules(checkConfig(edit(CONFIG, from, to), /* hasVariables= */ true)), description).toEqual([rule]);
 });
 
 it('does not ask for TypeOK in a config for a module with no variables', () => {
-  expect(checkConfig(edit(CONFIG, '    TypeOK', '    Counted'), false)).toEqual([]);
+  expect(checkConfig(edit(CONFIG, '    TypeOK', '    Counted'), /* hasVariables= */ false)).toEqual([]);
 });

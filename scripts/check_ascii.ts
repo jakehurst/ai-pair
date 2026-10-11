@@ -26,25 +26,25 @@ const S_CARON = 0x0160; // LATIN CAPITAL LETTER S WITH CARON
 const EM_DASH = 0x2014;
 
 /** The characters a file may hold beyond ASCII, as code points, with why. */
-const ALLOWED: Record<string, readonly number[]> = {
+const ALLOWED: ReadonlyMap<string, readonly number[]> = new Map([
   // The cursor marker, shown to the agent as it types it.
-  'AGENT_GUIDE.md': [CURSOR_MARKER],
-  'PROTOCOL.md': [CURSOR_MARKER],
+  ['AGENT_GUIDE.md', [CURSOR_MARKER]],
+  ['PROTOCOL.md', [CURSOR_MARKER]],
   // The components diagram's box drawing.
-  'ARCHITECTURE.md': [BOX_DOWN_RIGHT, BOX_DOWN_LEFT, BOX_UP_RIGHT, BOX_UP_LEFT, BOX_HORIZONTAL, BOX_VERTICAL, RIGHT_TRIANGLE],
+  ['ARCHITECTURE.md', [BOX_DOWN_RIGHT, BOX_DOWN_LEFT, BOX_UP_RIGHT, BOX_UP_LEFT, BOX_HORIZONTAL, BOX_VERTICAL, RIGHT_TRIANGLE]],
   // The upstream author's name.
-  'LICENSE': [S_CARON],
+  ['LICENSE', [S_CARON]],
   // The dash before the quote's source, and the diagram's line and arrowhead.
-  'README.md': [EM_DASH, BOX_HORIZONTAL, RIGHT_TRIANGLE],
-  'packages/vscode/README.md': [EM_DASH],
-};
+  ['README.md', [EM_DASH, BOX_HORIZONTAL, RIGHT_TRIANGLE]],
+  ['packages/vscode/README.md', [EM_DASH]],
+]);
 
 const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0');
 const files = tracked.filter((file) => file && !SKIPPED.test(file) && fs.existsSync(path.join(ROOT, file)));
 
 let found = 0;
 for (const file of files) {
-  const allowed = new Set(ALLOWED[file] ?? []);
+  const allowed = new Set(ALLOWED.get(file) ?? []);
   const lines = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n');
   lines.forEach((line, i) => {
     let column = 0;

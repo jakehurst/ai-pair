@@ -12,8 +12,9 @@ const SPECS = path.join(ROOT, 'specs');
 /** The column limit (4.2). */
 const COLUMN_LIMIT = 80;
 const MODULE_EXTENSION = '.tla';
-/** The module footer (3.10) and a separator line (4.6). */
+/** The module footer (3.10). */
 const FOOTER = '='.repeat(COLUMN_LIMIT);
+/** A separator line (4.6). */
 const SEPARATOR = '-'.repeat(COLUMN_LIMIT);
 /** A line of dashes, a separator meant to be SEPARATOR. */
 const DASHES = /^-{4,}$/;
@@ -31,9 +32,11 @@ const CRAMPED_COMMENT = /\\\*(?! |$)/;
 const SINGULAR_KEYWORD = /^(CONSTANT|VARIABLE)(?!S)\b/;
 /** `==` without exactly one space on each side (4.4). */
 const CRAMPED_DEFINITION = /[^ =]==|==[^ =]|  ==|==  /;
-/** The starts of the definitions of the variables tuple (3.6) and the type invariant (6.1). */
+/** The start of the variables tuple's definition (3.6). */
 const VARS_DEFINITION = 'vars ==';
+/** The type invariant's name (6.1). */
 const TYPE_OK = 'TypeOK';
+/** The start of the type invariant's definition (6.1). */
 const TYPE_OK_DEFINITION = `${TYPE_OK} ==`;
 
 const CONFIG_EXTENSION = '.cfg';
@@ -42,33 +45,34 @@ const MODEL_SEPARATOR = '_';
 /** A config line's keyword. */
 const CONFIG_KEYWORD = /^[A-Z_]+/;
 /** Each config keyword's place in a config (8.1); the four state-space controls share one. */
-const CONFIG_ORDER: Readonly<Record<string, number>> = {
-  SPECIFICATION: 0,
-  CONSTANTS: 1,
-  INVARIANTS: 2,
-  PROPERTIES: 3,
-  SYMMETRY: 4,
-  CONSTRAINT: 4,
-  ACTION_CONSTRAINT: 4,
-  VIEW: 4,
-  CHECK_DEADLOCK: 5,
-};
+const CONFIG_ORDER: ReadonlyMap<string, number> = new Map([
+  ['SPECIFICATION', 0],
+  ['CONSTANTS', 1],
+  ['INVARIANTS', 2],
+  ['PROPERTIES', 3],
+  ['SYMMETRY', 4],
+  ['CONSTRAINT', 4],
+  ['ACTION_CONSTRAINT', 4],
+  ['VIEW', 4],
+  ['CHECK_DEADLOCK', 5],
+]);
 /** The keywords TLC accepts that the guide replaces, with what replaces them (8.3, 8.4, 8.5). */
-const REPLACED: Readonly<Record<string, string>> = {
-  CONSTANT: 'CONSTANTS',
-  INVARIANT: 'INVARIANTS',
-  PROPERTY: 'PROPERTIES',
-  INIT: 'SPECIFICATION',
-  NEXT: 'SPECIFICATION',
-};
+const REPLACED: ReadonlyMap<string, string> = new Map([
+  ['CONSTANT', 'CONSTANTS'],
+  ['INVARIANT', 'INVARIANTS'],
+  ['PROPERTY', 'PROPERTIES'],
+  ['INIT', 'SPECIFICATION'],
+  ['NEXT', 'SPECIFICATION'],
+]);
 /** The keywords whose entries go below them, one per line (8.4, 8.5). */
 const BLOCK_KEYWORDS: readonly string[] = ['CONSTANTS', 'INVARIANTS', 'PROPERTIES'];
 /** The block keywords whose entries are names, one per line (8.5). */
 const NAME_BLOCKS: readonly string[] = ['INVARIANTS', 'PROPERTIES'];
 /** A block's entry: indented 4 spaces (8.4). */
 const ENTRY = /^ {4}\S/;
-/** The keywords a comment has to justify (7.2, 8.6), and the deadlock check turned off (6.13, 7.2). */
+/** The keywords a comment has to justify (7.2, 8.6). */
 const JUSTIFIED: readonly string[] = ['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW'];
+/** The deadlock check turned off, which a comment has to justify (6.13, 7.2). */
 const DEADLOCK_OFF = 'CHECK_DEADLOCK FALSE';
 
 /** A problem found in a spec or a config: its line, the guide's section, and what is wrong. */
@@ -78,18 +82,18 @@ export interface Problem {
   message: string;
 }
 
-/** The header line of module `name` (3.2): four dashes, `MODULE`, the name, and dashes to the column limit. */
+/** Returns the header line of module `name` (3.2): four dashes, `MODULE`, the name, and dashes to the column limit. */
 function header(name: string): string {
   return `---- MODULE ${name} `.padEnd(COLUMN_LIMIT, '-');
 }
 
-/** The code of `line`: the part before its line comment, if it has one. */
+/** Returns the code of `line`: the part before its line comment, if it has one. */
 function codeOf(line: string): string {
   const start = line.indexOf(LINE_COMMENT);
   return start < 0 ? line : line.slice(0, start);
 }
 
-/** Where each `VARIABLES` block starts, and the variables the blocks declare, in order (3.6). */
+/** Finds where each `VARIABLES` block starts, and the variables the blocks declare, in order (3.6). */
 function variables(lines: string[]): { blocks: number[]; names: string[] } {
   const blocks: number[] = [];
   const names: string[] = [];
@@ -107,26 +111,28 @@ function variables(lines: string[]): { blocks: number[]; names: string[] } {
   return { blocks, names };
 }
 
-/** The line of the `vars` definition and the names its tuple lists, or undefined if there is none (3.6). */
+/** Finds the line of the `vars` definition and the names its tuple lists, or undefined if there is none (3.6). */
 function varsTuple(lines: string[]): { line: number; names: string[] } | undefined {
   const start = lines.findIndex((line) => line.startsWith(VARS_DEFINITION));
   if (start < 0) return undefined;
   const end = lines.findIndex((line, i) => i >= start && line.includes('>>'));
   const tuple = lines
     .slice(start, end + 1)
-    .map(codeOf)
+    .map((line) => codeOf(line))
     .join(' ')
     .slice(VARS_DEFINITION.length);
   return { line: start, names: tuple.match(IDENTIFIER) ?? [] };
 }
 
-/** The problems in module `name`, whose text is `text`: each with its line, the guide's section, and what is wrong. */
+/** Returns the problems in module `name`, whose text is `text`: each with its line, the guide's section, and what is wrong. */
 export function checkModule(name: string, text: string): Problem[] {
   const lines = text.split('\n');
   const problems: Problem[] = [];
   if (lines[0] !== header(name)) problems.push({ line: 1, rule: '3.2', message: `the header is not "${header(name)}"` });
   lines.forEach((line, i) => {
-    const report = (rule: string, message: string) => problems.push({ line: i + 1, rule, message });
+    function report(rule: string, message: string): void {
+      problems.push({ line: i + 1, rule, message });
+    }
     const code = codeOf(line);
     const comment = line.slice(code.length);
     if (line.includes('\t')) report('4.1', 'a tab');
@@ -138,27 +144,37 @@ export function checkModule(name: string, text: string): Problem[] {
     if (line === '' && lines[i - 1] === '') report('4.6', 'two blank lines in a row');
   });
   const last = lines.length - 1;
-  if (lines[last] !== '') problems.push({ line: last + 1, rule: '2.2', message: 'no newline at the end' });
-  else if (lines[last - 1] !== FOOTER) problems.push({ line: last, rule: '3.10', message: `the footer is not ${COLUMN_LIMIT} "="` });
+  if (lines[last] !== '') {
+    problems.push({ line: last + 1, rule: '2.2', message: 'no newline at the end' });
+  } else if (lines[last - 1] !== FOOTER) {
+    problems.push({ line: last, rule: '3.10', message: `the footer is not ${COLUMN_LIMIT} "="` });
+  }
   const { blocks, names } = variables(lines);
-  for (const block of blocks.slice(1)) problems.push({ line: block + 1, rule: '3.6', message: 'a second VARIABLES block' });
+  for (const block of blocks.slice(1)) {
+    problems.push({ line: block + 1, rule: '3.6', message: 'a second VARIABLES block' });
+  }
   const [firstBlock] = blocks;
   if (firstBlock !== undefined && names.length > 0) {
     const tuple = varsTuple(lines);
-    if (!tuple) problems.push({ line: firstBlock + 1, rule: '3.6', message: 'no vars tuple' });
-    else if (tuple.names.join() !== names.join())
+    if (!tuple) {
+      problems.push({ line: firstBlock + 1, rule: '3.6', message: 'no vars tuple' });
+    } else if (tuple.names.join() !== names.join()) {
       problems.push({ line: tuple.line + 1, rule: '3.6', message: `vars is not <<${names.join(', ')}>>` });
-    if (!lines.some((line) => line.startsWith(TYPE_OK_DEFINITION)))
+    }
+    if (!lines.some((line) => line.startsWith(TYPE_OK_DEFINITION))) {
       problems.push({ line: firstBlock + 1, rule: '6.1', message: 'no TypeOK' });
+    }
   }
   return problems;
 }
 
-/** The problems in a config, whose text is `text`, for a module that declares variables or not (`hasVariables`). */
+/** Returns the problems in a config, whose text is `text`, for a module that declares variables or not (`hasVariables`). */
 export function checkConfig(text: string, hasVariables: boolean): Problem[] {
   const lines = text.split('\n');
   const problems: Problem[] = [];
-  const report = (i: number, rule: string, message: string) => problems.push({ line: i + 1, rule, message });
+  function report(i: number, rule: string, message: string): void {
+    problems.push({ line: i + 1, rule, message });
+  }
   if (!lines[0]?.startsWith(LINE_COMMENT)) report(0, '8.2', 'no leading comment saying what the model is for');
   const invariants: string[] = [];
   let place = 0;
@@ -174,9 +190,9 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
       if (block === 'INVARIANTS') invariants.push(...names);
       return;
     }
-    block = REPLACED[keyword] ?? keyword;
-    if (keyword in REPLACED) report(i, '8.3, 8.4, 8.5', `${block}, not ${keyword}`);
-    const order = CONFIG_ORDER[block] ?? place;
+    block = REPLACED.get(keyword) ?? keyword;
+    if (REPLACED.has(keyword)) report(i, '8.3, 8.4, 8.5', `${block}, not ${keyword}`);
+    const order = CONFIG_ORDER.get(block) ?? place;
     if (order < place) report(i, '8.1', `${block} is out of order`);
     place = Math.max(place, order);
     const above = lines.findLastIndex((other, j) => j < i && !other.startsWith(LINE_COMMENT));
@@ -191,18 +207,19 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
   return problems;
 }
 
-/** The text of `file` in specs/. */
+/** Returns the text of `file` in specs/. */
 function readSpec(file: string): string {
   return fs.readFileSync(path.join(SPECS, file), 'utf8');
 }
 
-/** The problems in `file`, a module or a config in specs/; none for another file. */
+/** Returns the problems in `file`, a module or a config in specs/; none for another file. */
 function problemsIn(file: string): Problem[] {
   const extension = path.extname(file);
   const name = path.basename(file, extension);
   if (extension === MODULE_EXTENSION) return checkModule(name, readSpec(file));
   if (extension !== CONFIG_EXTENSION) return [];
-  const module = readSpec(name.split(MODEL_SEPARATOR)[0] + MODULE_EXTENSION);
+  const [moduleName = name] = name.split(MODEL_SEPARATOR);
+  const module = readSpec(`${moduleName}${MODULE_EXTENSION}`);
   return checkConfig(readSpec(file), variables(module.split('\n')).names.length > 0);
 }
 

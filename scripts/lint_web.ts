@@ -11,25 +11,33 @@ import { build } from 'esbuild';
 import { FileSystemConfigLoader, formatterFactory, HtmlValidate } from 'html-validate/node';
 import stylelint from 'stylelint';
 import { config } from './stylelint.config.ts';
+import type * as panelHtml from '../packages/vscode/src/panelHtml.ts';
 
 const TEMPLATE = 'packages/vscode/src/panelHtml.ts';
 const STYLESHEET = 'packages/vscode/src/webview/panel.css';
 const VNU_JAR = 'node_modules/vnu-jar/build/dist/vnu.jar';
 const PRETTIER_CONFIG = '.prettierrc.json';
-/** The webview's `cspSource`, and the origin its resources load from, as VS Code gives them. */
+/** The webview's `cspSource`, as VS Code gives it. */
 const CSP_SOURCE = 'https://*.vscode-cdn.net';
+/** The origin the webview's resources load from, as VS Code gives it. */
 const RESOURCE_ORIGIN = 'https://file.vscode-resource.vscode-cdn.net';
 /** vnu's CSS check rejects a gradient as a `mask`, which CSS Masking allows: a validator bug. */
 const VNU_CSS_BUG = '.*mask.*radial-gradient.*';
 
-/** The page as `panelHtml` renders it, from the TypeScript source, bundled to a temporary module. */
+/** Checks that `value` is a module with a `panelHtml` function, as the bundle of TEMPLATE is. */
+function isPanelHtmlModule(value: unknown): value is typeof panelHtml {
+  return typeof value === 'object' && value !== null && 'panelHtml' in value && typeof value.panelHtml === 'function';
+}
+
+/** Renders the page as `panelHtml` does, from the TypeScript source, bundled to a temporary module. */
 async function renderPage(): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'lint_web-'));
   try {
     const outfile = join(dir, 'panelHtml.mjs');
     await build({ entryPoints: [TEMPLATE], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'warning' });
-    const { panelHtml }: typeof import('../packages/vscode/src/panelHtml.ts') = await import(pathToFileURL(outfile).href);
-    return panelHtml(CSP_SOURCE, `${RESOURCE_ORIGIN}/dist/panel.css`, `${RESOURCE_ORIGIN}/dist/panel.js`);
+    const bundle: unknown = await import(pathToFileURL(outfile).href);
+    if (!isPanelHtmlModule(bundle)) throw new Error(`${TEMPLATE} bundled with no panelHtml export.`);
+    return bundle.panelHtml(CSP_SOURCE, `${RESOURCE_ORIGIN}/dist/panel.css`, `${RESOURCE_ORIGIN}/dist/panel.js`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -43,9 +51,18 @@ function vnu(args: string[], input?: string): boolean {
   return result.status === 0;
 }
 
-/** The lines of `file` past Prettier's print width, which Prettier can't wrap inside a template literal. */
+/** Returns the lines of `file` past Prettier's print width, which Prettier can't wrap inside a template literal. */
 function longLines(file: string): string[] {
-  const { printWidth }: { printWidth: number } = JSON.parse(readFileSync(PRETTIER_CONFIG, 'utf8'));
+  const prettierConfig: unknown = JSON.parse(readFileSync(PRETTIER_CONFIG, 'utf8'));
+  if (
+    typeof prettierConfig !== 'object' ||
+    prettierConfig === null ||
+    !('printWidth' in prettierConfig) ||
+    typeof prettierConfig.printWidth !== 'number'
+  ) {
+    throw new Error(`${PRETTIER_CONFIG} has no printWidth.`);
+  }
+  const printWidth = prettierConfig.printWidth;
   const lines = readFileSync(file, 'utf8').split('\n');
   return lines.flatMap((line, i) => (line.length > printWidth ? [`${file}:${i + 1}: over ${printWidth} columns`] : []));
 }
@@ -58,5 +75,7 @@ if (!report.valid) process.stderr.write(formatterFactory('text')(report.results)
 const pageValid = vnu(['-'], page);
 const stylesheetValid = vnu(['--css', '--filterpattern', VNU_CSS_BUG, STYLESHEET]);
 const long = longLines(TEMPLATE);
-for (const line of long) console.error(line);
+for (const line of long) {
+  console.error(line);
+}
 if (stylelintResult.errored || !report.valid || !pageValid || !stylesheetValid || long.length > 0) process.exitCode = 1;

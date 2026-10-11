@@ -39,11 +39,14 @@ await esbuild.build({
 // The narration panel's page styles.
 await esbuild.build({ minify: production, logLevel: 'warning', entryPoints: ['src/webview/panel.css'], outfile: 'dist/panel.css' });
 // The relay tells agents the extension's version.
-const { version } = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const manifest: unknown = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+if (typeof manifest !== 'object' || manifest === null || !('version' in manifest) || typeof manifest.version !== 'string') {
+  throw new Error('package.json has no version.');
+}
 await esbuild.build({
   ...common,
   entryPoints: ['../relay/src/main.ts'],
   loader: { '.md': 'text' },
-  define: { AI_PAIR_VERSION: JSON.stringify(version) },
+  define: { AI_PAIR_VERSION: JSON.stringify(manifest.version) },
   outfile: 'dist/relay.js',
 });
