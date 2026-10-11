@@ -89,7 +89,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE` | holds | 12 |
 
-`Controller.tla` also passes at `B = 3, MaxCancels = 2` (570,008 states).
+`Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
 Each violation TLC found was checked against the code step by step before it was
 reported. The traces are in the issues.
@@ -132,9 +132,9 @@ test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `BlockedIsCurrent` | `controller.test.ts`: BlockedIsCurrent: a call waits its turn while another is blocked, and blocks only once that one has returned |
-| `CancelKeepsBatch` | `controller.test.ts`: CancelKeepsBatch: keeps a cancelled step's batch queued and reports it later; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
-| `CancelReleases` | `controller.test.ts`: CancelReleases, ChainProgresses: releases a blocked call without consuming the report; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
-| `ChainProgresses` | `controller.test.ts`: CancelReleases, ChainProgresses: releases a blocked call without consuming the report |
+| `CancelKeepsBatch` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
+| `CancelReleases` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
+| `ChainProgresses` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report |
 
 ### `Wire`: the relay's side of the WebSocket
 
@@ -185,9 +185,9 @@ the test's title carries its name:
 | `OwnCloseOnly` | `link.test.ts`: OwnCloseOnly: rejects a call only when the socket it was sent on closes |
 | `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a frame that is not JSON; RelayStaysUp: fails to connect, without crashing, when a window answers with JSON that isn't a message; RelayStaysUp: drops a frame that is not JSON after the welcome |
 | `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
-| `RepeatsMarked` | `relay.test.ts`: RepeatsMarked: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
+| `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
-| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67) |
+| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67) |
 
 ### `Panel`: the history
 
@@ -292,7 +292,7 @@ least once since #67: nothing reaches the agent twice in a report not marked
 (`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a
 call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`).
 `RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the
-relay sending a call only once every cancelled call on the socket has settled,
+relay sending a call only once every canceled call on the socket has settled,
 so a `return` reaches the editor before the next call. `RestoreEnded` is the fix
 for #60: `restore()` working on a session the programmer ended, and putting a
 closed one back. `MarkHeld` and `DrainHeld` fix two bugs this spec found, each
@@ -305,14 +305,49 @@ held rejections are out, one per report, where before it closed with the first.
 |---|---|
 | `Submit`, `Listen` | `step` with a batch; `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
 | `EndSession` | `endSession()`: `ended`, the `end` event, `interrupt()` |
-| `RehearseFails`, `RehearseOk` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
+| `FailRehearsal`, `PassRehearsal` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
-| `Programmer` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
+| `Interrupt` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
 | `Commit` | `finishCall` -> `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
-| `Cancel` | the agent cancelling a call |
+| `Cancel` | the agent canceling a call |
 | `Answer`, `Bounce`, `Restore` | the report reaching the agent; the relay's `return`; `restore()` |
-| `LateBounce` | the agent's cancel coming after it took the answer: the relay's `handBack` with `mayRepeat`, and `restore()` setting `s.mayRepeat`, so the next report is marked `repeated` (#67) |
-| `QuietEdit` | `userEdit` in the programmer's turn: recorded, interrupting nothing |
+| `BounceLate` | the agent's cancel coming after it took the answer: the relay's `handBack` with `mayRepeat`, and `restore()` setting `s.mayRepeat`, so the next report is marked `repeated` (#67) |
+| `EditQuietly` | `userEdit` in the programmer's turn: recorded, interrupting nothing |
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Listen` sets `callBatch` to 0, the sentinel before `NoBatch` | `TypeOK` |
+| `MarkHeld = FALSE` | `NoUnmarkedRepeat` |
+| `Commit` leaves `stale` false while rejections are still held | `HeldMeansStale` |
+| `PassRehearsal` queues a batch while `stale` | `PlaysKnowingEvents` |
+| `Commit` leaves out the batches that did not complete | `PlaysAfterCompleted` |
+| `WaitForReturn = FALSE`, the code before #59 | `PlaysAfterCompleted` |
+| `RestoreRejected = FALSE`, the code before #28 | `PlaysAfterCompleted` |
+| `DrainHeld = FALSE` | `BatchesDelivered` |
+| `Restore` drops the events of a report handed back after the end | `EventsDelivered` |
+| `Commit` holds back the programmer's quiet edits during their turn | `QuietDelivered` |
+| `Commit` leaves out the end event | the deadlock check; with it off, `EndDelivered` |
+| `RestoreEnded = FALSE`, the code before #60 | the deadlock check; with it off, `BatchesDelivered`, `EventsDelivered`, and `EndDelivered` |
+| `Commit` only with something to report, as if `block()` set no `maxBlockMs` timer | `BlockedReturns` |
+
+Every invariant and property names the test that proves the code obeys it; the
+test's title carries its name:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NoUnmarkedRepeat` | `controller.test.ts`: NoUnmarkedRepeat: says a returned report may repeat one already seen, when the relay can't tell (#67); NoUnmarkedRepeat: marks each report that carries a returned rejection the agent may have seen. `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
+| `HeldMeansStale` | `controller.test.ts`: HeldMeansStale: reports a returned rejection again, discarding steps until it has |
+| `PlaysKnowingEvents` | `controller.test.ts`: PlaysKnowingEvents: discards a batch planned before an interruption the agent hasn't seen |
+| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: shows the code as far as it got, returns the rest of the cut action, and discards the queued batch. `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
+| `BatchesDelivered` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call. `relay.test.ts`: BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28) |
+| `EventsDelivered` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; EventsDelivered, EndDelivered: reports a returned report again after the programmer ended the session with it (#60). `relay.test.ts`: EventsDelivered: cancels a blocked call without losing the report, even when racing |
+| `QuietDelivered` | `controller.test.ts`: QuietDelivered: reports an edit the programmer made in their turn, which interrupted nothing, when they hand the turn back |
+| `BlockedReturns` | `controller.test.ts`: BlockedReturns: returns with `waiting` after MAX_BLOCK |
+| `EndDelivered` | `controller.test.ts`: EndDelivered: ends when the programmer ends it, delivering a final report; EventsDelivered, EndDelivered: reports a returned report again after the programmer ended the session with it (#60); EndDelivered: reports a returned report again when the programmer ends the session before it comes back (#60) |
 
 ### `Discovery`: finding a window
 

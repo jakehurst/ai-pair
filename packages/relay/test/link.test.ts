@@ -145,7 +145,7 @@ describe("link", () => {
     link.close()
   })
 
-  it("sends the next call only after a cancelled call's report is handed back", async () => {
+  it("PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59)", async () => {
     const a = await fakeWindow("/a")
     const link = new EditorLink("/a", dir)
     const abort = new AbortController()

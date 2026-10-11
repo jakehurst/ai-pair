@@ -111,7 +111,7 @@ describe("relay", () => {
   it("types a backslash-u sequence as its six characters, not as the character it names", async () => {
     const client = await connect()
     await call(client, "start")
-    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: "\\u0041\u{258c}" }] })
+    await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `\\u0041${CURSOR_MARKER}` }] })
     await call(client, "step", { actions: [] })
     expect(editor.text("src/a.ts")).toBe("\\u0041")
   })
@@ -215,7 +215,7 @@ describe("relay", () => {
 
   // The programmer acts right after the cancellation, before it reaches the editor, so the
   // cancelled call returns their message. It must still reach the agent.
-  it("cancels a blocked call without losing the report, even when racing", async () => {
+  it("EventsDelivered: cancels a blocked call without losing the report, even when racing", async () => {
     const client = await connect()
     await call(client, "start")
     await call(client, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }] })
@@ -246,7 +246,7 @@ describe("relay", () => {
     ])
   })
 
-  it("DroppedHandedBack: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
+  it("DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
     // The relay's answers to the agent, held while the test says so.
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
     const server = createServer(new EditorLink("/project/src", dir), "THE GUIDE", "/project/src")
@@ -278,7 +278,7 @@ describe("relay", () => {
     expect(again.text).toMatch(/may repeat/)
   })
 
-  it("RepeatsMarked: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
+  it("RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
     const client = await connect()
     await call(client, "start")
     const abort = new AbortController()
@@ -308,7 +308,7 @@ describe("relay", () => {
     expect((await call(client, "listen")).text).toMatch(/hello/)
   })
 
-  it("reports the rejection of a step cancelled during its rehearsal", async () => {
+  it("BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28)", async () => {
     const client = await connect()
     await call(client, "start")
     // Holds the rehearsal at its first read of the file, so the cancel arrives during it.

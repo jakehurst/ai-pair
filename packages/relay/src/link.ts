@@ -163,8 +163,8 @@ export class EditorLink {
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     // A cancelled call's report may be on its way back, to be handed back with `return`. This call
     // goes out after it, so the editor restores the report before it takes this call (#59; specs/Wire.tla,
-    // `Send` with WaitCancelled). The socket may close meanwhile, so it is taken again after each wait;
-    // from there to `send`, nothing awaits.
+    // `Send` with WaitCancelled; specs/Controller.tla, `Sendable` with WaitForReturn). The socket may close
+    // meanwhile, so it is taken again after each wait; from there to `send`, nothing awaits.
     let ws: WebSocket
     let cancelled: Set<Promise<void>>
     for (;;) {
@@ -211,7 +211,7 @@ export class EditorLink {
   /**
    * Hands a report back to the editor, on the socket it came over, to be delivered with the next
    * report, marked as one the agent may have seen: for a call it canceled after the relay answered (#67;
-   * specs/Wire.tla, `Abort` with HandBackAnswered and MarkRepeats).
+   * specs/Wire.tla, `Abort` with HandBackAnswered and MarkRepeats; specs/Controller.tla, `BounceLate`).
    */
   handBack(report: unknown): void {
     if (typeof report !== "object" || report === null) return
@@ -285,7 +285,8 @@ export class EditorLink {
         } else if (m.type === "result") {
           const p = settle(m.id)
           // The call returned before our cancellation reached the editor, so the agent will never
-          // see this report. Hand it back to be delivered with the next one (specs/Wire.tla, `Reply`).
+          // see this report. Hand it back to be delivered with the next one (specs/Wire.tla, `Reply`;
+          // specs/Controller.tla, `Bounce`).
           if (p?.cancelled && REPORTING.has(p.tool)) ws.send(JSON.stringify({ type: "return", report: m.result }))
           else if (p && REPORTING.has(p.tool) && typeof m.result === "object" && m.result !== null) this.answeredOn.set(m.result, ws)
           p?.resolve(m.result)
