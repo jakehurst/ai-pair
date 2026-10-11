@@ -215,12 +215,15 @@ packages/
   core/       editor-agnostic sessions, playback, and the local WebSocket server
   relay/      pair-mcp, the MCP server the agent runs
   vscode/     the extension, which ships the relay
+scripts/      the repository's checks and its release, in TypeScript that Node runs as is
 ```
 
 ```sh
 npm install
 npm test                  # unit and end-to-end tests
-npm run typecheck
+npm run typecheck         # the packages and the scripts
+npm run lint              # oxlint; the scripts also to Google's TypeScript Style Guide
+npm run format:check      # Prettier
 npm run check:ascii       # every tracked file is ASCII, apart from scripts/check_ascii.ts's allowlist
 npm run lint:swift        # Swift to Google's Swift Style Guide, with Xcode's swift-format (macOS)
 npm run typecheck:swift   # the Swift icon script compiles without warnings (macOS)
