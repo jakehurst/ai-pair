@@ -1,12 +1,11 @@
 ---- MODULE Player -------------------------------------------------------------
 (******************************************************************************)
 (* A `delete` in packages/core/src/player.ts, between its awaits, while the   *)
-(* programmer edits: S11 in #19 (the selection stays on the same text through *)
-(* an edit by someone else) and an edit by the programmer interrupting        *)
-(* playback. Offsets are where the selected text starts; the programmer can   *)
-(* type in front of it, which moves it, or behind it, which does not. The     *)
-(* delete runs once, and the programmer edits only until it is done: Finished *)
-(* models the end.                                                            *)
+(* programmer edits: the selection stays on the same text through an edit by  *)
+(* someone else, and an edit by the programmer interrupting playback. Offsets *)
+(* are where the selected text starts; the programmer can type in front of    *)
+(* it, which moves it, or behind it, which does not. The delete runs once,    *)
+(* and the programmer edits only until it is done: Finished models the end.   *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -131,7 +130,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S11: a delete removes the text that is selected.
+\* A delete removes the text that is selected.
 DeletesTheSelection == (outcome = "deleted") => (deletedAt = target)
 
 \* An edit by the programmer before the delete takes effect stops it.

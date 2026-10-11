@@ -339,6 +339,7 @@ export class Controller {
    * were played in memory when queued. Not after an interruption, which discards what they'd do.
    */
   private planned(s: Session, path: string): string | undefined {
+    // specs/Rehearsal.tla, `Read`: while `stale`, the editor's text.
     if (s.stale) return undefined
     return s.queue.at(-1)?.after?.texts.get(path)
   }
@@ -865,6 +866,7 @@ export class Controller {
     s.events = []
     s.baselines = new Map()
     s.latest = new Map()
+    // specs/Rehearsal.tla, `Report`: the agent now knows of the interrupt.
     s.stale = false
     s.navigatorReady = false
 
@@ -900,7 +902,8 @@ export class Controller {
     s.finished.push(batch.result)
   }
 
-  /** Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and `EndSession`). */
+  /** Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and `EndSession`).
+   * A batch already playing plays on and may complete (specs/Rehearsal.tla, `Interrupted`, #151). */
   private interrupt(s: Session): void {
     s.stale = true
     for (const b of s.queue) if (b.state === "queued") this.discard(s, b)

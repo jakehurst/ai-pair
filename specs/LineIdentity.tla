@@ -4,10 +4,10 @@
 (* and change. Texts are sequences of "x" (any other character), "n" (a line  *)
 (* feed) and "r" (a carriage return). Offsets count from 0, as in the code.   *)
 (* Old identities are 1, 2, ...; the ones a change makes are 100, 101, ...,   *)
-(* in the order the code calls `fresh`. S10 in #19 rests on it: a line number *)
-(* is accepted only while the line it was shown at still has the identity it  *)
-(* had, so identities must name one line each, and follow the rules in        *)
-(* applyChange's comment.                                                     *)
+(* in the order the code calls `fresh`. The agent's line numbers rest on it:  *)
+(* a line number is accepted only while the line it was shown at still has    *)
+(* the identity it had, so identities must name one line each, and follow the *)
+(* rules in applyChange's comment.                                            *)
 (******************************************************************************)
 EXTENDS Naturals, Sequences, FiniteSets
 

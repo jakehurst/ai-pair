@@ -1,8 +1,8 @@
 ---- MODULE Turns --------------------------------------------------------------
 (******************************************************************************)
-(* Turns in packages/core/src/player.ts and controller.ts: S6 in #19, during  *)
-(* the programmer's turn only `say` and `point` take effect. `perform` checks *)
-(* the turn as each action starts; taking or handing back the turn interrupts *)
+(* Turns in packages/core/src/player.ts and controller.ts: during the         *)
+(* programmer's turn only `say` and `point` take effect. `perform` checks the *)
+(* turn as each action starts; taking or handing back the turn interrupts     *)
 (* (`takeTurn`, `handBack`), and an action that edits checks for an interrupt *)
 (* after its awaits, before its effect: `type` in its delay before each       *)
 (* chunk, `delete` after `show` and `getText` (#49), and `run` in the         *)
@@ -124,7 +124,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S6: during the programmer's turn, no edit takes effect.
+\* During the programmer's turn, no edit takes effect.
 OnlyTalkInTheirTurn == ~bad
 
 \* A batch begun ends: each action takes effect or the batch stops. A player

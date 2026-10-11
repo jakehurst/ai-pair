@@ -1,7 +1,7 @@
 ---- MODULE Actions ------------------------------------------------------------
 (******************************************************************************)
 (* What an interrupted batch reports as unplayed, in `actions` and `perform`  *)
-(* in packages/core/src/player.ts: S14 in #19, the unplayed actions come back *)
+(* in packages/core/src/player.ts: the unplayed actions come back             *)
 (* in order, and resubmitting them plays nothing twice. Each action is the    *)
 (* steps between its awaits, from the code; an interrupt can come at any      *)
 (* await. The timeline stays interrupted until the next batch. The steps:     *)
@@ -237,7 +237,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S14: the actions before the unplayed ones played in full; the unplayed
+\* The actions before the unplayed ones played in full; the unplayed
 \* ones never started, except a cut `type`, whose rest is exactly the chunks
 \* it didn't type.
 PlaysNothingTwice ==

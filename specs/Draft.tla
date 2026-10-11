@@ -3,9 +3,9 @@
 (* The reply box's draft and the "reply" pause reason, across the panel's     *)
 (* webview going away and coming back: packages/vscode/src/webview/panel.ts   *)
 (* (syncDraft, takeDraft) and panel.ts (`draft`, `reply`, `ready`,            *)
-(* onDidDispose), with Controller.pause and resume. L4 in #19: a pause the    *)
-(* programmer didn't ask for doesn't hold playback. Typing a draft asks for   *)
-(* the "reply" pause; a draft that is gone no longer does. The other pause    *)
+(* onDidDispose), with Controller.pause and resume. A pause the programmer    *)
+(* didn't ask for doesn't hold playback (#19). Typing a draft asks for the    *)
+(* "reply" pause; a draft that is gone no longer does. The other pause        *)
 (* reasons are in Timeline.tla.                                               *)
 (******************************************************************************)
 EXTENDS Naturals

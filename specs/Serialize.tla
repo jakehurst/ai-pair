@@ -211,7 +211,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S4: the blocked call is this.call, so at most one call is blocked.
+\* The blocked call is this.call, so at most one call is blocked.
 BlockedIsCurrent == \A i \in Calls : (pc[i] = "blocked") => (current = i)
 
 \* A blocked step whose batch plays next is ready to report (#150): a step
@@ -220,14 +220,14 @@ ReadyAtHead ==
     \A i \in Calls :
         (pc[i] = "blocked" /\ ~empty[i] /\ AtHead(i)) => ENABLED Finish(i)
 
-\* S7: a step cancelled after Guard keeps its batch queued; one cancelled by
+\* A step cancelled after Guard keeps its batch queued; one cancelled by
 \* Guard never queues it.
 CancelKeepsBatch ==
     \A i \in Calls :
         (~empty[i] /\ outcome[i] = "cancelled") =>
             ((batch[i] = NoBatch) <=> (abortedAt[i] = "waiting"))
 
-\* L2: an abort that fires before the call commits to a report ends the call
+\* An abort that fires before the call commits to a report ends the call
 \* with cancelled, or with its batch's rejection, which the relay hands back
 \* (Controller.tla).
 CancelReleases ==
@@ -235,7 +235,7 @@ CancelReleases ==
         (aborted[i] /\ pc[i] \in {"waiting", "rehearsing", "blocked"}) ~>
             (outcome[i] = "cancelled" \/ rejected[i])
 
-\* L8: a call waiting its turn in the serialize chain eventually settles. A
+\* A call waiting its turn in the serialize chain eventually settles. A
 \* chain that never ran a call would fail it, so it says something must
 \* happen.
 ChainProgresses ==

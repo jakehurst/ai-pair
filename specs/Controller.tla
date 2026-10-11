@@ -2,8 +2,11 @@
 (******************************************************************************)
 (* Reports in packages/core/src/controller.ts: what the agent has to be told, *)
 (* the snapshot a call takes, and a canceled call's report coming back        *)
-(* through `return` (relay/src/link.ts) and `restore`. Issue #19: S1, S2, S3, *)
-(* L1, and L5.                                                                *)
+(* through `return` (relay/src/link.ts) and `restore`. From issue #19: every  *)
+(* event and batch result reaches the agent exactly once; a batch planned     *)
+(* without knowledge of an interrupting event never plays; a batch plays only *)
+(* if the one before it completed; every blocked call returns; and the        *)
+(* programmer ending the session reaches the agent.                           *)
 (*                                                                            *)
 (* A canceled call's result can reach the relay after the agent made its next *)
 (* call. Without WaitForReturn the relay forwards that call at once, so       *)
@@ -536,15 +539,15 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S1, safety, since #67 at least once: nothing reaches the agent twice in a
-\* report that isn't marked as one that may repeat an earlier one.
+\* Delivered at least once since #67, and so: nothing reaches the agent twice
+\* in a report that isn't marked as one that may repeat an earlier one.
 NoUnmarkedRepeat == ~unmarkedRepeat
 
 \* #28: while returned rejections are held, new steps are discarded, so none
 \* is rejected.
 HeldMeansStale == (held # {}) => stale
 
-\* S2: a batch plays only if the agent had been told of every event before it
+\* A batch plays only if the agent had been told of every event before it
 \* plays, quiet ones too.
 PlaysKnowingEvents ==
     \A b \in Batches :
@@ -553,34 +556,34 @@ PlaysKnowingEvents ==
             /\ \A q \in QuietEdits :
                    quietState[q] # "new" => q \in knownQuiet[b]
 
-\* S3: a batch plays only if every batch before it completed, or the agent was
+\* A batch plays only if every batch before it completed, or the agent was
 \* told it didn't.
 PlaysAfterCompleted ==
     \A b \in Batches :
         batchState[b] = "playing" =>
             \A c \in 1..(b - 1) : completed[c] \/ c \in knownBatches[b]
 
-\* S1, liveness: every batch submitted is eventually reported. Code that never
+\* Every batch submitted is eventually reported. Code that never
 \* reported would fail it, so it says something must happen, as do the next
 \* two.
 BatchesDelivered ==
     \A b \in Batches : (batchState[b] # "new") ~> Got(batchState[b])
 
-\* S1, liveness: every interrupting event is eventually reported.
+\* Every interrupting event is eventually reported.
 EventsDelivered ==
     \A e \in Events : (eventState[e] # "new") ~> Got(eventState[e])
 
-\* S1, liveness: every edit the programmer makes in their turn is eventually
+\* Every edit the programmer makes in their turn is eventually
 \* reported.
 QuietDelivered ==
     \A q \in QuietEdits : (quietState[q] # "new") ~> Got(quietState[q])
 
-\* L1: a blocked call returns. `Commit` is enabled whenever a call is blocked,
+\* A blocked call returns. `Commit` is enabled whenever a call is blocked,
 \* as the timer that block() sets for maxBlockMs ends it whether or not it is
 \* ready; only a cancel ends it otherwise.
 BlockedReturns == (call = "blocked") ~> (call # "blocked")
 
-\* L5: the programmer ending the session reaches the agent.
+\* The programmer ending the session reaches the agent.
 EndDelivered == (endState # "new") ~> Got(endState)
 
 \* Cancels run out only so that the model is finite (6.8). It prunes exactly

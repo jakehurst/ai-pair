@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CURSOR_MARKER } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot } from "../src/places"
-import { applyChange } from "../src/lines"
+import { applyChange, LineIds } from "../src/lines"
 import { planTyping, readingTime } from "../src/typing"
 import { terminalText } from "../src/text"
 import { samePath, withinFolder, type PathStyle } from "../src/paths"
@@ -157,6 +157,20 @@ describe("line identities", () => {
     expect(follow("ab\ncd", 1, 3, "")).toEqual([1])
     // From a line's start into the next: what's left is the next one's.
     expect(follow("ab\ncd\ne", 0, 4, "")).toEqual([2, 3])
+  })
+
+  it("OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151)", () => {
+    const editor = LineIds.editor()
+    const before = editor.of("a.ts", "hello\nworld\n")
+    const fork = editor.fork()
+    fork.of("a.ts", "hello\nworld\n")
+    const typed = { offset: 5, deleteLength: 0, text: "abc" }
+    fork.apply("a.ts", typed)
+    editor.apply("a.ts", typed)
+    // A formatter rewrites the second line while the batch plays.
+    editor.apply("a.ts", { offset: 9, deleteLength: 5, text: "WORLD" })
+    editor.adopt(fork)
+    expect(editor.of("a.ts", "helloabc\nWORLD\n")).toEqual(before)
   })
 })
 
