@@ -37,7 +37,9 @@ Status: describes 0.2.0.
 - **The narration panel** is a webview. It talks to the extension via
   `postMessage`, with the messages typed in
   [`panelMessages.ts`](packages/vscode/src/panelMessages.ts). Its markup is
-  [`panelHtml.ts`](packages/vscode/src/panelHtml.ts), and its script is
+  [`panelHtml.ts`](packages/vscode/src/panelHtml.ts), its styles are
+  [`webview/panel.css`](packages/vscode/src/webview/panel.css), built as
+  `dist/panel.css`, and its script is
   [`webview/panel.ts`](packages/vscode/src/webview/panel.ts), bundled as
   `dist/panel.js`.
 

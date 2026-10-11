@@ -149,4 +149,5 @@ Code goes without a spec for one of these reasons:
 | `calibration.ts` | all | `Calibration` |
 | `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
 | `panelHtml.ts` | `panelHtml`, `settingSpeed` | Format |
+| `webview/panel.css` | all | Look |
 | `panelMessages.ts` | | Types |
