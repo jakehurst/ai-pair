@@ -27,3 +27,8 @@ export async function loadPage(post: (message: { type: string }) => void = () =>
   vi.resetModules()
   await import(/* @vite-ignore */ SCRIPT)
 }
+
+/** The page's element marked `data-ui="name"`, as webview/panel.ts finds it. */
+export function ui(name: string) {
+  return document.querySelector(`[data-ui="${name}"]`)
+}

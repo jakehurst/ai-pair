@@ -10,6 +10,9 @@ import { panelHtml, SPEEDS } from "../src/panelHtml"
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { window } = globalThis as unknown as { window: Window }
+// The tests need no styles, and the stylesheet would be fetched from a server that isn't there.
+window.happyDOM.settings.disableCSSFileLoading = true
+window.happyDOM.settings.handleDisabledFileLoadingAsSuccess = true
 
 it("loads its script from the file it is given, with the page's nonce, and has no inline script", () => {
   const html = panelHtml("vscode-resource:", "https://file.vscode-resource/dist/panel.css", "https://file.vscode-resource/dist/panel.js")
@@ -41,11 +44,18 @@ it("offers the speeds with one decimal, so they line up", () => {
 it("offers the same speeds for reading, in a menu of its own", () => {
   const html = panelHtml("vscode-resource:", "panel.css", "panel.js")
   const page = new window.DOMParser().parseFromString(html, "text/html")
-  expect(page.querySelectorAll("#reading-menu [data-speed]")).toHaveLength(SPEEDS.length)
+  expect(page.querySelectorAll('[data-ui="reading-menu"] [data-speed]')).toHaveLength(SPEEDS.length)
 })
 
 it("gives controls the panel's own tooltips, since native ones show unreliably in a webview", () => {
   const html = panelHtml("vscode-resource:", "panel.css", "panel.js")
   expect(html).not.toMatch(/\stitle=|\.title = /)
   expect(html).toContain('data-tip="Interrupt"')
+})
+
+it("has no id attributes: the script finds its elements by data-ui, as Google's HTML/CSS guide asks (#132)", () => {
+  const html = panelHtml("vscode-resource:", "panel.css", "panel.js")
+  const page = new window.DOMParser().parseFromString(html, "text/html")
+  expect(page.querySelectorAll("[id]")).toHaveLength(0)
+  expect(page.querySelectorAll("[data-ui]")).not.toHaveLength(0)
 })

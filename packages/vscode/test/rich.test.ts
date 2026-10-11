@@ -4,11 +4,11 @@
 
 import { beforeEach, expect, it } from "vitest"
 import type { Window } from "happy-dom"
-import { loadPage } from "./page"
+import { loadPage, ui } from "./page"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const { window, document } = globalThis as unknown as { window: Window; document: Window["document"] }
+const { window } = globalThis as unknown as { window: Window }
 
 beforeEach(async () => {
   await loadPage()
@@ -17,12 +17,12 @@ beforeEach(async () => {
 
 function shown(text: string): string {
   window.dispatchEvent(new window.MessageEvent("message", { data: { type: "say", text } }))
-  return document.getElementById("now-text")!.innerHTML
+  return ui("now-text")!.innerHTML
 }
 
 it("escapes markup", () => {
   shown(`<b>"x" & 'y'</b>`)
-  const now = document.getElementById("now-text")!
+  const now = ui("now-text")!
   expect(now.textContent).toBe(`<b>"x" & 'y'</b>`)
   expect(now.querySelector("b")).toBeNull()
 })

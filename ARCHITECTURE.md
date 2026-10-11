@@ -41,7 +41,8 @@ Status: describes 0.2.0.
   [`webview/panel.css`](packages/vscode/src/webview/panel.css), built as
   `dist/panel.css`, and its script is
   [`webview/panel.ts`](packages/vscode/src/webview/panel.ts), bundled as
-  `dist/panel.js`.
+  `dist/panel.js`. The script finds the elements it updates by their `data-ui`
+  attribute; the markup has no `id`s.
 
 ### Why a relay
 

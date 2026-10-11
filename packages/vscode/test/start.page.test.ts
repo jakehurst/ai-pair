@@ -3,11 +3,11 @@
 
 import { beforeEach, expect, it } from "vitest"
 import type { Window } from "happy-dom"
-import { loadPage } from "./page"
+import { loadPage, ui } from "./page"
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const { window, document } = globalThis as unknown as { window: Window; document: Window["document"] }
+const { window } = globalThis as unknown as { window: Window }
 
 let posted: { type: string }[] = []
 
@@ -20,9 +20,9 @@ function send(event: object): void {
   window.dispatchEvent(new window.MessageEvent("message", { data: event }))
 }
 
-const hidden = (): boolean => document.getElementById("start")?.hasAttribute("hidden") ?? false
-const noteHidden = (): boolean => document.getElementById("starting")?.hasAttribute("hidden") ?? false
-const click = (): void => void document.getElementById("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+const hidden = (): boolean => ui("start")?.hasAttribute("hidden") ?? false
+const noteHidden = (): boolean => ui("starting")?.hasAttribute("hidden") ?? false
+const click = (): void => void ui("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
 
 it("hides Start a session until the extension says it can start one (ClicksNeedButton)", () => {
   expect(hidden()).toBe(true)
@@ -34,7 +34,7 @@ it("hides Start a session until the extension says it can start one (ClicksNeedB
 
 it("posts start when the button is clicked (RunsAreClicks)", () => {
   send({ type: "canStart", value: true })
-  document.getElementById("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+  ui("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
   expect(posted).toContainEqual({ type: "start" })
 })
 

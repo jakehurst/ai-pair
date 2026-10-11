@@ -709,14 +709,14 @@ a:hover {
   color: inherit;
   font-family: var(--mono);
   font-size: 0.88em;
-  text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent);
+  text-decoration: underline dotted color-mix(in srgb, currentcolor 45%, transparent);
   text-underline-offset: 3px;
 }
 
 .file:hover,
 .ref:hover {
   color: var(--vscode-textLink-foreground);
-  text-decoration: underline dotted currentColor;
+  text-decoration: underline dotted currentcolor;
 }
 
 .ref {
