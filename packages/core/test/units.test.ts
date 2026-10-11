@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CURSOR_MARKER } from '@ai-pair/protocol';
 import { resolveSpan, resolveSpot } from '../src/places';
 import { applyChange, LineIds } from '../src/lines';
+import type { Change } from '../src/ports';
 import { boundedDiff, MAX_DIFF_LINES } from '../src/diff';
 import { planTyping, readingTime } from '../src/typing';
 import { terminalText } from '../src/text';
@@ -60,8 +61,8 @@ describe('paths', () => {
 
   it('shows a file in a folder whose name starts with two dots by its path in the root (#5)', () => {
     const editor = new FakeEditor();
-    expect(displayPath(editor, '/proj', '/proj/..cache/a.ts')).toBe('..cache/a.ts');
-    expect(displayPath(editor, '/proj', '/other/a.ts')).toBe('/other/a.ts');
+    expect(displayPath(editor, '/proj/..cache/a.ts', '/proj')).toBe('..cache/a.ts');
+    expect(displayPath(editor, '/other/a.ts', '/proj')).toBe('/other/a.ts');
   });
 
   it('handles a folder that is a drive root', () => {
@@ -124,7 +125,7 @@ describe('places', () => {
 });
 
 /** Returns which line of `text` (from 1) each line is after the change, or 0 for a new one. */
-function follow(text: string, offset: number, deleteLength: number, insert: string): number[] {
+function follow(text: string, { offset, deleteLength, text: insert }: Change): number[] {
   const ids = text.split('\n').map((_, i) => -(i + 1));
   const after = applyChange({ text, ids }, { offset, deleteLength, text: insert });
   expect(after.text).toBe(text.slice(0, offset) + insert + text.slice(offset + deleteLength));
@@ -133,31 +134,31 @@ function follow(text: string, offset: number, deleteLength: number, insert: stri
 
 describe('line identities', () => {
   it('keeps every line in place for a change within a line', () => {
-    expect(follow('a\nb\n', 1, 0, 'x')).toEqual([1, 2, 3]);
-    expect(follow('a\n\nb', 2, 0, 'x')).toEqual([1, 2, 3]);
+    expect(follow('a\nb\n', { offset: 1, deleteLength: 0, text: 'x' })).toEqual([1, 2, 3]);
+    expect(follow('a\n\nb', { offset: 2, deleteLength: 0, text: 'x' })).toEqual([1, 2, 3]);
   });
 
   it('keeps a line in place when a line break is typed after it, and moves it down when one is typed before it', () => {
-    expect(follow('a\nb\n', 1, 0, '\nx')).toEqual([1, 0, 2, 3]);
-    expect(follow('a\nb\n', 2, 0, 'x\n')).toEqual([1, 0, 2, 3]);
-    expect(follow('a\r\nb\r\n', 1, 0, '\r\nx')).toEqual([1, 0, 2, 3]);
-    expect(follow('a\r\nb\r\n', 3, 0, 'x\r\n')).toEqual([1, 0, 2, 3]);
+    expect(follow('a\nb\n', { offset: 1, deleteLength: 0, text: '\nx' })).toEqual([1, 0, 2, 3]);
+    expect(follow('a\nb\n', { offset: 2, deleteLength: 0, text: 'x\n' })).toEqual([1, 0, 2, 3]);
+    expect(follow('a\r\nb\r\n', { offset: 1, deleteLength: 0, text: '\r\nx' })).toEqual([1, 0, 2, 3]);
+    expect(follow('a\r\nb\r\n', { offset: 3, deleteLength: 0, text: 'x\r\n' })).toEqual([1, 0, 2, 3]);
   });
 
   it('keeps the place of a line whose text is all replaced', () => {
-    expect(follow('a\nbb\nc', 2, 2, 'x')).toEqual([1, 2, 3]);
-    expect(follow('a\nbb\nc', 2, 2, 'x\ny')).toEqual([1, 2, 0, 3]);
+    expect(follow('a\nbb\nc', { offset: 2, deleteLength: 2, text: 'x' })).toEqual([1, 2, 3]);
+    expect(follow('a\nbb\nc', { offset: 2, deleteLength: 2, text: 'x\ny' })).toEqual([1, 2, 0, 3]);
   });
 
   it('follows the text of lines joined or deleted', () => {
     // A whole line, with its line break.
-    expect(follow('a\nb\nc', 2, 2, '')).toEqual([1, 3]);
+    expect(follow('a\nb\nc', { offset: 2, deleteLength: 2, text: '' })).toEqual([1, 3]);
     // The line break before a line, with the line.
-    expect(follow('a\nb\nc', 1, 2, '')).toEqual([1, 3]);
+    expect(follow('a\nb\nc', { offset: 1, deleteLength: 2, text: '' })).toEqual([1, 3]);
     // Two lines joined: the first one's text is where it was.
-    expect(follow('ab\ncd', 1, 3, '')).toEqual([1]);
+    expect(follow('ab\ncd', { offset: 1, deleteLength: 3, text: '' })).toEqual([1]);
     // From a line's start into the next: what's left is the next one's.
-    expect(follow('ab\ncd\ne', 0, 4, '')).toEqual([2, 3]);
+    expect(follow('ab\ncd\ne', { offset: 0, deleteLength: 4, text: '' })).toEqual([2, 3]);
   });
 
   it("OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151)", () => {

@@ -20,7 +20,7 @@ interface Pending {
 /** The clock playback runs on: sleeps that a pause holds and an interrupt cuts short. */
 export class Timeline {
   private interrupted = false;
-  private pending: Pending | null = null;
+  private pending: Pending | undefined = undefined;
   private abort = new AbortController();
 
   constructor(private paused: boolean) {}
@@ -75,7 +75,7 @@ export class Timeline {
     const p = this.pending;
     if (!p) return;
     clearTimeout(p.timer);
-    this.pending = null;
+    this.pending = undefined;
     p.resolve(false);
   }
 
@@ -83,7 +83,7 @@ export class Timeline {
     p.startedAt = Date.now();
     // specs/Timeline.tla, `Fire`: the sleep resolves `true`.
     p.timer = setTimeout(() => {
-      if (this.pending === p) this.pending = null;
+      if (this.pending === p) this.pending = undefined;
       p.resolve(true);
     }, p.remaining);
   }

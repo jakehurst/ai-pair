@@ -135,7 +135,7 @@ export async function setUpAgent(launcher: string): Promise<void> {
   }
   if (picked.some((p) => p.id === 'other')) {
     const config = { mcpServers: { [SERVER]: { command: launcher, args: [] } } };
-    await vscode.env.clipboard.writeText(JSON.stringify(config, null, 2));
+    await vscode.env.clipboard.writeText(JSON.stringify(config, /* replacer= */ undefined, 2));
     void vscode.window.showInformationMessage(
       `Copied. Add it to your agent's MCP configuration: a stdio server named "${SERVER}" running ${launcher}.`,
     );

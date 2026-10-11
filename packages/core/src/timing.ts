@@ -106,7 +106,7 @@ function numbers<T extends object>(base: T, over: unknown): T {
  * one that isn't a finite number of zero or more keeps the base value: a `NaN` or negative delay
  * would turn pacing off without a word (#17).
  */
-export function withOverrides(base: Timing, overrides: TimingOverrides): Timing {
+export function withOverrides(base: Timing, overrides: unknown): Timing {
   return {
     ...numbers(base, overrides),
     type: numbers(base.type, field(overrides, 'type')),

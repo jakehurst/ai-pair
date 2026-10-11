@@ -81,11 +81,18 @@ function missing(e: unknown): boolean {
   return e instanceof Error && 'code' in e && e.code === 'invalid_arguments' && /doesn't exist/.test(e.message);
 }
 
+/** Returns whether `v` is the extension's `Api`, by its members: the bundle's classes are not this bundle's, so no `instanceof`. */
+function isApi(v: unknown): v is Api {
+  return typeof v === 'object' && v !== null && 'controller' in v && 'editor' in v && 'bridge' in v && 'playDemo' in v && 'ready' in v;
+}
+
 /** Runs every scenario inside VS Code; the extension host exits with its result. */
 export async function run(): Promise<void> {
-  const ext = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const ext = vscode.extensions.getExtension('michalstrba.ai-pair');
   assert.ok(ext, 'extension not found');
-  const api = await ext.activate();
+  const exported: unknown = await ext.activate();
+  assert.ok(isApi(exported), 'the extension exported something other than its Api');
+  const api = exported;
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'no workspace folder is open');
   const root = folder.uri.fsPath;

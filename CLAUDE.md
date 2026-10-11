@@ -125,6 +125,20 @@ Set by Justine on 2026-10-07.
     -   Write documentation, a module-private function's too, as a JSDoc
         comment, and keep `//` for implementation notes (JSDoc versus
         comments).
+    -   Spell a missing value `undefined`, never `null`, as VS Code's API
+        does: an optional field or parameter with `?`, a check with
+        `=== undefined`. oxlint's `unicorn/no-null` flags the literal; a
+        `null` that JSON or a library hands over is compared with
+        `=== null` and otherwise turned into `undefined` with `??` (Null vs
+        Undefined; set by Justine on 2026-10-11 for consistency).
+    -   Read a setting or stored value as `unknown` and narrow it with a type
+        guard, not with `get<T>()`: VS Code checks neither (any Type).
+    -   Give a helper with several positional arguments of one type an
+        options object, like `userEdit(file, { offset, deleteLength, text })`
+        (Comments when calling a function).
+    -   Export a type that appears in an exported signature, like `Frame` in
+        `parseFrame`, so a caller can name it; otherwise export only what
+        another file imports (Exports).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`

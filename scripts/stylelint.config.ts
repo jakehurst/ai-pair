@@ -10,6 +10,8 @@ export const config: Config = {
   plugins: ['@stylistic/stylelint-plugin', 'stylelint-order'],
   rules: {
     // Not in the guide; fixing its hits would split the file's sections.
+    // Stylelint turns a rule off with `null`.
+    // oxlint-disable-next-line unicorn/no-null
     'no-descending-specificity': null,
     // Capitalization: lowercase.
     '@stylistic/at-rule-name-case': 'lower',

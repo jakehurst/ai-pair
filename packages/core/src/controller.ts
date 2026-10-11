@@ -20,7 +20,7 @@ import { followChange, rehearse, type Rehearsal } from './rehearsal';
 import { fileLines } from './text';
 import { Timeline } from './timeline';
 import { defaultConfig, type Config } from './config';
-import { defaultTiming, glideDuration, withOverrides, type TimingOverrides } from './timing';
+import { defaultTiming, glideDuration, withOverrides } from './timing';
 
 const UNANCHORED =
   'Your previous batch was interrupted or discarded, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
@@ -61,6 +61,11 @@ export interface SavedSession {
   scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection'> & { allowedCommands: string[] };
   finished: BatchResult[];
   events: Array<Exclude<Event, { kind: 'edit' }>>;
+}
+
+/** Returns whether `v` has the fields of a saved session; its storage is the window's own, so the check is shallow. */
+export function isSavedSession(v: unknown): v is SavedSession {
+  return typeof v === 'object' && v !== null && 'scene' in v && 'finished' in v && 'events' in v;
 }
 
 interface Session {
@@ -148,14 +153,14 @@ function cancelled(): ToolError {
 
 /** The session: takes the agent's tool calls, queues its batches, plays them through the editor, and reports what happened. */
 export class Controller {
-  private session: Session | null = null;
+  private session: Session | undefined = undefined;
   /** The session the last report closed, until another starts: a report handed back puts it back. */
-  private closed: Session | null = null;
-  private call: Call | null = null;
+  private closed: Session | undefined = undefined;
+  private call: Call | undefined = undefined;
   /** After a `listen` that timed out empty, the status stays "listening" until this fires (specs/ListenGrace.tla). */
-  private grace: ReturnType<typeof setTimeout> | null = null;
+  private grace: ReturnType<typeof setTimeout> | undefined = undefined;
   /** Armed while no call is open; when it fires, the status is "absent" (specs/ListenGrace.tla, `GoQuiet`, #149). */
-  private quiet: ReturnType<typeof setTimeout> | null = null;
+  private quiet: ReturnType<typeof setTimeout> | undefined = undefined;
   private absent = false;
   /** Tool calls that have arrived and not settled: the quiet starts when the last one does. */
   private openCalls = 0;
@@ -180,7 +185,7 @@ export class Controller {
 
   /** Starts a session, or resumes a suspended one from the same directory. `rules`: the project guides the relay read for the agent, named for the panel (#23). */
   start(task?: string, root?: string, rules?: string[]): Promise<Report> {
-    return this.serialize(undefined, async () => {
+    return this.serialize(async () => {
       // In the editor's spelling, so paths inside it are reported relative to it.
       const at = root && this.editor.resolvePath(root);
       const waiting = this.session;
@@ -195,14 +200,14 @@ export class Controller {
       const scene: Scene = {
         root: at,
         turn: 'agent',
-        cursor: null,
-        selection: null,
-        point: null,
+        cursor: undefined,
+        selection: undefined,
+        point: undefined,
         focus: 'cursor',
         pointFar: false,
         allowedCommands: new Set(),
       };
-      this.open(task, scene);
+      this.open(scene, task);
       this.trace?.(`session started${task ? `: ${task}` : ''}`);
       this.panel.post({ type: 'session', active: true, task, ...(rules?.length ? { rules } : {}) });
       this.render();
@@ -221,11 +226,11 @@ export class Controller {
     session.seenCursor = undefined;
     this.panel.post({ type: 'session', active: true, task: session.task, resumed: true, ...(rules?.length ? { rules } : {}) });
     this.render();
-    return this.withCursor(session, { ...this.snapshot(session, undefined, /* waiting= */ false), resumed: true });
+    return this.withCursor(session, { ...this.snapshot(session, /* waiting= */ false), resumed: true });
   }
 
   /** Opens a new session, the window's from now on. */
-  private open(task: string | undefined, scene: Scene): Session {
+  private open(scene: Scene, task?: string): Session {
     const timeline = new Timeline(this.pauseReasons.size > 0);
     const lines = LineIds.editor();
     const s: Session = {
@@ -262,7 +267,7 @@ export class Controller {
       seen: new Map(),
     };
     this.session = s;
-    this.closed = null;
+    this.closed = undefined;
     this.lastPosted = '';
     return s;
   }
@@ -287,14 +292,17 @@ export class Controller {
   /** Revives, after a reload, the session the window saved, suspended until its agent's `start` (#25). */
   revive(saved: SavedSession): void {
     if (this.session) return;
+    // A session saved by 0.6.10 or earlier holds `null` where nothing was set.
     const scene: Scene = {
       ...saved.scene,
-      point: null,
+      cursor: saved.scene.cursor ?? undefined,
+      selection: saved.scene.selection ?? undefined,
+      point: undefined,
       focus: 'cursor',
       pointFar: false,
       allowedCommands: new Set(saved.scene.allowedCommands),
     };
-    const session = this.open(saved.task, scene);
+    const session = this.open(scene, saved.task);
     session.suspended = true;
     this.trace?.('session revived after a reload, suspended');
     session.finished = [...saved.finished];
@@ -305,7 +313,7 @@ export class Controller {
   }
 
   step(actions: Action[], signal?: AbortSignal): Promise<Report> {
-    return this.serialize(signal, async () => {
+    return this.serialize(async () => {
       const session = this.requireSession();
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block('step', {}, signal);
@@ -330,23 +338,23 @@ export class Controller {
         this.discard(session, batch);
       }
       return this.block('step', { batch }, signal);
-    });
+    }, signal);
   }
 
   /** Blocks until there is something to report: `Listen` in specs/Controller.tla. */
   listen(signal?: AbortSignal): Promise<Report> {
-    return this.serialize(signal, () => {
+    return this.serialize(() => {
       this.requireSession();
       return this.block('listen', {}, signal);
-    });
+    }, signal);
   }
 
   /** Ends the session, the agent's way: specs/Resume.tla, `EndByAgent`. */
   end(summary?: string, signal?: AbortSignal): Promise<Report> {
-    return this.serialize(signal, () => {
+    return this.serialize(() => {
       this.requireSession();
       return this.block('end', { summary }, signal);
-    });
+    }, signal);
   }
 
   /** Reads a file. Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
@@ -408,7 +416,7 @@ export class Controller {
     if (!this.session) {
       session.ended = true;
       this.session = session;
-      this.closed = null;
+      this.closed = undefined;
     }
     session.finished.unshift(...report.batches);
     session.events.unshift(...report.events);
@@ -566,11 +574,11 @@ export class Controller {
    */
   disconnect(): void {
     const session = this.session;
-    this.closed = null;
+    this.closed = undefined;
     if (this.call) {
       clearTimeout(this.call.timer);
       this.call.reject(new ToolError('no_session', 'Disconnected.'));
-      this.call = null;
+      this.call = undefined;
     }
     if (!session) return;
     if (session.ended) {
@@ -692,7 +700,7 @@ export class Controller {
   }
 
   /** Sets the timing: the calibration's overrides on top of the default. */
-  setTiming(overrides: TimingOverrides): void {
+  setTiming(overrides: unknown): void {
     this.config = { ...this.config, timing: withOverrides(defaultTiming, overrides) };
   }
 
@@ -702,21 +710,21 @@ export class Controller {
   }
 
   get isActive(): boolean {
-    return this.activeSession() !== null;
+    return this.activeSession() !== undefined;
   }
 
   get isPaused(): boolean {
     return this.pauseReasons.size > 0;
   }
 
-  get turn(): Turn | null {
-    return this.activeSession()?.scene.turn ?? null;
+  get turn(): Turn | undefined {
+    return this.activeSession()?.scene.turn ?? undefined;
   }
 
   // ---- Calls and reports -------------------------------------------------
 
   /** Runs tool calls one at a time. A call cancelled while waiting its turn never runs. */
-  private serialize<T>(signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+  private serialize<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     // `Call` in specs/ListenGrace.tla: the agent is calling, so it's listening.
     this.openCalls++;
     this.endQuiet();
@@ -756,7 +764,7 @@ export class Controller {
     for (const sighting of rehearsal.sightings) {
       this.saw(session, rehearsal.after.lines, sighting);
     }
-    const report = { ...this.snapshot(session, undefined, /* waiting= */ false), rejected };
+    const report = { ...this.snapshot(session, /* waiting= */ false), rejected };
     this.trace?.(`report to step: ${describeReport(report)}`);
     this.render();
     return this.withCursor(session, report);
@@ -766,7 +774,7 @@ export class Controller {
   private rejectUnanchored(session: Session, anchor: CursorAnchor): Promise<Report> {
     const error = { kind: 'unanchored' as const, message: UNANCHORED };
     const rejected = { index: anchor.index, action: anchor.action, error };
-    const report = { ...this.snapshot(session, undefined, /* waiting= */ false), rejected };
+    const report = { ...this.snapshot(session, /* waiting= */ false), rejected };
     this.trace?.(`report to step: ${describeReport(report)}`);
     this.render();
     return this.withCursor(session, report);
@@ -779,8 +787,8 @@ export class Controller {
     return this.session;
   }
 
-  private activeSession(): Session | null {
-    return this.session && !this.session.ended ? this.session : null;
+  private activeSession(): Session | undefined {
+    return this.session && !this.session.ended ? this.session : undefined;
   }
 
   /**
@@ -807,7 +815,7 @@ export class Controller {
       // `Cancel` in specs/Controller.tla: a blocked call is released at once.
       signal?.addEventListener('abort', () => {
         if (this.call !== call) return;
-        this.call = null;
+        this.call = undefined;
         clearTimeout(call.timer);
         reject(cancelled());
         this.render();
@@ -852,7 +860,7 @@ export class Controller {
     const call = this.call;
     if (!call) return;
     // specs/Serialize.tla, `Commit`.
-    this.call = null;
+    this.call = undefined;
     clearTimeout(call.timer);
     const session = this.session;
     if (!session) {
@@ -860,7 +868,7 @@ export class Controller {
       return;
     }
     // `Commit` in specs/Controller.tla. Nothing more to wait for once the session is ending.
-    const report = this.snapshot(session, call.batch, timedOut && !session.ended && call.kind !== 'end');
+    const report = this.snapshot(session, /* waiting= */ timedOut && !session.ended && call.kind !== 'end', call.batch);
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
     const closing = (session.ended && session.held.length === 0) || call.kind === 'end';
     if (closing) {
@@ -887,7 +895,7 @@ export class Controller {
   private startGrace(): void {
     this.endGrace();
     this.grace = setTimeout(() => {
-      this.grace = null;
+      this.grace = undefined;
       this.render();
     }, this.config.listenGraceMs);
   }
@@ -895,14 +903,14 @@ export class Controller {
   /** Ends the grace: a new call does (`Call` in specs/ListenGrace.tla). */
   private endGrace(): void {
     if (this.grace) clearTimeout(this.grace);
-    this.grace = null;
+    this.grace = undefined;
   }
 
   /** Starts the quiet: with no call open for absentMs, the agent isn't listening (`GoQuiet` in specs/ListenGrace.tla, #149). */
   private startQuiet(): void {
     this.endQuiet();
     this.quiet = setTimeout(() => {
-      this.quiet = null;
+      this.quiet = undefined;
       this.absent = true;
       this.render();
     }, this.config.absentMs);
@@ -911,7 +919,7 @@ export class Controller {
   /** Ends the quiet: a new call does (`Call` in specs/ListenGrace.tla). */
   private endQuiet(): void {
     if (this.quiet) clearTimeout(this.quiet);
-    this.quiet = null;
+    this.quiet = undefined;
     if (!this.absent) return;
     this.absent = false;
     this.render();
@@ -952,7 +960,7 @@ export class Controller {
   }
 
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
-  private snapshot(session: Session, submitted: Batch | undefined, waiting: boolean): Report {
+  private snapshot(session: Session, waiting: boolean, submitted?: Batch): Report {
     const batches = session.finished.toSorted((a, b) => a.id - b.id);
     // The agent planned against where these would have ended; the cursor is where they stopped (#112,
     // specs/Anchor.tla, `Discard`; a batch that completed is `Complete`).
@@ -1005,12 +1013,12 @@ export class Controller {
 
   private close(session: Session): void {
     this.trace?.('session closed');
-    if (this.session === session) this.session = null;
+    if (this.session === session) this.session = undefined;
     session.timeline.interrupt();
     clearTimeout(session.navigatorTimer);
     this.endGrace();
     this.endQuiet();
-    this.editor.renderPoint(null);
+    this.editor.renderPoint(undefined);
     this.render();
   }
 
@@ -1103,17 +1111,17 @@ export class Controller {
   // ---- Paths ---------------------------------------------------------------
 
   private resolvePath(session: Session, file: string): string {
-    return agentPath(this.editor, session.scene.root, file);
+    return agentPath(this.editor, file, session.scene.root);
   }
 
   private displayPath(session: Session, file: string): string {
-    return displayPath(this.editor, session.scene.root, file);
+    return displayPath(this.editor, file, session.scene.root);
   }
 
   // ---- Rendering -----------------------------------------------------------
 
-  private cursorView(session: Session): CursorView | null {
-    if (!session.scene.cursor) return null;
+  private cursorView(session: Session): CursorView | undefined {
+    if (!session.scene.cursor) return undefined;
     return session.scene.selection ? { ...session.scene.cursor, selection: session.scene.selection } : { ...session.scene.cursor };
   }
 
@@ -1123,7 +1131,7 @@ export class Controller {
     if (this.pauseReasons.size > 0) return 'paused';
     if (session.queue.length > 0) return session.player.reading ? 'read' : session.player.commandRunning ? 'running' : 'typing';
     // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace, then "absent" once quiet.
-    const waiting = this.grace !== null && !session.events.some(interrupting);
+    const waiting = this.grace !== undefined && !session.events.some(interrupting);
     return this.call?.kind === 'listen' || waiting ? 'listening' : this.absent ? 'absent' : 'thinking';
   }
 
@@ -1131,7 +1139,7 @@ export class Controller {
     this.onChange?.();
     const session = this.activeSession();
     const state = this.state();
-    this.editor.renderCursor(session ? this.cursorView(session) : null, state, session?.scene.focus ?? 'cursor');
+    this.editor.renderCursor(session ? this.cursorView(session) : undefined, state, session?.scene.focus ?? 'cursor');
     if (!session) return;
     const paused = this.pauseReasons.size > 0;
     const key = `${state}/${session.scene.turn}/${paused}`;

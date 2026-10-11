@@ -568,7 +568,7 @@ describe('line numbers', () => {
     const { editor, controller } = setup({ 'a.ts': 'a\nb\nc\n' });
     await controller.start();
     await controller.read('a.ts');
-    editor.userEdit('a.ts', 3, 0, '\n  y');
+    editor.userEdit('a.ts', { offset: 3, deleteLength: 0, text: '\n  y' });
     await until(controller.listen());
     expect((await controller.step([{ move: { file: 'a.ts', line: 4, to: 'line_end' } }])).rejected?.error.kind).toBe('line_not_seen');
     expect((await until(controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }]))).rejected).toBeUndefined();
@@ -919,7 +919,7 @@ describe('reports', () => {
     const next = await until(controller.step([]));
     expect(next.cursor).toBeUndefined();
 
-    editor.userEdit('a.ts', 0, 0, '\n');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '\n' });
     const moved = await until(controller.listen());
     expect(moved.cursor).toEqual({
       file: 'a.ts',
@@ -1142,7 +1142,7 @@ describe('interruptions', () => {
     void controller.step([{ select: { file: 'a.ts', line: 1, text: 'DELETE' } }, { delete: true }]);
     await until(atGate.promise);
     // The programmer types in front of the selection while the delete waits.
-    editor.userEdit('a.ts', 0, 0, '>>>');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '>>>' });
     editor.show = show;
     gate.resolve();
     const report = await until(controller.step([]));
@@ -1208,7 +1208,7 @@ describe('interruptions', () => {
     await advance(500);
     expect(listening.done).toBe(false);
 
-    editor.userEdit('a.ts', 0, 0, 'XX');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'XX' });
     const report = await until(listen);
     expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+XXhello'), by: 'programmer' }]);
     // The batch's code showed the cursor before the edit, so the report shows where it is now.
@@ -1221,7 +1221,7 @@ describe('interruptions', () => {
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
     await advance(200);
-    editor.otherEdit('package.json', 1, 0, '"x": 1');
+    editor.otherEdit('package.json', { offset: 1, deleteLength: 0, text: '"x": 1' });
 
     const report = await until(controller.step([{ type: `d${CURSOR_MARKER}` }]));
     expect(report.batches).toMatchObject([{ id: 1, status: 'completed' }]);
@@ -1230,10 +1230,10 @@ describe('interruptions', () => {
     expect(editor.text('a.ts')).toBe('helloabcd\n');
 
     const listening = track(controller.listen());
-    editor.otherEdit('a.ts', 0, 0, '// formatted\n');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// formatted\n' });
     await advance(5000);
     expect(listening.done).toBe(false);
-    editor.userEdit('a.ts', 0, 0, '!');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '!' });
     await advance(10);
     ok(listening.value);
     expect(listening.value.events).toMatchObject([{ kind: 'edit', file: 'a.ts', by: 'programmer' }]);
@@ -1247,7 +1247,7 @@ describe('interruptions', () => {
     const queued = track(controller.step([{ type: `d${CURSOR_MARKER}` }]));
     await advance(200);
     // A formatter, say.
-    editor.otherEdit('a.ts', 0, 0, '// formatted\n');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// formatted\n' });
     await advance(10);
     expect(queued.done).toBe(true);
     ok(queued.value);
@@ -1268,7 +1268,7 @@ describe('interruptions', () => {
       await save(file);
       if (formatted) return;
       formatted = true;
-      editor.otherEdit('a.ts', 0, 0, '// formatted\n');
+      editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// formatted\n' });
     };
     await controller.start();
     await controller.read('a.ts');
@@ -1286,8 +1286,8 @@ describe('interruptions', () => {
     const { editor, controller } = setup({ 'a.ts': 'hello\n' });
     await controller.start();
     const listen = controller.listen();
-    editor.otherEdit('a.ts', 0, 0, 'A');
-    editor.userEdit('a.ts', 0, 0, 'B');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: 'A' });
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'B' });
     const report = await until(listen);
     expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+BAhello'), by: 'programmer' }]);
   });
@@ -1300,8 +1300,8 @@ describe('edits with no net change', () => {
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
     const queued = controller.step([{ type: `y${CURSOR_MARKER}` }]);
-    editor.userEdit('a.ts', 0, 0, '#');
-    editor.userEdit('a.ts', 0, 1, '');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '#' });
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 1, text: '' });
     const report = await until(queued);
     expect(report.batches.map((b) => b.status)).toContain('discarded');
     expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: '', by: 'programmer' }]);
@@ -1310,8 +1310,8 @@ describe('edits with no net change', () => {
   it("leaves out a tool's edit with no net change that interrupted nothing", async () => {
     const { editor, controller } = setup({ 'a.ts': 'abc\n', 'b.ts': 'b\n' });
     await controller.start();
-    editor.otherEdit('b.ts', 0, 0, '#');
-    editor.otherEdit('b.ts', 0, 1, '');
+    editor.otherEdit('b.ts', { offset: 0, deleteLength: 0, text: '#' });
+    editor.otherEdit('b.ts', { offset: 0, deleteLength: 1, text: '' });
     controller.userMessage('hi');
     const report = await until(controller.listen());
     expect(report.events.map((e) => e.kind)).toEqual(['message']);
@@ -1324,11 +1324,11 @@ describe('turns', () => {
     await controller.start();
     controller.takeTurn();
     await until(controller.listen());
-    editor.userEdit('a.ts', 3, 0, 'd');
+    editor.userEdit('a.ts', { offset: 3, deleteLength: 0, text: 'd' });
     // A pause, with no listen waiting: the timer fires.
     await advance(1100);
     // Typing again, then the agent listens: not mid-word.
-    editor.userEdit('a.ts', 4, 0, 'e');
+    editor.userEdit('a.ts', { offset: 4, deleteLength: 0, text: 'e' });
     const following = track(controller.listen());
     await advance(500);
     expect(following.done).toBe(false);
@@ -1359,7 +1359,7 @@ describe('turns', () => {
 
     // Edits are reported once the programmer pauses typing.
     const following = track(controller.listen());
-    editor.userEdit('a.ts', 7, 2, '<');
+    editor.userEdit('a.ts', { offset: 7, deleteLength: 2, text: '<' });
     await advance(500);
     expect(following.done).toBe(false);
     await advance(600);
@@ -1380,7 +1380,7 @@ describe('turns', () => {
     await controller.start();
     controller.takeTurn();
     await until(controller.listen());
-    editor.userEdit('a.ts', 3, 0, 'd');
+    editor.userEdit('a.ts', { offset: 3, deleteLength: 0, text: 'd' });
     const handedBack = track(controller.listen());
     controller.handBack();
     await advance(10);
@@ -1655,7 +1655,7 @@ describe('sessions', () => {
     expect(await lines('a.ts')).toEqual(['a', 'bc', 'd']);
     // Files the batches don't edit read as they are.
     expect(await lines('b.ts')).toEqual(['b']);
-    editor.userEdit('a.ts', 0, 0, '!');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '!' });
     expect(`${(await lines('a.ts')).join('\n')}\n`).toBe(editor.text('a.ts'));
     await until(queued);
     expect(`${(await lines('a.ts')).join('\n')}\n`).toBe(editor.text('a.ts'));
@@ -1997,7 +1997,7 @@ describe('saving', () => {
 // VS Code reloads a file changed on disk with one change from the first line that differs to the
 // last (#65): here lines 2 and 5 of 6 changed, reported as one change replacing lines 2 to 5.
 function reload(editor: ReturnType<typeof setup>['editor']): void {
-  editor.otherEdit('a.ts', 2, 8, 'X\n3\n4\nY\n');
+  editor.otherEdit('a.ts', { offset: 2, deleteLength: 8, text: 'X\n3\n4\nY\n' });
 }
 
 describe('a file changed on disk', () => {
@@ -2042,7 +2042,7 @@ describe('changes by others, while batches are queued', () => {
       { say: 'one two three four five six seven eight nine ten' },
     ]);
     await advance(300);
-    editor.otherEdit('a.ts', 0, 0, 'XX\n');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: 'XX\n' });
     const typed = await until(controller.step([{ type: `!${CURSOR_MARKER}` }]));
     expect(typed.rejected).toBeUndefined();
     expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['XX', 'hello', '!world']);
@@ -2057,7 +2057,7 @@ describe('changes by others, while batches are queued', () => {
     await controller.read('a.ts');
     await controller.step([{ say: 'one two three four five six seven eight nine ten' }]);
     await advance(300);
-    editor.otherEdit('a.ts', 0, 0, 'XX\n');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: 'XX\n' });
     expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['XX', 'hello']);
     const moved = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
     expect(moved.rejected).toBeUndefined();
@@ -2071,7 +2071,7 @@ describe('changes by others, while batches are queued', () => {
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `1${CURSOR_MARKER}` }]);
     await until(controller.step([{ move: { file: 'b.ts', line: 1, to: 'line_end' } }, { type: ` long text here${CURSOR_MARKER}` }]));
     await advance(300);
-    editor.otherEdit('a.ts', 0, 0, '// tool\n');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// tool\n' });
     const report = await until(controller.step([]));
     expect(report.batches.map((b) => [b.id, b.status])).toEqual([[2, 'completed']]);
     expect(report.events).toMatchObject([{ kind: 'edit', file: 'a.ts', by: 'other' }]);
@@ -2087,7 +2087,7 @@ describe('changes by others, while batches are queued', () => {
     await controller.step([{ move: { file: 'b.ts', line: 1, to: 'line_end' } }, { type: ` long text here${CURSOR_MARKER}` }]);
     const queued = controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `1${CURSOR_MARKER}` }]);
     await advance(300);
-    editor.otherEdit('a.ts', 0, 0, '// tool\n');
+    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// tool\n' });
     const first = await until(queued);
     const rest = await until(controller.step([]));
     expect([...first.batches, ...rest.batches].map((b) => b.status)).toEqual(['interrupted', 'discarded']);
@@ -2205,7 +2205,7 @@ describe('pauses and the log (#149)', () => {
     const { editor, controller } = setup({ 'a.ts': '' });
     await controller.start();
     const listening = controller.listen();
-    editor.userEdit('a.ts', 0, 0, 'x\n'.repeat(300));
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'x\n'.repeat(300) });
     const report = await until(listening);
     expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: '@@ -0,0 +1,300 @@', by: 'programmer', omitted: 300 }]);
   });

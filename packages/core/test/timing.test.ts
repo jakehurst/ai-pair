@@ -2,13 +2,7 @@
 // number of zero or more keeps the default, so pacing doesn't silently turn off (#17).
 
 import { expect, it } from 'vitest';
-import { defaultTiming, glideDuration, withOverrides, type TimingOverrides } from '../src/timing';
-
-/** Returns `value` as the settings: they are JSON, so anything can be there, whatever their type says. */
-function settings(value: unknown): TimingOverrides {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return value as TimingOverrides;
-}
+import { defaultTiming, glideDuration, withOverrides } from '../src/timing';
 
 it('takes overrides that are numbers of zero or more, at either level', () => {
   const timing = withOverrides(defaultTiming, { afterSelectMs: 0, type: { charMs: 80 }, reading: { minMs: 4000 } });
@@ -17,20 +11,25 @@ it('takes overrides that are numbers of zero or more, at either level', () => {
 });
 
 it('keeps the default for a string, a negative number, NaN, or Infinity', () => {
-  const timing = withOverrides(
-    defaultTiming,
-    settings({ afterSelectMs: 'long', afterDeleteMs: -1, afterPointMs: Number.NaN, type: { charMs: Infinity }, reading: 'fast' }),
-  );
+  const timing = withOverrides(defaultTiming, {
+    afterSelectMs: 'long',
+    afterDeleteMs: -1,
+    afterPointMs: Number.NaN,
+    type: { charMs: Infinity },
+    reading: 'fast',
+  });
   expect(timing).toEqual(defaultTiming);
 });
 
 it("keeps the defaults for a setting that isn't an object", () => {
-  expect(withOverrides(defaultTiming, settings('fast'))).toEqual(defaultTiming);
-  expect(withOverrides(defaultTiming, settings(null))).toEqual(defaultTiming);
+  expect(withOverrides(defaultTiming, 'fast')).toEqual(defaultTiming);
+  // A JSON `null`, as a settings file could hold.
+  // oxlint-disable-next-line unicorn/no-null
+  expect(withOverrides(defaultTiming, null)).toEqual(defaultTiming);
 });
 
 it("ignores keys that aren't timings", () => {
-  expect(withOverrides(defaultTiming, settings({ color: 3 }))).toEqual(defaultTiming);
+  expect(withOverrides(defaultTiming, { color: 3 })).toEqual(defaultTiming);
 });
 
 it('glides longer the farther it goes, up to the cap', () => {

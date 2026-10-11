@@ -100,25 +100,25 @@ let replaying = false;
 /** The session's agent is gone, and the session waits for it to come back (#25). */
 let suspended = false;
 /** The agent's state, as the extension last reported it. */
-let state: AgentState | null = null;
+let state: AgentState | undefined = undefined;
 /** The programmer's selection, offered with the reply. */
-let selection: Ref | null = null;
+let selection: Ref | undefined = undefined;
 /** The programmer dismissed the selection, so it isn't offered until it changes. */
 let selectionDismissed = false;
 /** The command shown in the run box. */
-let runId: number | null = null;
+let runId: number | undefined = undefined;
 /** The run box waits for the programmer's decision on its command. */
 let runConfirming = false;
 /** Text of the current message. */
-let current: string | null = null;
+let current: string | undefined = undefined;
 /** Whether the current message is in the history already. */
 let filed = false;
 /** The reading pause under way: its length, and how much of it has elapsed, as of `last`. */
-let reading: { ms: number; elapsed: number; last: number } | null = null;
+let reading: { ms: number; elapsed: number; last: number } | undefined = undefined;
 /** A link to the code the agent just pointed at, shown with the message about it. */
-let pointed: HTMLAnchorElement | null = null;
+let pointed: HTMLAnchorElement | undefined = undefined;
 let draftEmpty = true;
-let tipTarget: HTMLElement | null = null;
+let tipTarget: HTMLElement | undefined = undefined;
 let tipTimer: ReturnType<typeof setTimeout> | undefined;
 let tipWarmUntil = 0;
 
@@ -155,7 +155,7 @@ function entry(cls: string, html?: string): HTMLElement {
  * (specs/Panel.tla, `Flushed`).
  */
 function fileCurrent(): void {
-  if (current !== null && !filed) ui.history.prepend(entry('agent', rich(current)));
+  if (current !== undefined && !filed) ui.history.prepend(entry('agent', rich(current)));
   filed = true;
 }
 
@@ -253,7 +253,7 @@ function addRun(id: number, command: string, phase: RunPhase, exitCode: number |
 // ---- The band --------------------------------------------------------------
 
 function attaching(): boolean {
-  return active && selection !== null && !selectionDismissed;
+  return active && selection !== undefined && !selectionDismissed;
 }
 
 function syncAttach(): void {
@@ -278,7 +278,7 @@ function setNow(text: string): void {
   ui.now.innerHTML = rich(text);
   // The agent points first, then says what's there.
   ui.ref.replaceChildren(...(pointed ? [pointed] : []));
-  pointed = null;
+  pointed = undefined;
   arrive(ui.now);
 }
 
@@ -312,7 +312,7 @@ function showCalibration(view: CalibrationView): void {
 }
 
 function syncReading(): void {
-  ui.dot.classList.toggle('reading', reading !== null);
+  ui.dot.classList.toggle('reading', reading !== undefined);
 }
 
 function tick(now: number): void {
@@ -322,7 +322,7 @@ function tick(now: number): void {
   const f = Math.min(1, reading.elapsed / reading.ms);
   ui.dot.style.setProperty('--progress', String(f));
   if (f >= 1) {
-    reading = null;
+    reading = undefined;
     syncReading();
     return;
   }
@@ -391,14 +391,14 @@ function hideTip(): void {
   clearTimeout(tipTimer);
   if (!tipTarget) return;
   tipTarget.removeAttribute('aria-describedby');
-  tipTarget = null;
+  tipTarget = undefined;
   ui.tip.hidden = true;
   tipWarmUntil = performance.now() + TIP_WARM_MS;
 }
 
-function hoverTip(el: HTMLElement | null): void {
+function hoverTip(el: HTMLElement | undefined): void {
   if (el === tipTarget) return;
-  const warm = tipTarget !== null || performance.now() < tipWarmUntil;
+  const warm = tipTarget !== undefined || performance.now() < tipWarmUntil;
   hideTip();
   if (!el) return;
   if (warm) {
@@ -421,8 +421,8 @@ function syncTip(): void {
 }
 
 /** Returns the element an event happened on, if it is one. */
-function elementOf(e: Event): HTMLElement | null {
-  return e.target instanceof HTMLElement ? e.target : null;
+function elementOf(e: Event): HTMLElement | undefined {
+  return e.target instanceof HTMLElement ? e.target : undefined;
 }
 
 // ---- The session's state ---------------------------------------------------
@@ -448,7 +448,7 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
 
 /** Clears the run box. */
 function clearRun(): void {
-  runId = null;
+  runId = undefined;
   runConfirming = false;
   ui.run.classList.remove('on', 'confirm');
   ui.run.removeAttribute('role');
@@ -496,7 +496,7 @@ function setActive(on: boolean): void {
   ui.reply.disabled = !on && !calibrating;
   if (!on) {
     suspended = false;
-    reading = null;
+    reading = undefined;
     // specs/RunBox.tla, `EndSession`: the session ending clears the box.
     clearRun();
     closeSpeedMenu();
@@ -542,7 +542,7 @@ function handle(message: ToPanel): void {
         if (message.suspended || message.resumed) {
           // The same session: its agent gone, or back (#25).
           fileCurrent();
-          current = null;
+          current = undefined;
           const was = suspended;
           suspended = message.suspended === true;
           // A revive repeats the suspension a disconnect already showed (#138).
@@ -553,19 +553,19 @@ function handle(message: ToPanel): void {
           return;
         }
         fileCurrent();
-        current = null;
-        state = null;
+        current = undefined;
+        state = undefined;
         ui.now.classList.add('empty');
         ui.now.textContent = `Waiting for the agent${ELLIPSIS}`;
         ui.ref.innerHTML = '';
-        pointed = null;
+        pointed = undefined;
         addDivider(
           `Session started${message.task ? `: ${message.task}` : ''}${message.rules ? `${LABEL_SEPARATOR}rules from ${message.rules.join(', ')}` : ''}`,
         );
         setActive(true);
       } else {
         fileCurrent();
-        current = null;
+        current = undefined;
         addDivider(ENDED[message.reason]);
         ui.idleTitle.textContent = message.reason === 'disconnected' ? 'The agent disconnected' : 'Session ended';
         ui.idleSummary.innerHTML = message.summary ? rich(message.summary) : '';
@@ -633,7 +633,7 @@ function handle(message: ToPanel): void {
       return;
     }
     case 'selection':
-      selection = message.ref ?? null;
+      selection = message.ref ?? undefined;
       selectionDismissed = false;
       syncAttach();
       return;
@@ -690,7 +690,7 @@ function sendReply(): void {
 }
 
 function decide(run: boolean, remember: boolean): void {
-  if (runId !== null) vscode.postMessage({ type: 'runDecision', id: runId, run, remember });
+  if (runId !== undefined) vscode.postMessage({ type: 'runDecision', id: runId, run, remember });
 }
 
 // ---- Wiring ----------------------------------------------------------------
@@ -742,10 +742,10 @@ ui.end.addEventListener('click', () => {
 
 // From any element under the pointer: over a button's icon, it's an SVG one.
 document.addEventListener('pointerover', (e) => {
-  hoverTip(e.target instanceof Element ? e.target.closest<HTMLElement>('[data-tip]') : null);
+  hoverTip(e.target instanceof Element ? (e.target.closest<HTMLElement>('[data-tip]') ?? undefined) : undefined);
 });
 document.documentElement.addEventListener('pointerleave', () => {
-  hoverTip(null);
+  hoverTip(undefined);
 });
 document.addEventListener('pointerdown', hideTip, /* useCapture= */ true);
 document.addEventListener('focusin', (e) => {
@@ -778,7 +778,7 @@ document.addEventListener('keydown', (e) => {
 // File names in messages open the file, URLs open in the browser, and the intro's commands run.
 // Links have an href, so they take focus and Enter (#16); it isn't followed.
 document.addEventListener('click', (e) => {
-  const target = e.target instanceof Element ? e.target : null;
+  const target = e.target instanceof Element ? e.target : undefined;
   if (target?.closest('a[href]')) e.preventDefault();
   const a = target?.closest<HTMLElement>('a.file, a.url, a.command');
   if (a?.dataset.file) vscode.postMessage({ type: 'openFile', file: a.dataset.file });

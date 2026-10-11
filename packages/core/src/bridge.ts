@@ -81,7 +81,7 @@ export class Bridge {
   private port = 0;
   private lastFocused = Date.now();
   /** The relay connection whose agent started the current (or last) session. */
-  private owner: WebSocket | null = null;
+  private owner: WebSocket | undefined = undefined;
   /** Sockets accepted so far, to tell them apart in `trace`. */
   private accepted = 0;
 
@@ -228,7 +228,7 @@ export class Bridge {
         abort.abort();
       }
       if (this.owner === ws) {
-        this.owner = null;
+        this.owner = undefined;
         this.controller.disconnect();
       }
     });
@@ -246,7 +246,7 @@ export class Bridge {
       // suspend the session rather than leave it to no one (#42, #25). From here to `owner`, nothing awaits. The owner is
       // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
-        this.owner = null;
+        this.owner = undefined;
         controller.disconnect();
         throw new ToolError('no_session', 'The connection closed while the session started.');
       }

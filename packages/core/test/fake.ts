@@ -2,8 +2,8 @@ import * as nodePath from 'node:path';
 import { expect, vi } from 'vitest';
 import { withinFolder } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
-import { Controller, type SavedSession } from '../src/controller';
-import { MissingFile } from '../src/ports';
+import { Controller, isSavedSession, type SavedSession } from '../src/controller';
+import { MissingFile, type Change } from '../src/ports';
 import type {
   AgentState,
   CommandOutcome,
@@ -26,16 +26,16 @@ export class FakeEditor implements EditorPort {
   saved: string[] = [];
   edits: Array<{ file: string; offset: number; deleteLength: number; text: string; options: EditOptions }> = [];
   shown: string[] = [];
-  cursor: CursorView | null = null;
-  state: AgentState | null = null;
-  point: { file: string; start: number; end: number } | null = null;
+  cursor: CursorView | undefined = undefined;
+  state: AgentState | undefined = undefined;
+  point: { file: string; start: number; end: number } | undefined = undefined;
   controller: Controller | undefined;
   /** Files the editor stores with CRLF, whatever they contain so far. */
   crlf = new Set<string>();
   focus: Focus = 'cursor';
   reveals = 0;
   /** What the view was following at the last reveal. */
-  revealedFocus: Focus | null = null;
+  revealedFocus: Focus | undefined = undefined;
   follows = 0;
   /** `unsaved`: the files with unsaved changes when the command started. */
   commands: Array<{ command: string; options: RunOptions; unsaved: string[] }> = [];
@@ -77,12 +77,12 @@ export class FakeEditor implements EditorPort {
     this.dirty.delete(file);
     this.saved.push(file);
   }
-  renderCursor(cursor: CursorView | null, state: AgentState, focus: Focus): void {
+  renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void {
     this.cursor = cursor;
     this.state = state;
     this.focus = focus;
   }
-  renderPoint(point: { file: string; start: number; end: number } | null): void {
+  renderPoint(point: { file: string; start: number; end: number } | undefined): void {
     this.point = point;
   }
   reveal(): void {
@@ -132,16 +132,16 @@ export class FakeEditor implements EditorPort {
   }
 
   /** Types into a file, as the programmer. */
-  userEdit(name: string, offset: number, deleteLength: number, text: string): void {
-    this.change('programmer', name, offset, deleteLength, text);
+  userEdit(name: string, change: Change): void {
+    this.change('programmer', name, change);
   }
 
   /** Changes a file as something other than the programmer: a tool, a formatter. */
-  otherEdit(name: string, offset: number, deleteLength: number, text: string): void {
-    this.change('other', name, offset, deleteLength, text);
+  otherEdit(name: string, change: Change): void {
+    this.change('other', name, change);
   }
 
-  private change(by: 'programmer' | 'other', name: string, offset: number, deleteLength: number, text: string): void {
+  private change(by: 'programmer' | 'other', name: string, { offset, deleteLength, text }: Change): void {
     const file = this.resolvePath(name);
     const before = this.files.get(file) ?? '';
     const after = before.slice(0, offset) + text + before.slice(offset + deleteLength);
@@ -203,10 +203,6 @@ export function setup(files: Record<string, string> = {}, config: Partial<Config
   const controller = new Controller(editor, panel, { ...testConfig, ...config });
   editor.controller = controller;
   return { editor, panel, controller };
-}
-
-function isSavedSession(v: unknown): v is SavedSession {
-  return typeof v === 'object' && v !== null && 'scene' in v && 'finished' in v && 'events' in v;
 }
 
 /** Returns `saved` as the workspace's storage hands it back: through JSON. */

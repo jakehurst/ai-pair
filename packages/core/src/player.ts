@@ -29,9 +29,9 @@ export interface Scene {
   /** The agent's working directory, if it gave one: paths to and from the agent are relative to it. */
   root?: string;
   turn: Turn;
-  cursor: { file: string; offset: number } | null;
-  selection: { start: number; end: number } | null;
-  point: { file: string; start: number; end: number } | null;
+  cursor?: { file: string; offset: number };
+  selection?: { start: number; end: number };
+  point?: { file: string; start: number; end: number };
   /** What the view follows: the cursor, or, right after a `point`, the pointed code. */
   focus: Focus;
   /** The pointed code is in another file than the cursor, or far from it: looking back changes the view. */
@@ -105,12 +105,12 @@ function failed(r: Resolution & { ok: false }, file: string, text: string, shown
 }
 
 /** Returns the absolute path for a path from the agent: relative to its working directory, if it gave one. */
-export function agentPath(editor: EditorPort, root: string | undefined, file: string): string {
+export function agentPath(editor: EditorPort, file: string, root?: string): string {
   return editor.resolvePath(root ? nodePath.resolve(root, file) : file);
 }
 
 /** Returns how to name a file to the agent. */
-export function displayPath(editor: EditorPort, root: string | undefined, file: string): string {
+export function displayPath(editor: EditorPort, file: string, root?: string): string {
   if (!root) return editor.displayPath(file);
   // Not by `relative` starting with "..": a folder in the root may be named `..cache` (#5).
   const inside = withinFolder(root, file);
@@ -349,7 +349,7 @@ export class Player {
       // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
       await editor.show(file);
       const at = move.at;
-      const where = await this.locate(file, move.line, 'move', at === undefined ? undefined : (text) => spotCandidates(text, at));
+      const where = await this.locate(file, 'move', move.line, at === undefined ? undefined : (text) => spotCandidates(text, at));
       if ('kind' in where) return where;
       const { text, line } = where;
       let offset: number;
@@ -367,7 +367,7 @@ export class Player {
         scene.cursor?.file === file &&
         Math.abs(position(text, scene.cursor.offset).line - position(text, offset).line) <= timing.nearLines;
       scene.cursor = { file, offset };
-      scene.selection = null;
+      scene.selection = undefined;
       playing.moved = true;
       this.follow();
       // The pause is after the move, so the programmer sees where the cursor went before anything happens there.
@@ -417,7 +417,7 @@ export class Player {
       playing.edited = true;
       this.clearPoint();
       scene.cursor.offset = start;
-      scene.selection = null;
+      scene.selection = undefined;
       const change = { offset: start, deleteLength: end - start, text: '' };
       this.touch(playing, file, change);
       await this.edit(file, change, { undoStopBefore: true, undoStopAfter: true });
@@ -576,7 +576,7 @@ export class Player {
       const deleteLength = scene.selection ? scene.selection.end - scene.selection.start : 0;
       // Move the cursor before awaiting, so programmer edits arriving meanwhile transform the right position.
       cursor.offset = start + insert.length;
-      scene.selection = null;
+      scene.selection = undefined;
       const change = { offset: start, deleteLength, text: insert };
       this.touch(playing, cursor.file, change);
       await this.edit(cursor.file, change, {
@@ -645,8 +645,8 @@ export class Player {
    */
   private async locate(
     file: string,
-    line: number | undefined,
     action: string,
+    line?: number,
     find?: (text: string) => Candidate[],
   ): Promise<{ text: string; line: number } | Outcome> {
     const scene = this.scene;
@@ -671,7 +671,7 @@ export class Player {
   private async span(file: string, target: SpanTarget, action: string): Promise<{ text: string; start: number; end: number } | Outcome> {
     const find = target.text ?? target.from;
     if (find === undefined) throw new Error('A span has `text` or `from`: spanProblem checks it before the span is played.');
-    const where = await this.locate(file, target.line, action, (text) => spanCandidates(text, find));
+    const where = await this.locate(file, action, target.line, (text) => spanCandidates(text, find));
     if ('kind' in where) return where;
     const { text, line } = where;
     const r = resolveSpan(text, { ...target, line });
@@ -717,8 +717,8 @@ export class Player {
 
   private clearPoint(): void {
     if (!this.scene.point) return;
-    this.scene.point = null;
-    this.stage.editor.renderPoint(null);
+    this.scene.point = undefined;
+    this.stage.editor.renderPoint(undefined);
   }
 
   /** Records a change the batch makes: the file it touched, and the span of its edits so far, moved through it. */
@@ -732,10 +732,10 @@ export class Player {
   }
 
   private resolvePath(file: string): string {
-    return agentPath(this.stage.editor, this.scene.root, file);
+    return agentPath(this.stage.editor, file, this.scene.root);
   }
 
   private displayPath(file: string): string {
-    return displayPath(this.stage.editor, this.scene.root, file);
+    return displayPath(this.stage.editor, file, this.scene.root);
   }
 }

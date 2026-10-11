@@ -97,9 +97,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   wrote: (file: string, text: string) => void = () => {};
   /** Files we're saving: changes to them meanwhile are by save participants, like format on save. */
   private readonly saving = new Set<string>();
-  private cursor: CursorView | null = null;
+  private cursor: CursorView | undefined = undefined;
   private state: AgentState = 'thinking';
-  private point: { file: string; start: number; end: number } | null = null;
+  private point: { file: string; start: number; end: number } | undefined = undefined;
   private focus: Focus = 'cursor';
   private pulse?: ReturnType<typeof setInterval>;
   private pulseOn = true;
@@ -296,7 +296,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     }
   }
 
-  renderCursor(cursor: CursorView | null, state: AgentState, focus: Focus): void {
+  renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void {
     this.cursor = cursor;
     this.focus = focus;
     const changed = state !== this.state;
@@ -317,7 +317,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     }
   }
 
-  renderPoint(point: { file: string; start: number; end: number } | null): void {
+  renderPoint(point: { file: string; start: number; end: number } | undefined): void {
     this.point = point;
     this.redraw();
   }
@@ -455,7 +455,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   // ---- Rendering -----------------------------------------------------------
 
   /** Returns what follow mode keeps in view: the agent cursor, or the start of the code it points at. */
-  private target(): Target | null {
+  private target(): Target | undefined {
     if (this.focus === 'point' && this.point) return { file: this.point.file, offset: this.point.start };
     return this.cursor;
   }
@@ -619,7 +619,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     for (const editor of vscode.window.visibleTextEditors) {
       const file = editor.document.uri.fsPath;
       const doc = editor.document;
-      const here = this.cursor && this.cursor.file === file ? this.cursor : null;
+      const here = this.cursor && this.cursor.file === file ? this.cursor : undefined;
       const at = here ? [new vscode.Range(doc.positionAt(here.offset), doc.positionAt(here.offset))] : [];
       for (const [key, type] of this.cursorTypes) {
         editor.setDecorations(type, key === cursorKey ? at : []);
@@ -629,7 +629,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       }
       const sel = here?.selection;
       editor.setDecorations(this.selectionType, sel ? [new vscode.Range(doc.positionAt(sel.start), doc.positionAt(sel.end))] : []);
-      const point = this.point && this.point.file === file ? this.point : null;
+      const point = this.point && this.point.file === file ? this.point : undefined;
       editor.setDecorations(this.pointType, point ? [new vscode.Range(doc.positionAt(point.start), doc.positionAt(point.end))] : []);
     }
   }

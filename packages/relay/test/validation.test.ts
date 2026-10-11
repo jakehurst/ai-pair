@@ -64,6 +64,8 @@ const actions: unknown[] = [
   { foo: 1 },
   {},
   'say',
+  // A JSON `null`, as an agent could send.
+  // oxlint-disable-next-line unicorn/no-null
   null,
 ];
 

@@ -1,6 +1,6 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
-import { Bridge, Controller, type PanelEvent, type SavedSession, type TimingOverrides } from '@ai-pair/core';
+import { Bridge, Controller, isSavedSession, type PanelEvent, type SavedSession } from '@ai-pair/core';
 import { discoveryDir } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
@@ -43,6 +43,21 @@ export interface Api {
 
 function config(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration('aiPair');
+}
+
+/** Returns whether `v` is an object, as a setting or stored value is read: JSON nobody has checked. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+/** Returns `v` if it is a string, else `undefined`. */
+function stringOf(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+/** Returns whether `v` is a list of panel events, by their `type`; the storage is the window's own, so the check is shallow. */
+function isPanelEvents(v: unknown): v is PanelEvent[] {
+  return Array.isArray(v) && v.every((e: unknown) => isRecord(e) && typeof e.type === 'string');
 }
 
 /** Wraps `f` so that it runs the first time only. */
@@ -104,13 +119,15 @@ export function activate(context: vscode.ExtensionContext): Api {
   panel.controller = controller;
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
-  controller.setTiming(config().get(TIMING, {}));
+  controller.setTiming(config().get(TIMING));
   controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
   function passage(): Passage {
-    const chosen = config().get<Partial<Passage>>('calibrationPassage', {});
-    if (!chosen.text?.trim()) return builtInPassage(context.extensionPath);
-    return { title: chosen.title || 'Your passage', text: chosen.text, ...(chosen.notice ? { notice: chosen.notice } : {}) };
+    const chosen: unknown = config().get(CALIBRATION_PASSAGE);
+    const text = isRecord(chosen) ? stringOf(chosen.text) : undefined;
+    if (!text?.trim()) return builtInPassage(context.extensionPath);
+    const notice = isRecord(chosen) ? stringOf(chosen.notice) : undefined;
+    return { title: (isRecord(chosen) && stringOf(chosen.title)) || 'Your passage', text, ...(notice ? { notice } : {}) };
   }
   const calibration = new Calibration(
     {
@@ -124,9 +141,11 @@ export function activate(context: vscode.ExtensionContext): Api {
       // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla, and
       // setTiming below is `ApplyRate`.
       store: async (msPerChar) => {
-        const timing = config().get<TimingOverrides>(TIMING, {});
-        await config().update(TIMING, { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global);
-        controller.setTiming(config().get(TIMING, {}));
+        const timing: unknown = config().get(TIMING);
+        const kept = isRecord(timing) ? timing : {};
+        const reading = isRecord(kept.reading) ? kept.reading : {};
+        await config().update(TIMING, { ...kept, reading: { ...reading, msPerChar } }, vscode.ConfigurationTarget.Global);
+        controller.setTiming(config().get(TIMING));
       },
       show: (view) => {
         panel.showCalibration(view);
@@ -143,9 +162,11 @@ export function activate(context: vscode.ExtensionContext): Api {
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel);
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
   // specs/Resume.tla, `Reload`): saved shortly after each change, and once more as the window goes (`Save`).
-  const saved = context.workspaceState.get<SavedSession>(SAVED_SESSION);
+  const stored: unknown = context.workspaceState.get(SAVED_SESSION);
+  const saved = isSavedSession(stored) ? stored : undefined;
   if (saved) {
-    panel.restoreHistory(context.workspaceState.get<PanelEvent[]>(SAVED_HISTORY) ?? []);
+    const history: unknown = context.workspaceState.get(SAVED_HISTORY);
+    panel.restoreHistory(isPanelEvents(history) ? history : []);
     controller.revive(saved);
   }
   let saving: ReturnType<typeof setTimeout> | undefined;
@@ -213,7 +234,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         controller.setReadingSpeed(readingSpeed.get());
         panel.showReadingSpeed(readingSpeed.get());
       }
-      if (e.affectsConfiguration('aiPair.timing')) controller.setTiming(config().get(TIMING, {}));
+      if (e.affectsConfiguration('aiPair.timing')) controller.setTiming(config().get(TIMING));
       if (e.affectsConfiguration('aiPair.agentName')) editor.setAgentName(config().get(AGENT_NAME, 'Agent'));
       if (e.affectsConfiguration('aiPair.confirmCommands')) {
         controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
@@ -281,7 +302,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     playDemo: () => playDemo(controller, root),
     launcher,
     ready,
-    saved: () => context.workspaceState.get<SavedSession>(SAVED_SESSION),
+    saved: () => {
+      const kept: unknown = context.workspaceState.get(SAVED_SESSION);
+      return isSavedSession(kept) ? kept : undefined;
+    },
   };
 }
 

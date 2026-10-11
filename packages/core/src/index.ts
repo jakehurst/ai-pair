@@ -1,5 +1,5 @@
 export { defaultConfig, type Config } from './config';
-export { Controller, type SavedSession } from './controller';
+export { Controller, isSavedSession, type SavedSession } from './controller';
 export type {
   AgentState,
   Change,

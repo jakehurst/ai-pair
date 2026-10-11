@@ -81,8 +81,8 @@ export interface EditorPort {
   show(file: string): Promise<void>;
   edit(file: string, offset: number, deleteLength: number, text: string, options: EditOptions): Promise<void>;
   save(file: string): Promise<void>;
-  renderCursor(cursor: CursorView | null, state: AgentState, focus: Focus): void;
-  renderPoint(point: { file: string; start: number; end: number } | null): void;
+  renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void;
+  renderPoint(point?: { file: string; start: number; end: number }): void;
   /** Brings the programmer's view back to what it follows. */
   reveal(): void;
   /** Keeps what the view follows in view, after a keystroke, move, selection or point of the agent changed it. */

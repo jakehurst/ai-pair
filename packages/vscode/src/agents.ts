@@ -160,7 +160,7 @@ function setIn(object: Record<string, unknown>, keys: string[], value: unknown):
 export function editJson(file: string, keys: string[], value: unknown): void {
   const text = readText(file);
   if (text === undefined || text.trim() === '') {
-    write(file, `${JSON.stringify(setIn({}, keys, value), null, 2)}\n`);
+    write(file, `${JSON.stringify(setIn({}, keys, value), /* replacer= */ undefined, 2)}\n`);
     return;
   }
   const errors: ParseError[] = [];

@@ -77,14 +77,14 @@ export function applyChange(version: Version, change: Change): Version {
 /** The identities of the lines of files, as they're edited. */
 export class LineIds {
   private constructor(
-    /** What a copy hasn't tracked itself comes from here: the editor's. */
-    private readonly base: LineIds | undefined,
     private readonly versions: Map<string, Version>,
+    /** What a copy hasn't tracked itself comes from here: the editor's. */
+    private readonly base?: LineIds,
   ) {}
 
   /** Returns the tracker for the files in the editor. */
   static editor(): LineIds {
-    return new LineIds(/* base= */ undefined, new Map());
+    return new LineIds(new Map());
   }
 
   /**
@@ -103,7 +103,7 @@ export class LineIds {
 
   /** Returns a copy to play batches in memory with: its changes don't affect this one. */
   fork(): LineIds {
-    return this.base ? new LineIds(this.base, new Map(this.versions)) : new LineIds(this, new Map());
+    return this.base ? new LineIds(new Map(this.versions), this.base) : new LineIds(new Map(), this);
   }
 
   /** Drops this copy's own identities for a file, so it reads the ones it was forked from again. */
