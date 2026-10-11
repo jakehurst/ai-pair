@@ -5,7 +5,9 @@ import { expect, it } from 'vitest';
 import type { Report } from '@ai-pair/protocol';
 import { renderReport } from '../src/render';
 
-const code = (file: string, n: number) => ({ file, lines: [{ number: n, text: `code-${n}` }], end: { final_newline: false } });
+function code(file: string, n: number) {
+  return { file, lines: [{ number: n, text: `code-${n}` }], end: { final_newline: false } };
+}
 
 it('renders every field of a report', () => {
   const report: Report = {

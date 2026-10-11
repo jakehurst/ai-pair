@@ -14,41 +14,42 @@ import { TOOLS } from './tools';
 declare const AI_PAIR_VERSION: string | undefined;
 const VERSION = typeof AI_PAIR_VERSION === 'string' ? AI_PAIR_VERSION : 'dev';
 
-/** Always loaded by the harness, so kept short; the full guide comes with `start`. */
-export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Never end your turn during a session; call \`listen\` instead.`;
-
-/** The agent-facing part of AGENT_GUIDE.md: everything after the first horizontal rule. */
-export function agentGuide(markdown: string): string {
-  const rule = /\r?\n---\r?\n/.exec(markdown);
-  return (rule ? markdown.slice(rule.index + rule[0].length) : markdown).trim();
-}
-
-export function startPrompt(task?: string): string {
-  const what = task?.trim() ? `The task: ${task.trim()}` : "Ask me what we're working on, unless it's clear from our conversation.";
-  return `Let's pair program. ${what}\n\nStart a session with the \`start\` tool of the pair server, then follow the guide it returns.`;
-}
-
-/** A guide's path for the agent and the panel: `~` for the home folder. */
-function shownPath(file: string): string {
-  const home = os.homedir();
-  return file.startsWith(home + path.sep) ? `~${file.slice(home.length)}` : file;
-}
-
 /** How many answered reports the relay keeps, for a cancel that arrives after its answer (#67). */
 const MAX_ANSWERED = 16;
 
 /** How long to wait for the harness to list its roots: one that claims to but never answers mustn't block `start`. */
 const ROOTS_MS = 2000;
 
+/** Always loaded by the harness, so kept short; the full guide comes with `start`. */
+export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Never end your turn during a session; call \`listen\` instead.`;
+
+/** Returns the agent-facing part of AGENT_GUIDE.md: everything after the first horizontal rule. */
+export function agentGuide(markdown: string): string {
+  const rule = /\r?\n---\r?\n/.exec(markdown);
+  return (rule ? markdown.slice(rule.index + rule[0].length) : markdown).trim();
+}
+
+/** Builds the `start` prompt's message: the task, or a question to ask the programmer for one. */
+export function startPrompt(task?: string): string {
+  const what = task?.trim() ? `The task: ${task.trim()}` : "Ask me what we're working on, unless it's clear from our conversation.";
+  return `Let's pair program. ${what}\n\nStart a session with the \`start\` tool of the pair server, then follow the guide it returns.`;
+}
+
+/** Shortens a guide's path for the agent and the panel: `~` for the home folder. */
+function shownPath(file: string): string {
+  const home = os.homedir();
+  return file.startsWith(home + path.sep) ? `~${file.slice(home.length)}` : file;
+}
+
 /**
- * `cwd` is the relay's working directory. The agent's paths are relative to its own, which `start`
+ * Creates the MCP server. `cwd` is the relay's working directory. The agent's paths are relative to its own, which `start`
  * finds as the first of these that a VS Code window has open: the one the agent gives, the harness's
  * roots, and `cwd`. Some harnesses start MCP servers in `/` or in their own install folder.
  */
 export function createServer(link: EditorLink, guide: string, cwd: string): McpServer {
   const server = new McpServer({ name: 'ai-pair', version: VERSION }, { instructions: INSTRUCTIONS });
 
-  const roots = async (): Promise<string[]> => {
+  async function roots(): Promise<string[]> {
     if (!server.server.getClientCapabilities()?.roots) return [];
     try {
       const listed = await server.server.listRoots(undefined, { timeout: ROOTS_MS });
@@ -56,26 +57,28 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
     } catch {
       return [];
     }
-  };
+  }
 
   // The guides the last `start` read, for its result (#23).
   let guides: Guide[] = [];
 
   // The reports the relay answered with, by request: a cancel for one may come after its answer (#67).
   const answered = new Map<RequestId, unknown>();
-  const run = async (
+  async function run(
     tool: ToolName,
     args: Record<string, unknown>,
     { signal, requestId }: { signal: AbortSignal; requestId: RequestId },
     before?: () => Promise<Record<string, unknown>>,
-  ): Promise<CallToolResult> => {
+  ): Promise<CallToolResult> {
     try {
       if (before) args = { ...args, ...(await before()) };
       const result = await link.call(tool, args, signal);
       // Canceled before its answer came, it was handed back already, and never reached the agent.
       if (tool !== 'read' && !signal.aborted) {
         answered.set(requestId, result);
-        for (const id of answered.keys()) if (answered.size > MAX_ANSWERED) answered.delete(id);
+        for (const id of answered.keys()) {
+          if (answered.size > MAX_ANSWERED) answered.delete(id);
+        }
       }
       // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts).
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -89,7 +92,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       const message = e instanceof Error ? e.message : String(e);
       return { isError: true, content: [{ type: 'text', text: `${code}: ${message}` }] };
     }
-  };
+  }
 
   server.registerTool('start', TOOLS.start, ({ cwd: given, ...args }, extra) =>
     run('start', args, extra, async () => {

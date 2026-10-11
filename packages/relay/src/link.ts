@@ -8,6 +8,28 @@ import { parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, typ
 /** A call's error when its window's socket closes: a reloaded window keeps the session for a `start` (#25, #138). */
 export const EDITOR_DISCONNECTED = 'The editor disconnected. If its window was reloaded, call `start` again to resume the session.';
 
+/** A port a stale window file points at may now belong to something that never answers. */
+const HANDSHAKE_MS = 5000;
+
+/** Tools whose results are reports, which must be delivered at least once (#67). */
+const REPORTING: ReadonlySet<ToolName> = new Set(['step', 'listen', 'end']);
+
+interface Pending {
+  tool: ToolName;
+  cancelled: boolean;
+  resolve: (result: unknown) => void;
+  reject: (error: RelayError) => void;
+}
+
+/** What a welcomed socket carries, which `openWindow` registers before it resolves. */
+interface SocketState {
+  /** The socket's calls waiting for an answer, so that its close rejects only its own. */
+  calls: Map<number, Pending>;
+  /** The socket's cancelled calls not yet answered: settled once the editor's answer arrives. */
+  cancelled: Set<Promise<void>>;
+}
+
+/** A call's failure the agent reads as `code: message`. */
 export class RelayError extends Error {
   constructor(
     readonly code: string,
@@ -38,7 +60,7 @@ function alive(pid: number): boolean {
   }
 }
 
-/** Whether a discovery file holds a Discovery: one that parses but doesn't is skipped like garbage (#31). */
+/** Returns whether a discovery file holds a Discovery: one that parses but doesn't is skipped like garbage (#31). */
 function isDiscovery(d: unknown): d is Discovery {
   return (
     typeof d === 'object' &&
@@ -60,8 +82,8 @@ function isDiscovery(d: unknown): d is Discovery {
 }
 
 /**
- * The first of `folders` inside a live window's workspace folder, and the windows it's in, best
- * first: the most closely containing workspace folder, then the most recently focused window.
+ * Finds the first of `folders` inside a live window's workspace folder, and the windows it's in,
+ * best first: the most closely containing workspace folder, then the most recently focused window.
  */
 export function findWindows(folders: string[], dir: string): { folder: string; windows: Discovery[] } {
   const windows: Discovery[] = [];
@@ -83,10 +105,10 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
 
   for (const folder of folders) {
     const here = realpath(folder);
-    const matches: { window: Discovery; length: number }[] = [];
+    const matches: Array<{ window: Discovery; length: number }> = [];
     for (const window of windows) {
       const lengths = window.workspaceFolders
-        .map(realpath)
+        .map((f) => realpath(f))
         .filter((f) => contains(f, here))
         .map((f) => f.length);
       if (lengths.length > 0) matches.push({ window, length: Math.max(...lengths) });
@@ -103,28 +125,12 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
   );
 }
 
-type Pending = {
-  tool: ToolName;
-  cancelled: boolean;
-  resolve: (result: unknown) => void;
-  reject: (error: RelayError) => void;
-};
-
-/** A port a stale window file points at may now belong to something that never answers. */
-const HANDSHAKE_MS = 5000;
-
-/** Tools whose results are reports, which must be delivered at least once (#67). */
-const REPORTING: ReadonlySet<ToolName> = new Set(['step', 'listen', 'end']);
-
 /** A lazily (re)connected link to the editor window for the agent's folder, `cwd` until `locate` says otherwise. */
 export class EditorLink {
   private ws: WebSocket | null = null;
   private connecting: Promise<WebSocket> | null = null;
   private nextId = 1;
-  /** Each socket's calls waiting for an answer, so that a socket's close rejects only its own. */
-  private readonly pending = new WeakMap<WebSocket, Map<number, Pending>>();
-  /** Each socket's cancelled calls not yet answered: settled once the editor's answer arrives. */
-  private readonly cancelled = new WeakMap<WebSocket, Set<Promise<void>>>();
+  private readonly sockets = new WeakMap<WebSocket, SocketState>();
   /** The socket each report came over, for `handBack`. */
   private readonly answeredOn = new WeakMap<object, WebSocket>();
   private folder: string;
@@ -149,38 +155,39 @@ export class EditorLink {
   }
 
   /**
-   * `folder`, and the workspace folder of the window for it that holds it, both as real paths:
+   * Returns `folder`, and the workspace folder of the window for it that holds it, both as real paths:
    * where a project's guides are looked for, and where that stops (#23).
    */
   workspace(folder: string): { folder: string; root: string } {
     const here = realpath(folder);
     const { windows } = findWindows([folder], this.dir);
-    const roots = (windows[0]?.workspaceFolders ?? []).map(realpath).filter((f) => contains(f, here));
+    const roots = (windows[0]?.workspaceFolders ?? []).map((f) => realpath(f)).filter((f) => contains(f, here));
     return { folder: here, root: roots.toSorted((a, b) => b.length - a.length)[0] ?? here };
   }
 
-  /** The agent's tool call (specs/Wire.tla, `Request`), sent on the open socket (`Send`). */
+  /** Sends the agent's tool call (specs/Wire.tla, `Request`) on the open socket (`Send`). */
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     // A cancelled call's report may be on its way back, to be handed back with `return`. This call
     // goes out after it, so the editor restores the report before it takes this call (#59; specs/Wire.tla,
     // `Send` with WaitCancelled; specs/Controller.tla, `Sendable` with WaitForReturn). The socket may close
     // meanwhile, so it is taken again after each wait; from there to `send`, nothing awaits.
     let ws: WebSocket;
-    let cancelled: Set<Promise<void>>;
+    let state: SocketState;
     for (;;) {
       ws = await this.connect();
-      cancelled = this.cancelled.get(ws)!;
-      if (cancelled.size === 0) break;
-      await Promise.all(cancelled);
+      state = this.stateOf(ws);
+      if (state.cancelled.size === 0) break;
+      await Promise.all(state.cancelled);
     }
     // An abort that fired before the listener below is added won't fire again (#29). A call never
     // sent takes no report, so there is nothing to hand back (`Send` with CheckAbort).
     if (signal?.aborted) throw new RelayError('cancelled', 'The call was cancelled.');
-    const calls = this.pending.get(ws)!;
+    const { calls, cancelled } = state;
     const id = this.nextId++;
-    let pending!: Pending;
+    const pending: Pending = { tool, cancelled: false, resolve: () => {}, reject: () => {} };
     const answer = new Promise((resolve, reject) => {
-      pending = { tool, cancelled: false, resolve, reject };
+      pending.resolve = resolve;
+      pending.reject = reject;
       calls.set(id, pending);
       try {
         ws.send(JSON.stringify({ type: 'call', id, tool, args }));
@@ -200,7 +207,9 @@ export class EditorLink {
           () => {},
         );
         cancelled.add(settled);
-        void settled.then(() => cancelled.delete(settled));
+        void settled.then(() => {
+          cancelled.delete(settled);
+        });
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel', id }));
       },
       { once: true },
@@ -221,6 +230,12 @@ export class EditorLink {
 
   close(): void {
     this.ws?.close();
+  }
+
+  private stateOf(ws: WebSocket): SocketState {
+    const state = this.sockets.get(ws);
+    if (!state) throw new Error('A welcomed socket has no state: openWindow registers it before resolving.');
+    return state;
   }
 
   private connect(): Promise<WebSocket> {
@@ -254,13 +269,12 @@ export class EditorLink {
       const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: HANDSHAKE_MS });
       let welcomed = false;
       const calls = new Map<number, Pending>();
-      this.pending.set(ws, calls);
-      this.cancelled.set(ws, new Set());
-      const settle = (id: number) => {
+      this.sockets.set(ws, { calls, cancelled: new Set() });
+      function settle(id: number): Pending | undefined {
         const p = calls.get(id);
         calls.delete(id);
         return p;
-      };
+      }
       ws.on('open', () => {
         ws.send(JSON.stringify({ type: 'hello', token: window.token, protocolVersion: PROTOCOL_VERSION }));
       });
@@ -287,8 +301,11 @@ export class EditorLink {
           // The call returned before our cancellation reached the editor, so the agent will never
           // see this report. Hand it back to be delivered with the next one (specs/Wire.tla, `Reply`;
           // specs/Controller.tla, `Bounce`).
-          if (p?.cancelled && REPORTING.has(p.tool)) ws.send(JSON.stringify({ type: 'return', report: m.result }));
-          else if (p && REPORTING.has(p.tool) && typeof m.result === 'object' && m.result !== null) this.answeredOn.set(m.result, ws);
+          if (p?.cancelled && REPORTING.has(p.tool)) {
+            ws.send(JSON.stringify({ type: 'return', report: m.result }));
+          } else if (p && REPORTING.has(p.tool) && typeof m.result === 'object' && m.result !== null) {
+            this.answeredOn.set(m.result, ws);
+          }
           p?.resolve(m.result);
         } else if (m.type === 'error') {
           settle(m.id)?.reject(new RelayError(m.code, m.message));

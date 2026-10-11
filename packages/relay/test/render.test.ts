@@ -5,8 +5,13 @@ import { CURSOR_MARKER, type Report } from '@ai-pair/protocol';
 import { ELLIPSIS } from '@ai-pair/core/constants';
 import { renderFile, renderReport } from '../src/render';
 
-const report = (r: Partial<Report>): Report => ({ batches: [], events: [], turn: 'agent', ...r });
-const code = (final_newline: boolean) => ({ file: 'a.ts', lines: [{ number: 9, text: `}${CURSOR_MARKER}` }], end: { final_newline } });
+function report(r: Partial<Report>): Report {
+  return { batches: [], events: [], turn: 'agent', ...r };
+}
+
+function code(final_newline: boolean) {
+  return { file: 'a.ts', lines: [{ number: 9, text: `}${CURSOR_MARKER}` }], end: { final_newline } };
+}
 
 describe('reports', () => {
   it("shows a batch's code as numbered lines, with the cursor", () => {
@@ -63,9 +68,9 @@ describe('reports', () => {
   });
 
   it('says where code reaches the end of the file, and when no newline ends it', () => {
-    const ending = renderReport(report({ batches: [{ id: 1, status: 'completed', code: code(true) }] }), 'step');
+    const ending = renderReport(report({ batches: [{ id: 1, status: 'completed', code: code(/* final_newline= */ true) }] }), 'step');
     expect(ending).toMatch(new RegExp(`9  }${CURSOR_MARKER}\\n   \\(end of file\\)$`));
-    const missing = renderReport(report({ batches: [{ id: 1, status: 'completed', code: code(false) }] }), 'step');
+    const missing = renderReport(report({ batches: [{ id: 1, status: 'completed', code: code(/* final_newline= */ false) }] }), 'step');
     expect(missing).toMatch(/\(end of file, with no newline after the last line\)$/);
   });
 

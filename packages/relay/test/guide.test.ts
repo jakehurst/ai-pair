@@ -1,6 +1,7 @@
 // The guides `start` reads (#23, specs/ProjectGuide.tla): the user's, then every project guide from
 // the workspace folder down to the working directory, outer first, never one above the folder.
 
+import { ok } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -35,7 +36,9 @@ it('Exactly, OuterFirst, Contained: reads the guides from the workspace folder d
 });
 
 it('Exactly, Contained: leaves out a guide git ignores, and keeps one checked in though .gitignore names it', () => {
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: path.join(top, 'ws'), stdio: 'ignore' });
+  function git(...args: string[]): void {
+    execFileSync('git', args, { cwd: path.join(top, 'ws'), stdio: 'ignore' });
+  }
   const outer = guide('ws', 'outer');
   guide('ws/app', 'ignored');
   const tracked = guide('ws/app/src', 'checked in');
@@ -53,7 +56,9 @@ it("puts the user's guide first, skips empty ones, and cuts a long one with a no
   guide('ws/app', 'x'.repeat(MAX_GUIDE + 5));
   const guides = readGuides(home, path.join(top, 'ws/app'), path.join(top, 'ws'));
   expect(guides.map((g) => path.relative(top, g.file))).toEqual(['home/GUIDE.md', path.join('ws/app', GUIDE_FILE)]);
-  expect(guides[1]!.text).toMatch(/\[Cut: the file goes on for 5 more characters\.\]$/);
+  const cut = guides[1];
+  ok(cut);
+  expect(cut.text).toMatch(/\[Cut: the file goes on for 5 more characters\.\]$/);
 });
 
 it('renders them after an introduction that says which takes precedence', () => {

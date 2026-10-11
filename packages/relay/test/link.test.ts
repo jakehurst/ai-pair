@@ -1,6 +1,7 @@
 // The relay's link against fake editor windows whose sockets the tests control. The cases are
 // the counterexamples TLC found in specs/Wire.tla.
 
+import { ok } from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -17,7 +18,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  for (const s of servers.splice(0)) await new Promise((r) => s.close(() => r(undefined)));
+  for (const s of servers.splice(0)) {
+    await new Promise((r) => {
+      s.close(() => {
+        r(undefined);
+      });
+    });
+  }
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -28,7 +35,9 @@ afterEach(async () => {
 async function fakeWindow(folder: string, greeting = JSON.stringify({ type: 'welcome' })) {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   servers.push(server);
-  await new Promise((r) => server.once('listening', r));
+  await new Promise((r) => {
+    server.once('listening', r);
+  });
   const address = server.address();
   if (address === null || typeof address === 'string') throw new Error('no TCP address');
   const { port } = address;
@@ -42,15 +51,18 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: 'wel
   };
   fs.writeFileSync(path.join(dir, `${port}.json`), JSON.stringify(discovery));
   const sockets: WebSocket[] = [];
-  const calls: { ws: WebSocket; id: number; tool: string }[] = [];
+  const calls: Array<{ ws: WebSocket; id: number; tool: string }> = [];
   /** The type of each message after `hello`, in the order it arrived. */
   const received: string[] = [];
   server.on('connection', (ws) => {
     sockets.push(ws);
     ws.on('message', (data) => {
       const m = parseRelayMessage(data);
-      if (m?.type === 'hello') ws.send(greeting);
-      else if (m) received.push(m.type);
+      if (m?.type === 'hello') {
+        ws.send(greeting);
+      } else if (m) {
+        received.push(m.type);
+      }
       if (m?.type === 'call') calls.push({ ws, id: m.id, tool: m.tool });
     });
   });
@@ -62,7 +74,11 @@ function answer(call: { ws: WebSocket; id: number }, result: unknown): void {
 }
 
 async function until(check: () => boolean): Promise<void> {
-  while (!check()) await new Promise((r) => setTimeout(r, 5));
+  while (!check()) {
+    await new Promise((r) => {
+      setTimeout(r, 5);
+    });
+  }
 }
 
 describe('link', () => {
@@ -72,24 +88,36 @@ describe('link', () => {
     const link = new EditorLink('/a', dir);
     const first = link.call('read', {});
     await until(() => a.calls.length === 1);
-    answer(a.calls[0]!, 'from a');
+    const callOnA = a.calls[0];
+    ok(callOnA);
+    answer(callOnA, 'from a');
     expect(await first).toBe('from a');
 
     // Hold A's end of the closing handshake, so that A's close event comes after the call on B.
-    a.sockets[0]!.pause();
+    const socketA = a.sockets[0];
+    ok(socketA);
+    socketA.pause();
     link.locate(['/b']);
     const second = link.call('read', {});
     let settled = false;
     second.then(
-      () => (settled = true),
-      () => (settled = true),
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
     );
     await until(() => b.calls.length === 1);
-    a.sockets[0]!.resume();
-    await until(() => a.sockets[0]!.readyState === a.sockets[0]!.CLOSED);
-    await new Promise((r) => setTimeout(r, 100));
+    socketA.resume();
+    await until(() => socketA.readyState === socketA.CLOSED);
+    await new Promise((r) => {
+      setTimeout(r, 100);
+    });
     expect(settled).toBe(false);
-    answer(b.calls[0]!, 'from b');
+    const callOnB = b.calls[0];
+    ok(callOnB);
+    answer(callOnB, 'from b');
     expect(await second).toBe('from b');
     link.close();
   });
@@ -99,7 +127,9 @@ describe('link', () => {
     const link = new EditorLink('/a', dir);
     const call = link.call('listen', {});
     await until(() => a.calls.length === 1);
-    a.sockets[0]!.close();
+    const socket = a.sockets[0];
+    ok(socket);
+    socket.close();
     await expect(call).rejects.toMatchObject({ code: 'no_editor', message: EDITOR_DISCONNECTED });
     link.close();
   });
@@ -123,8 +153,12 @@ describe('link', () => {
     const link = new EditorLink('/a', dir);
     const call = link.call('read', {});
     await until(() => a.calls.length === 1);
-    a.sockets[0]!.send('not json');
-    answer(a.calls[0]!, 'result');
+    const socket = a.sockets[0];
+    ok(socket);
+    socket.send('not json');
+    const first = a.calls[0];
+    ok(first);
+    answer(first, 'result');
     expect(await call).toBe('result');
     link.close();
   });
@@ -140,7 +174,9 @@ describe('link', () => {
     const second = link.call('read', {});
     await until(() => a.calls.length > 0);
     expect(a.calls.map((c) => c.tool)).toEqual(['read']);
-    answer(a.calls[0]!, 'result');
+    const first = a.calls[0];
+    ok(first);
+    answer(first, 'result');
     expect(await second).toBe('result');
     link.close();
   });
@@ -155,12 +191,18 @@ describe('link', () => {
     await until(() => a.received.includes('cancel'));
     // The agent's next call, made while the editor's answer to the cancelled one is on its way.
     const second = link.call('step', { actions: [] });
-    await new Promise((r) => setTimeout(r, 50));
-    answer(a.calls[0]!, { batches: [], events: [], turn: 'agent' });
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
+    const first = a.calls[0];
+    ok(first);
+    answer(first, { batches: [], events: [], turn: 'agent' });
     await until(() => a.calls.length === 2);
     // The editor restores the report before it takes the next call.
     expect(a.received).toEqual(['call', 'cancel', 'return', 'call']);
-    answer(a.calls[1]!, 'second');
+    const next = a.calls[1];
+    ok(next);
+    answer(next, 'second');
     expect(await second).toBe('second');
     link.close();
   });
@@ -174,12 +216,18 @@ describe('link', () => {
     abort.abort();
     await until(() => a.received.includes('cancel'));
     const second = link.call('read', {});
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     expect(a.calls).toHaveLength(1);
-    a.calls[0]!.ws.send(JSON.stringify({ type: 'error', id: a.calls[0]!.id, code: 'cancelled', message: 'The call was cancelled.' }));
+    const cancelled = a.calls[0];
+    ok(cancelled);
+    cancelled.ws.send(JSON.stringify({ type: 'error', id: cancelled.id, code: 'cancelled', message: 'The call was cancelled.' }));
     await expect(first).rejects.toMatchObject({ code: 'cancelled' });
     await until(() => a.calls.length === 2);
-    answer(a.calls[1]!, 'second');
+    const next = a.calls[1];
+    ok(next);
+    answer(next, 'second');
     expect(await second).toBe('second');
     link.close();
   });

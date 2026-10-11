@@ -24,7 +24,7 @@ const line = z
 const inFile = file.optional().describe("Switch to this file, only before your batch's first edit. Omit it to stay in your cursor's file.");
 
 /** A `select`'s or `point`'s code: its text on a line, or a range. */
-const Span = z
+const spanSchema = z
   .strictObject(
     {
       file: inFile,
@@ -51,7 +51,36 @@ const typeText = z.string({ error: (issue) => typeProblem(issue.input) }).superR
   if (problem) ctx.addIssue({ code: 'custom', message: problem });
 });
 
-const Action = z.union(
+function combined(input: unknown): string | undefined {
+  if (typeof input !== 'object' || input === null) return undefined;
+  const kinds = actionKinds(input);
+  if (kinds.length < 2) return undefined;
+  return `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order`;
+}
+
+/** Says what's wrong with an action that matches no variant, instead of zod's bare "Invalid input". */
+function actionError(issue: { input?: unknown }): string | undefined {
+  const input = issue.input;
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return undefined;
+  const kinds = actionKinds(input);
+  if (kinds.length === 0) return `Not an action: each action has one of ${ACTION_KINDS.map((k) => `\`${k}\``).join(', ')}`;
+  if (kinds.length > 1) return combined(input);
+  // A malformed field fails on its type, before the action's own check gets to say what's wrong.
+  const move: unknown = 'move' in input ? input.move : undefined;
+  if (typeof move === 'object' && move !== null) return moveProblem(move);
+  const span: unknown = 'select' in input ? input.select : 'point' in input ? input.point : undefined;
+  if (typeof span === 'object' && span !== null) return spanProblem(span);
+  if ('type' in input) return typeProblem(input.type);
+  if ('type_fast' in input) return typeProblem(input.type_fast);
+  return undefined;
+}
+
+/** Builds an action's schema: no unknown fields, and a clear message when two actions were put in one. */
+function action<T extends z.ZodRawShape>(shape: T) {
+  return z.strictObject(shape, { error: (issue) => (issue.code === 'unrecognized_keys' ? combined(issue.input) : undefined) });
+}
+
+const actionSchema = z.union(
   [
     action({
       say: z
@@ -96,7 +125,7 @@ const Action = z.union(
         ),
     }),
     action({
-      select: Span.describe(
+      select: spanSchema.describe(
         "Select code, so the programmer sees what's about to change: its `text`, starting on `line`, exactly (without `line`, your cursor's line), or a range, `from` a text on it `through` the first match of another after it. Your cursor ends at its end.",
       ),
     }),
@@ -112,7 +141,7 @@ const Action = z.union(
     }),
     action({ delete: z.literal(true).describe('Delete the current selection; `select` first.') }),
     action({
-      point: Span.describe(
+      point: spanSchema.describe(
         "Highlight code without editing it or moving your cursor, to talk about it: point first, then `say` what's there. The code is given as for `select`. The programmer's view goes to the pointed code, and comes back to your cursor with your next move or edit.",
       ),
     }),
@@ -127,35 +156,6 @@ const Action = z.union(
   ],
   { error: actionError },
 );
-
-/** An action's object: no unknown fields, and a clear message when two actions were put in one. */
-function action<T extends z.ZodRawShape>(shape: T) {
-  return z.strictObject(shape, { error: (issue) => (issue.code === 'unrecognized_keys' ? combined(issue.input) : undefined) });
-}
-
-/** Says what's wrong with an action that matches no variant, instead of zod's bare "Invalid input". */
-function actionError(issue: { input?: unknown }): string | undefined {
-  const input = issue.input;
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) return undefined;
-  const kinds = actionKinds(input);
-  if (kinds.length === 0) return `Not an action: each action has one of ${ACTION_KINDS.map((k) => `\`${k}\``).join(', ')}`;
-  if (kinds.length > 1) return combined(input);
-  // A malformed field fails on its type, before the action's own check gets to say what's wrong.
-  const move: unknown = 'move' in input ? input.move : undefined;
-  if (typeof move === 'object' && move !== null) return moveProblem(move);
-  const span: unknown = 'select' in input ? input.select : 'point' in input ? input.point : undefined;
-  if (typeof span === 'object' && span !== null) return spanProblem(span);
-  if ('type' in input) return typeProblem(input.type);
-  if ('type_fast' in input) return typeProblem(input.type_fast);
-  return undefined;
-}
-
-function combined(input: unknown): string | undefined {
-  if (typeof input !== 'object' || input === null) return undefined;
-  const kinds = actionKinds(input);
-  if (kinds.length < 2) return undefined;
-  return `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order`;
-}
 
 export const TOOLS = {
   start: {
@@ -182,7 +182,7 @@ An empty batch waits for your queued batches without waiting for the programmer.
 
 After a report says a batch was interrupted or discarded, your cursor is where it stopped: \`read\`, then anchor the cursor with a \`move\` or \`select\` giving both \`file\` and \`line\` before anything else at the cursor, or the batch is refused with \`unanchored\`.`,
     inputSchema: {
-      actions: z.array(Action).describe('Played in order.'),
+      actions: z.array(actionSchema).describe('Played in order.'),
     },
   },
   listen: {

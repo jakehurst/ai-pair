@@ -1,5 +1,6 @@
 // End to end through MCP: client -> relay -> WebSocket -> bridge -> controller -> fake editor.
 
+import { ok } from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -50,7 +51,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  for (const c of clients.splice(0)) await c.close();
+  for (const c of clients.splice(0)) {
+    await c.close();
+  }
   bridge.dispose();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -68,17 +71,34 @@ async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> 
 }
 
 async function until(check: () => boolean): Promise<void> {
-  while (!check()) await new Promise((r) => setTimeout(r, 5));
+  while (!check()) {
+    await new Promise((r) => {
+      setTimeout(r, 5);
+    });
+  }
 }
 
-type Content = { type: string; text: string }[];
+function noop(): void {}
+
+/** A promise the test resolves by hand, to hold a method at a gate until the test says so. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  const d = { promise: Promise.resolve(), resolve: noop };
+  d.promise = new Promise<void>((r) => {
+    d.resolve = r;
+  });
+  return d;
+}
+
+type Content = Array<{ type: string; text: string }>;
 
 async function call(client: Client, name: string, args: Record<string, unknown> = {}, signal?: AbortSignal) {
   const result = await client.callTool({ name, arguments: args }, undefined, { signal });
   // The relay answers with text parts only.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const content = result.content as Content;
-  return { error: result.isError === true, text: content[0]!.text, content };
+  const first = content[0];
+  ok(first);
+  return { error: result.isError === true, text: first.text, content };
 }
 
 describe('relay', () => {
@@ -121,7 +141,9 @@ describe('relay', () => {
     const started = await call(client, 'start', { task: 'test' });
     expect(started.error).toBe(false);
     expect(started.text).toMatch(/started/);
-    expect(started.content[1]!.text).toContain('THE GUIDE');
+    const guide = started.content[1];
+    ok(guide);
+    expect(guide.text).toContain('THE GUIDE');
 
     const first = await call(client, 'step', {
       actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `hi${CURSOR_MARKER}` }],
@@ -150,8 +172,10 @@ describe('relay', () => {
     try {
       const client = await connect();
       const started = await call(client, 'start');
-      expect(started.content[2]!.text).toMatch(/^# Project rules\n/);
-      expect(started.content[2]!.text).toContain(`## From ${path.join(home, 'GUIDE.md')}\n\nAlways say hello.`);
+      const rules = started.content[2];
+      ok(rules);
+      expect(rules.text).toMatch(/^# Project rules\n/);
+      expect(rules.text).toContain(`## From ${path.join(home, 'GUIDE.md')}\n\nAlways say hello.`);
       expect(panel.events).toContainEqual({ type: 'session', active: true, rules: [path.join(home, 'GUIDE.md')] });
     } finally {
       vi.unstubAllEnvs();
@@ -221,7 +245,9 @@ describe('relay', () => {
     await call(client, 'step', { actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }] });
     const abort = new AbortController();
     const listening = call(client, 'listen', {}, abort.signal).catch((e: unknown) => e);
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     abort.abort();
     expect(await listening).toBeInstanceOf(Error);
 
@@ -253,7 +279,7 @@ describe('relay', () => {
     await server.connect(serverSide);
     const send = serverSide.send.bind(serverSide);
     let hold = false;
-    const held: Parameters<typeof send>[] = [];
+    const held: Array<Parameters<typeof send>> = [];
     serverSide.send = (...args) => (hold ? (held.push(args), Promise.resolve()) : send(...args));
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(clientSide);
@@ -271,8 +297,14 @@ describe('relay', () => {
     abort.abort();
     expect(await listening).toBeInstanceOf(Error);
     hold = false;
-    for (const args of held.splice(0)) await send(...args);
-    const timeout = new Promise<{ text: string }>((r) => setTimeout(() => r({ text: 'timed out' }), 1000));
+    for (const args of held.splice(0)) {
+      await send(...args);
+    }
+    const timeout = new Promise<{ text: string }>((r) => {
+      setTimeout(() => {
+        r({ text: 'timed out' });
+      }, 1000);
+    });
     const again = await Promise.race([call(client, 'listen'), timeout]);
     expect(again.text).toMatch(/hello/);
     expect(again.text).toMatch(/may repeat/);
@@ -313,31 +345,36 @@ describe('relay', () => {
     await call(client, 'start');
     // Holds the rehearsal at its first read of the file, so the cancel arrives during it.
     const getText = editor.getText.bind(editor);
-    let open!: () => void, reached!: () => void;
-    const gate = new Promise<void>((r) => (open = r));
-    const atGate = new Promise<void>((r) => (reached = r));
+    const gate = deferred();
+    const atGate = deferred();
     editor.getText = async (file) => {
-      reached();
-      await gate;
+      atGate.resolve();
+      await gate.promise;
       return getText(file);
     };
 
     const abort = new AbortController();
     const actions = [{ move: { file: 'a.ts', line: 5, to: 'line_end' } }];
     const stepping = call(client, 'step', { actions }, abort.signal).catch((e: unknown) => e);
-    await atGate;
+    await atGate.promise;
     abort.abort();
     expect(await stepping).toBeInstanceOf(Error);
     editor.getText = getText;
-    open();
+    gate.resolve();
     expect((await call(client, 'listen')).text).toMatch(/Your batch was rejected/);
   });
 
   it("keeps serving after frames that aren't messages", async () => {
-    const { port } = findWindows(['/project'], dir).windows[0]!;
+    const window = findWindows(['/project'], dir).windows[0];
+    ok(window);
+    const { port } = window;
     const raw = new WebSocket(`ws://127.0.0.1:${port}`);
-    await new Promise((r) => raw.once('open', r));
-    for (const frame of ['null', '42', '[]', '{ "kind": "hello" }', 'not json']) raw.send(frame);
+    await new Promise((r) => {
+      raw.once('open', r);
+    });
+    for (const frame of ['null', '42', '[]', '{ "kind": "hello" }', 'not json']) {
+      raw.send(frame);
+    }
     const client = await connect();
     expect((await call(client, 'start')).error).toBe(false);
     raw.close();
@@ -345,27 +382,36 @@ describe('relay', () => {
 
   it("OwnedByOpenSocket: doesn't leave a session to a socket that closed while it started", async () => {
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
-    const { port, token } = findWindows(['/project'], dir).windows[0]!;
+    const window = findWindows(['/project'], dir).windows[0];
+    ok(window);
+    const { port, token } = window;
     const start = controller.start.bind(controller);
-    let open!: () => void, reached!: () => void;
-    const gate = new Promise<void>((r) => (open = r));
-    const atGate = new Promise<void>((r) => (reached = r));
+    const gate = deferred();
+    const atGate = deferred();
     controller.start = async (...args) => {
-      reached();
-      await gate;
+      atGate.resolve();
+      await gate.promise;
       return start(...args);
     };
     const raw = new WebSocket(`ws://127.0.0.1:${port}`);
-    await new Promise((r) => raw.once('open', r));
+    await new Promise((r) => {
+      raw.once('open', r);
+    });
     raw.send(JSON.stringify({ type: 'hello', token, protocolVersion: PROTOCOL_VERSION }));
     raw.send(JSON.stringify({ type: 'call', id: 1, tool: 'start', args: {} }));
-    await atGate;
+    await atGate.promise;
     raw.close();
-    await new Promise((r) => raw.once('close', r));
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => {
+      raw.once('close', r);
+    });
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     controller.start = start;
-    open();
-    await new Promise((r) => setTimeout(r, 50));
+    gate.resolve();
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
 
     // Another agent can pair: the session didn't stay with the closed socket.
     const client = await connect();
@@ -376,11 +422,17 @@ describe('relay', () => {
     const client = await connect();
     await call(client, 'start');
     await client.close();
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     // The in-memory transport closing doesn't close the WebSocket by itself; the process exiting
     // does. Simulate that by disposing of every relay connection.
-    for (const c of bridge['server']?.clients ?? []) c.close();
-    await new Promise((r) => setTimeout(r, 50));
+    for (const c of bridge['server']?.clients ?? []) {
+      c.close();
+    }
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     expect(controller.isActive).toBe(true);
     expect(panel.events).toContainEqual({ type: 'session', active: true, suspended: true });
     const next = await call(await connect(), 'start');
@@ -393,27 +445,36 @@ describe('relay', () => {
     await call(one, 'start', { task: 'one' });
     controller.endSession();
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
-    const { port, token } = findWindows(['/project'], dir).windows[0]!;
+    const window = findWindows(['/project'], dir).windows[0];
+    ok(window);
+    const { port, token } = window;
     const start = controller.start.bind(controller);
-    let open!: () => void, reached!: () => void;
-    const gate = new Promise<void>((r) => (open = r));
-    const atGate = new Promise<void>((r) => (reached = r));
+    const gate = deferred();
+    const atGate = deferred();
     controller.start = async (...args) => {
-      reached();
-      await gate;
+      atGate.resolve();
+      await gate.promise;
       return start(...args);
     };
     const raw = new WebSocket(`ws://127.0.0.1:${port}`);
-    await new Promise((r) => raw.once('open', r));
+    await new Promise((r) => {
+      raw.once('open', r);
+    });
     raw.send(JSON.stringify({ type: 'hello', token, protocolVersion: PROTOCOL_VERSION }));
     raw.send(JSON.stringify({ type: 'call', id: 1, tool: 'start', args: { task: 'two' } }));
-    await atGate;
+    await atGate.promise;
     raw.close();
-    await new Promise((r) => raw.once('close', r));
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => {
+      raw.once('close', r);
+    });
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     controller.start = start;
-    open();
-    await new Promise((r) => setTimeout(r, 50));
+    gate.resolve();
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
 
     // The session it started is suspended, and the socket that owned the ended one can't drive it.
     expect(controller.isSuspended).toBe(true);
@@ -450,18 +511,22 @@ describe('relay', () => {
 
 describe('discovery', () => {
   it('picks the most specific workspace folder, then the most recently focused window', () => {
-    const write = (name: string, folders: string[], lastFocused: number) =>
+    function write(name: string, folders: string[], lastFocused: number): void {
       fs.writeFileSync(
         path.join(dir, name),
         JSON.stringify({ pid: process.pid, workspaceFolders: folders, port: 1, token: name, protocolVersion: 1, lastFocused }),
       );
+    }
     write('outer.json', ['/work'], 3);
     write('inner-old.json', ['/work/app'], 1);
     write('inner-new.json', ['/work/app'], 2);
     write('dead.json', ['/work/app/src'], 9);
-    const dead = JSON.parse(fs.readFileSync(path.join(dir, 'dead.json'), 'utf8'));
+    const dead: unknown = JSON.parse(fs.readFileSync(path.join(dir, 'dead.json'), 'utf8'));
+    ok(typeof dead === 'object' && dead !== null);
     fs.writeFileSync(path.join(dir, 'dead.json'), JSON.stringify({ ...dead, pid: 999_999_999 }));
-    const tokens = (folders: string[]) => findWindows(folders, dir).windows.map((w) => w.token);
+    function tokens(folders: string[]): string[] {
+      return findWindows(folders, dir).windows.map((w) => w.token);
+    }
     expect(tokens(['/work/app/src'])).toEqual(['inner-new.json', 'inner-old.json', 'outer.json']);
     expect(tokens(['/work/lib'])).toEqual(['outer.json']);
     expect(findWindows(['/', '/work/lib', '/work/app'], dir).folder).toBe('/work/lib');
@@ -493,7 +558,9 @@ describe('discovery', () => {
 
   it("NoInternal: skips a discovery file that parses but isn't a window's", async () => {
     const bad = [{ pid: process.pid }, { pid: process.pid, workspaceFolders: '/project' }, [process.pid]];
-    bad.forEach((d, i) => fs.writeFileSync(path.join(dir, `bad-${i}.json`), JSON.stringify(d)));
+    bad.forEach((d, i) => {
+      fs.writeFileSync(path.join(dir, `bad-${i}.json`), JSON.stringify(d));
+    });
     const client = await connect();
     expect((await call(client, 'start')).error).toBe(false);
   });
@@ -501,8 +568,12 @@ describe('discovery', () => {
   it("FindsOpen: finds the window again after the relay's socket to it closes, while it stays open", async () => {
     const client = await connect();
     expect((await call(client, 'start')).error).toBe(false);
-    for (const c of bridge['server']?.clients ?? []) c.terminate();
-    await new Promise((r) => setTimeout(r, 50));
+    for (const c of bridge['server']?.clients ?? []) {
+      c.terminate();
+    }
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
     expect(bridge['server']?.clients.size).toBe(0);
     expect((await call(client, 'start')).error).toBe(false);
     expect(bridge['server']?.clients.size).toBe(1);
