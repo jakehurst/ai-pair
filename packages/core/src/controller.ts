@@ -515,6 +515,7 @@ export class Controller {
     this.update()
   }
 
+  /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
   pause(reason = "user"): void {
     this.pauseReasons.add(reason)
     this.session?.timeline.pause()
@@ -522,8 +523,8 @@ export class Controller {
   }
 
   /**
-   * Removes one pause reason, or all of them. Playback continues when none are left. `reveal`: bring
-   * the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
+   * Removes one pause reason, or all of them. Playback continues when none are left (specs/Timeline.tla, `Resume`).
+   * `reveal`: bring the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
    * `Reply`, issue 125).
    */
   resume(reason?: string, { reveal = true }: { reveal?: boolean } = {}): void {

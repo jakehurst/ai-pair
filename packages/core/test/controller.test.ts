@@ -51,7 +51,7 @@ describe("timing", () => {
     expect(report.batches).toMatchObject([{ id: 1, status: "completed" }])
   })
 
-  it("holds playback while paused and continues on resume", async () => {
+  it("NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume", async () => {
     const { editor, controller } = setup({ "a.ts": "" })
     await controller.start()
     controller.pause()
@@ -61,6 +61,25 @@ describe("timing", () => {
     expect(editor.state).toBe("paused")
 
     controller.resume()
+    await advance(1000)
+    expect(editor.text("a.ts")).toBe("abc")
+  })
+
+  it("PausedMatchesReasons: holds playback until the last pause reason is gone", async () => {
+    const { editor, controller } = setup({ "a.ts": "" })
+    await controller.start()
+    controller.pause("away")
+    controller.pause("reply")
+    await controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `abc${CURSOR_MARKER}` }])
+    await advance(2000)
+    expect(editor.text("a.ts")).toBe("")
+
+    controller.resume("away")
+    await advance(2000)
+    expect(editor.text("a.ts")).toBe("")
+    expect(editor.state).toBe("paused")
+
+    controller.resume("reply")
     await advance(1000)
     expect(editor.text("a.ts")).toBe("abc")
   })

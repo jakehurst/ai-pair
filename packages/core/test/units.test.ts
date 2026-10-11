@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CURSOR_MARKER } from "@ai-pair/protocol"
 import { resolveSpan, resolveSpot } from "../src/places"
 import { applyChange } from "../src/lines"
@@ -6,6 +6,7 @@ import { planTyping, readingTime } from "../src/typing"
 import { terminalText } from "../src/text"
 import { samePath, withinFolder, type PathStyle } from "../src/paths"
 import { displayPath } from "../src/player"
+import { Timeline } from "../src/timeline"
 import { FakeEditor } from "./fake"
 
 // Terminal output as VS Code's shell integration reports it: OSC 633 marks, and ANSI colors.
@@ -200,5 +201,34 @@ describe("typing", () => {
     expect(readingTime("Hi.", reading)).toBe(30)
     expect(readingTime(Array(100).fill("word").join(" "), reading)).toBe(4990)
     expect(readingTime("word\n\n  word", reading)).toBe(90)
+  })
+})
+
+describe("timeline", () => {
+  const SLEEP_MS = 100
+  const LONGER_SLEEP_MS = 300
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up", async () => {
+    const timeline = new Timeline(false)
+    const results: boolean[] = []
+    void timeline.sleep(SLEEP_MS).then((completed) => results.push(completed))
+    timeline.interrupt()
+    await vi.advanceTimersByTimeAsync(SLEEP_MS)
+    expect(results).toEqual([false])
+    expect(await timeline.sleep(SLEEP_MS)).toBe(false)
+
+    timeline.reset()
+    void timeline.sleep(LONGER_SLEEP_MS).then((completed) => results.push(completed))
+    await vi.advanceTimersByTimeAsync(LONGER_SLEEP_MS - SLEEP_MS)
+    expect(results).toEqual([false])
+    await vi.advanceTimersByTimeAsync(SLEEP_MS)
+    expect(results).toEqual([false, true])
   })
 })

@@ -395,6 +395,28 @@ command (`extension.ts`), and looking away (`editor.ts`).
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code
 doesn't end the `away` pause, and the agent isn't told about pauses.
 
+Each invariant was proved to bite with a mutation of a copy of the model, run
+in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Pause` adds a reason outside `Reasons` | `TypeOK` |
+| `Resume` of one reason resumes the timeline with others left | `PausedMatchesReasons` |
+| `Pause` leaves the timer running | `NoTimerWhilePaused` |
+| `Interrupt` resolves the pending sleep but keeps it pending | `ResolvedOnce` |
+| `Resume` never restarts a waiting sleep's timer | `ResumeContinues` |
+
+Every invariant names the test that proves the code obeys it; the test's title
+carries the invariant's name:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons: holds playback until the last pause reason is gone |
+| `NoTimerWhilePaused` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume |
+| `ResolvedOnce` | `units.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up |
+| `ResumeContinues` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume |
+
 ### `Anchor`: the cursor after a discarded batch
 
 `step` and `snapshot` in `packages/core/src/controller.ts`. The agent plans a
