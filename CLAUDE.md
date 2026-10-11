@@ -79,6 +79,29 @@ Set by Justine on 2026-10-07.
     `@ai-pair/protocol`, not as the literal character or an escape. Justine
     prefers not to have a special character encoded in the file (2026-10-06),
     and a named constant to a magic value (2026-10-09).
+-   **The scripts are TypeScript, to Google's TypeScript Style Guide**
+    (https://google.github.io/styleguide/tsguide.html, #134). Node runs them
+    directly by stripping types, so `scripts/tsconfig.json` and
+    `packages/vscode/scripts/tsconfig.json` turn
+    on `erasableSyntaxOnly`. A script in
+    `packages/vscode/scripts/` is `.mts`, since that package stays
+    CommonJS. `npm run lint` checks them with the override in `.oxlintrc.json`,
+    `npm run format:check` with the one in `.prettierrc.json`, and
+    `npm run typecheck` with both tsconfigs, in CI's `check` job. These rules
+    no tool checks, so follow them by hand:
+    -   Give an arrow function a concise body only when its value is used;
+        otherwise a block (Arrow function bodies).
+    -   Brace every loop body, and both branches of an `if` with an `else`,
+        even on one line; oxlint's `curly` catches only bodies on another
+        line (Control flow statements and blocks).
+    -   Parse JSON and dynamic imports as `unknown`, and narrow them with a
+        type guard before use, not with `as` (any Type).
+    -   Use a `Map` for a table looked up by any string (Index signatures).
+    -   Start a function's doc comment with a verb in the third person, and
+        give each declaration its own (Method and function comments, JSDoc
+        versus comments).
+    -   Name an unclear argument, such as a bare boolean, with a
+        `/* name= */` comment (Comments when calling a function).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`
@@ -138,8 +161,8 @@ Set by Justine on 2026-10-07.
         `readarray`, or `${var,,}`.
 -   **The panel's HTML and CSS follow Google's HTML/CSS Style Guide**
     (https://google.github.io/styleguide/htmlcssguide.html, #132), and the page
-    is valid HTML5. `npm run lint:web` runs Stylelint (`stylelint.config.mjs`)
-    on `panel.css`, then `scripts/lint-web.mjs`: html-validate
+    is valid HTML5. `npm run lint:web` runs `scripts/lint_web.ts`: Stylelint
+    (`scripts/stylelint.config.ts`) on `panel.css`, html-validate
     (`.htmlvalidate.json`) and the W3C's Nu Html Checker (vnu) on the page as
     `panelHtml` renders it, vnu on `panel.css`, and the 140-column limit on
     `panelHtml.ts`. It runs in CI's `check` job. These rules no tool checks, so

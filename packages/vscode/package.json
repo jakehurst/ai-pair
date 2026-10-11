@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -19,9 +19,9 @@
     "onStartupFinished"
   ],
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "node scripts/build.mts",
     "test:integration": "bash scripts/integration.sh",
-    "package": "node scripts/build.mjs --production && vsce package --no-dependencies --out ../.."
+    "package": "node scripts/build.mts --production && vsce package --no-dependencies --out ../.."
   },
   "dependencies": {
     "@ai-pair/core": "*",

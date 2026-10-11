@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.10
+
+-   The repository's scripts are TypeScript now, to Google's TypeScript Style
+    Guide, and CI checks them against it with oxlint and Prettier (#134).
+    `npm run lint:web` runs Stylelint itself, with its config in
+    `scripts/stylelint.config.ts`. The extension works the same.
+
 ## 0.6.9
 
 -   When the agent has made no call for a listen's timeout (45 seconds), the

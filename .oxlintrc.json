@@ -8,6 +8,110 @@
     // VS Code's `Webview.postMessage(message)` has no `targetOrigin`: the rule is for `window.postMessage`.
     "unicorn/require-post-message-target-origin": "off"
   },
+  "overrides": [
+    // Google's TypeScript Style Guide (#134): the scripts only, until #133 brings the packages to it.
+    {
+      "files": ["scripts/**/*.ts", "packages/vscode/scripts/*.mts"],
+      "plugins": ["eslint", "typescript", "unicorn", "oxc", "import"],
+      "rules": {
+        "eslint/func-style": ["error", "declaration"],
+        "eslint/curly": ["error", "multi-line"],
+        "eslint/no-underscore-dangle": [
+          "error",
+          {
+            "allowFunctionParams": false
+          }
+        ],
+        "eslint/no-var": "error",
+        "eslint/prefer-const": "error",
+        "eslint/no-use-before-define": "error",
+        "eslint/one-var": ["error", "never"],
+        "eslint/no-array-constructor": "error",
+        "eslint/no-object-constructor": "error",
+        "eslint/guard-for-in": "error",
+        "eslint/no-proto": "error",
+        "eslint/no-extend-native": "error",
+        "eslint/prefer-arrow-callback": "error",
+        "eslint/prefer-rest-params": "error",
+        "eslint/prefer-spread": "error",
+        "eslint/no-multi-str": "error",
+        "eslint/prefer-template": "error",
+        "eslint/no-implicit-coercion": [
+          "error",
+          {
+            "boolean": false
+          }
+        ],
+        "eslint/no-extra-boolean-cast": "error",
+        "eslint/no-cond-assign": "error",
+        "eslint/no-throw-literal": "error",
+        "eslint/prefer-promise-reject-errors": "error",
+        "eslint/no-empty": "error",
+        "eslint/eqeqeq": [
+          "error",
+          "always",
+          {
+            "null": "ignore"
+          }
+        ],
+        "eslint/no-new-wrappers": "error",
+        "eslint/no-debugger": "error",
+        "eslint/no-with": "error",
+        "eslint/no-eval": "error",
+        "eslint/no-new-func": "error",
+        "eslint/no-global-assign": "error",
+        "import/no-default-export": "error",
+        "import/no-mutable-exports": "error",
+        "unicorn/filename-case": [
+          "error",
+          {
+            "case": "snakeCase"
+          }
+        ],
+        "unicorn/no-array-callback-reference": "error",
+        "unicorn/throw-new-error": "error",
+        "unicorn/new-for-builtins": "error",
+        "oxc/no-const-enum": "error",
+        "typescript/no-namespace": "error",
+        "typescript/no-require-imports": "error",
+        "typescript/triple-slash-reference": "error",
+        "typescript/no-for-in-array": "error",
+        "typescript/only-throw-error": "error",
+        "typescript/no-non-null-assertion": "error",
+        "typescript/consistent-type-assertions": [
+          "error",
+          {
+            "assertionStyle": "as",
+            "objectLiteralTypeAssertions": "never"
+          }
+        ],
+        "typescript/no-implied-eval": "error",
+        "typescript/no-inferrable-types": "error",
+        "typescript/consistent-type-definitions": "error",
+        "typescript/array-type": [
+          "error",
+          {
+            "default": "array-simple"
+          }
+        ],
+        "typescript/no-explicit-any": "error",
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-return": "error",
+        "typescript/no-unsafe-argument": "error",
+        "typescript/no-unsafe-call": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/restrict-plus-operands": [
+          "error",
+          {
+            "allowNullish": false
+          }
+        ],
+        "typescript/no-empty-object-type": "error",
+        "typescript/no-wrapper-object-types": "error",
+        "typescript/ban-ts-comment": "error"
+      }
+    }
+  ],
   "options": {
     "typeAware": true,
     "typeCheck": true
