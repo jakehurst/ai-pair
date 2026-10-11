@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- The Swift script that draws the icon, `scripts/icon.swift`, follows Google's Swift Style
+  Guide, and CI checks it with swift-format and a warnings-as-errors type check on macOS
+  (`npm run lint:swift`, `npm run typecheck:swift`). The icon it draws is unchanged.
+
 ## 0.6.0
 
 - The editor's scroll to follow the agent now takes its time from the playback speed, like
