@@ -2,7 +2,7 @@
 // number of zero or more keeps the default, so pacing doesn't silently turn off (#17).
 
 import { expect, it } from "vitest"
-import { defaultTiming, withOverrides, type TimingOverrides } from "../src/timing"
+import { defaultTiming, glideDuration, withOverrides, type TimingOverrides } from "../src/timing"
 
 // The settings are JSON: anything can be there, whatever their type says.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -29,4 +29,19 @@ it("keeps the defaults for a setting that isn't an object", () => {
 
 it("ignores keys that aren't timings", () => {
   expect(withOverrides(defaultTiming, settings({ color: 3 }))).toEqual(defaultTiming)
+})
+
+it("glides longer the farther it goes, up to the cap", () => {
+  const near = defaultTiming.nearLines
+  const far = defaultTiming.glideMaxMs / defaultTiming.glidePerLineMs
+  expect(glideDuration(defaultTiming, 0, 1)).toBe(defaultTiming.glideMs)
+  expect(glideDuration(defaultTiming, near, 1)).toBe(defaultTiming.glideMs + near * defaultTiming.glidePerLineMs)
+  expect(glideDuration(defaultTiming, 2 * far, 1)).toBe(defaultTiming.glideMaxMs)
+})
+
+it("divides the glide by the speed", () => {
+  const speed = 2
+  for (const lines of [0, defaultTiming.nearLines, defaultTiming.glideMaxMs]) {
+    expect(glideDuration(defaultTiming, lines, speed)).toBe(glideDuration(defaultTiming, lines, 1) / speed)
+  }
 })

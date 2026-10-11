@@ -20,7 +20,7 @@ import { followChange, rehearse, type Rehearsal } from "./rehearsal"
 import { fileLines } from "./text"
 import { Timeline } from "./timeline"
 import { defaultConfig, type Config } from "./config"
-import { defaultTiming, withOverrides, type TimingOverrides } from "./timing"
+import { defaultTiming, glideDuration, withOverrides, type TimingOverrides } from "./timing"
 
 type Batch = {
   id: number
@@ -539,6 +539,11 @@ export class Controller {
 
   setSpeed(speed: number): void {
     this.speed = speed
+  }
+
+  /** How long follow mode's scroll glides over `lines` lines, at the playback speed (#123). */
+  glideMs(lines: number): number {
+    return glideDuration(this.config.timing, lines, this.speed)
   }
 
   setReadingSpeed(speed: number): void {

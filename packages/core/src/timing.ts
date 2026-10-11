@@ -41,6 +41,12 @@ export type Timing = {
   afterDeleteMs: number
   /** After a `point` highlight appears: find the highlighted code. */
   afterPointMs: number
+  /** Follow mode's scroll: how long it glides, easing out, for a jump of no lines. */
+  glideMs: number
+  /** Added to `glideMs` for each line the view scrolls, so a long jump can be followed. */
+  glidePerLineMs: number
+  /** The longest a glide takes, however far it goes. */
+  glideMaxMs: number
 }
 
 export const defaultTiming: Timing = {
@@ -62,6 +68,9 @@ export const defaultTiming: Timing = {
   afterSelectMs: 700,
   afterDeleteMs: 300,
   afterPointMs: 400,
+  glideMs: 500,
+  glidePerLineMs: 10,
+  glideMaxMs: 1500,
 }
 
 export type TimingOverrides = Partial<Omit<Timing, "type" | "reading">> & {
@@ -80,6 +89,11 @@ export function withOverrides(base: Timing, overrides: TimingOverrides): Timing 
     type: numbers(base.type, field(overrides, "type")),
     reading: numbers(base.reading, field(overrides, "reading")),
   }
+}
+
+/** How long follow mode's scroll glides over `lines` lines at `speed`: longer the farther it goes, up to a cap (#123). */
+export function glideDuration(timing: Timing, lines: number, speed: number): number {
+  return Math.min(timing.glideMaxMs, timing.glideMs + timing.glidePerLineMs * lines) / speed
 }
 
 /** `base`, with each of its numbers replaced by the one `over` has under its key, if that's valid. */

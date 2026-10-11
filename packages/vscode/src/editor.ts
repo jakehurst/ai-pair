@@ -38,9 +38,6 @@ const SCROLL_QUIET_MS = 50
 /** The longest we wait for our own scroll to finish. */
 const SCROLL_MAX_MS = 500
 
-/** How long follow mode's scroll glides, easing out, however far it goes. */
-const GLIDE_MS = 500
-
 /** A glide's frame. */
 const FRAME_MS = 16
 
@@ -460,12 +457,14 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   /**
-   * Scrolls the view's top line from `from` to `to`, easing out, a line at a time: the API scrolls by
-   * lines. With `editor.smoothScrolling`, VS Code animates the scroll itself.
+   * Scrolls the view's top line from `from` to `to`, easing out over the controller's `glideMs`, a
+   * line at a time: the API scrolls by lines. With `editor.smoothScrolling`, VS Code animates the
+   * scroll itself, at its own pace.
    */
   private async glide(editor: vscode.TextEditor, from: number, to: number, height: number): Promise<void> {
     const smooth = vscode.workspace.getConfiguration("editor", editor.document).get("smoothScrolling", false)
-    if (smooth) return this.revealTop(editor, to, height)
+    const duration = this.controller?.glideMs(Math.abs(to - from))
+    if (smooth || duration === undefined) return this.revealTop(editor, to, height)
     // Back from the middle, if measuring went there, before anyone sees it.
     if (editor.visibleRanges[0]?.start.line !== from) await this.revealTop(editor, from, height)
     const started = Date.now()
@@ -476,7 +475,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         this.cut = true
         return
       }
-      const t = Math.min(1, (Date.now() - started) / GLIDE_MS)
+      const t = Math.min(1, (Date.now() - started) / duration)
       const next = glideTop(from, to, t)
       if (next === top) continue
       top = next

@@ -54,6 +54,9 @@ app.listen(3000, () => console.log("Listening on http://localhost:3000"));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** A glide long enough to catch mid-way, set as both `glideMs` and `glideMaxMs`: 500 ms at speed 20. */
+const LONG_GLIDE_MS = 10_000
+
 /**
  * Inserts text as the programmer would, while the agent may be typing into the same document. VS Code
  * rejects an extension's edit made against a version the document has moved past, which the agent's
@@ -366,10 +369,11 @@ export async function run(): Promise<void> {
   console.log("an edit the programmer undid is reported with the batches it discarded")
 
   // A scroll a command cut short goes on once the command is done (specs/Scroll.tla). The moves
-  // there and back first measure the view, so the last one glides from the top: a glide takes 500 ms,
-  // and at speed 20 the command starts some 50 ms into it.
+  // there and back first measure the view, so the last one glides from the top: the timing makes a
+  // glide 500 ms, and at speed 20 the command starts some 50 ms into it.
   const ai = vscode.workspace.getConfiguration("aiPair")
   await ai.update("confirmCommands", false, vscode.ConfigurationTarget.Global)
+  await ai.update("timing", { glideMs: LONG_GLIDE_MS, glideMaxMs: LONG_GLIDE_MS }, vscode.ConfigurationTarget.Global)
   fs.writeFileSync(file("glide.txt"), Array.from({ length: 300 }, (_, i) => `line ${i + 1}\n`).join(""))
   const glide = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file("glide.txt")))
   c.setSpeed(20)
@@ -397,6 +401,33 @@ export async function run(): Promise<void> {
   await c.end()
   await ai.update("confirmCommands", undefined, vscode.ConfigurationTarget.Global)
   console.log(`a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
+
+  // The follow scroll's glide takes its time from the playback speed (#123): at SLOW, a glide of
+  // LONG_GLIDE_MS takes a second, part way at SAMPLE_MS; at FAST it takes 100 ms, done by then.
+  const SLOW = 10
+  const FAST = 100
+  const SAMPLE_MS = 300
+  const top = () => glide.visibleRanges[0]?.start.line ?? 0
+  const glideTo = async (line: number, speed: number) => {
+    c.setSpeed(speed)
+    await c.step([{ move: { file: "glide.txt", line, to: "line_end" } }])
+    await c.step([])
+    await sleep(SAMPLE_MS)
+    return top()
+  }
+  await c.start("glide speed")
+  await c.read("glide.txt")
+  assert.equal(await glideTo(1, FAST), 0)
+  const midway = await glideTo(250, SLOW)
+  await sleep(LONG_GLIDE_MS / SLOW)
+  const landed = top()
+  assert.ok(midway > 0 && midway < landed, `slow glide not part way: ${midway} of ${landed}`)
+  assert.equal(await glideTo(1, FAST), 0)
+  assert.equal(await glideTo(250, FAST), landed)
+  c.setSpeed(1)
+  await c.end()
+  await ai.update("timing", undefined, vscode.ConfigurationTarget.Global)
+  console.log(`a glide took its time from the speed: part way at line ${midway + 1} of ${landed + 1}`)
 
   // An interrupt while a `run` saves its files stops it, without waiting to ask the programmer.
   fs.writeFileSync(file("asked.txt"), "a\n")
