@@ -99,13 +99,15 @@ const rich = (s: string) =>
     .join("")
 
 function add(el: HTMLElement): HTMLElement {
-  // Newest first: the current message came before this entry, so it goes in first.
+  // Newest first: the current message came before this entry, so it goes in first
+  // (specs/Panel.tla, `AddEntry`).
   fileCurrent()
   ui.history.prepend(el)
   return el
 }
 
-/** Puts the current message into the history, once: when the next entry comes, or when it is replaced. */
+/** Puts the current message into the history, once: when the next entry comes, or when it is replaced
+ * (specs/Panel.tla, `Flushed`). */
 function fileCurrent(): void {
   if (current !== null && !filed) ui.history.prepend(entry("agent", rich(current)))
   filed = true
@@ -210,6 +212,7 @@ function arrive(el: HTMLElement): void {
   el.classList.add("arrive")
 }
 
+// specs/Panel.tla, `Say`.
 function setNow(text: string): void {
   fileCurrent()
   current = text
@@ -372,6 +375,7 @@ function handle(e: ToPanel): void {
       ui.starting.hidden = true
       return
     case "session":
+      // specs/Panel.tla, `ChangeSession`: the band is filed, and a divider goes on top.
       if (e.active) {
         // specs/Start.tla, AgentStart: a session clears the note (NoteUntilSession).
         ui.starting.hidden = true

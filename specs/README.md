@@ -55,7 +55,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 |---|---|---|---|
 | `Serialize.cfg` | `N = 2` calls, each empty or not | holds | 709 |
 | `Wire.cfg` | `S = 2` sockets, `C = 2` calls | holds | 24,714 |
-| `Panel.cfg` | `N = 5` events | holds | 21 |
+| `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
 | `PanelScroll.cfg` | `N = 5` entries, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
 | `Controller.cfg` | `B = 2` batches, `E = 1` event, `Q = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
@@ -143,9 +143,30 @@ since #18.
 | Spec | Code |
 |---|---|
 | `Say` | `setNow` |
-| `Entry` | `addYou`, `addRun`, `addOutside`, the interrupt and turn dividers: `add()` |
-| `Edge` | the `session` event, start and end |
+| `AddEntry` | `addYou`, `addRun`, `addOutside`, the interrupt and turn dividers: `add()` |
+| `ChangeSession` | the `session` event, start and end |
 | `band`, `flag`, `Flushed` | `current`, `filed`, `fileCurrent()` |
+
+Each invariant was proved to bite with a mutation, run in TLC and then
+reverted. NewestFirst implies NoDuplicates (a strictly decreasing history has
+no duplicates), so NoDuplicates' mutation ran with NewestFirst left out of the
+config:
+
+| Mutation | Breaks |
+|---|---|
+| `AddEntry` stamps the entry with the old time, 0 at first | `TypeOK` |
+| `Fix = 0`, the code at 57ac07f (`Fix = 2` passes) | `NewestFirst` |
+| `ChangeSession` drops the band's message | `NoneLost` |
+| Fix 1 never marks the message as filed | `NoDuplicates` |
+
+Every invariant names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NewestFirst` | `history.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers; NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
+| `NoneLost` | `history.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers |
+| `NoDuplicates` | `history.test.ts`: NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
 
 ### `PanelScroll`: the history's scroll position
 
