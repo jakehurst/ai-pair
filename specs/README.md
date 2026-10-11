@@ -1027,15 +1027,34 @@ stayed where the glide stopped, with the target possibly out of view. The
 programmer's turn drops it. `beyond` is `editor.scrollBeyondLastLine`, either
 way: with it on (the default), the last line can scroll to the top. How long a
 glide takes (#123: `glideMs` in `controller.ts`, from the timing and the
-playback speed) is not modeled: a `Frame` carries no time, and `Move` and
+playback speed) is not modeled: a `Glide` step carries no time, and `Move` and
 `Leave` can come between any two frames, so a longer or shorter glide is a run
 the model already has.
 
 | Spec | Code |
 |---|---|
 | `Move` | an action moving the target, and the player's `follow()`; no action plays while a command runs |
-| `Leave`, `Return` | the state leaving the following states (`paused`, `running`) and coming back: `renderCursor` |
-| `Frame` | `glide`'s frames; `scroll`'s `finally` and its follow if the target moved |
+| `Leave`, `Return` | the state leaving the following states (`paused`, `running`) and coming back: `renderCursor`; a pause's end: `resume`'s `reveal` |
+| `Glide` | `glide`'s frames; `scroll`'s `finally` and its follow if the target moved |
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Move` moves the target past the file's last line | `TypeOK` |
+| `Landing` ignores how far the editor scrolls | `InRange` |
+| `CatchUp = FALSE`, the code before the fix | `Settles` |
+| a finished `Glide` does not follow a target that moved | `Settles` |
+| `Return` from a pause does not reveal the target | `Settles` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `InRange` | `view.test.ts`: InRange: stops at the top of the document; InRange: stops with the last line at the top when the editor scrolls beyond the end, else at the bottom |
+| `Settles` | `integration.ts`, in VS Code: Settles: a scroll a command cut short went on to line 250 |
 
 ### `Turns`: only talk during the programmer's turn
 

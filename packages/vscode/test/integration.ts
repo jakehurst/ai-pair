@@ -402,7 +402,7 @@ export async function run(): Promise<void> {
   c.setSpeed(1)
   await c.end()
   await ai.update("confirmCommands", undefined, vscode.ConfigurationTarget.Global)
-  console.log(`a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
+  console.log(`Settles: a scroll a command cut short went on to line 250: ${shown.join(", ")}`)
 
   // The follow scroll's glide takes its time from the playback speed (#123): at SLOW, a glide of
   // LONG_GLIDE_MS takes a second, part way at SAMPLE_MS; at FAST it takes 100 ms, done by then.

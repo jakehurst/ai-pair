@@ -274,7 +274,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.redraw()
     if (!changed) return
     // A scroll a command cut short goes on once it's done; a pause's end reveals the target anyway,
-    // and the programmer's turn is theirs to look where they like (specs/Scroll.tla).
+    // and the programmer's turn is theirs to look where they like. specs/Scroll.tla: leaving the
+    // following states is `Leave`, and coming back `Return`.
     if (state === "navigator") this.cut = false
     else if (this.cut && FOLLOWING.has(state)) {
       this.cut = false
@@ -288,11 +289,13 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   reveal(): void {
+    // specs/Scroll.tla, `Return`: a pause ends in `resume`, which reveals the target.
     const target = this.target()
     if (target) void this.show(target.file).then(() => this.follow())
   }
 
   follow(): void {
+    // specs/Scroll.tla, `Move`: the player calls this once an action moves the target.
     const target = this.target()
     if (target && FOLLOWING.has(this.state)) this.keepInView(target)
   }
@@ -441,6 +444,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * Code can do knowing its viewport, so the lines above it are half of the viewport's; then on, from
    * where the target is by then. Afterwards, catches up with the target if it moved to another line
    * meanwhile. Only then: a landing the editor can't reach would otherwise be tried again and again.
+   * specs/Scroll.tla, `Glide`.
    */
   private async scroll(editor: vscode.TextEditor, line: number, height?: number): Promise<void> {
     this.scrolling = true
@@ -479,6 +483,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (editor.visibleRanges[0]?.start.line !== from) await this.revealTop(editor, from, height)
     const started = Date.now()
     let top = from
+    // specs/Scroll.tla, `Glide`: each frame nearer the landing, until the state stops following.
     while (top !== to) {
       await new Promise((resolve) => setTimeout(resolve, FRAME_MS))
       if (!FOLLOWING.has(this.state)) {

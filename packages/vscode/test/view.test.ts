@@ -39,11 +39,11 @@ describe("landing", () => {
     expect(landing(100, 30, 1000, true)).toBe(90)
   })
 
-  it("stops at the top of the document", () => {
+  it("InRange: stops at the top of the document", () => {
     expect(landing(5, 30, 1000, true)).toBe(0)
   })
 
-  it("stops with the last line at the top when the editor scrolls beyond the end, else at the bottom", () => {
+  it("InRange: stops with the last line at the top when the editor scrolls beyond the end, else at the bottom", () => {
     expect(landing(999, 30, 1000, true)).toBe(989)
     expect(landing(999, 30, 1000, false)).toBe(970)
     expect(landing(10, 30, 20, false)).toBe(0)
