@@ -1,5 +1,8 @@
 // Offset <-> line/column conversions. Lines and columns are 1-based.
 
+/** In `terminalText`, where a line was erased: what came before it on the line is gone. */
+const ERASED_LINE = "\x00"
+
 export type Position = { line: number; column: number }
 
 export function position(text: string, offset: number): Position {
@@ -70,6 +73,9 @@ export function terminalText(raw: string): string {
   // Escape sequences start with ESC (\x1b) and some end with BEL (\x07): matching control characters is the point.
   /* oxlint-disable no-control-regex */
   const plain = raw
+    // ECMA-48: CSI G or 1G moves the cursor to column 1; CSI K or 0K erases from it to the end, CSI 2K the whole line.
+    .replace(/\x1b\[1?G\x1b\[0?K|\x1b\[2K/g, ERASED_LINE)
+    .replace(/\x1b\[1?G/g, "\r")
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/\x1b[@-Z\\-_]/g, "")
@@ -77,7 +83,7 @@ export function terminalText(raw: string): string {
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => {
-      const parts = line.split("\r").filter((p) => p !== "")
+      const parts = (line.split(ERASED_LINE).at(-1) ?? "").split("\r").filter((p) => p !== "")
       return (parts.at(-1) ?? "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").trimEnd()
       /* oxlint-enable no-control-regex */
     })
