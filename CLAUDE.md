@@ -36,6 +36,14 @@ Set by Justine on 2026-10-07.
 ## Code
 
 - In test files, write the cursor marker as `CURSOR_MARKER` from `@ai-pair/protocol`, not as the literal character or an escape. Justine prefers not to have a special character encoded in the file (2026-10-06), and a named constant to a magic value (2026-10-09).
+- **Swift follows Google's Swift Style Guide** (https://google.github.io/swift/, #137). `.swift-format` turns on every rule swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift` check them, in CI on macOS. These rules no tool checks, so follow them by hand:
+  - Import every module the file uses, not one that another framework happens to import (Import Statements).
+  - Spell names out, as Apple's API Design Guidelines ask: `context`, not `ctx`; `width`, not `w` (Naming).
+  - Keep overloads next to each other, and the file in an order you can explain (Source File Structure).
+  - Use `Optional` for a missing value, not a sentinel such as -1, and an `Error` type when there are several ways to fail (Optional Types, Error Types).
+  - Where the guide allows a force unwrap or `try!` (an invariant the code guarantees, or a literal checked only by the programmer), write a comment saying why it is safe, and a `// swift-format-ignore: NeverForceUnwrap` or `NeverUseForceTry` line above the statement (Force Unwrapping, Error Types).
+  - Give a literal its type with `as` or a type annotation, not an initializer: `50 as UInt8`, not `UInt8(50)` (Numeric and String Literals).
+  - Use the trapping operators (`+`, not `&+`) unless the arithmetic is meant to wrap, and define no new operators (Trapping vs. Overflowing Arithmetic, Defining New Operators).
 
 ## Versioning
 
