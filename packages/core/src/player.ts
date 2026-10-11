@@ -308,6 +308,7 @@ export class Player {
 
     if ("say" in action) {
       panel.post({ type: "say", text: action.say })
+      // specs/Calibration.tla, `StartSay`: timed with the rate in force now; the sleep's end is `EndSay`.
       const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed()
       this.reading = true
       panel.post({ type: "reading", ms })

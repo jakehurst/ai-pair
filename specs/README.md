@@ -84,7 +84,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE` | holds | 46 |
-| `Calibration.cfg` | `N = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
+| `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, 2 replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `Pages = 3`, `Flips = 2`, `Clicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE` | holds | 12 |
@@ -375,16 +375,35 @@ the `calibrate` pair tool in `bridge.ts`, the setting the rate is stored in,
 written by `extension.ts`, and the `say` pause that reads it in `player.ts`.
 Issue #109. The constant `AwaitStore` switches whether playback resumes before
 or after the stored rate has been applied; with `FALSE`, TLC violates
-`FreshRate` in five steps: `Supply`, `Go`, `Finish`, then a `SayStart` timed
+`FreshRate` in five steps: `Supply`, `Go`, `Finish`, then a `StartSay` timed
 with the default rate.
 
 | Spec | Code |
 |---|---|
 | `Arm`, `Supply` | the Calibrate Reading Speed command, or the calibrate tool, which the bridge refuses unless idle; both add the calibrate pause reason |
 | `Go`, `Finish` | the programmer typing go and x in the panel; the extension timestamps both |
-| `Stored` | the configuration change applying the new timing, which also removes the pause |
+| `ApplyRate` | the configuration change applying the new timing, which also removes the pause |
 | `Cancel` | any other reply, the view disposed, the session ending |
-| `SayStart` | the reading time computed in the player from the timing in force at that moment |
+| `StartSay` | the reading time computed in the player from the timing in force at that moment |
+| `EndSay` | the reading time's sleep ending |
+
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| a say timed with a third rate | `TypeOK` |
+| `Arm` does not pause | `PauseMatchesPhase` |
+| `AwaitStore = FALSE`, the code before | `FreshRate` |
+| the settings write is never applied: no fairness on `ApplyRate` | `StoreLands` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `PauseMatchesPhase` | `calibration.test.ts`: PauseMatchesPhase, FreshRate, StoreLands: measures the rate from go to x over the passage's characters, and holds the pause until the rate is stored; PauseMatchesPhase: cancels on any other reply, with nothing stored |
+| `FreshRate`, `StoreLands` | `calibration.test.ts`: PauseMatchesPhase, FreshRate, StoreLands: measures the rate from go to x over the passage's characters, and holds the pause until the rate is stored |
 
 ### `PointFocus`: the view on a reply and on Resume
 

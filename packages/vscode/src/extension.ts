@@ -79,7 +79,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       now: () => Date.now(),
       pause: () => controller.pause("calibrate"),
       resume: () => controller.resume("calibrate"),
-      // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla.
+      // The pause ends only once the player reads the new rate: AwaitStore in specs/Calibration.tla, and
+      // setTiming below is `ApplyRate`.
       store: async (msPerChar) => {
         const timing = config().get<TimingOverrides>("timing", {})
         await config().update("timing", { ...timing, reading: { ...timing.reading, msPerChar } }, vscode.ConfigurationTarget.Global)

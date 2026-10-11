@@ -25,7 +25,7 @@ function setup() {
   return { calibration, views, calls, clock, release: () => release() }
 }
 
-it("measures the rate from go to x over the passage's characters, and holds the pause until the rate is stored", async () => {
+it("PauseMatchesPhase, FreshRate, StoreLands: measures the rate from go to x over the passage's characters, and holds the pause until the rate is stored", async () => {
   const { calibration, views, calls, clock, release } = setup()
   expect(calibration.arm()).toBe(true)
   expect(views).toEqual([{ phase: "armed", title: "Sample" }])
@@ -55,7 +55,7 @@ it("refuses a passage with nothing to read", () => {
   expect(calls).toEqual([])
 })
 
-it("cancels on any other reply, with nothing stored", () => {
+it("PauseMatchesPhase: cancels on any other reply, with nothing stored", () => {
   const { calibration, views, calls } = setup()
   calibration.arm()
   expect(calibration.reply("hello")).toBe(true)

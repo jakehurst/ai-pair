@@ -36,7 +36,7 @@ export class Calibration {
     private passage: Passage,
   ) {}
 
-  /** The command, or the agent's calibrate tool with a passage of its own. Refused while one is under way, or for an empty passage. */
+  /** The command, or the agent's calibrate tool with a passage of its own. Refused while one is under way, or for an empty passage. specs/Calibration.tla, `Arm` and `Supply`. */
   arm(passage?: Passage): boolean {
     if (this.phase !== "idle") return false
     if (passage) {
@@ -49,7 +49,7 @@ export class Calibration {
     return true
   }
 
-  /** A reply while a calibration is under way: go shows the passage and starts the clock, x stops it, anything else cancels. False when it is not for the calibration. */
+  /** A reply while a calibration is under way: go shows the passage and starts the clock, x stops it, anything else cancels. False when it is not for the calibration. specs/Calibration.tla, `Go`. */
   reply(text: string): boolean {
     const word = text.trim().toLowerCase()
     if (this.phase === "armed" && word === "go") {
@@ -69,7 +69,7 @@ export class Calibration {
     return false
   }
 
-  /** x: the rate is written, and only once the player reads it does the pause end (AwaitStore). */
+  /** x: the rate is written, and only once the player reads it does the pause end (AwaitStore): specs/Calibration.tla, `Finish`, then `ApplyRate`. */
   private async finish(elapsedMs: number): Promise<void> {
     this.phase = "storing"
     const text = this.passage.text
@@ -80,7 +80,7 @@ export class Calibration {
     this.host.resume()
   }
 
-  /** Any other reply, the panel's view going away, or the session ending: back to idle, nothing stored. */
+  /** Any other reply, the panel's view going away, or the session ending: back to idle, nothing stored (specs/Calibration.tla, `Cancel`). */
   cancel(): void {
     if (this.phase !== "armed" && this.phase !== "reading") return
     this.phase = "idle"
