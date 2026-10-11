@@ -63,7 +63,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `EditorAdapter.cfg` | `N = 5` changes | holds | 311 |
 | `FollowMode.cfg` | one move to another file, the programmer looking away | holds | 13 |
 | `Bridge.cfg` | `S = 2` sockets | holds | 76 |
-| `Draft.cfg` | `Views = 3` pages | holds | 12 |
+| `Draft.cfg` | `MaxViews = 3` pages | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
 | `Outside.cfg` | one file, 5 contents | holds | 564 |
