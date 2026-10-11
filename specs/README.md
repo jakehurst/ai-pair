@@ -593,10 +593,28 @@ session ending clears it too.
 
 | Spec | Code |
 |---|---|
-| `Saved` | after `save`: `confirm` with confirmation on, else `running`; a failed save posts nothing |
-| `Decided` | `confirm` resolving: `running`, or `declined` for a skip or an interrupt |
-| `Ran` | `editor.runCommand`: `done` or `background`, or `declined` for `notStarted` or a throw |
-| `End` | the session ending: `setActive(false)` |
+| `SaveAndConfirm`, `SaveAndRun`, `FailSave` | after `save`: `confirm` with confirmation on, else `running`; a failed save posts nothing |
+| `Go`, `Decline` | `confirm` resolving: `running`, or `declined` for a skip or an interrupt |
+| `FinishCommand` | `editor.runCommand`: `done` or `background`, or `declined` for `notStarted` or a throw |
+| `EndSession` | the session ending: `setActive(false)` |
+
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted. Under the fairness, BoxMatches implies Clears, so Clears'
+mutation ran with BoxMatches left out of the config:
+
+| Mutation | Breaks |
+|---|---|
+| the box shows every phase | `TypeOK` |
+| `Go` posts nothing, so the box says confirm while the command runs | `BoxMatches` |
+| `ClearOnEnd = FALSE` | `Clears` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `BoxMatches` | `runbox.page.test.ts`: BoxMatches: shows the box while a command waits for a decision, and while it runs |
+| `Clears` | `runbox.page.test.ts`: Clears: a %s phase clears the box (done, background, declined); Clears: the session ending clears the box |
 
 ### `FileText`: the text the session takes for a file
 

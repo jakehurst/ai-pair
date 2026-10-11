@@ -347,7 +347,7 @@ function setActive(on: boolean): void {
   if (!on) {
     suspended = false
     reading = null
-    // specs/RunBox.tla, End: the session ending clears the box.
+    // specs/RunBox.tla, `EndSession`: the session ending clears the box.
     clearRun()
     closeSpeedMenu()
     closeReadingMenu()

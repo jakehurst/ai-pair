@@ -438,6 +438,7 @@ export class Player {
     if (typeof command !== "string" || command.trim() === "") return fail("invalid_action", "`run` needs a command.")
     // Commands read files from disk, so the batch's edits so far go there first.
     const unsaved = await this.save(playing)
+    // specs/RunBox.tla, `FailSave`: a failed save posts nothing.
     if (unsaved.length > 0) {
       const which = unsaved.map((u) => `${u.file} (${u.error})`).join(", ")
       return fail(
@@ -449,6 +450,7 @@ export class Player {
     const signal = this.stage.pacing.signal
 
     if (config.confirmCommands && !s.allowedCommands.has(command)) {
+      // specs/RunBox.tla, `SaveAndConfirm`.
       panel.post({ type: "run", id, command, phase: "confirm" })
       this.reading = true
       this.stage.render()
@@ -456,6 +458,7 @@ export class Player {
       this.reading = false
       this.stage.render()
       if (!go || signal.aborted) {
+        // specs/RunBox.tla, `Decline`.
         panel.post({ type: "run", id, command, phase: "declined" })
         if (signal.aborted) return { kind: "interrupted" }
         return fail("command_declined", "The programmer declined to run this command.")
@@ -464,9 +467,11 @@ export class Player {
 
     const requested = action.wait !== undefined ? action.wait * 1000 : config.runWaitMs
     const waitMs = Math.max(0, Math.min(config.maxRunWaitMs, requested))
+    // specs/RunBox.tla, `SaveAndRun`, or `Go` after a confirm.
     panel.post({ type: "run", id, command, phase: "running" })
     this.commandRunning = true
     this.stage.render()
+    // specs/RunBox.tla, `FinishCommand`: done or background when it ran, declined when it never started or threw.
     let outcome
     try {
       outcome = await editor.runCommand(command, { cwd: s.root ?? editor.resolvePath("."), waitMs, signal })
