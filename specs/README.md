@@ -641,7 +641,26 @@ The feature of #23, specified before its code: `projectGuides` in
 `packages/relay/src/guide.ts`. Checked over every small tree, as `ASSUME`s:
 walking up from the working directory to the workspace folder gives exactly the
 guides on that path that git doesn't ignore, outer first, and none above the
-folder. Walking past the folder, or reading an ignored guide, is caught.
+folder. Walking past the folder, or reading an ignored guide, is caught. Like
+the pure functions below, it is `ASSUME`s alone, with a config of constants.
+
+Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted.
+Exactly implies Contained, so Contained's mutation ran without Exactly's
+`ASSUME`:
+
+| Mutation | Breaks |
+|---|---|
+| the walk skips the workspace folder's own guide | `Exactly` |
+| `Found` without `Reverse`: innermost first | `OuterFirst` |
+| the walk reads guides git ignores | `Contained` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `Exactly` | `guide.test.ts`: Exactly, OuterFirst, Contained: reads the guides from the workspace folder down to the working directory, outer first; Exactly, Contained: leaves out a guide git ignores, and keeps one checked in though .gitignore names it |
+| `OuterFirst` | `guide.test.ts`: Exactly, OuterFirst, Contained: reads the guides from the workspace folder down to the working directory, outer first |
+| `Contained` | both tests above |
 
 ### `Resume`: a session that waits for its agent
 
