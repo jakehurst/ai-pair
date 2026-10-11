@@ -1217,7 +1217,7 @@ describe("edits with no net change", () => {
 })
 
 describe("turns", () => {
-  it("waits for the programmer to pause again when they resume typing before the agent listens (specs/Navigator.tla)", async () => {
+  it("NotWhileTyping, EditsReported: waits for the programmer to pause again when they resume typing before the agent listens (specs/Navigator.tla)", async () => {
     const { editor, controller } = setup({ "a.ts": "abc\n" })
     await controller.start()
     controller.takeTurn()

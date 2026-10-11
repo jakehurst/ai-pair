@@ -67,7 +67,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, 4 changes | holds | 123 |
 | `Outside.cfg` | one file, 5 contents | holds | 564 |
-| `Navigator.cfg` | `Edits = 3` | holds | 44 |
+| `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
 | `EditEvents.cfg` | one file, 3 texts, `Steps = 4` | holds | 516 |
 | `Scroll.cfg` | 8 lines, a view of 4, `Moves = 2`, `Changes = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
@@ -720,6 +720,22 @@ fix: an edit takes back `navigatorReady`, which a pause before it set, so a
 | `Edit` | `userEdit` in the programmer's turn: `recordEdit`, `navigatorReady = false`, the timer started again |
 | `Pause`, `Fire` | `navigatorIdleMs` without an edit; the timer setting `navigatorReady` and calling `pump()` |
 | `Listen`, `Return`, `Timeout` | `listen`; `ready` holding, and `snapshot` clearing `navigatorReady`; `maxBlockMs` |
+
+Each invariant and property was proved to bite with a mutation, run in TLC and
+then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Listen` sets the call to a third state | `TypeOK` |
+| `ResetReady = FALSE`, the code before | `NotWhileTyping` |
+| `Fire` leaves `ready` unset, so no call returns for the edits | `EditsReported` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `NotWhileTyping`, `EditsReported` | `controller.test.ts`: NotWhileTyping, EditsReported: waits for the programmer to pause again when they resume typing before the agent listens (specs/Navigator.tla) |
 
 ### `ListenGrace`: "Your move" between two idle listens
 

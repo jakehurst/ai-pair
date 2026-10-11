@@ -392,10 +392,11 @@ export class Controller {
     if (s.scene.turn === "agent") {
       this.interrupt(s)
     } else {
-      // Typing again: the pause the timer marked is over, so wait for the next (specs/Navigator.tla).
+      // Typing again: the pause the timer marked is over, so wait for the next (specs/Navigator.tla, `Edit`).
       s.navigatorReady = false
       clearTimeout(s.navigatorTimer)
       s.navigatorTimer = setTimeout(() => {
+        // specs/Navigator.tla, `Fire`.
         s.navigatorReady = true
         this.pump()
       }, this.config.navigatorIdleMs)
@@ -687,6 +688,7 @@ export class Controller {
         ...opts,
         resolve,
         reject,
+        // specs/Navigator.tla, `Timeout`, for a listen.
         timer: setTimeout(() => this.finishCall(true), this.config.maxBlockMs),
       }
       this.endGrace()
@@ -717,7 +719,7 @@ export class Controller {
         if (s.finished.some((r) => r.status !== "completed")) return true
         if (s.queue.length > 0) return false
         if (s.scene.turn === "agent") return s.events.some(interrupting)
-        // The programmer's edits during their turn wait until they pause typing.
+        // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
         return s.events.some((e) => e.kind !== "edit") || (s.navigatorReady && s.events.some(interrupting))
       default:
         throw new Error(`Unknown call: ${JSON.stringify(call.kind satisfies never)}`)
