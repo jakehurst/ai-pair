@@ -116,7 +116,7 @@ describe("relay", () => {
     expect(editor.text("src/a.ts")).toBe("\\u0041")
   })
 
-  it("runs a session: start with the guide, pipelined steps, read, end", async () => {
+  it("StartOpensSession: runs a session: start with the guide, pipelined steps, read, end", async () => {
     const client = await connect()
     const started = await call(client, "start", { task: "test" })
     expect(started.error).toBe(false)
@@ -193,12 +193,24 @@ describe("relay", () => {
     expect(nothing.text).toMatch(/Give the code: `text`, or `from` and `through`/)
   })
 
-  it("lets only one agent pair in a window at a time", async () => {
+  it("OwnedByOpenSocket: lets only one agent pair in a window at a time", async () => {
     const one = await connect()
     const two = await connect()
     await call(one, "start")
     expect((await call(two, "start")).text).toMatch(/^session_active:/)
     expect((await call(two, "listen")).text).toMatch(/^no_session:/)
+  })
+
+  it("EndedOwned: gives a session the programmer ended to its owner's next call, which closes it", async () => {
+    const one = await connect()
+    const two = await connect()
+    await call(one, "start")
+    controller.endSession()
+    expect((await call(two, "listen")).text).toMatch(/^no_session:/)
+    const ended = await call(one, "listen")
+    expect(ended.error).toBe(false)
+    expect(ended.text).toMatch(/programmer ended the session/)
+    expect((await call(one, "listen")).text).toMatch(/^no_session:/)
   })
 
   // The programmer acts right after the cancellation, before it reaches the editor, so the
@@ -331,7 +343,7 @@ describe("relay", () => {
     raw.close()
   })
 
-  it("doesn't leave a session to a socket that closed while it started", async () => {
+  it("OwnedByOpenSocket: doesn't leave a session to a socket that closed while it started", async () => {
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
     const { port, token } = findWindows(["/project"], dir).windows[0]!
     const start = controller.start.bind(controller)
@@ -360,7 +372,7 @@ describe("relay", () => {
     expect((await call(client, "start")).error).toBe(false)
   })
 
-  it("suspends the session when the agent's harness goes away, and resumes it for the next agent (#25)", async () => {
+  it("SuspendedUnowned: suspends the session when the agent's harness goes away, and resumes it for the next agent (#25)", async () => {
     const client = await connect()
     await call(client, "start")
     await client.close()
@@ -374,6 +386,39 @@ describe("relay", () => {
     const next = await call(await connect(), "start")
     expect(next.error).toBe(false)
     expect(next.text).toMatch(/resumed[\s\S]*Read the files/)
+  })
+
+  it("SuspendedUnowned: a start whose socket closes while it runs leaves the suspended session to no one, even after another socket's session ended", async () => {
+    const one = await connect()
+    await call(one, "start", { task: "one" })
+    controller.endSession()
+    // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
+    const { port, token } = findWindows(["/project"], dir).windows[0]!
+    const start = controller.start.bind(controller)
+    let open!: () => void, reached!: () => void
+    const gate = new Promise<void>((r) => (open = r))
+    const atGate = new Promise<void>((r) => (reached = r))
+    controller.start = async (...args) => {
+      reached()
+      await gate
+      return start(...args)
+    }
+    const raw = new WebSocket(`ws://127.0.0.1:${port}`)
+    await new Promise((r) => raw.once("open", r))
+    raw.send(JSON.stringify({ type: "hello", token, protocolVersion: PROTOCOL_VERSION }))
+    raw.send(JSON.stringify({ type: "call", id: 1, tool: "start", args: { task: "two" } }))
+    await atGate
+    raw.close()
+    await new Promise((r) => raw.once("close", r))
+    await new Promise((r) => setTimeout(r, 50))
+    controller.start = start
+    open()
+    await new Promise((r) => setTimeout(r, 50))
+
+    // The session it started is suspended, and the socket that owned the ended one can't drive it.
+    expect(controller.isSuspended).toBe(true)
+    const step = await call(one, "step", { actions: [{ move: { file: "a.ts", line: 1, to: "line_end" } }] })
+    expect(step.text).toMatch(/^no_session:/)
   })
 
   it("explains when no editor has the project open", async () => {

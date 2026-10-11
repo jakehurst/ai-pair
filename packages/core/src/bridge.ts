@@ -172,6 +172,7 @@ export class Bridge {
       if (m.type === "cancel") {
         calls.get(m.id)?.abort()
       } else if (m.type === "return") {
+        // specs/Bridge.tla, `Restore`: only the owner's socket brings its session's report back.
         if (this.owner === ws) this.controller.restore(m.report, m.mayRepeat === true)
       } else if (m.type === "call") {
         const abort = new AbortController()
@@ -193,6 +194,7 @@ export class Bridge {
 
     ws.on("close", () => {
       trace?.(`socket ${socket} closed`)
+      // specs/Bridge.tla, `Close`: the owner's socket gone, the session is suspended, or closed if it ended.
       for (const abort of calls.values()) abort.abort()
       if (this.owner === ws) {
         this.owner = null
@@ -204,13 +206,16 @@ export class Bridge {
   private async dispatch(ws: WebSocket, tool: ToolName, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
     const c = this.controller
     if (tool === "start") {
+      // specs/Bridge.tla, `BeginStart`: refused while another socket's session is active.
       if (c.isActive && !c.isSuspended && this.owner !== ws) {
         throw new ToolError("session_active", "Another agent is already pairing in this editor window.")
       }
       const report = await c.start(optionalString(args.task), optionalString(args.cwd), optionalStrings(args.rules))
-      // The socket may have closed while the session started, when its close handler didn't own it yet:
-      // suspend the session rather than leave it to no one (#42, #25). From here to `owner`, nothing awaits.
+      // specs/Bridge.tla, `FinishStart`: the socket may have closed while the session started, when its close handler didn't own it yet:
+      // suspend the session rather than leave it to no one (#42, #25). From here to `owner`, nothing awaits. The owner is
+      // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
+        this.owner = null
         c.disconnect()
         throw new ToolError("no_session", "The connection closed while the session started.")
       }

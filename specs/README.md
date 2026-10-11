@@ -398,11 +398,35 @@ with the controller's session. `CheckOpen` is the fix for #42.
 
 | Spec | Code |
 |---|---|
-| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active and not suspended; `controller.start()`; `this.owner = ws`, or on a socket that closed meanwhile, `disconnect()`, which suspends the session it started |
+| `BeginStart`, `FinishStart` | `dispatch("start")`: refused while another socket's session is active and not suspended; `controller.start()`; `this.owner = ws`, or on a socket that closed meanwhile, `this.owner = null` and `disconnect()`, which suspends the session it started, unowned |
 | `Close` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session, which suspends it, unowned (#25) |
 | `EndSuspended` | the programmer ending a suspended session: it closes at once |
-| `EndSession`, `Closed`, `AgentEnd` | the programmer ending the session from the panel, and its last report closing it; the agent's `end` |
+| `EndSession`, `CloseEnded`, `CallEnd` | the programmer ending the session from the panel, and its last report closing it; the agent's `end` |
 | `Restore` | a `return` from the owner's socket: `restore()` puts a session its last report closed back, as ended (#60); `recent` is `this.closed` |
+| `Finished` | every socket closed, with no session: nothing more happens until another socket connects |
+
+Each invariant and property was proved to bite with a mutation of a copy of
+the model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `EndSuspended` leaves the session in a fifth phase | `TypeOK` |
+| `CheckOpen = FALSE`, the code before #42 | `OwnedByOpenSocket` |
+| `Close` of the owner leaves an ended session ended | `EndedOwned` |
+| `Close` of the owner leaves it the owner | `SuspendedUnowned` |
+| `FinishStart` keeps the old owner when its socket closed (the code before this fix): 7 states | `SuspendedUnowned` |
+| `FinishStart` opens no session | `StartOpensSession` |
+
+Every invariant and property names the test that proves the code obeys it; the
+test's title carries its name:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `OwnedByOpenSocket` | `relay.test.ts`: OwnedByOpenSocket: lets only one agent pair in a window at a time; OwnedByOpenSocket: doesn't leave a session to a socket that closed while it started |
+| `EndedOwned` | `relay.test.ts`: EndedOwned: gives a session the programmer ended to its owner's next call, which closes it |
+| `SuspendedUnowned` | `relay.test.ts`: SuspendedUnowned: suspends the session when the agent's harness goes away, and resumes it for the next agent (#25); SuspendedUnowned: a start whose socket closes while it runs leaves the suspended session to no one, even after another socket's session ended |
+| `StartOpensSession` | `relay.test.ts`: StartOpensSession: runs a session: start with the guide, pipelined steps, read, end |
 
 ### `Timeline`: pausing
 

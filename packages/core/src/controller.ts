@@ -486,11 +486,12 @@ export class Controller {
     const s = this.activeSession()
     if (!s) return
     if (s.suspended) {
-      // No agent is there to take a final report: it's over now.
+      // No agent is there to take a final report: it's over now (specs/Bridge.tla, `EndSuspended`).
       this.close(s)
       this.panel.post({ type: "session", active: false, reason: "user" })
       return
     }
+    // specs/Bridge.tla, `EndSession`: its last report, to the owner's next call, closes it.
     s.ended = true
     s.events.push({ kind: "end" })
     this.interrupt(s)
@@ -767,6 +768,7 @@ export class Controller {
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, DrainHeld).
     const closing = (s.ended && s.held.length === 0) || call.kind === "end"
     if (closing) {
+      // specs/Bridge.tla, `CloseEnded`, or `CallEnd` for the agent's `end`; `this.closed` is `recent`.
       this.close(s)
       this.closed = s
       if (call.kind === "end" && !s.ended) {
