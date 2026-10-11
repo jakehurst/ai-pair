@@ -37,7 +37,10 @@ type PendingEvent = Exclude<Event, { kind: "edit" }> | EditEvent
 /** `interrupted`: a change the programmer didn't make, to a file the playing or queued batches edit. */
 type EditEvent = { kind: "edit"; file: string; by: "programmer" | "other"; diff?: string; interrupted?: true }
 
-/** Everything interrupts, except changes the programmer didn't make to files no batch is going to edit. */
+/**
+ * Everything interrupts, except changes the programmer didn't make to files no batch is going to edit. An event it
+ * holds for is `Act` in specs/ListenGrace.tla.
+ */
 function interrupting(e: PendingEvent): boolean {
   return e.kind !== "edit" || e.by === "programmer" || e.interrupted === true
 }
@@ -736,6 +739,7 @@ export class Controller {
     if (call && s && this.ready(call, s)) this.finishCall(false)
   }
 
+  /** `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
   private finishCall(timedOut: boolean): void {
     const call = this.call
     if (!call) return
@@ -958,6 +962,7 @@ export class Controller {
     if (!s || s.scene.turn === "user") return "navigator"
     if (this.pauseReasons.size > 0) return "paused"
     if (s.queue.length > 0) return s.player.reading ? "read" : s.player.commandRunning ? "running" : "typing"
+    // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace.
     const waiting = this.grace !== null && !s.events.some(interrupting)
     return this.call?.kind === "listen" || waiting ? "listening" : "thinking"
   }

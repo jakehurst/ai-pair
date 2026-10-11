@@ -836,20 +836,23 @@ and "listening".
 | `Act` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
 
-Each property was proved to bite with a mutation of a copy of the model:
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
 
 | Mutation | Breaks |
 |---|---|
+| a call outside `Calls` | `TypeOK` |
 | `Grace = FALSE`, the code before | `NoFlicker` |
 | `Status` ignores `pending` | `NoYourMoveAfterAct` |
 | `Return` starts the grace too | `NoFalseYourMove` |
 | `Expire` leaves the grace set | `GraceEnds` |
 | `Call` leaves the grace set | `NoYourMoveInOtherCall` |
 
-Every property names the test that proves the code obeys it:
+Every invariant and property names the test that proves the code obeys it:
 
-| Property | Proved by |
+| Invariant | Proved by |
 |---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoFlicker` | `controller.test.ts`: NoFlicker: keeps listening after a listen times out with nothing to report |
 | `GraceEnds` | `controller.test.ts`: GraceEnds: shows thinking once the grace runs out without a call |
 | `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove: shows thinking when a listen times out with a batch to report |
