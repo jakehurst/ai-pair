@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4
+
+-   The repository's Markdown, this changelog and the Marketplace README
+    included, follows Google's Markdown style guide, and CI checks it with
+    markdownlint (`npm run lint:md`). The README gains a title and headings over
+    its animations; the words are unchanged.
+
 ## 0.6.3
 
 -   The Pair panel's page and stylesheet follow Google's HTML/CSS Style Guide,
