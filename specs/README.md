@@ -75,7 +75,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Timeline.cfg` | `N = 3` sleeps | holds | 88 |
 | `Terminals.cfg` | `T = 2` terminals, `Runs = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxChanges = 2` turn changes | holds | 538 |
-| `Reload.cfg` | `N = 5` lines, any of them changed on disk | holds | 160 |
+| `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk | holds | 160 |
 | `Rehearsal.cfg` | 3 lines, 2 changes by others, 2 batches, up to 2 queued | holds | 34,939 |
 | `BatchFile.cfg` | files `a` and `b`, batches of up to 4 actions | holds | 121 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
@@ -955,6 +955,26 @@ of changed lines.
 |---|---|
 | `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` -> `recordEdit` moves the scene (`mapThrough`) and the identities (`applyChange`) through them |
 | `Runs`, `Coarse` | the changes `recordEdit` is given, with and without `lineChanges` |
+
+Each invariant was proved to bite with a mutation, run in TLC and then
+reverted. `Refine = FALSE`, the code before #65, breaks UnchangedKeepIds
+first, and SelectionStays with UnchangedKeepIds left out of the config:
+
+| Mutation | Breaks |
+|---|---|
+| a selection moved past the file | `TypeOK` |
+| a selection on an unchanged line moves down one | `SelectionStays` |
+| every line gets a fresh id | `UnchangedKeepIds` |
+| no line gets a fresh id | `ChangedGetNewIds` |
+
+Every invariant names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `SelectionStays` | `controller.test.ts`: SelectionStays: keeps the agent's selection on a line between the changed ones |
+| `UnchangedKeepIds` | `controller.test.ts`: UnchangedKeepIds: keeps the numbers of the lines between the changed ones known |
+| `ChangedGetNewIds` | `controller.test.ts`: ChangedGetNewIds: forgets the number of a changed line, so a batch has to read it again |
 
 ### `Rehearsal`: line identities across a rehearsal
 

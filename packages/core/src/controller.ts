@@ -407,7 +407,8 @@ export class Controller {
   /**
    * A change the programmer didn't make: by a tool, a formatter, or on disk. It interrupts if the
    * playing or queued batches edit the file, since they were planned against the text before it.
-   * Otherwise it's just reported, and the queued rehearsals follow it.
+   * Otherwise it's just reported, and the queued rehearsals follow it. A file changed
+   * on disk: specs/Reload.tla, `Reload`.
    */
   otherEdit(file: string, before: string, after: string, reported: Change[]): void {
     const s = this.activeSession()
