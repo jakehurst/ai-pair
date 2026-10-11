@@ -246,7 +246,7 @@ describe("relay", () => {
     ])
   })
 
-  it("hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
+  it("DroppedHandedBack: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67)", async () => {
     // The relay's answers to the agent, held while the test says so.
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
     const server = createServer(new EditorLink("/project/src", dir), "THE GUIDE", "/project/src")
@@ -278,7 +278,7 @@ describe("relay", () => {
     expect(again.text).toMatch(/may repeat/)
   })
 
-  it("delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
+  it("RepeatsMarked: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67)", async () => {
     const client = await connect()
     await call(client, "start")
     const abort = new AbortController()

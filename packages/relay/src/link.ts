@@ -141,6 +141,7 @@ export class EditorLink {
     const { folder } = findWindows(folders, this.dir)
     if (folder !== this.folder) {
       this.folder = folder
+      // specs/Wire.tla, `Close`: calls no longer go out on this socket; its close handler rejects its own.
       this.ws?.close()
       this.ws = null
     }
@@ -158,10 +159,12 @@ export class EditorLink {
     return { folder: here, root: roots.toSorted((a, b) => b.length - a.length)[0] ?? here }
   }
 
+  /** The agent's tool call (specs/Wire.tla, `Request`), sent on the open socket (`Send`). */
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     // A cancelled call's report may be on its way back, to be handed back with `return`. This call
-    // goes out after it, so the editor restores the report before it takes this call (#59). The socket
-    // may close meanwhile, so it is taken again after each wait; from there to `send`, nothing awaits.
+    // goes out after it, so the editor restores the report before it takes this call (#59; specs/Wire.tla,
+    // `Send` with WaitCancelled). The socket may close meanwhile, so it is taken again after each wait;
+    // from there to `send`, nothing awaits.
     let ws: WebSocket
     let cancelled: Set<Promise<void>>
     for (;;) {
@@ -171,7 +174,7 @@ export class EditorLink {
       await Promise.all(cancelled)
     }
     // An abort that fired before the listener below is added won't fire again (#29). A call never
-    // sent takes no report, so there is nothing to hand back.
+    // sent takes no report, so there is nothing to hand back (`Send` with CheckAbort).
     if (signal?.aborted) throw new RelayError("cancelled", "The call was cancelled.")
     const calls = this.pending.get(ws)!
     const id = this.nextId++
@@ -186,6 +189,7 @@ export class EditorLink {
         reject(new RelayError("no_editor", `Couldn't send to the editor: ${e instanceof Error ? e.message : String(e)}`))
       }
     })
+    // specs/Wire.tla, `Abort`: the relay handles the client's cancel of a call it sent.
     signal?.addEventListener(
       "abort",
       () => {
@@ -206,7 +210,8 @@ export class EditorLink {
 
   /**
    * Hands a report back to the editor, on the socket it came over, to be delivered with the next
-   * report, marked as one the agent may have seen: for a call it canceled after the relay answered (#67).
+   * report, marked as one the agent may have seen: for a call it canceled after the relay answered (#67;
+   * specs/Wire.tla, `Abort` with HandBackAnswered and MarkRepeats).
    */
   handBack(report: unknown): void {
     if (typeof report !== "object" || report === null) return
@@ -220,6 +225,7 @@ export class EditorLink {
 
   private connect(): Promise<WebSocket> {
     if (this.ws?.readyState === WebSocket.OPEN) return Promise.resolve(this.ws)
+    // specs/Wire.tla, `Open`: with no socket open, one attempt at a time.
     this.connecting ??= this.open().finally(() => {
       this.connecting = null
     })
@@ -261,7 +267,8 @@ export class EditorLink {
       ws.on("message", (data) => {
         const m = parseEditorMessage(data)
         if (!m) {
-          // Before the welcome, whatever is on this port isn't our editor. After it, drop the frame.
+          // Before the welcome, whatever is on this port isn't our editor. After it, drop the frame
+          // (specs/Wire.tla, `SendGarbage`).
           if (!welcomed) {
             reject(new RelayError("no_editor", "The editor's port answered with something that isn't a message."))
             ws.close()
@@ -269,6 +276,7 @@ export class EditorLink {
           return
         }
         if (m.type === "welcome") {
+          // specs/Wire.tla, `Welcome`: calls go out on this socket.
           welcomed = true
           this.ws = ws
           resolve(ws)
@@ -277,7 +285,7 @@ export class EditorLink {
         } else if (m.type === "result") {
           const p = settle(m.id)
           // The call returned before our cancellation reached the editor, so the agent will never
-          // see this report. Hand it back to be delivered with the next one.
+          // see this report. Hand it back to be delivered with the next one (specs/Wire.tla, `Reply`).
           if (p?.cancelled && REPORTING.has(p.tool)) ws.send(JSON.stringify({ type: "return", report: m.result }))
           else if (p && REPORTING.has(p.tool) && typeof m.result === "object" && m.result !== null) this.answeredOn.set(m.result, ws)
           p?.resolve(m.result)
@@ -288,6 +296,7 @@ export class EditorLink {
       ws.on("error", (e) => {
         if (!welcomed) reject(new RelayError("no_editor", `Couldn't connect to the editor: ${e.message}`))
       })
+      // specs/Wire.tla, `HandleClose`: a close rejects only this socket's calls (#3).
       ws.on("close", () => {
         // specs/Discovery.tla, `Disconnect`: the next call opens again.
         if (this.ws === ws) this.ws = null

@@ -108,8 +108,8 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
 
   // A cancel for a request the relay already answered: the SDK ignores it, and the agent's client
   // dropped the answer, unless it had taken it first (its abort listener sends a cancel either way).
-  // So the report is handed back, marked as one the agent may have seen (#67). The agent's next
-  // request comes after the cancel on the same stream, so the `return` goes out before it.
+  // So the report is handed back, marked as one the agent may have seen (#67; specs/Wire.tla, `Abort`).
+  // The agent's next request comes after the cancel on the same stream, so the `return` goes out before it.
   const connect = server.connect.bind(server)
   server.connect = async (transport) => {
     await connect(transport)

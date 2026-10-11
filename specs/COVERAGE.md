@@ -96,7 +96,7 @@ Code goes without a spec for one of these reasons:
 
 | File | Functions | Spec |
 |---|---|---|
-| `wire.ts` | `parseFrame`, `parseEditorMessage`, `parseRelayMessage` | `Wire` (`Garbage`) |
+| `wire.ts` | `parseFrame`, `parseEditorMessage`, `parseRelayMessage` | `Wire` (`SendGarbage`) |
 | | `aiPairHome`, `discoveryDir` | Pure |
 | `index.ts` | `actionKinds` and the `*Problem` checks | Pure; `validation.test.ts` |
 | `paths.ts` | `samePath`, `withinFolder` | Pure |

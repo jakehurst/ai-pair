@@ -153,12 +153,41 @@ earlier one (`RepeatsMarked`).
 |---|---|
 | `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
-| `ClientAbort`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
+| `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
 | `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer |
-| `Close`, `Closed` | `locate()` closing `this.ws`, or the editor's end closing; the `close` handler rejecting `Victims` |
+| `Close`, `HandleClose` | `locate()` closing `this.ws`, or the editor's end closing; the `close` handler rejecting `Victims` |
 | `Reply` | a `result` frame: `result`, or `return` for a call the relay marked cancelled |
-| `Garbage` | a frame that isn't a message (`parseEditorMessage`) |
+| `SendGarbage` | a frame that isn't a message (`parseEditorMessage`) |
+| `Finished` | nothing: the model's sockets are used up, or the relay crashed, and the run ends |
+
+Each invariant and property was proved to bite with a mutation of a copy of
+the model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Request` sets a call to a state outside `CallStates` | `TypeOK` |
+| `PerSocket = FALSE`, the code before #3 | `OwnCloseOnly` |
+| `GuardedParse = FALSE`, the code before #4 | `RelayStaysUp` |
+| `CheckAbort = FALSE`, the code before #29 | `NoReportLost` |
+| `MarkRepeats = FALSE` | `RepeatsMarked` |
+| `HandBackAnswered = FALSE`, the code before #67 | `DroppedHandedBack` |
+| no fairness on `Reply` | `CallsAnswered` |
+| `Finished` left out of `Next` | the deadlock check |
+| `WaitCancelled = FALSE`, the code before #59 | nothing here, with the same 24,714 states: what it is for is checked in `Controller` |
+
+Every invariant and property names the test that proves the code obeys it;
+the test's title carries its name:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `OwnCloseOnly` | `link.test.ts`: OwnCloseOnly: rejects a call only when the socket it was sent on closes |
+| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a frame that is not JSON; RelayStaysUp: fails to connect, without crashing, when a window answers with JSON that isn't a message; RelayStaysUp: drops a frame that is not JSON after the welcome |
+| `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
+| `RepeatsMarked` | `relay.test.ts`: RepeatsMarked: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
+| `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
+| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67) |
 
 ### `Panel`: the history
 
