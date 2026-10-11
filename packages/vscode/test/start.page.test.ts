@@ -24,7 +24,7 @@ const hidden = (): boolean => ui("start")?.hasAttribute("hidden") ?? false
 const noteHidden = (): boolean => ui("starting")?.hasAttribute("hidden") ?? false
 const click = (): void => void ui("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
 
-it("hides Start a session until the extension says it can start one (ClicksNeedButton)", () => {
+it("ClicksNeedButtonProp: hides Start a session until the extension says it can start one", () => {
   expect(hidden()).toBe(true)
   send({ type: "canStart", value: true })
   expect(hidden()).toBe(false)
@@ -32,27 +32,27 @@ it("hides Start a session until the extension says it can start one (ClicksNeedB
   expect(hidden()).toBe(true)
 })
 
-it("posts start when the button is clicked (RunsAreClicks)", () => {
+it("RunsAreClicks: posts start when the button is clicked", () => {
   send({ type: "canStart", value: true })
   ui("start")?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
   expect(posted).toContainEqual({ type: "start" })
 })
 
-it("shows the starting note at once when the button is clicked (Acknowledged)", () => {
+it("AcknowledgedProp: shows the starting note at once when the button is clicked", () => {
   send({ type: "canStart", value: true })
   expect(noteHidden()).toBe(true)
   click()
   expect(noteHidden()).toBe(false)
 })
 
-it("hides the starting note once the agent has exited, with no session (Settles)", () => {
+it("Settles: hides the starting note once the agent has exited, with no session", () => {
   send({ type: "canStart", value: true })
   click()
   send({ type: "startEnded" })
   expect(noteHidden()).toBe(true)
 })
 
-it("hides the starting note when a session starts, new or resumed (NoteUntilSession)", () => {
+it("NoteUntilSession: hides the starting note when a session starts, new or resumed", () => {
   for (const session of [{ active: true }, { active: true, resumed: true }]) {
     send({ type: "session", active: false, reason: "user" })
     send({ type: "canStart", value: true })

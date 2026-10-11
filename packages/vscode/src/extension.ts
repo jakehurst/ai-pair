@@ -131,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const launcher = writeLauncher(context.extensionPath)
   const starter = claudeStarter(launcher)
   panel.starter = starter
-  // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, Flip).
+  // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, `FlipSetUp`).
   const setUp = () => setUpAgent(launcher).then(() => panel.askStart())
   registerServerProvider(context)
 

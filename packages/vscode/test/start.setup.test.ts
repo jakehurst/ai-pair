@@ -64,7 +64,7 @@ const installCli = () => {
 const starterHere = () => claudeStarter(LAUNCHER, host, () => folders)
 const close = (t: FakeTerminal) => closeListeners.forEach((l) => l(t))
 
-it("offers the button only once Claude Code is set up, its CLI is here, and a folder is open (Grounded)", async () => {
+it("GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open", async () => {
   const starter = starterHere()
   expect(await starter.available()).toBe(false)
   installCli()
@@ -75,7 +75,7 @@ it("offers the button only once Claude Code is set up, its CLI is here, and a fo
   expect(await starter.available()).toBe(false)
 })
 
-it("runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command (RunsAreClicks, Starts, StaysOnPair, KeepsLocation)", async () => {
+it("RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command", async () => {
   const cli = installCli()
   setUp()
   void starterHere().start()
@@ -86,7 +86,7 @@ it("runs the CLI with the prompt in a terminal it never shows, once per start, w
   expect(executed).toEqual([])
 })
 
-it("starts no second agent while the first one's terminal is open, and starts again once it closes (OneAtATime, Closes)", async () => {
+it("OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes", async () => {
   installCli()
   setUp()
   const starter = starterHere()
@@ -98,7 +98,7 @@ it("starts no second agent while the first one's terminal is open, and starts ag
   expect(created).toHaveLength(2)
 })
 
-it("resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once (Settles)", async () => {
+it("Settles: resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once", async () => {
   const starter = starterHere()
   await starter.start()
   expect(created).toHaveLength(0)

@@ -40,9 +40,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   /**
    * Asks the starter whether a session can be started from here, and tells the page: for each new
-   * page, and again after Set Up Agent (specs/Start.tla, Ready and Flip with ReaskOnSetUp). Only the
-   * latest question's answer reaches the page, so a page replaced before its answer landed cannot
-   * set the button on its successor (DropStale).
+   * page, and again after Set Up Agent (specs/Start.tla, `LoadPage`, and `FlipSetUp` with ReaskOnSetUp).
+   * Only the latest question's answer reaches the page, so a page replaced before its answer landed
+   * cannot set the button on its successor (`Answer` with DropStale).
    */
   askStart(): void {
     const asked = ++this.asked
@@ -124,6 +124,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.html = panelHtml(view.webview.cspSource, style, script)
     view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
     view.onDidDispose(() => {
+      // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) this.view = undefined
       // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
       this.controller?.resume("reply")
@@ -149,6 +150,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showSpeed(this.speed.get())
         this.showReadingSpeed(this.readingSpeed.get())
         this.showSelection(this.selection.ref())
+        // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart()
         return
       case "speed":
@@ -205,8 +207,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command)
         return
       case "start":
-        // specs/Start.tla, Click: one run per click. Exit: the agent is done, and the page drops its note
-        // (Settles).
+        // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
+        // note (Settles).
         void this.starter?.start().then(() => this.send({ type: "startEnded" }))
         return
       case "openChange":

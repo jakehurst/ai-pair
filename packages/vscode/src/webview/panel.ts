@@ -367,17 +367,17 @@ function handle(e: ToPanel): void {
       replaying = false
       return
     case "canStart":
-      // specs/Start.tla, Answer: the button shows exactly what the extension answered.
+      // specs/Start.tla, `Answer`: the button shows exactly what the extension answered.
       ui.start.hidden = !e.value
       return
     case "startEnded":
-      // specs/Start.tla, Exit: the agent is done, session or not (Settles).
+      // specs/Start.tla, `Exit`: the agent is done, session or not (Settles).
       ui.starting.hidden = true
       return
     case "session":
       // specs/Panel.tla, `ChangeSession`: the band is filed, and a divider goes on top.
       if (e.active) {
-        // specs/Start.tla, AgentStart: a session clears the note (NoteUntilSession).
+        // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
         ui.starting.hidden = true
         if (e.suspended || e.resumed) {
           // The same session: its agent gone, or back (#25).
@@ -409,6 +409,7 @@ function handle(e: ToPanel): void {
         ui.idleTitle.textContent = e.reason === "disconnected" ? "The agent disconnected" : "Session ended"
         ui.idleSummary.innerHTML = e.summary ? rich(e.summary) : ""
         ui.idleText.textContent = "Ask your agent to pair again."
+        // specs/Start.tla, `EndSession`: the idle view, and its button, are back.
         setActive(false)
       }
       return
@@ -711,7 +712,7 @@ document.addEventListener("click", (e) => {
 
 // Start a session: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115).
 ui.start.addEventListener("click", () => {
-  // specs/Start.tla, Click: the note shows at once (Acknowledged).
+  // specs/Start.tla, `Click`: the note shows at once (AcknowledgedProp).
   ui.starting.hidden = false
   vscode.postMessage({ type: "start" })
 })

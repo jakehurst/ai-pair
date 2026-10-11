@@ -148,7 +148,7 @@ export function claudeStarter(
   // What `start` returns while the agent runs: resolved once its terminal closes (#118).
   let exited = Promise.resolve()
   let exit: (() => void) | undefined
-  // specs/Start.tla, Exit: the CLI exited, and its terminal closed with it.
+  // specs/Start.tla, `Exit`: the CLI exited, and its terminal closed with it.
   const closed = vscode.window.onDidCloseTerminal((t) => {
     if (t !== running) return
     running = undefined
@@ -157,12 +157,12 @@ export function claudeStarter(
   const cli = () => which(h, "claude", [path.join(h.home, ".local", "bin")])
   return {
     async available() {
-      // specs/Start.tla, Answer: Claude Code set up for the pair server, its CLI here, a folder open.
+      // specs/Start.tla, `Answer`: Claude Code set up for the pair server, its CLI here, a folder open.
       const claude = AGENTS.find((a) => a.id === "claude")
       return !!claude?.isSetUp(h, launcher) && !!cli() && folders().length > 0
     },
     async start() {
-      // specs/Start.tla, Click: one agent at a time (OneAgent), in a terminal never shown (InTerminal).
+      // specs/Start.tla, `Click`: one agent at a time (OneAgent), in a terminal never shown (InTerminal).
       const shellPath = cli()
       const cwd = folders()[0]
       if (running) return exited

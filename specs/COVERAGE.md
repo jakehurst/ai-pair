@@ -147,7 +147,7 @@ Code goes without a spec for one of these reasons:
 | | the rest | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
 | | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`Stored`) |
-| | asking the panel again after Set Up Agent | `Start` (`Flip`) |
+| | asking the panel again after Set Up Agent | `Start` (`FlipSetUp`) |
 | | the rest | Glue |
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |
 | `calibration.ts` | all | `Calibration` |
