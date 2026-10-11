@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.7
+
+-   The `Rehearsal` spec now covers a batch that is already playing when a
+    change by someone else interrupts the queue, such as a formatter on save:
+    the batch plays on and may complete, and `adopt` keeps its line identities
+    off the changed text (#151). A new test checks that `adopt` does. The specs
+    and their README say each property in words, not by its ID in #19. The
+    extension works the same.
+
 ## 0.6.6
 
 -   The `Serialize` spec says when a step returns as the code does: once its

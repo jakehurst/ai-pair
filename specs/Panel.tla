@@ -91,7 +91,7 @@ Spec == Init /\ [][Next]_vars
 
 --------------------------------------------------------------------------------
 
-\* S13: the history is in reverse order of when things happened.
+\* The history is in reverse order of when things happened.
 NewestFirst == \A i \in 1..(Len(history) - 1) : history[i] > history[i + 1]
 
 \* Every event is in the band or in the history. A panel that ignored events

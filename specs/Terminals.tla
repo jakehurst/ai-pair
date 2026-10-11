@@ -2,8 +2,8 @@
 (******************************************************************************)
 (* The agent's `run` commands in packages/vscode/src/terminal.ts: which       *)
 (* terminal each gets (`acquire`), waiting for shell integration, the command *)
-(* running, and what ends each wait. L6 and Terminals in #19. One run() call  *)
-(* at a time, as the player makes them.                                       *)
+(* running, and what ends each wait. Every run() call returns (#19). One      *)
+(* run() call at a time, as the player makes them.                            *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -225,7 +225,7 @@ NoReuseWhileBusy == ~reused
 FreedAfterEnd ==
     \A t \in TerminalIds : (cmd[t] = "ended" \/ state[t] = "closed") => ~busy[t]
 
-\* L6, for the command: every run() call returns. Code whose call waited
+\* For the command: every run() call returns. Code whose call waited
 \* forever would fail it, so it says something must happen.
 RunReturns == (call \in {"integration", "running"}) ~> (call = "returned")
 

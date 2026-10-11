@@ -168,7 +168,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S12: a change is attributed to the agent only if the agent made it, and a
+\* A change is attributed to the agent only if the agent made it, and a
 \* change the programmer made is attributed to the programmer, so it
 \* interrupts.
 RightAuthor == wrong = {}

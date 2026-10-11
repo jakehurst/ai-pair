@@ -5,7 +5,8 @@
 (* packages/core/src/controller.ts, and the places that pause and resume:     *)
 (* packages/vscode/src/panel.ts (Pause, Resume, the reply box's draft,        *)
 (* sending a reply, the turn button) and packages/vscode/src/editor.ts        *)
-(* (looking away). L3 and L4 in #19.                                          *)
+(* (looking away). With no interruption and no pause, every queued batch      *)
+(* plays, and once no pause reason is left, playback continues (#19).         *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -143,7 +144,7 @@ ResolvedOnce ==
     /\ resolved <= sleeps
     /\ (pending # NoSleep) => (resolved < sleeps)
 
-\* L4: once no pause reason is left and none comes back, a waiting sleep
+\* Once no pause reason is left and none comes back, a waiting sleep
 \* resolves. The programmer may pause for good, so the leads-to holds only
 \* under that hypothesis (6.29). Code that never resumed a waiting sleep would
 \* fail it, so it says something must happen.

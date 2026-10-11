@@ -1,7 +1,7 @@
 ---- MODULE Reload -------------------------------------------------------------
 (******************************************************************************)
-(* A file replaced on disk while it is open, as a git checkout does: S10 and  *)
-(* S11 in #19, for `otherEdit` and `recordEdit` in                            *)
+(* A file replaced on disk while it is open, as a git checkout does: line     *)
+(* identities and the agent's selection, for `otherEdit` and `recordEdit` in  *)
 (* packages/core/src/controller.ts, with the change VS Code reports. VS Code  *)
 (* reloads the document with one change from the first line that differs to   *)
 (* the last, unchanged lines between them included (measured: lines 2 and 5   *)
@@ -115,10 +115,10 @@ Spec == Init /\ [][Next]_vars
 
 --------------------------------------------------------------------------------
 
-\* S11: a selection on a line that didn't change stays on it.
+\* A selection on a line that didn't change stays on it.
 SelectionStays == (ghosts[orig] = orig) => (sel = orig)
 
-\* S10, for precision: a line that didn't change keeps its identity, so its
+\* For precision: a line that didn't change keeps its identity, so its
 \* number is still known.
 UnchangedKeepIds == \A l \in Lines : (ghosts[l] = l) => (ids[l] = OldId(l))
 

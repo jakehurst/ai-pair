@@ -315,22 +315,22 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S8: a call is rejected by a socket's close only if it was sent on that
+\* A call is rejected by a socket's close only if it was sent on that
 \* socket.
 OwnCloseOnly == \A c \in Calls : rejectedBy[c] \in {NoSocket, on[c]}
 
-\* S9: no frame from the other side ends the relay.
+\* No frame from the other side ends the relay.
 RelayStaysUp == relayUp
 
-\* L7: a call sent by the relay eventually gets a result or a rejection. A
+\* A call sent by the relay eventually gets a result or a rejection. A
 \* relay that never answered would fail it, so it says something must happen.
 CallsAnswered == \A c \in Calls : (call[c] \in Sent) ~> (call[c] \in Settled)
 
-\* S1 at the relay: no report is handed to a request the agent already
+\* At the relay: no report is handed to a request the agent already
 \* canceled.
 NoReportLost == \A c \in Calls : call[c] # "void"
 
-\* S1 at the agent, at least once: a report the client took and that is
+\* At the agent, at least once: a report the client took and that is
 \* handed back says, when delivered again, that it may repeat one already
 \* seen.
 RepeatsMarked ==
@@ -344,7 +344,7 @@ HandedBackOrEnded(c) ==
     \/ /\ on[c] # NoSocket
        /\ sock[on[c]] # "open"
 
-\* S1 at the agent: a report the client dropped is handed back to the editor,
+\* At the agent: a report the client dropped is handed back to the editor,
 \* unless the socket closed first. (A `read` takes no report; every call here
 \* is a report.)
 DroppedHandedBack ==

@@ -2,8 +2,8 @@
 (******************************************************************************)
 (* Which socket drives the window's session: `dispatch` and the `close`       *)
 (* handler in packages/core/src/bridge.ts, with the session in                *)
-(* packages/core/src/controller.ts. S5 in #19: a window has at most one       *)
-(* active session, and only its owner's socket can drive it.                  *)
+(* packages/core/src/controller.ts. A window has at most one active session,  *)
+(* and only its owner's socket can drive it.                                  *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -162,7 +162,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
-\* S5: an active session is owned by a socket that is open, so some agent can
+\* An active session is owned by a socket that is open, so some agent can
 \* drive it.
 OwnedByOpenSocket ==
     (session = "active") => (owner # NoSocket /\ sock[owner] = "open")

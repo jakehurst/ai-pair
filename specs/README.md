@@ -76,7 +76,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Terminals.cfg` | `MaxTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxChanges = 2` turn changes | holds | 538 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk | holds | 160 |
-| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxBatches = 2` batches, `MaxQueued = 2` queued | holds | 35,031 |
+| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxBatches = 2` batches, `MaxQueued = 2` queued | holds | 79,999 |
 | `BatchFile.cfg` | files `a` and `b`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE` | holds | 121 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
@@ -287,21 +287,25 @@ Every invariant names the test that proves the code obeys it:
 
 ### `Controller`: what reaches the agent
 
-`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. S1, at
-least once since #67: nothing reaches the agent twice in a report not marked
-`repeated` (`NoUnmarkedRepeat`), and everything reaches it (`BatchesDelivered`,
-`EventsDelivered`, `QuietDelivered`). S2 (`PlaysKnowingEvents`), S3
-(`PlaysAfterCompleted`), L1 (`BlockedReturns`: `Commit` is enabled whenever a
-call is blocked, as the `maxBlockMs` timer ends it), and L5 (`EndDelivered`).
-`RestoreRejected` is the fix for #28. `WaitForReturn` is the fix for #59: the
-relay sending a call only once every canceled call on the socket has settled,
-so a `return` reaches the editor before the next call. `RestoreEnded` is the fix
-for #60: `restore()` working on a session the programmer ended, and putting a
-closed one back. `MarkHeld` and `DrainHeld` fix two bugs this spec found, each
-needing two rejections held at once, which a cancel after an answer allows. Each
-held rejection now keeps its own repeat mark, where before only the first report
-after them was marked. And a session the programmer ended stays open until its
-held rejections are out, one per report, where before it closed with the first.
+`packages/core/src/controller.ts`, with `call` and `return` in `link.ts`. Every
+event and batch result reaches the agent exactly once, and since #67 at least
+once: nothing reaches the agent twice in a report not marked `repeated`
+(`NoUnmarkedRepeat`), and everything reaches it (`BatchesDelivered`,
+`EventsDelivered`, `QuietDelivered`). A batch planned without knowledge of an
+interrupting event never plays (`PlaysKnowingEvents`); a batch plays only if the
+one before it completed (`PlaysAfterCompleted`); every blocked call returns
+(`BlockedReturns`: `Commit` is enabled whenever a call is blocked, as the
+`maxBlockMs` timer ends it); and the programmer ending the session reaches the
+agent (`EndDelivered`). `RestoreRejected` is the fix for #28. `WaitForReturn` is
+the fix for #59: the relay sending a call only once every canceled call on the
+socket has settled, so a `return` reaches the editor before the next call.
+`RestoreEnded` is the fix for #60: `restore()` working on a session the
+programmer ended, and putting a closed one back. `MarkHeld` and `DrainHeld` fix
+two bugs this spec found, each needing two rejections held at once, which a
+cancel after an answer allows. Each held rejection now keeps its own repeat
+mark, where before only the first report after them was marked. And a session
+the programmer ended stays open until its held rejections are out, one per
+report, where before it closed with the first.
 
 | Spec | Code |
 |---|---|
@@ -725,12 +729,14 @@ Every invariant and property names the test that proves the code obeys it:
 
 ### `Actions`: what an interrupted batch reports as unplayed
 
-S14 in `actions` and `perform` in `packages/core/src/player.ts`. Each action is
-its steps between awaits, read from the code: awaits, checks of a sleep's or
-`confirm`'s result or of `notStarted`, and effects the programmer sees. An
-interrupt comes at any await. Two defenses keep S14. A `type` cut after a chunk
-returns only what's left of it (`RestOnly`), and a `run` interrupted while its
-command keeps running counts as played (`ConsumeRun`).
+The unplayed actions of an interrupted batch come back in order, and
+resubmitting them plays nothing twice: `actions` and `perform` in
+`packages/core/src/player.ts`. Each action is its steps between awaits, read
+from the code: awaits, checks of a sleep's or `confirm`'s result or of
+`notStarted`, and effects the programmer sees. An interrupt comes at any await.
+Two defenses keep that. A `type` cut after a chunk returns only what's left of
+it (`RestOnly`), and a `run` interrupted while its command keeps running counts
+as played (`ConsumeRun`).
 
 | Spec | Code |
 |---|---|
@@ -1199,12 +1205,13 @@ Every invariant and property names the test that proves the code obeys it:
 
 ### `Turns`: only talk during the programmer's turn
 
-S6 in `packages/core/src/player.ts`: `perform` checks the turn as each action
-starts, a turn change interrupts (`takeTurn`, `handBack` in `controller.ts`),
-and each action that edits checks for an interrupt after its awaits, before its
-effect. A batch may start at any time, from either turn, which is more than the
-controller allows. `DeleteChecks` is the fix for #49, which also let a `delete`
-take effect after the programmer took the turn.
+During the programmer's turn, only `say` and `point` take effect, in
+`packages/core/src/player.ts`: `perform` checks the turn as each action starts,
+a turn change interrupts (`takeTurn`, `handBack` in `controller.ts`), and each
+action that edits checks for an interrupt after its awaits, before its effect. A
+batch may start at any time, from either turn, which is more than the controller
+allows. `DeleteChecks` is the fix for #49, which also let a `delete` take effect
+after the programmer took the turn.
 
 | Spec | Code |
 |---|---|
@@ -1232,12 +1239,12 @@ Every invariant and property names the test that proves the code obeys it:
 
 ### `Reload`: a file changed on disk
 
-S10 and S11 for `otherEdit` and `recordEdit` in
-`packages/core/src/controller.ts`, with the change VS Code reports when it
-reloads a document from disk. Measured in an integration run, that is one change
-from the first line that differs to the last, unchanged lines included. `Refine`
-is the fix for #65: `lineChanges` in `diff.ts` splits it into one change per run
-of changed lines.
+Line identities, and the agent's selection staying on its text, through
+`otherEdit` and `recordEdit` in `packages/core/src/controller.ts`, with the
+change VS Code reports when it reloads a document from disk. Measured in an
+integration run, that is one change from the first line that differs to the
+last, unchanged lines included. `Refine` is the fix for #65: `lineChanges` in
+`diff.ts` splits it into one change per run of changed lines.
 
 | Spec | Code |
 |---|---|
@@ -1266,27 +1273,33 @@ Every invariant names the test that proves the code obeys it:
 
 ### `Rehearsal`: line identities across a rehearsal
 
-S10 across `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the
+A line number the agent was shown is accepted only while that line still has
+that number: `core/src/lines.ts`, `rehearsal.ts`, `controller.ts`, and the
 player's `knows`. Each line has a ghost, which line it really is, next to the
 tracker's id, and changes are whole lines inserted or deleted or an edit within
-a line, where `applyChange`'s rules are plain. Two defenses keep S10: a change
+a line, where `applyChange`'s rules are plain. Two defenses keep that: a change
 by others to a file the queue edits interrupts it (`OtherInterrupts`), and
 `adopt` takes the fork's ids only for a text that reads as in the fork
-(`AdoptChecksText`). Batches are queued, each rehearsed from the one before;
-the config bounds the queue. `ReadIsStart`: right after a read, the agent's next
-batch is checked against what it was shown. `ShareIds` is the fix for a bug
-this spec found: `followChange` gave a queued batch's fork its own id for a
-line a tool inserted, unlike the editor's id the agent was shown, so a line the
-agent had just read was refused. Now the fork drops its copy of the file's ids,
-and reads the editor's.
+(`AdoptChecksText`). An interrupt discards the batches still queued, but one
+already playing plays on and may complete, as when a formatter changes the file
+on save (#151); `AdoptChecksText` keeps that batch's fork ids off the changed
+text. Until a report says the queue was interrupted (`stale`), no batch is
+rehearsed, and `read` shows the editor's text. Batches are queued, each
+rehearsed from the one before; the config bounds the queue. `ReadIsStart`: right
+after a read, the agent's next batch is checked against what it was shown.
+`ShareIds` is the fix for a bug this spec found: `followChange` gave a queued
+batch's fork its own id for a line a tool inserted, unlike the editor's id the
+agent was shown, so a line the agent had just read was refused. Now the fork
+drops its copy of the file's ids, and reads the editor's.
 
 | Spec | Code |
 |---|---|
-| `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), else the editor's |
-| `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Start`), the batch played in memory |
+| `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), unless `stale`; else the editor's |
+| `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Start`), the batch played in memory; while `stale`, the batch is discarded unrehearsed |
 | `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a failure interrupts the queue |
-| `EditAsOther` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file, else each rehearsal follows it (`followChange`) |
+| `EditAsOther` | `otherEdit` or `userEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file (`interrupt`: the batches still queued are discarded, one already playing plays on, and `stale` is set), else each rehearsal follows it (`followChange`) |
 | `Accept` | the rehearsal's `knows` in `unseen`: the id the agent was shown at a number is the id there where the rehearsal starts |
+| `Report` | the report's `snapshot` clearing `stale`; `ready()` holds the report until a batch interrupted while playing has finished |
 
 Each invariant was proved to bite with a mutation of a copy of the model, run in
 TLC and then reverted:
@@ -1300,10 +1313,14 @@ TLC and then reverted:
 | `ShareIds = FALSE`, the code before this spec | `ReadIsStart` |
 | `OtherInterrupts = FALSE` | `ReadIsStart` |
 | `AdoptChecksText = FALSE`, with `OtherInterrupts = FALSE` | `OnePerLine` |
-| `AdoptChecksText = FALSE` alone | nothing: with `OtherInterrupts`, a change by others discards the playing batch too, so no batch plays on a text other than its fork's; in the code the playing batch can still complete (a formatter on save), which the model does not cover |
+| `AdoptChecksText = FALSE` alone | `OnePerLine`: a batch playing when a change by others interrupted the queue completes, and adopts its fork's ids for a text with a line more or fewer (#151) |
+| an interrupt discards the playing batch too, the spec before #151, with `AdoptChecksText = FALSE` | nothing: no batch then plays on a text other than its fork's, so that spec could not see what `AdoptChecksText` guards |
+| `Submit` queues a batch while `stale` | nothing here: `Controller`'s `PlaysKnowingEvents` checks that no batch is queued before the agent knows of an interrupt |
 
-Neither `OtherInterrupts = FALSE` nor `AdoptChecksText = FALSE` alone breaks
-`AcceptedOnlyForThatLine`; with both, `OnePerLine` breaks first.
+`OtherInterrupts = FALSE` alone does not break `AcceptedOnlyForThatLine`. With
+`AdoptChecksText = FALSE`, `OnePerLine` breaks first, and past it the model
+reads beyond the end of a sequence, so `AcceptedOnlyForThatLine` is not checked
+on its own there.
 
 Every invariant names the test that proves the code obeys it:
 
@@ -1312,7 +1329,7 @@ Every invariant names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `AcceptedOnlyForThatLine` | `controller.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
 | `IdsDistinct` | `lines.exhaustive.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
-| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines' |
+| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `units.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
 | `ReadIsStart` | `controller.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits |
 
 ### `Terminals`: running commands

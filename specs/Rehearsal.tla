@@ -4,8 +4,8 @@
 (* each queued batch's fork of it, `adopt` when a batch completes,            *)
 (* `followChange`, and the numbers the agent was shown (`seen`), in           *)
 (* core/src/lines.ts, core/src/rehearsal.ts, core/src/controller.ts and       *)
-(* core/src/player.ts. S10 in #19: a line number the agent was shown is       *)
-(* accepted only while that line still has it.                                *)
+(* core/src/player.ts. A line number the agent was shown is accepted only     *)
+(* while that line still has it.                                              *)
 (*                                                                            *)
 (* Each line has a ghost: which line it really is, kept through edits within  *)
 (* it and moved by lines inserted or deleted around it. Changes are whole     *)
@@ -77,9 +77,11 @@ VARIABLES
     others,     \* changes by others so far
     batches,    \* batches submitted so far
     next,       \* the counter all trackers share, and new ghosts
-    fresh       \* nothing changed since the agent's last read
+    fresh,      \* nothing changed since the agent's last read
+    stale       \* an interrupt came, and no report has said so yet (`stale`)
 
-vars == <<ghosts, ids, queue, seen, bad, others, batches, next, fresh>>
+vars ==
+    <<ghosts, ids, queue, seen, bad, others, batches, next, fresh, stale>>
 
 --------------------------------------------------------------------------------
 
@@ -94,6 +96,7 @@ TypeOK ==
     /\ batches \in Nat
     /\ next \in Nat
     /\ fresh \in BOOLEAN
+    /\ stale \in BOOLEAN
 
 \* The changes to a text of n lines.
 Ops(n) ==
@@ -154,6 +157,11 @@ Followed(k, o) ==
                               !.ids = Apply(from.ids, o, next + 2 + k),
                               !.ghosts = Apply(from.ghosts, o, next)]
 
+\* What an interrupt leaves of the queue: nothing, or the oldest batch, if it
+\* was already playing; `interrupt` discards only the batches still queued, and
+\* the playing one may go on to complete (#151).
+Interrupted == {<<>>, SubSeq(queue, 1, 1)}
+
 --------------------------------------------------------------------------------
 
 Init ==
@@ -166,19 +174,22 @@ Init ==
     /\ batches = 0
     /\ next = Len(FirstGhosts) + 1
     /\ fresh = FALSE
+    /\ stale = FALSE
 
 \* `read`: the text as the queued batches leave it, with the last one's ids
-\* (`saw` with its `after.lines`), if they edit the file; else the editor's,
-\* with its ids.
+\* (`saw` with its `after.lines`), if they edit the file and no interrupt is
+\* unreported (`planned`); else the editor's, with its ids.
 Read ==
-    /\ seen' = Shown(IF Planned THEN queue[Len(queue)] ELSE Editor)
+    /\ seen' = Shown(IF Planned /\ ~stale THEN queue[Len(queue)] ELSE Editor)
     /\ fresh' = TRUE
-    /\ UNCHANGED <<ghosts, ids, queue, bad, others, batches, next>>
+    /\ UNCHANGED <<ghosts, ids, queue, bad, others, batches, next, stale>>
 
 \* `step`: the rehearsal forks where the queue leaves off, and plays the batch,
 \* with change o, in memory. A line the batch inserts gets a fresh id in the
-\* fork, and is the line the real play will make.
+\* fork, and is the line the real play will make. While `stale`, the batch is
+\* discarded, unrehearsed, so nothing is queued.
 Submit(o) ==
+    /\ ~stale
     /\ queue' =
            Append(queue,
                   [op |-> o,
@@ -188,7 +199,7 @@ Submit(o) ==
     /\ batches' = batches + 1
     /\ next' = next + 2
     /\ fresh' = FALSE
-    /\ UNCHANGED <<ghosts, ids, seen, bad, others>>
+    /\ UNCHANGED <<ghosts, ids, seen, bad, others, stale>>
 
 \* The oldest batch plays its change on the editor, which tracks it (`apply`):
 \* a fresh id for an inserted line. Then `adopt` takes its fork's ids, if the
@@ -207,7 +218,7 @@ Play ==
         /\ queue' = Tail(queue)
         /\ next' = next + 1
         /\ fresh' = FALSE
-        /\ UNCHANGED <<seen, bad, others, batches>>
+        /\ UNCHANGED <<seen, bad, others, batches, stale>>
 
 \* Played on a text with fewer lines than it was planned for, the batch fails
 \* (a line it names isn't there): nothing is adopted, and the failure
@@ -217,29 +228,46 @@ FailPlay ==
     /\ Head(queue).op \notin BatchOps(Len(ghosts))
     /\ queue' = <<>>
     /\ fresh' = FALSE
+    /\ stale' = TRUE
     /\ UNCHANGED <<ghosts, ids, seen, bad, others, batches, next>>
 
 \* Someone else makes change o to the file. If a queued batch edits it, the
-\* queue is interrupted and discarded (`interrupt`). Otherwise each queued
+\* queue is interrupted (`interrupt`): the batches still queued are discarded,
+\* and the one playing, if any, plays on (#151). Otherwise each queued
 \* rehearsal follows it (`followChange`).
 EditAsOther(o) ==
     /\ ghosts' = Apply(ghosts, o, next)
     /\ ids' = Apply(ids, o, next + 1)
-    /\ queue' =
-           IF Planned
-           THEN (IF OtherInterrupts THEN <<>> ELSE queue)
-           ELSE [k \in 1..Len(queue) |-> Followed(k, o)]
+    /\ IF Planned /\ OtherInterrupts
+       THEN /\ queue' \in Interrupted
+            /\ stale' = TRUE
+       ELSE /\ queue' =
+                   IF Planned THEN queue
+                   ELSE [k \in 1..Len(queue) |-> Followed(k, o)]
+            /\ UNCHANGED stale
     /\ others' = others + 1
     /\ next' = next + 3 + Len(queue)
     /\ fresh' = FALSE
     /\ UNCHANGED <<seen, bad, batches>>
 
 \* The rehearsal of the agent's next batch checks number n it gives (`knows`,
-\* in `unseen`), and accepts it. The real play doesn't check again.
+\* in `unseen`), and accepts it. The real play doesn't check again. While
+\* `stale`, no batch is rehearsed, so nothing is accepted.
 Accept(n) ==
+    /\ ~stale
     /\ CanAccept(n)
     /\ bad' = (bad \/ (seen[n].ghost # Start.ghosts[n]))
-    /\ UNCHANGED <<ghosts, ids, queue, seen, others, batches, next, fresh>>
+    /\ UNCHANGED
+           <<ghosts, ids, queue, seen, others, batches, next, fresh, stale>>
+
+\* A report tells the agent about the interrupt (`stale = false` in its
+\* snapshot), once the batch that was playing has finished: `ready()` waits
+\* for it.
+Report ==
+    /\ stale
+    /\ queue = <<>>
+    /\ stale' = FALSE
+    /\ UNCHANGED <<ghosts, ids, queue, seen, bad, others, batches, next, fresh>>
 
 Next ==
     \/ Read
@@ -248,12 +276,13 @@ Next ==
     \/ FailPlay
     \/ \E o \in Ops(Len(ghosts)) : EditAsOther(o)
     \/ \E n \in DOMAIN seen : Accept(n)
+    \/ Report
 
 Spec == Init /\ [][Next]_vars
 
 --------------------------------------------------------------------------------
 
-\* S10: a number is accepted only for the line the agent was shown at it.
+\* A number is accepted only for the line the agent was shown at it.
 AcceptedOnlyForThatLine == ~bad
 
 \* The editor's LineIds has one identity for each line of the text.
@@ -265,9 +294,10 @@ IdsDistinct ==
     /\ \A k \in 1..Len(queue) : Distinct(queue[k].ids)
 
 \* Right after a read, the agent's next batch is checked against what it was
-\* shown: a line it was just shown is accepted at its number. Code that
-\* refused one would fail it, so it says something must happen.
-ReadIsStart == fresh => (\A n \in DOMAIN seen : CanAccept(n))
+\* shown, once no interrupt is unreported: a line it was just shown is accepted
+\* at its number. Code that refused one would fail it, so it says something
+\* must happen.
+ReadIsStart == (fresh /\ ~stale) => (\A n \in DOMAIN seen : CanAccept(n))
 
 \* The lines, the changes by others, the batches, and the queue are bounded
 \* only so that the model is finite (6.8). Each bound prunes exactly the
