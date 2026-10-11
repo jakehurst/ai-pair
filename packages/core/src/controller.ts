@@ -1,7 +1,7 @@
 // The protocol state machine: sessions, the batch queue, and reports. Playing a batch is player.ts.
 // See PROTOCOL.md for the rules implemented here.
 
-import type { Action, BatchResult, Event, Excerpt, FileContent, Passage, Report, Turn } from "@ai-pair/protocol"
+import type { Action, BatchResult, Event, Excerpt, FileContent, Passage, PauseReason, Report, Turn } from "@ai-pair/protocol"
 import { CURSOR_MARKER, ToolError } from "@ai-pair/protocol"
 import { fileDiff, lineChanges } from "./diff"
 import { LineIds, type Sighting } from "./lines"
@@ -43,6 +43,19 @@ type EditEvent = { kind: "edit"; file: string; by: "programmer" | "other"; diff?
  */
 function interrupting(e: PendingEvent): boolean {
   return e.kind !== "edit" || e.by === "programmer" || e.interrupted === true
+}
+
+/** A report in one log line: its batches, events, flags, and size (#149). */
+function describeReport(report: Report): string {
+  const parts = [
+    `batches [${report.batches.map((b) => `${b.id} ${b.status}`).join(", ")}]`,
+    `events [${report.events.map((e) => (e.kind === "edit" ? `edit ${e.file}` : e.kind)).join(", ")}]`,
+  ]
+  if (report.waiting) parts.push("waiting")
+  if (report.paused) parts.push(`paused (${report.paused.join(", ")})`)
+  if (report.rejected) parts.push(`rejected at action ${report.rejected.index}: ${report.rejected.error.kind}`)
+  parts.push(`${JSON.stringify(report).length} chars`)
+  return parts.join(", ")
 }
 
 const UNANCHORED =
@@ -128,12 +141,14 @@ export class Controller {
   private openCalls = 0
   private chain: Promise<unknown> = Promise.resolve()
   private nextBatchId = 1
-  private pauseReasons = new Set<string>()
+  private pauseReasons = new Set<PauseReason>()
   private speed = 1
   private readingSpeed = 1
   private lastPosted = ""
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void
+  /** Where the session's interactions are logged: statuses, batches, pauses, interrupts, edits, reports (#149). */
+  trace?: (line: string) => void
 
   constructor(
     private readonly editor: EditorPort,
@@ -168,6 +183,7 @@ export class Controller {
         allowedCommands: new Set(),
       }
       this.open(task, scene)
+      this.trace?.(`session started${task ? `: ${task}` : ""}`)
       this.panel.post({ type: "session", active: true, task, ...(rules?.length ? { rules } : {}) })
       this.render()
       return { batches: [], events: [], turn: scene.turn }
@@ -180,6 +196,7 @@ export class Controller {
    */
   private resumeSession(s: Session, rules?: string[]): Promise<Report> {
     s.suspended = false
+    this.trace?.("session resumed")
     s.seen = new Map()
     s.seenCursor = undefined
     this.panel.post({ type: "session", active: true, task: s.task, resumed: true, ...(rules?.length ? { rules } : {}) })
@@ -257,6 +274,7 @@ export class Controller {
     }
     const s = this.open(saved.task, scene)
     s.suspended = true
+    this.trace?.("session revived after a reload, suspended")
     s.finished = [...saved.finished]
     s.events = [...saved.events]
     // specs/Resume.tla, `Reload`: the replayed history may end with the session live (#138).
@@ -283,6 +301,7 @@ export class Controller {
       const batch: Batch = { id: this.nextBatchId++, actions, state: "queued", after: rehearsal?.after }
       if (current) {
         s.queue.push(batch)
+        this.trace?.(`batch ${batch.id} queued: ${actions.length} actions`)
         if (anchor?.anchored) s.anchorNeeded = false
         this.kick(s)
       } else {
@@ -459,6 +478,7 @@ export class Controller {
     if (!s.baselines.has(file)) {
       s.baselines.set(file, before)
       s.events.push({ kind: "edit", file, by })
+      this.trace?.(`edit ${file} by ${by}`)
     } else if (by === "programmer") {
       const pending = s.events.find((e): e is EditEvent => e.kind === "edit" && e.file === file && e.diff === undefined)
       if (pending) pending.by = "programmer"
@@ -531,12 +551,14 @@ export class Controller {
     // Nothing plays without its agent: what's queued is discarded, and reported once it's back.
     this.interrupt(s)
     s.suspended = true
+    this.trace?.("session suspended: the agent disconnected")
     this.panel.post({ type: "session", active: true, task: s.task, suspended: true })
     this.update()
   }
 
   /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
-  pause(reason = "user"): void {
+  pause(reason: PauseReason = "user"): void {
+    if (!this.pauseReasons.has(reason)) this.trace?.(`pause ${reason}`)
     this.pauseReasons.add(reason)
     this.session?.timeline.pause()
     this.render()
@@ -547,9 +569,10 @@ export class Controller {
    * `reveal`: bring the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
    * `Reply`, issue 125).
    */
-  resume(reason?: string, { reveal = true }: { reveal?: boolean } = {}): void {
+  resume(reason?: PauseReason, { reveal = true }: { reveal?: boolean } = {}): void {
     if (this.pauseReasons.size === 0) return
     const lookedAway = this.pauseReasons.has("away")
+    if (reason === undefined || this.pauseReasons.has(reason)) this.trace?.(`resume ${reason ?? "all"}`)
     if (reason === undefined) this.pauseReasons.clear()
     else this.pauseReasons.delete(reason)
     if (this.pauseReasons.size > 0) return
@@ -689,6 +712,7 @@ export class Controller {
     if (rehearsed.code) rejected.code = rehearsed.code
     for (const sighting of rehearsal.sightings) this.saw(s, rehearsal.after.lines, sighting)
     const report = { ...this.snapshot(s, undefined, false), rejected }
+    this.trace?.(`report to step: ${describeReport(report)}`)
     this.render()
     return this.withCursor(s, report)
   }
@@ -698,6 +722,7 @@ export class Controller {
     const error = { kind: "unanchored" as const, message: UNANCHORED }
     const rejected = { index, action: actions[index - 1]!, error }
     const report = { ...this.snapshot(s, undefined, false), rejected }
+    this.trace?.(`report to step: ${describeReport(report)}`)
     this.render()
     return this.withCursor(s, report)
   }
@@ -803,6 +828,7 @@ export class Controller {
     const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected
     if (call.kind === "listen" && report.waiting && empty) this.startGrace()
     this.render()
+    this.trace?.(`report to ${call.kind}: ${describeReport(report)}`)
     // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
     // `Answer` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
     void this.withCursor(s, report).then(call.resolve, () => call.resolve(report))
@@ -909,6 +935,8 @@ export class Controller {
     const b = submitted
     if (b && b.state !== "done") report.submitted = { id: b.id, status: b.state }
     if (waiting) report.waiting = true
+    // The agent's batches are held: it's told why, so it can say so or wait (#149).
+    if (this.pauseReasons.size > 0) report.paused = [...this.pauseReasons]
     if (s.mayRepeat) report.repeated = true
     s.mayRepeat = false
     // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
@@ -921,6 +949,7 @@ export class Controller {
   }
 
   private close(s: Session): void {
+    this.trace?.("session closed")
     if (this.session === s) this.session = null
     s.timeline.interrupt()
     clearTimeout(s.navigatorTimer)
@@ -936,12 +965,16 @@ export class Controller {
     batch.state = "done"
     batch.result = { id: batch.id, status: "discarded", unplayed: batch.actions }
     s.finished.push(batch.result)
+    this.trace?.(`batch ${batch.id} discarded`)
   }
 
   /** Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and `EndSession`).
    * A batch already playing plays on and may complete (specs/Rehearsal.tla, `Interrupted`, #151). */
   private interrupt(s: Session): void {
     s.stale = true
+    const discarded = s.queue.filter((b) => b.state === "queued").map((b) => b.id)
+    const playing = s.queue.find((b) => b.state === "playing")
+    this.trace?.(`interrupt: discarding [${discarded.join(", ")}]${playing ? `, batch ${playing.id} plays on` : ""}`)
     for (const b of s.queue) if (b.state === "queued") this.discard(s, b)
     s.queue = s.queue.filter((b) => b.state !== "done")
     s.timeline.interrupt()
@@ -976,6 +1009,7 @@ export class Controller {
         // specs/Serialize.tla, `Play`: batches finish in queue order.
         batch.state = "done"
         batch.result = result
+        this.trace?.(`batch ${batch.id} ${result.status}`)
         s.queue = s.queue.filter((b) => b !== batch)
         s.finished.push(result)
         // specs/Rehearsal.tla, `FailPlay`: a batch that didn't complete interrupts the queue behind it.
@@ -993,6 +1027,7 @@ export class Controller {
     const head = s.queue[0]
     if (head?.state !== "queued") return
     head.state = "playing"
+    this.trace?.(`batch ${head.id} playing`)
     s.timeline.reset()
   }
 
@@ -1043,6 +1078,7 @@ export class Controller {
     const key = `${state}/${s.scene.turn}/${paused}`
     if (key === this.lastPosted) return
     this.lastPosted = key
+    this.trace?.(`status ${state}, ${s.scene.turn}'s turn${paused ? ", paused" : ""}`)
     this.panel.post({ type: "state", state, turn: s.scene.turn, paused })
   }
 }

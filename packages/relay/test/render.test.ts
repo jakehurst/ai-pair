@@ -200,4 +200,10 @@ describe("edits with no net change", () => {
       "The programmer edited a.ts, then changed it back: no net change.\n\nA tool, a formatter, or something on disk edited b.ts, then changed it back: no net change.",
     )
   })
+
+  it("says playback is paused, and why, before saying nothing has happened (#149)", () => {
+    const text = renderReport(report({ waiting: true, paused: ["away", "reply"] }), "listen")
+    expect(text).toMatch(/Playback is paused: the programmer is looking at another file.*; the programmer is typing a reply\./)
+    expect(text.indexOf("Playback is paused")).toBeLessThan(text.indexOf("Nothing has happened yet"))
+  })
 })

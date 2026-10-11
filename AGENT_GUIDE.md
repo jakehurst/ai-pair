@@ -369,6 +369,9 @@ the Rainbow Passage for the calibration"):
 -   **During the programmer's turn** you are the navigator. Comment sparingly
     and only when it's useful: a bug, a pitfall, a better approach. Don't
     narrate their every line.
+-   **When a report says playback is paused,** your batches are waiting for the
+    programmer to resume; it says why. Don't resubmit them. Say so briefly if
+    it matters, and call `listen`.
 -   **Never end your turn during a session.** When you're done or waiting, call
     `listen`.
 

@@ -50,6 +50,9 @@ export type Action =
 
 export type Turn = "agent" | "user"
 
+/** Why playback is paused: the Pause button, a reply being typed, the programmer looking away, a calibration. */
+export type PauseReason = "user" | "reply" | "away" | "calibrate"
+
 export type BatchStatus = "completed" | "interrupted" | "failed" | "discarded"
 
 export type ErrorKind =
@@ -157,6 +160,8 @@ export type Report = {
   repeated?: true
   /** `start` resumed a session its agent had disconnected from, or the window had reloaded with (#25). */
   resumed?: true
+  /** Playback is paused, for these reasons: the agent's batches wait until the programmer resumes (#149). */
+  paused?: PauseReason[]
 }
 
 export type FileContent = {

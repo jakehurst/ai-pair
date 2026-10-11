@@ -2121,3 +2121,40 @@ describe("listen grace (specs/ListenGrace.tla)", () => {
     expect(editor.state).toBe("thinking")
   })
 })
+
+describe("pauses and the log (#149)", () => {
+  it("tells the agent playback is paused, and why, until the programmer resumes", async () => {
+    const { controller } = setup({ "a.ts": "" }, { maxBlockMs: 1000 })
+    await controller.start()
+    controller.pause("away")
+    const held = await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }]))
+    expect(held.paused).toEqual(["away"])
+    controller.resume("away")
+    const report = await until(controller.listen())
+    expect(report.paused).toBeUndefined()
+  })
+
+  it("logs the session, each pause and resume once, each batch, and each report with its size", async () => {
+    const { controller } = setup({ "a.ts": "" })
+    const lines: string[] = []
+    controller.trace = (line) => lines.push(line)
+    await controller.start()
+    controller.pause("reply")
+    controller.pause("reply")
+    controller.resume()
+    await until(controller.step([{ move: { file: "a.ts", line: 1, to: "line_end" } }, { type: `x${CURSOR_MARKER}` }]))
+    await until(controller.step([]))
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        "session started",
+        "pause reply",
+        "resume all",
+        "batch 1 queued: 2 actions",
+        "batch 1 playing",
+        "batch 1 completed",
+      ]),
+    )
+    expect(lines.filter((line) => line === "pause reply")).toHaveLength(1)
+    expect(lines).toContainEqual(expect.stringMatching(/^report to step: batches \[1 completed\], events \[\], \d+ chars$/))
+  })
+})

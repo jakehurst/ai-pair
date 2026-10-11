@@ -142,9 +142,11 @@ Rules:
 During the agent's turn, the programmer's view **follows the agent cursor**, so
 every `move` is visible to them, or, right after a `point`, the pointed code.
 
-Playback pauses when the programmer presses Pause, navigates away, or starts
-typing a reply, until they resume. **Pausing is not an event**: the agent isn't
-told, its blocked call just waits longer (subject to `MAX_BLOCK`).
+Playback pauses when the programmer presses Pause, navigates away, starts typing
+a reply, or calibrates their reading speed, until they resume. **Pausing is not
+an event**: it wakes no call, and a blocked call just waits longer (subject to
+`MAX_BLOCK`). But every report made while playback is paused says so, with the
+reasons (`paused`), so the agent knows its batches are held (#149).
 
 ## Tools
 
@@ -520,6 +522,7 @@ type Report = {
   waiting?: true              // returned due to MAX_BLOCK
   repeated?: true             // part of it may repeat a report the agent saw: a call it canceled had returned (#67)
   resumed?: true              // start only: it resumed a suspended session (#25)
+  paused?: ("user" | "reply" | "away" | "calibrate")[]  // playback is paused, for these reasons (#149)
 }
 
 type BatchResult = {
