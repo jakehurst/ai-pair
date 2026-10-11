@@ -222,6 +222,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const entry: OwnEdit = { offset, deleteLength, text }
     const pending = this.own.get(file) ?? []
     this.own.set(file, pending)
+    // specs/EditorAdapter.tla, `Edit`: the entry is in `own` before VS Code applies the edit.
     pending.push(entry)
     try {
       if (editor) {
@@ -238,6 +239,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         if (!(await vscode.workspace.applyEdit(edit))) throw new Error("The edit was rejected.")
       }
     } finally {
+      // `ResolveEdit`: the entry goes, if its event didn't take it.
       const i = pending.indexOf(entry)
       if (i !== -1) pending.splice(i, 1)
     }
@@ -247,13 +249,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const doc = this.openDocument(file)
     if (!doc?.isDirty) return
     // First a round trip to the main thread: its answer comes after every change event VS Code sent
-    // before it, so a change made before this save is handled before `saving` says otherwise (#40).
+    // before it, so a change made before this save is handled before `saving` says otherwise (#40):
+    // specs/EditorAdapter.tla, `StartSave`.
     await vscode.workspace.fs.stat(doc.uri)
     this.saving.add(file)
     try {
+      // The save participants run (`RunParticipant`, `FinishParticipants`), then the file is written.
       // A save that fails, say because the file on disk is newer, resolves to false instead of throwing.
       if (!(await doc.save())) throw new Error("the editor didn't save it; the file on disk may have changed")
     } finally {
+      // `FinishSave`: save() resolves after every change event before it.
       this.saving.delete(file)
     }
   }
@@ -351,6 +356,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       .toSorted((a, b) => b.rangeOffset - a.rangeOffset)
       .map((c) => ({ offset: c.rangeOffset, deleteLength: c.rangeLength, text: c.text }))
 
+    // specs/EditorAdapter.tla, `Handle`: the agent's edit in flight, or else `byProgrammer` decides.
     const pending = this.own.get(file)
     if (pending && isOwnEdit(changes, pending[0])) {
       pending.shift()

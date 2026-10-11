@@ -287,14 +287,32 @@ before them: one channel, in order.
 
 | Spec | Code |
 |---|---|
-| `AgentEdit`, `AgentResolved` | `edit()`: the entry in `own`, VS Code applying it, `finally` |
-| `Programmer` | a keystroke: its change event is queued for the extension host |
-| `SaveStart`, `Participant`, `ParticipantsDone`, `SaveDone` | `save()`: the round trip, `saving`, the save participants (format on save), the write |
+| `Edit`, `ResolveEdit` | `edit()`: the entry in `own`, VS Code applying it, `finally` |
+| `Type` | a keystroke: its change event is queued for the extension host |
+| `StartSave`, `RunParticipant`, `FinishParticipants`, `FinishSave` | `save()`: the round trip, `saving`, the save participants (format on save), the write |
 | `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
 
 A keystroke made while the save participants run can't be told from their edits,
 since VS Code doesn't say who made a change. The spec allows that one wrong
 attribution by name (`"programmer during save"`).
+
+Each invariant and property was proved to bite with a mutation of a copy of the
+model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `ResolveEdit` leaves `own` in a fourth phase | `TypeOK` |
+| `FlushBeforeSave = FALSE`, the code before #40 | `RightAuthor` |
+| `onChange` never matches the agent's own edit | `RightAuthor` |
+| `onChange` never runs | `ChangesHandled` |
+| `Handle` without fairness | `ChangesHandled` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `RightAuthor`, `ChangesHandled` | `integration.ts`, in VS Code: RightAuthor, ChangesHandled: changes by others are reported as theirs; RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's |
 
 ### `FollowMode`: our own navigation against looking away
 

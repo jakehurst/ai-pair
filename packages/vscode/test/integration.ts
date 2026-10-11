@@ -139,7 +139,7 @@ export async function run(): Promise<void> {
   )
   assert.ok((await buffer("tool.txt")).endsWith("abc\nend"))
   await c.end()
-  console.log("changes by others are reported as theirs")
+  console.log("RightAuthor, ChangesHandled: changes by others are reported as theirs")
 
   // A keystroke just before the agent saves is the programmer's, even though its change event is
   // handled while the save runs (#40). The test's own edit stands in for the keystroke.
@@ -157,7 +157,7 @@ export async function run(): Promise<void> {
     ["race.txt programmer"],
   )
   await c.end()
-  console.log("a keystroke just before a save is the programmer's")
+  console.log("RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's")
 
   // Our own move to another file doesn't pause playback, however long VS Code takes to show it (#56).
   // With no window after our navigation, only the hold while show() awaits covers it.
