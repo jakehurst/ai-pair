@@ -18,7 +18,7 @@ function texts(max: number): string[] {
 const lineCount = (t: string) => t.split("\n").length
 
 it(
-  "gives each line of the result one identity, never one twice, and keeps the untouched lines'",
+  "OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'",
   () => {
     let cases = 0
     for (const text of texts(5)) {

@@ -867,6 +867,27 @@ Each is a module of `ASSUME`s alone, with a config that only gives the
 constants (the guide's 8.7, item 6): TLC checks the `ASSUME`s and explores no
 states.
 
+#### `LineIdentity`
+
+Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted;
+each mutation broke only its own:
+
+| Mutation | Breaks |
+|---|---|
+| the id of the line after the change is dropped | `OnePerLine` |
+| every fresh id is 100 | `Distinct` |
+| the lines before the change get new ids | `Untouched` |
+| a line edited within itself gets a new id | `WithinALine` |
+| with a prefix, the id stays on the line after the break | `BreakAtEnd` |
+| at a line's start, the id stays on the first line | `BreakAtStart` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines' |
+| `Distinct`, `Untouched`, `WithinALine`, `BreakAtEnd`, `BreakAtStart` | the same test |
+
 #### `Typing`
 
 Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
