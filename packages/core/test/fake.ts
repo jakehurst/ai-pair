@@ -1,6 +1,6 @@
 import * as nodePath from 'node:path';
 import { expect, vi } from 'vitest';
-import { withinFolder } from '@ai-pair/protocol';
+import { withinFolder, type Action } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
 import { Controller, isSavedSession, type SavedSession } from '../src/controller';
 import {
@@ -19,6 +19,9 @@ import {
 
 /** `/project` in this platform's form (`C:\project` on Windows), as the controller resolves it. */
 const ROOT = nodePath.resolve('/project');
+
+/** A move to the end of the first line of `a.ts`. */
+export const MOVE_TO_A: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
 
 /** An editor in memory: files as strings, a cursor, and a record of what the controller asked. */
 export class FakeEditor implements EditorPort {

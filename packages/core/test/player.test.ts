@@ -6,10 +6,7 @@ import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
 import { LineIds } from '../src/lines';
 import { Player, spanText, transformScene, type Scene } from '../src/player';
 import { instant } from '../src/timeline';
-import { advance, containing, FakeEditor, FakePanel, setup, testConfig, until } from './fake';
-
-/** A move to the end of the first line of `a.ts`. */
-const MOVE_TO_A: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
+import { advance, containing, FakeEditor, FakePanel, MOVE_TO_A, setup, testConfig, until } from './fake';
 
 /** Returns a scene whose cursor is at `offset` in `file`. */
 function sceneWithCursor(file: string, offset: number): Scene {

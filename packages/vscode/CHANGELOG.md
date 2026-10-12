@@ -14,8 +14,13 @@
     first had already run, an `?? undefined`, a lookup of an event that always
     exists, a `default` after every kind of call, and a queued batch typed as
     maybe lacking its rehearsal. `Player` takes a `PlayerEditor`, an
-    `EditorPort` without the three methods only the controller calls. The
-    extension works the same.
+    `EditorPort` without the three methods only the controller calls.
+-   A `move`, `select`, or `point` whose place is not an object, such as
+    `{ move: 5 }`, is now refused by name in `fieldsProblem`, with the fields
+    the place takes. The player used to refuse it only by accident, with a
+    TypeError, in a check that the unit work removed as redundant; the
+    relay's schema already refused it. `validation.test.ts` gains the cases.
+    The extension otherwise works the same.
 
 ## 0.7.1
 

@@ -2,13 +2,10 @@
 // under a call or a batch, a player or editor that fails, and a report restored by hand (specs/Controller.tla, specs/Resume.tla).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CURSOR_MARKER, type Action, type Report } from '@ai-pair/protocol';
+import { CURSOR_MARKER, type Report } from '@ai-pair/protocol';
 import { LineIds } from '../src/lines';
 import { Player } from '../src/player';
-import { advance, containing, setup, testConfig, track, until } from './fake';
-
-/** A move to the end of the first line of `a.ts`. */
-const MOVE_TO_A: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
+import { advance, containing, MOVE_TO_A, setup, testConfig, track, until } from './fake';
 
 /** A report with nothing in it. */
 const EMPTY_REPORT: Report = { batches: [], events: [], turn: 'agent' };
@@ -250,6 +247,7 @@ describe('a restored report', () => {
   it('reports an edit without a diff as one that changed nothing if the programmer made it, and leaves it out if not', async () => {
     const { controller } = setup();
     await controller.start();
+    // The report is not a Report on purpose: the relay does not check what it hands back.
     // oxlint-disable-next-line typescript/no-unsafe-argument
     controller.restore(JSON.parse(REPORT_WITHOUT_DIFFS));
     const report = await until(controller.listen());

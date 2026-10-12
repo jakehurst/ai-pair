@@ -22,6 +22,13 @@ const places = {
     { before: 'x' },
     { to: 'line_end', extra: 1 },
     { line: '1', to: 'line_end' },
+    5,
+    'x',
+    true,
+    [],
+    // A JSON `null`, as an agent could send.
+    // oxlint-disable-next-line unicorn/no-null
+    null,
   ],
   span: [
     { text: 'x' },
@@ -36,6 +43,13 @@ const places = {
     { text: 5 },
     { text: 'x', extra: 1 },
     { line: -1, text: 'x' },
+    5,
+    'x',
+    true,
+    [],
+    // A JSON `null`, as an agent could send.
+    // oxlint-disable-next-line unicorn/no-null
+    null,
   ],
   type: [`x${CURSOR_MARKER}`, 'x', `${CURSOR_MARKER}${CURSOR_MARKER}`, 5, [`x${CURSOR_MARKER}`], ''],
 };

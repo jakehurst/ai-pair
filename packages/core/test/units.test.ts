@@ -355,7 +355,7 @@ describe('timeline', () => {
     expect(results).toEqual([true, false]);
   });
 
-  it('ResumeContinues: leaves a sleep that was never paused on its own deadline', async () => {
+  it('leaves a sleep that was never paused on its own deadline when it is resumed', async () => {
     const timeline = new Timeline(/* paused= */ false);
     const results: boolean[] = [];
     void timeline.sleep(sleepMs).then((completed) => {
