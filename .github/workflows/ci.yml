@@ -42,8 +42,18 @@ jobs:
       - run: npm run lint:tla
       - run: npm run typecheck
       - run: npm run test:coverage
-      # kcov traces bash line by line, for the shell scripts' tests.
-      - run: sudo apt-get install -y kcov
+      # kcov traces bash line by line, for the shell scripts' tests. Ubuntu 24.04 has no package
+      # and the release has no binary, so it is built from the v43 source, checked against its SHA-256.
+      - name: Build kcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils-dev libssl-dev libcurl4-openssl-dev libelf-dev libstdc++-12-dev zlib1g-dev libdw-dev libiberty-dev
+          curl -sSL -o "$RUNNER_TEMP/kcov.tar.gz" https://github.com/SimonKagstrom/kcov/archive/refs/tags/v43.tar.gz
+          echo "4cbba86af11f72de0c7514e09d59c7927ed25df7cebdad087f6d3623213b95bf  $RUNNER_TEMP/kcov.tar.gz" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/kcov.tar.gz" -C "$RUNNER_TEMP"
+          cmake -S "$RUNNER_TEMP/kcov-43" -B "$RUNNER_TEMP/kcov-build" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/kcov-build" --parallel
+          sudo cmake --install "$RUNNER_TEMP/kcov-build"
       - run: npm run test:shell:coverage
       - uses: actions/upload-artifact@v4
         with:
