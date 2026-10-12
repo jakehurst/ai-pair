@@ -9,3 +9,7 @@ packages/vscode/LICENSE
 coverage/
 # VS Code, downloaded for the integration test on CI.
 .vscode-test/
+# Playwright's results and the Swift package's build.
+test-results/
+playwright-report/
+.build/

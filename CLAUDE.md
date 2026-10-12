@@ -158,11 +158,25 @@ Set by Justine on 2026-10-07.
         (`require-await`).
     -   `COVERAGE.md` holds every source file's coverage in one table. Each
         coverage run rewrites its own column through
-        `scripts/coverage_report.ts`: `npm run test:coverage` the unit
-        column, `npm run test:integration:coverage` the integration column,
-        `npm run coverage:tla` the TLC column. Run `npm run coverage` and
-        commit the file with a change that moves the numbers (set by Justine
-        on 2026-10-11).
+        `scripts/coverage_report.ts`: `npm run test:coverage` the unit and
+        CSS columns, `npm run test:integration:coverage` the integration
+        column, `npm run coverage:tla` the TLC column,
+        `npm run test:swift:coverage` the Swift column, and
+        `npm run test:shell:coverage` the Shell column, on Linux only: on
+        macOS, kcov's bash tracing rides on stderr, which bats captures, so CI's
+        check job is where that column fills; its COVERAGE.md is in the job's
+        artifact. Run `npm run coverage` and commit the file with a change that
+        moves the numbers (set by Justine on 2026-10-11).
+    -   Every file type with a test tool has tests (set by Justine on
+        2026-10-11): a shell script gets a bats test in `scripts/test/`,
+        against fakes on the PATH; the icon's Swift package in
+        `packages/vscode/scripts/icon` has XCTest tests, one of which holds
+        `media/icon.svg` to what the package writes; `panel.css` has the
+        rule-usage test in `packages/vscode/test/css.test.ts`, which fails on a
+        rule the page never matches, so a dead rule is removed, not kept; and
+        the panel's page has screenshots under `test/visual/baselines`,
+        recorded on macOS with `npm run test:visual:update` when the page
+        changes on purpose.
     -   Keep every dependency at its latest version, with two held on
         purpose: `@types/node` at the extension host's Node (22 for VS Code
         1.106) and `@types/vscode` at `engines.vscode`, which stays the

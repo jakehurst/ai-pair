@@ -42,18 +42,44 @@ jobs:
       - run: npm run lint:tla
       - run: npm run typecheck
       - run: npm run test:coverage
+      # kcov traces bash line by line, for the shell scripts' tests.
+      - run: sudo apt-get install -y kcov
+      - run: npm run test:shell:coverage
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage-unit
-          path: coverage/unit
+          name: coverage-unit-css-shell
+          path: |
+            coverage/unit
+            coverage/css
+            coverage/shell
+            COVERAGE.md
 
   swift:
     # Xcode has swift-format, and the SDK with the frameworks the script imports.
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
       - run: npm run lint:swift
       - run: npm run typecheck:swift
+      - run: npm run test:swift:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-swift
+          path: coverage/swift
+      # The panel's screenshots, against the baselines recorded on macOS.
+      - run: npx playwright install chromium
+      - run: npm run build
+      - run: npm run test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs
+          path: test-results
 
   integration:
     runs-on: ubuntu-latest

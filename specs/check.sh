@@ -10,7 +10,8 @@ cd "$(dirname "$0")" || exit 1
 # TLC: the command that runs TLC, with its arguments, split on spaces.
 read -r -a TLC_COMMAND <<<"${TLC:-tlc}"
 readonly TLC_COMMAND
-readonly COVERAGE_DIR='../coverage/tla'
+# COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
+readonly COVERAGE_DIR="${COVERAGE_ROOT:-../coverage}/tla"
 coverage=()
 if [[ "${1:-}" == '--coverage' ]]; then
   coverage=(-coverage 1)
@@ -52,7 +53,7 @@ for cfg in ./*.cfg; do
   name="${file%.cfg}"
   out="$(
     "${TLC_COMMAND[@]}" -workers auto -cleanup -metadir "${META}/${name}" \
-      "${coverage[@]}" -config "${file}" "${name}.tla" 2>&1
+      ${coverage[@]+"${coverage[@]}"} -config "${file}" "${name}.tla" 2>&1
   )"
   if [[ "${out}" == *'No error has been found'* ]]; then
     result='pass'

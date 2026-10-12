@@ -9,7 +9,8 @@ set -e
 readonly MAC_CODE='/Applications/Visual Studio Code.app/Contents/MacOS/Code'
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 readonly ROOT
-readonly COVERAGE_DIR="${ROOT}/coverage/integration"
+# COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
+readonly COVERAGE_DIR="${COVERAGE_ROOT:-${ROOT}/coverage}/integration"
 
 cd "$(dirname "$0")/.."
 coverage=0

@@ -90,11 +90,6 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
-button:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
 /* quiet: an icon button, which hovers like the theme's toolbar icons. */
 .quiet {
   color: var(--muted);

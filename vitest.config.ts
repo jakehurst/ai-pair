@@ -7,6 +7,8 @@ import { defineConfig } from 'vitest/config';
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   test: {
+    // Only vitest's tests: Playwright's are *.spec.ts, under test/visual.
+    include: ['**/*.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts', 'scripts/**/*.ts'],
