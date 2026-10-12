@@ -13,9 +13,20 @@ permissions:
 
 jobs:
   check:
+    # Debian trixie, in a container: it packages kcov, which the shell tests' coverage needs and
+    # Ubuntu 24.04 does not carry. The actions need git, curl, and certificates in the container,
+    # and Node's binary links libatomic.
     runs-on: ubuntu-latest
+    container: debian:trixie
     steps:
+      - name: Install Debian's packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git kcov libatomic1 shellcheck xz-utils
       - uses: actions/checkout@v4
+      # The checkout's safe-directory entry lives in a temporary config that goes with its step; the
+      # scripts run git too, as the container's root over files another user owns.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 26
@@ -24,7 +35,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check:ascii
-      # shfmt 3.14.1, checked against its SHA-256; the runner image has ShellCheck.
+      # shfmt 3.14.1, checked against its SHA-256; ShellCheck is Debian's.
       - name: Install shfmt
         run: |
           curl -sSL -o "$RUNNER_TEMP/shfmt" https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64
@@ -41,15 +52,44 @@ jobs:
       - run: npm run lint:md
       - run: npm run lint:tla
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage
+      # kcov traces bash line by line, for the shell scripts' tests.
+      - run: npm run test:shell:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-css-shell
+          path: |
+            coverage/unit
+            coverage/css
+            coverage/shell
+            COVERAGE.md
 
   swift:
     # Xcode has swift-format, and the SDK with the frameworks the script imports.
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
       - run: npm run lint:swift
       - run: npm run typecheck:swift
+      - run: npm run test:swift:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-swift
+          path: coverage/swift
+      # The panel's screenshots, against the baselines recorded on macOS.
+      - run: npx playwright install chromium
+      - run: npm run build
+      - run: npm run test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs
+          path: test-results
 
   integration:
     runs-on: ubuntu-latest
@@ -63,10 +103,14 @@ jobs:
       - name: Download VS Code
         run: echo "VSCODE_BIN=$(node scripts/vscode_bin.mts | tail -1)" >> "$GITHUB_ENV"
         working-directory: packages/vscode
-      - name: Run the integration test
-        run: xvfb-run -a npm run test:integration
+      - name: Run the integration test, with coverage
+        run: xvfb-run -a npm run test:integration:coverage
         env:
           VSCODE_ARGS: --no-sandbox --disable-gpu
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage/integration
 
   specs:
     runs-on: ubuntu-latest
@@ -81,7 +125,11 @@ jobs:
         run: |
           curl -sSL -o "$RUNNER_TEMP/tla2tools.jar" https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
           echo "7beec0f04818732a62fa193731711a99aa4f11279499b2360a7d156c519ea78d  $RUNNER_TEMP/tla2tools.jar" | sha256sum -c
-      - name: Check every spec
-        run: specs/check.sh
+      - name: Check every spec, with coverage
+        run: specs/check.sh --coverage
         env:
           TLC: java -XX:+UseParallelGC -cp ${{ runner.temp }}/tla2tools.jar tlc2.TLC
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-tla
+          path: coverage/tla

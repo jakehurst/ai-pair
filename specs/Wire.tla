@@ -69,7 +69,8 @@ VARIABLES
     cur,        \* this.ws: the open socket calls go out on, or NoSocket
     call,       \* each call's state, in CallStates
     on,         \* the socket each call was sent on, or NoSocket
-    pending,    \* this.pending: the calls waiting for an answer
+    pending,    \* the calls waiting for an answer, each in the `calls` map of
+                \* the socket it went out on
     rejectedBy, \* the socket whose close rejected the call, or NoSocket
     garbage,    \* whether the frame that is not a message has been sent yet
     relayUp,    \* FALSE once an uncaught exception has ended the relay

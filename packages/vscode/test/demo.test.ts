@@ -1,28 +1,28 @@
 // The scripted demo, played against the fake editor: every batch completes, and the code comes out right.
 
-import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { setup, until } from "../../core/test/fake"
-import { INITIAL_SERVER, SCRIPT, SERVER, stepScript, TODOS } from "../src/demo"
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { setup, until } from '../../core/test/fake';
+import { INITIAL_SERVER, SCRIPT, SERVER, stepScript, TODOS } from '../src/demo';
 
-vi.mock("vscode", () => ({}))
+vi.mock('vscode', () => ({}));
 
 beforeEach(() => {
-  vi.useFakeTimers()
-})
+  vi.useFakeTimers();
+});
 afterEach(() => {
-  vi.useRealTimers()
-})
+  vi.useRealTimers();
+});
 
-it("plays through, typing the todos API", async () => {
-  const { editor, controller } = setup({ [SERVER]: INITIAL_SERVER })
-  await controller.start()
-  const current = {}
+it('plays through, typing the todos API', async () => {
+  const { editor, controller } = setup({ [SERVER]: INITIAL_SERVER });
+  await controller.start();
+  const current = {};
   for (const batch of SCRIPT) {
-    const report = await until(stepScript(controller, batch, current))
-    expect(report.batches.filter((b) => b.status !== "completed")).toEqual([])
+    const report = await until(stepScript(controller, batch, current));
+    expect(report.batches.filter((b) => b.status !== 'completed')).toEqual([]);
   }
-  const report = await until(controller.step([]))
-  expect(report.batches.filter((b) => b.status !== "completed")).toEqual([])
+  const report = await until(controller.step([]));
+  expect(report.batches.filter((b) => b.status !== 'completed')).toEqual([]);
 
   expect(editor.text(TODOS)).toBe(`export interface Todo {
   id: number;
@@ -42,7 +42,7 @@ export function createTodo(title: string): Todo {
 export function listTodos(): Todo[] {
   return todos;
 }
-`)
+`);
   expect(editor.text(SERVER)).toBe(`import express from "express";
 import { createTodo, listTodos } from "./todos";
 
@@ -59,5 +59,5 @@ app.get("/todos", (req, res) => {
 });
 
 app.listen(3000, () => console.log("Listening on http://localhost:3000"));
-`)
-}, 60_000)
+`);
+}, /* timeout= */ 60_000);

@@ -1,41 +1,45 @@
 // The narration panel: a webview view in the secondary side bar. See "Narration panel" in DESIGN.md.
 
-import * as vscode from "vscode"
-import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from "@ai-pair/core"
-import { panelHtml, SPEEDS } from "./panelHtml"
-import type { FromPanel, ToPanel } from "./panelMessages"
-import type { Calibration, CalibrationView } from "./calibration"
+import * as vscode from 'vscode';
+import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
+import { panelHtml, SPEEDS } from './panel_html';
+import type { FromPanel, ToPanel } from './panel_messages';
+import type { Calibration, CalibrationView } from './calibration';
 
-const MAX_LOG = 400
+const MAX_LOG = 400;
 
 /** The commands the panel may run: the ones its intro links to. */
-const PANEL_COMMANDS: ReadonlySet<string> = new Set(["aiPair.playDemo", "aiPair.setUpAgent"])
+const PANEL_COMMANDS: ReadonlySet<string> = new Set(['aiPair.playDemo', 'aiPair.setUpAgent']);
 
 /** An agent the idle view can start a session with: whether it can right now, and how (#107). */
-export type Starter = {
-  available(): Promise<boolean>
+export interface Starter {
+  available(): Promise<boolean>;
   /** Resolves once the agent it ran has exited, or at once if it ran none (#118). */
-  start(): Promise<void>
+  start(): Promise<void>;
 }
 
-export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
-  static readonly viewId = "aiPair.narration"
-  controller?: Controller
-  /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
-  calibration?: Calibration
-  /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
-  starter?: Starter
-  /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
-  private asked = 0
-  private view?: vscode.WebviewView
-  /** Everything posted so far, replayed when the view is (re)created. */
-  private readonly log: PanelEvent[] = []
-  /** After each post: the window saves the history with a session, for a reload (#25). */
-  onPost?: () => void
+/** How many files of a name to look for before asking which was meant. */
+const MAX_FOUND = 20;
 
-  /** Everything posted so far, as the window saves it. */
+/** The AI Pair view: shows the agent's narration and status, and takes the programmer's replies and controls. */
+export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
+  static readonly viewId = 'aiPair.narration';
+  controller?: Controller;
+  /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
+  calibration?: Calibration;
+  /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
+  starter?: Starter;
+  /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
+  private asked = 0;
+  private view?: vscode.WebviewView;
+  /** Everything posted so far, replayed when the view is (re)created. */
+  private readonly log: PanelEvent[] = [];
+  /** After each post: the window saves the history with a session, for a reload (#25). */
+  onPost?: () => void;
+
+  /** Returns everything posted so far, as the window saves it. */
   get history(): readonly PanelEvent[] {
-    return this.log
+    return this.log;
   }
 
   /**
@@ -45,10 +49,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
    * cannot set the button on its successor (`Answer` with DropStale).
    */
   askStart(): void {
-    const asked = ++this.asked
+    const asked = ++this.asked;
     void this.starter?.available().then((value) => {
-      if (asked === this.asked) this.send({ type: "canStart", value })
-    })
+      if (asked === this.asked) this.send({ type: 'canStart', value });
+    });
   }
 
   constructor(
@@ -64,196 +68,211 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   /** Posts to the page, if there is one. */
   private send(message: ToPanel): void {
-    void this.view?.webview.postMessage(message)
+    void this.view?.webview.postMessage(message);
   }
 
-  /** The programmer's selection changed. Not logged: only the current one matters. */
+  /** Shows the programmer's selection, which changed. Not logged: only the current one matters. */
   showSelection(ref: Ref | undefined): void {
-    this.send({ type: "selection", ref })
+    this.send({ type: 'selection', ref });
   }
 
-  /** The speed setting changed. Not logged: only the current value matters. */
+  /** Shows the speed setting, which changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
-    this.send({ type: "speed", value })
+    this.send({ type: 'speed', value });
   }
 
   showReadingSpeed(value: number): void {
-    this.send({ type: "readingSpeed", value })
+    this.send({ type: 'readingSpeed', value });
   }
 
   showCalibration(view: CalibrationView): void {
-    this.send({ type: "calibration", view })
+    this.send({ type: 'calibration', view });
   }
 
   // specs/PanelReplay.tla, `Post`: the event onto the log, the oldest cut beyond MAX_LOG.
   post(event: PanelEvent): void {
-    this.log.push(event)
+    this.log.push(event);
     if (this.log.length > MAX_LOG) {
-      const cut = this.log.splice(0, this.log.length - MAX_LOG)
+      const cut = this.log.splice(0, this.log.length - MAX_LOG);
       // A view replays its session state from the last `session` event: keep it, or a view created
       // after a long session shows none while one runs (#54).
-      const session = cut.findLast((e) => e.type === "session")
-      if (session && !this.log.some((e) => e.type === "session")) this.log.unshift(session)
+      const session = cut.findLast((e) => e.type === 'session');
+      if (session && !this.log.some((e) => e.type === 'session')) this.log.unshift(session);
     }
-    this.send(event)
-    if (event.type === "session") {
-      void vscode.commands.executeCommand("setContext", "aiPair.active", event.active)
-      if (event.active) this.reveal()
-      if (!event.active) this.calibration?.cancel()
+    this.send(event);
+    if (event.type === 'session') {
+      void vscode.commands.executeCommand('setContext', 'aiPair.active', event.active);
+      if (event.active) this.reveal();
+      if (!event.active) this.calibration?.cancel();
     }
-    this.onPost?.()
+    this.onPost?.();
   }
 
-  /** After a reload: the history the window saved with its session, for the view to replay (#25). */
+  /** Restores, after a reload, the history the window saved with its session, for the view to replay (#25). */
   restoreHistory(events: readonly PanelEvent[]): void {
-    this.log.splice(0, this.log.length, ...events)
-    void vscode.commands.executeCommand("setContext", "aiPair.active", true)
+    this.log.splice(0, this.log.length, ...events);
+    void vscode.commands.executeCommand('setContext', 'aiPair.active', true);
   }
 
   focusReply(): void {
-    this.reveal(false)
-    this.send({ type: "focusReply" })
+    this.reveal(/* preserveFocus= */ false);
+    this.send({ type: 'focusReply' });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
-    this.view = view
-    const dist = this.extensionUri && vscode.Uri.joinPath(this.extensionUri, "dist")
-    view.webview.options = { enableScripts: true, localResourceRoots: dist ? [dist] : [] }
-    const style = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, "panel.css")).toString() : ""
-    const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, "panel.js")).toString() : ""
-    view.webview.html = panelHtml(view.webview.cspSource, style, script)
-    view.webview.onDidReceiveMessage((m: FromPanel) => this.receive(m))
+    this.view = view;
+    const dist = this.extensionUri && vscode.Uri.joinPath(this.extensionUri, 'dist');
+    view.webview.options = { enableScripts: true, localResourceRoots: dist ? [dist] : [] };
+    const style = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString() : '';
+    const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString() : '';
+    view.webview.html = panelHtml(view.webview.cspSource, style, script);
+    // The page posts only FromPanel messages; VS Code types them `any`.
+    view.webview.onDidReceiveMessage((m: FromPanel) => {
+      this.receive(m);
+    });
     view.onDidDispose(() => {
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
-      if (this.view === view) this.view = undefined
+      if (this.view === view) this.view = undefined;
       // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
-      this.controller?.resume("reply")
-      this.calibration?.cancel()
-    })
+      this.controller?.resume('reply');
+      this.calibration?.cancel();
+    });
   }
 
   private reveal(preserveFocus = true): void {
-    if (this.view) this.view.show(preserveFocus)
-    else void vscode.commands.executeCommand(`${NarrationPanel.viewId}.focus`)
+    if (this.view) {
+      this.view.show(preserveFocus);
+    } else {
+      void vscode.commands.executeCommand(`${NarrationPanel.viewId}.focus`);
+    }
   }
 
-  private receive(m: FromPanel): void {
-    const c = this.controller
+  private receive(message: FromPanel): void {
+    const controller = this.controller;
     this.trace?.(
-      `panel ${m.type}${m.type === "reply" ? ` ${JSON.stringify(m.text)}` : m.type === "draft" ? (m.empty ? " empty" : " typed") : ""}`,
-    )
-    switch (m.type) {
-      case "ready":
+      `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
+    );
+    switch (message.type) {
+      case 'ready':
         // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
-        c?.resume("reply")
-        this.send({ type: "replay", events: this.log })
-        this.showSpeed(this.speed.get())
-        this.showReadingSpeed(this.readingSpeed.get())
-        this.showSelection(this.selection.ref())
+        controller?.resume('reply');
+        this.send({ type: 'replay', events: this.log });
+        this.showSpeed(this.speed.get());
+        this.showReadingSpeed(this.readingSpeed.get());
+        this.showSelection(this.selection.ref());
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
-        this.askStart()
-        return
-      case "speed":
+        this.askStart();
+        return;
+      case 'speed':
         // Only the menu's speeds: the page sends no others (#17).
-        if (SPEEDS.includes(m.value)) this.speed.set(m.value)
-        return
-      case "readingSpeed":
-        if (SPEEDS.includes(m.value)) this.readingSpeed.set(m.value)
-        return
-      case "reply":
+        if (SPEEDS.includes(message.value)) this.speed.set(message.value);
+        return;
+      case 'readingSpeed':
+        if (SPEEDS.includes(message.value)) this.readingSpeed.set(message.value);
+        return;
+      case 'reply':
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
-        if (this.calibration?.reply(m.text)) return
-        c?.resume(undefined, { reveal: false })
-        c?.userMessage(m.text, m.attach ? this.selection.current() : undefined)
-        return
-      case "draft":
+        if (this.calibration?.reply(message.text) === true) return;
+        controller?.resume(undefined, { reveal: false });
+        controller?.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
+        return;
+      case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
-        if (m.empty) c?.resume("reply")
-        else c?.pause("reply")
-        return
-      case "pause":
-        c?.pause()
-        return
-      case "resume":
+        if (message.empty) {
+          controller?.resume('reply');
+        } else {
+          controller?.pause('reply');
+        }
+        return;
+      case 'pause':
+        controller?.pause();
+        return;
+      case 'resume':
         // specs/Draft.tla, `ResumeAll`: resume() with no reason ends every pause.
-        c?.resume()
-        return
-      case "interrupt":
-        c?.userInterrupt()
-        return
-      case "turn":
-        c?.resume()
-        if (c?.turn === "user") c.handBack(m.message, m.attach ? this.selection.current() : undefined)
-        else c?.takeTurn()
-        return
-      case "end":
-        c?.endSession()
-        return
-      case "runDecision":
-        c?.decideRun(m.id, m.run, m.remember)
-        return
-      case "open": {
-        const uri = vscode.Uri.file(this.resolvePath(m.file))
-        const position = new vscode.Position(Math.max(0, m.line - 1), 0)
-        void vscode.window.showTextDocument(uri, { selection: new vscode.Range(position, position) })
-        return
+        controller?.resume();
+        return;
+      case 'interrupt':
+        controller?.userInterrupt();
+        return;
+      case 'turn':
+        controller?.resume();
+        if (controller?.turn === 'user') {
+          controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
+        } else {
+          controller?.takeTurn();
+        }
+        return;
+      case 'end':
+        controller?.endSession();
+        return;
+      case 'runDecision':
+        controller?.decideRun(message.id, message.run, message.remember);
+        return;
+      case 'open': {
+        const uri = vscode.Uri.file(this.resolvePath(message.file));
+        const position = new vscode.Position(Math.max(0, message.line - 1), 0);
+        void vscode.window.showTextDocument(uri, { selection: new vscode.Range(position, position) });
+        return;
       }
-      case "openFile":
-        void this.openByName(m.file)
-        return
-      case "command":
-        if (PANEL_COMMANDS.has(m.command)) void vscode.commands.executeCommand(m.command)
-        return
-      case "start":
+      case 'openFile':
+        void this.openByName(message.file);
+        return;
+      case 'command':
+        if (PANEL_COMMANDS.has(message.command)) void vscode.commands.executeCommand(message.command);
+        return;
+      case 'start':
         // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
         // note (Settles).
-        void this.starter?.start().then(() => this.send({ type: "startEnded" }))
-        return
-      case "openChange":
-        void this.openChange(m.file)
-        return
-      case "openUrl":
-        if (/^https?:\/\//.test(m.url)) void vscode.env.openExternal(vscode.Uri.parse(m.url))
-        return
+        void this.starter?.start().then(() => {
+          this.send({ type: 'startEnded' });
+        });
+        return;
+      case 'openChange':
+        void this.openChange(message.file);
+        return;
+      case 'openUrl':
+        if (/^https?:\/\//.test(message.url)) void vscode.env.openExternal(vscode.Uri.parse(message.url));
+        return;
+      default:
     }
   }
 
   /** Opens a file changed outside the protocol: its diff against git's index, or the file itself outside git (#15). */
   private async openChange(file: string): Promise<void> {
-    const uri = vscode.Uri.file(this.resolvePath(file))
+    const uri = vscode.Uri.file(this.resolvePath(file));
     try {
-      await vscode.commands.executeCommand("git.openChange", uri)
+      await vscode.commands.executeCommand('git.openChange', uri);
     } catch {
-      await vscode.commands.executeCommand("vscode.open", uri)
+      await vscode.commands.executeCommand('vscode.open', uri);
     }
   }
 
   /** Opens a file the agent named: as a path in the workspace, else the file of that name, asking if there are several. */
   private async openByName(name: string): Promise<void> {
-    const direct = vscode.Uri.file(this.resolvePath(name))
+    const direct = vscode.Uri.file(this.resolvePath(name));
     try {
-      await vscode.workspace.fs.stat(direct)
-      await vscode.window.showTextDocument(direct)
-      return
+      await vscode.workspace.fs.stat(direct);
+      await vscode.window.showTextDocument(direct);
+      return;
     } catch {
       // Not a path from the workspace's root: look for it by name.
     }
-    const found = await vscode.workspace.findFiles(`**/${name}`, "**/node_modules/**", 20)
-    if (found.length === 0) {
-      void vscode.window.showInformationMessage(`AI Pair: couldn't find ${name} in the workspace.`)
-      return
+    const found = await vscode.workspace.findFiles(`**/${name}`, '**/node_modules/**', MAX_FOUND);
+    let uri = found[0];
+    if (uri === undefined) {
+      void vscode.window.showInformationMessage(`AI Pair: couldn't find ${name} in the workspace.`);
+      return;
     }
-    let uri = found[0]!
     if (found.length > 1) {
       const picked = await vscode.window.showQuickPick(
         found.map((u) => ({ label: vscode.workspace.asRelativePath(u), uri: u })),
         { placeHolder: `Which ${name}?` },
-      )
-      if (!picked) return
-      uri = picked.uri
+      );
+      if (!picked) return;
+      uri = picked.uri;
     }
-    await vscode.window.showTextDocument(uri)
+    await vscode.window.showTextDocument(uri);
   }
 }

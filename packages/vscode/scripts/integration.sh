@@ -2,12 +2,26 @@
 #
 # Runs test/integration.ts inside a fresh, isolated VS Code instance. With
 # EXTENSION_PATH set (e.g. to an unpacked .vsix), tests that instead of the
-# dev build.
+# dev build. With --coverage, the extension host writes V8 coverage of the
+# bundle, and c8 reports it against the sources, in coverage/integration/.
 set -e
 
 readonly MAC_CODE='/Applications/Visual Studio Code.app/Contents/MacOS/Code'
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+readonly ROOT
+# COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
+readonly COVERAGE_DIR="${COVERAGE_ROOT:-${ROOT}/coverage}/integration"
 
 cd "$(dirname "$0")/.."
+coverage=0
+if [[ "${1:-}" == '--coverage' ]]; then
+  coverage=1
+  rm -rf "${COVERAGE_DIR}"
+  mkdir -p "${COVERAGE_DIR}/v8"
+  # Node, and the extension host, write their V8 coverage here on exit.
+  export NODE_V8_COVERAGE="${COVERAGE_DIR}/v8"
+fi
+readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
@@ -36,3 +50,15 @@ unset ELECTRON_RUN_AS_NODE
   --extensionDevelopmentPath="${EXTENSION_PATH}" \
   --extensionTestsPath="${PWD}/dist-test/integration.js" \
   "${TMP}/workspace"
+if ((coverage)); then
+  # The bundle is selected before c8 follows its source map back to the
+  # sources; the report script keeps ours and drops node_modules. From the
+  # root, since c8 matches paths against the cwd.
+  (
+    cd "${ROOT}" && npx c8 report --temp-directory "${COVERAGE_DIR}/v8" \
+      --reports-dir "${COVERAGE_DIR}" \
+      --reporter text-summary --reporter lcov --reporter json-summary \
+      --include 'packages/vscode/dist/**' --all=false \
+      && node scripts/coverage_report.ts --integration
+  )
+fi

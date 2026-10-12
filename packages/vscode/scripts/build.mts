@@ -29,7 +29,7 @@ await esbuild.build({
   bundle: true,
   platform: 'browser',
   format: 'iife',
-  target: 'es2022',
+  target: 'es2025',
   minify: production,
   sourcemap: !production,
   logLevel: 'warning',

@@ -9,9 +9,9 @@
     "unicorn/require-post-message-target-origin": "off"
   },
   "overrides": [
-    // Google's TypeScript Style Guide (#134): the scripts only, until #133 brings the packages to it.
+    // Google's TypeScript Style Guide (#134, #133).
     {
-      "files": ["scripts/**/*.ts", "packages/vscode/scripts/*.mts"],
+      "files": ["**/*.ts", "**/*.mts"],
       "plugins": ["eslint", "typescript", "unicorn", "oxc", "import"],
       "rules": {
         "eslint/func-style": ["error", "declaration"],
@@ -108,7 +108,106 @@
         ],
         "typescript/no-empty-object-type": "error",
         "typescript/no-wrapper-object-types": "error",
-        "typescript/ban-ts-comment": "error"
+        "typescript/ban-ts-comment": "error",
+        "typescript/no-unsafe-type-assertion": "error",
+        "typescript/prefer-readonly": "error",
+        "typescript/explicit-member-accessibility": [
+          "error",
+          {
+            "accessibility": "no-public"
+          }
+        ],
+        "typescript/dot-notation": "error",
+        "typescript/prefer-for-of": "error",
+        "typescript/no-this-alias": "error",
+        "typescript/no-confusing-void-expression": "error",
+        "eslint/default-case": "error",
+        "eslint/no-fallthrough": "error",
+        "unicorn/no-static-only-class": "error",
+        "unicorn/no-null": "error",
+        // Deprecated APIs, and the modern form where one exists (asked by Justine, 2026-10-11).
+        "typescript/no-deprecated": "error",
+        "unicorn/prefer-string-replace-all": "error",
+        "unicorn/prefer-set-has": "error",
+        "unicorn/prefer-at": "error",
+        "unicorn/prefer-structured-clone": "error",
+        "unicorn/prefer-node-protocol": "error",
+        "unicorn/prefer-dom-node-append": "error",
+        "unicorn/prefer-dom-node-remove": "error",
+        "unicorn/prefer-dom-node-text-content": "error",
+        "unicorn/prefer-dom-node-dataset": "error",
+        "unicorn/prefer-modern-dom-apis": "error",
+        "unicorn/prefer-modern-math-apis": "error",
+        "unicorn/prefer-string-slice": "error",
+        "unicorn/prefer-keyboard-event-key": "error",
+        "unicorn/prefer-add-event-listener": "error",
+        "unicorn/prefer-global-this": "error",
+        "unicorn/prefer-array-flat": "error",
+        "unicorn/prefer-array-flat-map": "error",
+        "unicorn/prefer-code-point": "error",
+        "unicorn/prefer-query-selector": "error",
+        "unicorn/prefer-string-trim-start-end": "error",
+        "unicorn/prefer-math-trunc": "error",
+        "unicorn/prefer-number-properties": "error",
+        "unicorn/prefer-date-now": "error",
+        "unicorn/prefer-regexp-test": "error",
+        "unicorn/prefer-includes": "error",
+        "unicorn/prefer-string-starts-ends-with": "error",
+        "unicorn/prefer-array-find": "error",
+        "unicorn/prefer-array-some": "error",
+        "unicorn/prefer-array-index-of": "error",
+        "unicorn/prefer-optional-catch-binding": "error",
+        "unicorn/prefer-negative-index": "error",
+        "unicorn/prefer-event-target": "error",
+        // Code quality beyond the guide (asked by Justine, 2026-10-11).
+        "typescript/switch-exhaustiveness-check": [
+          "error",
+          {
+            "considerDefaultExhaustiveForUnions": true
+          }
+        ],
+        "typescript/prefer-nullish-coalescing": "error",
+        "typescript/use-unknown-in-catch-callback-variable": "error",
+        "typescript/strict-void-return": "error",
+        "typescript/prefer-regexp-exec": "error",
+        "typescript/prefer-includes": "error",
+        "typescript/strict-boolean-expressions": "error",
+        "typescript/require-await": "error",
+        "eslint/no-duplicate-imports": "error",
+        "unicorn/catch-error-name": "error",
+        "unicorn/numeric-separators-style": [
+          "error",
+          {
+            "hexadecimal": {
+              "onlyIfContainsSeparator": true
+            }
+          }
+        ],
+        "unicorn/no-hex-escape": "error",
+        "unicorn/escape-case": "error"
+      }
+    },
+    // A number in the code has a name (engineering rule: a named constant, not a magic value). Tests
+    // are data: line numbers, offsets, and delays are the point of each case.
+    {
+      "files": ["**/*.ts", "**/*.mts"],
+      "excludeFiles": ["**/test/**", "**/*.test.ts"],
+      "rules": {
+        "eslint/no-magic-numbers": [
+          "error",
+          {
+            "ignore": [0, 1, -1, 2],
+            "ignoreArrayIndexes": true,
+            "ignoreDefaultValues": true,
+            "ignoreClassFieldInitialValues": true,
+            "ignoreEnums": true,
+            "ignoreNumericLiteralTypes": true,
+            "ignoreReadonlyClassProperties": true,
+            "ignoreTypeIndexes": true,
+            "enforceConst": true,
+            "detectObjects": false
+          }
+        ]
       }
     }
   ],

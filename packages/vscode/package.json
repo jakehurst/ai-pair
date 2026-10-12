@@ -2,10 +2,22 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "pair programming",
+    "agent",
+    "mcp",
+    "claude",
+    "live coding"
+  ],
+  "pricing": "Free",
   "icon": "media/icon.png",
   "galleryBanner": {
     "color": "#1F1F1F",
@@ -14,13 +26,25 @@
   "engines": {
     "vscode": "^1.106.0"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "AI Pair lets an agent edit the files in the workspace and run commands in it."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "AI Pair reads and writes the workspace through the file system."
+    }
+  },
   "main": "./dist/extension.js",
   "activationEvents": [
     "onStartupFinished"
   ],
   "scripts": {
+    "vscode:prepublish": "node scripts/build.mts --production",
     "build": "node scripts/build.mts",
     "test:integration": "bash scripts/integration.sh",
+    "test:integration:coverage": "bash scripts/integration.sh --coverage",
     "package": "node scripts/build.mts --production && vsce package --no-dependencies --out ../.."
   },
   "dependencies": {
@@ -113,6 +137,26 @@
         {
           "command": "aiPair.askAboutSelection",
           "when": "aiPair.active && editorHasSelection"
+        },
+        {
+          "command": "aiPair.togglePause",
+          "when": "aiPair.active"
+        },
+        {
+          "command": "aiPair.interrupt",
+          "when": "aiPair.active"
+        },
+        {
+          "command": "aiPair.toggleTurn",
+          "when": "aiPair.active"
+        },
+        {
+          "command": "aiPair.endSession",
+          "when": "aiPair.active"
+        },
+        {
+          "command": "aiPair.focusReply",
+          "when": "aiPair.active"
         }
       ]
     },
@@ -124,29 +168,34 @@
           "default": 1,
           "minimum": 0.25,
           "maximum": 4,
-          "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4x to 3x."
+          "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4x to 3x.",
+          "scope": "application"
         },
         "aiPair.readingSpeed": {
           "type": "number",
           "default": 1,
           "minimum": 0.25,
           "maximum": 4,
-          "description": "Reading speed: divides only the pause after each of the agent's messages. The panel's reading menu offers 0.4x to 3x."
+          "description": "Reading speed: divides only the pause after each of the agent's messages. The panel's reading menu offers 0.4x to 3x.",
+          "scope": "application"
         },
         "aiPair.calibrationPassage": {
           "type": "object",
           "default": {},
-          "markdownDescription": "The passage read to calibrate the reading speed: `{ \"title\": ..., \"text\": ..., \"notice\": ... }`. Empty, the built-in one, Comma Gets a Cure. The agent's `calibrate` tool writes it."
+          "markdownDescription": "The passage read to calibrate the reading speed: `{ \"title\": ..., \"text\": ..., \"notice\": ... }`. Empty, the built-in one, Comma Gets a Cure. The agent's `calibrate` tool writes it.",
+          "scope": "application"
         },
         "aiPair.agentName": {
           "type": "string",
           "default": "Agent",
-          "description": "Name shown on the agent's cursor."
+          "description": "Name shown on the agent's cursor.",
+          "scope": "window"
         },
         "aiPair.timing": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Calibration: override any playback timing, in milliseconds at normal speed. See `packages/core/src/timing.ts` for every key and its default, e.g. `{ \"afterSelectMs\": 900, \"type\": { \"wordStartMs\": 140 } }`."
+          "markdownDescription": "Calibration: override any playback timing, in milliseconds at normal speed. See `packages/core/src/timing.ts` for every key and its default, e.g. `{ \"afterSelectMs\": 900, \"type\": { \"wordStartMs\": 140 } }`.",
+          "scope": "application"
         },
         "aiPair.confirmCommands": {
           "type": "boolean",
@@ -157,7 +206,8 @@
         "aiPair.trace": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "The **AI Pair** output always logs each session's interactions at the Info level: statuses, batches, pauses and resumes with their reasons, interrupts, edits, and each report with its size. This also logs every frame between the editor and the agent, and every panel message, at the Info level, which VS Code shows by default. Without it they're at Trace, hidden unless **Developer: Set Log Level** sets it, which a reinstall resets."
+          "markdownDescription": "The **AI Pair** output always logs each session's interactions at the Info level: statuses, batches, pauses and resumes with their reasons, interrupts, edits, and each report with its size. This also logs every frame between the editor and the agent, and every panel message, at the Info level, which VS Code shows by default. Without it they're at Trace, hidden unless **Developer: Set Log Level** sets it, which a reinstall resets.",
+          "scope": "window"
         }
       }
     },

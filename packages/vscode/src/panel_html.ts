@@ -2,22 +2,29 @@
 // Top to bottom: the band, which holds the header (the status and the controls), the current
 // message, and the reply box; then the history, newest first.
 
-import { randomBytes } from "node:crypto"
-import { ELLIPSIS, SPEED_SUFFIX } from "@ai-pair/core/constants"
+import { randomBytes } from 'node:crypto';
+import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
+
+/** The range `aiPair.speed` declares in package.json. */
+const MIN_SPEED = 0.25;
+const MAX_SPEED = 4;
+/** The CSP nonce's length before base64 encoding. */
+const NONCE_BYTES = 16;
 
 /** Speeds offered in the panel's menu. The `aiPair.speed` setting takes any value in its range. */
-export const SPEEDS = [0.4, 0.6, 1, 1.5, 2, 3]
+// oxlint-disable-next-line eslint/no-magic-numbers -- the list is the constant
+export const SPEEDS: readonly number[] = [0.4, 0.6, 1, 1.5, 2, 3];
 
 /**
- * The `aiPair.speed` setting as played: clamped to the range it declares (0.25 to 4), or 1 for what
- * isn't a finite number. VS Code only warns about a value out of range in settings.json (#17).
+ * Returns the `aiPair.speed` setting as played: clamped to the range it declares (0.25 to 4), or 1
+ * for what isn't a finite number. VS Code only warns about a value out of range in settings.json (#17).
  */
 export function settingSpeed(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? Math.min(4, Math.max(0.25, value)) : 1
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(MAX_SPEED, Math.max(MIN_SPEED, value)) : 1;
 }
 
-const svg = (paths: string, cls = "") =>
-  `<svg
+function svg(paths: string, cls = ''): string {
+  return `<svg
     class="i ${cls}"
     viewbox="0 0 24 24"
     fill="none"
@@ -26,24 +33,25 @@ const svg = (paths: string, cls = "") =>
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"
-  >${paths}</svg>`
+  >${paths}</svg>`;
+}
 
 const ICONS = {
-  pause: svg('<path d="M9 5v14M15 5v14"/>', "pause"),
-  resume: svg('<path d="M8 5l11 7-11 7z"/>', "resume"),
+  pause: svg('<path d="M9 5v14M15 5v14"/>', 'pause'),
+  resume: svg('<path d="M8 5l11 7-11 7z"/>', 'resume'),
   stop: svg('<rect x="6" y="6" width="12" height="12" rx="2"/>'),
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
   play: svg('<path d="M8 5l11 7-11 7z"/>'),
-}
+};
 
-/** `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
+/** Renders the page. `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
 export function panelHtml(cspSource: string, styleUri: string, scriptUri: string): string {
-  const nonce = randomBytes(16).toString("base64")
+  const nonce = randomBytes(NONCE_BYTES).toString('base64');
   const speeds = SPEEDS.map(
     (s) => `<button type="button" role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}${SPEED_SUFFIX}</button>`,
-  ).join("")
+  ).join('');
   return /* html */ `<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
@@ -174,5 +182,5 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
   <section data-ui="history" class="history" aria-label="Earlier, newest first"></section>
 </div>
 <div data-ui="tip" class="tip" role="tooltip" hidden></div>
-<script nonce="${nonce}" src="${scriptUri}"></script>`
+<script nonce="${nonce}" src="${scriptUri}"></script>`;
 }

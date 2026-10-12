@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "es2022",
+    "target": "es2025",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "lib": ["es2023"],
+    "lib": ["es2025"],
     "types": ["node"],
     "strict": true,
     "noEmit": true,
@@ -14,6 +14,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["packages/*/src", "packages/*/test"],
+  "include": ["packages/*/src", "packages/*/test", "vitest.config.ts", "playwright.config.ts"],
   "exclude": ["packages/vscode/src/webview"]
 }

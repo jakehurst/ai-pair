@@ -1,14 +1,14 @@
 // A window's discovery file is never half written, though it is rewritten each time the window
 // gains focus: a relay reading it then still finds the window (#72, specs/Discovery.tla).
 
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-import { Worker } from "node:worker_threads"
-import { expect, it } from "vitest"
-import { Bridge } from "../src/bridge"
-import { Controller } from "../src/controller"
-import { FakeEditor, FakePanel, testConfig } from "./fake"
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { Worker } from 'node:worker_threads';
+import { expect, it } from 'vitest';
+import { Bridge } from '../src/bridge';
+import { Controller } from '../src/controller';
+import { FakeEditor, FakePanel, testConfig } from './fake';
 
 // Reads and parses the file as findWindows does, until told to stop; counts the reads that fail.
 const READER = `
@@ -21,42 +21,52 @@ while (Atomics.load(stop, 0) === 0) {
   reads++
 }
 parentPort.postMessage({ reads, broken })
-`
+`;
 
-it("FindsRunningProp: rewrites the discovery file on focus without a reader ever seeing it half written", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-pair-discovery-"))
-  const bridge = new Bridge(new Controller(new FakeEditor(), new FakePanel(), testConfig), { dir, workspaceFolders: () => ["/project"] })
-  await bridge.start()
-  const stop = new SharedArrayBuffer(4)
-  const reader = new Worker(READER, { eval: true, workerData: { file: bridge.file, stop } })
-  const counted = new Promise<{ reads: number; broken: number }>((r) => reader.once("message", r))
-  await new Promise((r) => setTimeout(r, 100))
-  for (let i = 0; i < 5000; i++) bridge.focused()
-  Atomics.store(new Int32Array(stop), 0, 1)
-  const { reads, broken } = await counted
-  await reader.terminate()
-  bridge.dispose()
-  fs.rmSync(dir, { recursive: true, force: true })
-  expect(reads).toBeGreaterThan(0)
-  expect(broken).toBe(0)
-}, 30_000)
+it('FindsRunningProp: rewrites the discovery file on focus without a reader ever seeing it half written', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-discovery-'));
+  const bridge = new Bridge(new Controller(new FakeEditor(), new FakePanel(), testConfig), { dir, workspaceFolders: () => ['/project'] });
+  await bridge.start();
+  const stop = new SharedArrayBuffer(4);
+  const reader = new Worker(READER, { eval: true, workerData: { file: bridge.file, stop } });
+  const counted = new Promise<{ reads: number; broken: number }>((r) => {
+    reader.once('message', r);
+  });
+  await new Promise((r) => {
+    setTimeout(r, 100);
+  });
+  for (let i = 0; i < 5000; i++) {
+    bridge.focused();
+  }
+  Atomics.store(new Int32Array(stop), /* index= */ 0, /* value= */ 1);
+  const { reads, broken } = await counted;
+  await reader.terminate();
+  bridge.dispose();
+  fs.rmSync(dir, { recursive: true, force: true });
+  expect(reads).toBeGreaterThan(0);
+  expect(broken).toBe(0);
+}, 30_000);
 
-it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
   "reports a discovery file it can't write, without throwing, on start and on focus (#9)",
   async () => {
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "ai-pair-discovery-"))
-    fs.chmodSync(parent, 0o500)
-    const failures: unknown[] = []
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-discovery-'));
+    fs.chmodSync(parent, 0o500);
+    const failures: unknown[] = [];
     const bridge = new Bridge(new Controller(new FakeEditor(), new FakePanel(), testConfig), {
-      dir: path.join(parent, "windows"),
-      workspaceFolders: () => ["/project"],
-      failed: (e) => failures.push(e),
-    })
-    await bridge.start()
-    expect(() => bridge.focused()).not.toThrow()
-    bridge.dispose()
-    fs.chmodSync(parent, 0o700)
-    fs.rmSync(parent, { recursive: true, force: true })
-    expect(failures).toHaveLength(2)
+      dir: path.join(parent, 'windows'),
+      workspaceFolders: () => ['/project'],
+      failed: (e) => {
+        failures.push(e);
+      },
+    });
+    await bridge.start();
+    expect(() => {
+      bridge.focused();
+    }).not.toThrow();
+    bridge.dispose();
+    fs.chmodSync(parent, 0o700);
+    fs.rmSync(parent, { recursive: true, force: true });
+    expect(failures).toHaveLength(2);
   },
-)
+);

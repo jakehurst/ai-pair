@@ -79,18 +79,26 @@ Set by Justine on 2026-10-07.
     `@ai-pair/protocol`, not as the literal character or an escape. Justine
     prefers not to have a special character encoded in the file (2026-10-06),
     and a named constant to a magic value (2026-10-09).
--   **The scripts are TypeScript, to Google's TypeScript Style Guide**
-    (https://google.github.io/styleguide/tsguide.html, #134). Node runs them
-    directly by stripping types, so `scripts/tsconfig.json` and
-    `packages/vscode/scripts/tsconfig.json` turn
-    on `erasableSyntaxOnly`. A script in
-    `packages/vscode/scripts/` is `.mts`, since that package stays
-    CommonJS. `npm run lint` checks them with the override in `.oxlintrc.json`,
-    `npm run format:check` with the one in `.prettierrc.json`, and
-    `npm run typecheck` with both tsconfigs, in CI's `check` job. These rules
-    no tool checks, so follow them by hand:
+-   **All TypeScript follows Google's TypeScript Style Guide**
+    (https://google.github.io/styleguide/tsguide.html, #133, #134): the
+    packages and the scripts alike. `npm run lint` checks it with the
+    override for `*.ts` and `*.mts` in `.oxlintrc.json` (type-aware, with
+    `no-use-before-define` at its default, so a function too is declared
+    above its first use), `npm run format:check` with the one in
+    `.prettierrc.json` (semicolons, single quotes), and `npm run typecheck`
+    with every tsconfig, in CI's `check` job. File names are snake_case. The
+    scripts are run by Node directly, by stripping types, so
+    `scripts/tsconfig.json` and `packages/vscode/scripts/tsconfig.json` turn
+    on `erasableSyntaxOnly`; a script in `packages/vscode/scripts/` is
+    `.mts`, since that package stays CommonJS. One exception is documented in
+    place: `packages/relay/src/md.d.ts` keeps a default export, which
+    esbuild's text loader needs. These rules no tool checks, so follow them
+    by hand:
     -   Give an arrow function a concise body only when its value is used;
-        otherwise a block (Arrow function bodies).
+        otherwise a block (Arrow function bodies). oxlint's
+        `no-confusing-void-expression` catches a body that calls a `void`
+        function; a body whose value is of another type and still unused, such
+        as `() => list.push(x)`, it does not.
     -   Brace every loop body, and both branches of an `if` with an `else`,
         even on one line; oxlint's `curly` catches only bodies on another
         line (Control flow statements and blocks).
@@ -102,6 +110,78 @@ Set by Justine on 2026-10-07.
         versus comments).
     -   Name an unclear argument, such as a bare boolean, with a
         `/* name= */` comment (Comments when calling a function).
+    -   Reach a private member only through the class's own methods; a test
+        that needs one gets a method, like `Bridge.connections()`, not
+        `obj['member']` (Properties used outside of class lexical scope;
+        oxlint's `dot-notation` flags the bracket).
+    -   Give every top-level export a doc comment of its own, a re-export
+        excepted (Document all top-level exports of modules).
+    -   Use a one-letter name only in a scope under ten lines; `scene`, not
+        `s`, over a long method (Identifiers, Naming style).
+    -   Name a constant inside a function in lowerCamelCase; CONSTANT_CASE is
+        for module-level values only (Constants).
+    -   Make a parameter that may be left out optional with `?`, not
+        `| undefined`, where it can be last (Optionals vs `|undefined` type).
+    -   Write documentation, a module-private function's too, as a JSDoc
+        comment, and keep `//` for implementation notes (JSDoc versus
+        comments).
+    -   Spell a missing value `undefined`, never `null`, as VS Code's API
+        does: an optional field or parameter with `?`, a check with
+        `=== undefined`. oxlint's `unicorn/no-null` flags the literal; a
+        `null` that JSON or a library hands over is compared with
+        `=== null` and otherwise turned into `undefined` with `??` (Null vs
+        Undefined; set by Justine on 2026-10-11 for consistency).
+    -   Read a setting or stored value as `unknown` and narrow it with a type
+        guard, not with `get<T>()`: VS Code checks neither (any Type).
+    -   Give a helper with several positional arguments of one type an
+        options object, like `userEdit(file, { offset, deleteLength, text })`
+        (Comments when calling a function).
+    -   Export a type that appears in an exported signature, like `Frame` in
+        `parseFrame`, so a caller can name it; otherwise export only what
+        another file imports (Exports).
+    -   Use no API its types mark `@deprecated`, and the modern form where
+        one exists: `replaceAll`, `.at(-1)`, `Set.has`, `structuredClone`,
+        `node:` imports. oxlint's `typescript/no-deprecated` and the
+        `unicorn/prefer-*` rules in `.oxlintrc.json` check these (set by
+        Justine on 2026-10-11).
+    -   Test a value's presence outright, as `strict-boolean-expressions`
+        asks: `x !== undefined` for a string that may be missing,
+        `x === true` for a boolean that may be, `text.trim() !== ''` where
+        the empty string is the case that matters; never `if (x)` on a
+        nullable (set by Justine on 2026-10-11).
+    -   Give every number outside a test a name: `no-magic-numbers` runs on
+        the packages' `src` and on `scripts/`, with 0, 1, -1, and 2 allowed.
+        A list that is the constant, like `SPEEDS`, carries a disable comment
+        saying so.
+    -   An `async` function awaits something; one that does not returns
+        `Promise.resolve(...)` or `Promise.reject(...)` without `async`
+        (`require-await`).
+    -   `COVERAGE.md` holds every source file's coverage in one table. Each
+        coverage run rewrites its own column through
+        `scripts/coverage_report.ts`: `npm run test:coverage` the unit and
+        CSS columns, `npm run test:integration:coverage` the integration
+        column, `npm run coverage:tla` the TLC column,
+        `npm run test:swift:coverage` the Swift column, and
+        `npm run test:shell:coverage` the Shell column, on Linux only: on
+        macOS, kcov's bash tracing rides on stderr, which bats captures, so CI's
+        check job is where that column fills; its COVERAGE.md is in the job's
+        artifact. Run `npm run coverage` and commit the file with a change that
+        moves the numbers (set by Justine on 2026-10-11).
+    -   Every file type with a test tool has tests (set by Justine on
+        2026-10-11): a shell script gets a bats test in `scripts/test/`,
+        against fakes on the PATH; the icon's Swift package in
+        `packages/vscode/scripts/icon` has XCTest tests, one of which holds
+        `media/icon.svg` to what the package writes; `panel.css` has the
+        rule-usage test in `packages/vscode/test/css.test.ts`, which fails on a
+        rule the page never matches, so a dead rule is removed, not kept; and
+        the panel's page has screenshots under `test/visual/baselines`,
+        recorded on macOS with `npm run test:visual:update` when the page
+        changes on purpose.
+    -   Keep every dependency at its latest version, with two held on
+        purpose: `@types/node` at the extension host's Node (22 for VS Code
+        1.106) and `@types/vscode` at `engines.vscode`, which stays the
+        oldest VS Code the extension supports (set by Justine on
+        2026-10-11).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`
@@ -165,7 +245,7 @@ Set by Justine on 2026-10-07.
     (`scripts/stylelint.config.ts`) on `panel.css`, html-validate
     (`.htmlvalidate.json`) and the W3C's Nu Html Checker (vnu) on the page as
     `panelHtml` renders it, vnu on `panel.css`, and the 140-column limit on
-    `panelHtml.ts`. It runs in CI's `check` job. These rules no tool checks, so
+    `panel_html.ts`. It runs in CI's `check` job. These rules no tool checks, so
     follow them by hand:
     -   Give the script its hooks as `data-ui` attributes, and styling as
         classes; no `id`s, which `panel.test.ts` checks (id Attributes).

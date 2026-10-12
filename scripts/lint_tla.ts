@@ -45,17 +45,16 @@ const MODEL_SEPARATOR = '_';
 /** A config line's keyword. */
 const CONFIG_KEYWORD = /^[A-Z_]+/;
 /** Each config keyword's place in a config (8.1); the four state-space controls share one. */
-const CONFIG_ORDER: ReadonlyMap<string, number> = new Map([
-  ['SPECIFICATION', 0],
-  ['CONSTANTS', 1],
-  ['INVARIANTS', 2],
-  ['PROPERTIES', 3],
-  ['SYMMETRY', 4],
-  ['CONSTRAINT', 4],
-  ['ACTION_CONSTRAINT', 4],
-  ['VIEW', 4],
-  ['CHECK_DEADLOCK', 5],
-]);
+const CONFIG_ORDER: ReadonlyMap<string, number> = new Map(
+  [
+    ['SPECIFICATION'],
+    ['CONSTANTS'],
+    ['INVARIANTS'],
+    ['PROPERTIES'],
+    ['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW'],
+    ['CHECK_DEADLOCK'],
+  ].flatMap((keywords, rank) => keywords.map((keyword): [string, number] => [keyword, rank])),
+);
 /** The keywords TLC accepts that the guide replaces, with what replaces them (8.3, 8.4, 8.5). */
 const REPLACED: ReadonlyMap<string, string> = new Map([
   ['CONSTANT', 'CONSTANTS'],
@@ -65,13 +64,13 @@ const REPLACED: ReadonlyMap<string, string> = new Map([
   ['NEXT', 'SPECIFICATION'],
 ]);
 /** The keywords whose entries go below them, one per line (8.4, 8.5). */
-const BLOCK_KEYWORDS: readonly string[] = ['CONSTANTS', 'INVARIANTS', 'PROPERTIES'];
+const BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['CONSTANTS', 'INVARIANTS', 'PROPERTIES']);
 /** The block keywords whose entries are names, one per line (8.5). */
-const NAME_BLOCKS: readonly string[] = ['INVARIANTS', 'PROPERTIES'];
+const NAME_BLOCKS: ReadonlySet<string> = new Set(['INVARIANTS', 'PROPERTIES']);
 /** A block's entry: indented 4 spaces (8.4). */
 const ENTRY = /^ {4}\S/;
 /** The keywords a comment has to justify (7.2, 8.6). */
-const JUSTIFIED: readonly string[] = ['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW'];
+const JUSTIFIED: ReadonlySet<string> = new Set(['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW']);
 /** The deadlock check turned off, which a comment has to justify (6.13, 7.2). */
 const DEADLOCK_OFF = 'CHECK_DEADLOCK FALSE';
 
@@ -175,18 +174,18 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
   function report(i: number, rule: string, message: string): void {
     problems.push({ line: i + 1, rule, message });
   }
-  if (!lines[0]?.startsWith(LINE_COMMENT)) report(0, '8.2', 'no leading comment saying what the model is for');
+  if (lines[0]?.startsWith(LINE_COMMENT) !== true) report(0, '8.2', 'no leading comment saying what the model is for');
   const invariants: string[] = [];
   let place = 0;
   let block: string | undefined;
   lines.forEach((line, i) => {
     if (line.length > COLUMN_LIMIT) report(i, '4.2', `${line.length} columns, over ${COLUMN_LIMIT}`);
     const code = codeOf(line).trimEnd();
-    const [keyword] = code.match(CONFIG_KEYWORD) ?? [];
+    const [keyword] = CONFIG_KEYWORD.exec(code) ?? [];
     if (keyword === undefined) {
       if (code !== '' && !ENTRY.test(code)) report(i, '8.4, 8.5', 'an entry is indented 4 spaces');
       const names = code.match(IDENTIFIER) ?? [];
-      if (block !== undefined && NAME_BLOCKS.includes(block) && names.length > 1) report(i, '8.5', 'one name per line');
+      if (block !== undefined && NAME_BLOCKS.has(block) && names.length > 1) report(i, '8.5', 'one name per line');
       if (block === 'INVARIANTS') invariants.push(...names);
       return;
     }
@@ -198,9 +197,9 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
     const above = lines.findLastIndex((other, j) => j < i && !other.startsWith(LINE_COMMENT));
     if (lines[above] !== '') report(i, '8.1', 'a blank line before each keyword');
     const justified = above < i - 1 || codeOf(line) !== line;
-    if ((JUSTIFIED.includes(block) || code === DEADLOCK_OFF) && !justified) report(i, '7.2, 8.6', `${code} needs a comment saying why`);
+    if ((JUSTIFIED.has(block) || code === DEADLOCK_OFF) && !justified) report(i, '7.2, 8.6', `${code} needs a comment saying why`);
     const entries = code.slice(keyword.length).match(IDENTIFIER) ?? [];
-    if (BLOCK_KEYWORDS.includes(block) && entries.length > 0) report(i, '8.4, 8.5', 'entries go below the keyword, one per line');
+    if (BLOCK_KEYWORDS.has(block) && entries.length > 0) report(i, '8.4, 8.5', 'entries go below the keyword, one per line');
     if (block === 'INVARIANTS') invariants.push(...entries);
   });
   if (hasVariables && invariants[0] !== TYPE_OK) report(0, '6.1, 8.5', 'TypeOK is not the first invariant');

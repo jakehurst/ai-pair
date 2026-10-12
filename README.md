@@ -232,7 +232,15 @@ npm run lint:web          # the panel's HTML and CSS to Google's HTML/CSS Style 
 npm run lint:md           # Markdown to Google's Markdown style guide
 npm run build             # development build of the extension
 npm run test:integration  # plays a session inside a real, isolated VS Code (macOS; VSCODE_BIN for another)
-npm run test:coverage     # the unit tests, with coverage
+npm run test:shell        # the shell scripts, with bats, against fake tlc, Code, npm, and code commands
+npm run test:swift        # the icon's Swift package: its drawing, and that media/ holds what it writes (macOS)
+npm run test:visual       # the panel's page in Chromium against its screenshots; test:visual:update records them
+npm run test:coverage     # the unit tests, with coverage, in coverage/unit/
+npm run test:integration:coverage  # the integration test, with coverage of the bundle mapped to the sources, in coverage/integration/
+npm run coverage:tla      # every spec, with TLC counting how often each action fired, in coverage/tla/
+npm run test:shell:coverage  # the shell tests under kcov, in coverage/shell/ (Linux; on macOS kcov records nothing under bats)
+npm run test:swift:coverage  # the Swift tests with llvm-cov, in coverage/swift/ (macOS)
+npm run coverage          # all of them; each rewrites its column of COVERAGE.md, the whole project's coverage in one table
 npm run package           # production build -> ai-pair-<version>.vsix
 ```
 

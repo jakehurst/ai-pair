@@ -18,6 +18,8 @@ const EXTENSION = 'packages/vscode';
 const CHANGELOG = `${EXTENSION}/CHANGELOG.md`;
 const MANIFEST = `${EXTENSION}/package.json`;
 const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
+/** `git status --porcelain`: two status columns and a space before the path. */
+const STATUS_WIDTH = 3;
 
 interface Manifest {
   publisher: string;
@@ -100,7 +102,7 @@ function notes(version: string): string | undefined {
 const args = process.argv.slice(2);
 const yes = args.includes('--yes');
 const bump = args.find((a) => !a.startsWith('--'));
-if (!bump) fail('Usage: npm run release -- patch | minor | major | <x.y.z> [--yes]');
+if (bump === undefined) fail('Usage: npm run release -- patch | minor | major | <x.y.z> [--yes]');
 
 const { publisher, name, version: current } = manifest();
 const version = next(current, bump);
@@ -111,7 +113,7 @@ step('Checking the repository and accounts');
 if (read('git', ['branch', '--show-current']) !== 'main') fail('Release from main.');
 // Not `read`: trimming would take the first line's leading status column.
 const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
-const unexpected = dirty.filter((line) => line.slice(3) !== CHANGELOG);
+const unexpected = dirty.filter((line) => line.slice(STATUS_WIDTH) !== CHANGELOG);
 if (unexpected.length) fail(`Commit or stash these first; only ${CHANGELOG} may have changes:\n${unexpected.join('\n')}`);
 run('git', ['fetch', '--quiet', '--tags', 'origin', 'main']);
 if (read('git', ['rev-parse', 'HEAD']) !== read('git', ['rev-parse', 'origin/main'])) {
@@ -119,7 +121,7 @@ if (read('git', ['rev-parse', 'HEAD']) !== read('git', ['rev-parse', 'origin/mai
 }
 if (read('git', ['tag', '--list', tag])) fail(`${tag} is already tagged.`);
 const changes = notes(version);
-if (!changes) fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`);
+if (changes === undefined || changes === '') fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`);
 if (!read('vsce', ['ls-publishers']).split('\n').includes(publisher)) {
   fail(`vsce has no token for the publisher ${publisher}: run \`vsce login ${publisher}\`.`);
 }

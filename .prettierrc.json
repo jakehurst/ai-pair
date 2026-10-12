@@ -9,7 +9,7 @@
       }
     },
     {
-      "files": ["scripts/**/*.ts", "packages/vscode/scripts/*.mts"],
+      "files": ["**/*.ts", "**/*.mts"],
       "options": {
         "semi": true,
         "singleQuote": true,

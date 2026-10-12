@@ -1,5 +1,5 @@
-export { defaultConfig, type Config } from "./config"
-export { Controller, type SavedSession } from "./controller"
+export { defaultConfig, type Config } from './config';
+export { Controller, isSavedSession, type SavedSession } from './controller';
 export type {
   AgentState,
   Change,
@@ -13,11 +13,11 @@ export type {
   Ref,
   RunOptions,
   SharedSelection,
-} from "./ports"
-export { MissingFile } from "./ports"
-export { resolveSpan, resolveSpot } from "./places"
-export { terminalText } from "./text"
-export { hostPathStyle, samePath, withinFolder, type PathStyle } from "./paths"
-export { planTyping, readingChars, readingTime } from "./typing"
-export { defaultTiming, withOverrides, type Cadence, type Reading, type Timing, type TimingOverrides } from "./timing"
-export { Bridge, type BridgeOptions } from "./bridge"
+} from './ports';
+export { MissingFile } from './ports';
+export { resolveSpan, resolveSpot } from './places';
+export { terminalText } from './text';
+export { hostPathStyle, samePath, withinFolder, type PathStyle } from './paths';
+export { planTyping, readingChars, readingTime } from './typing';
+export { defaultTiming, withOverrides, type Cadence, type Reading, type Timing, type TimingOverrides } from './timing';
+export { Bridge, type BridgeOptions } from './bridge';

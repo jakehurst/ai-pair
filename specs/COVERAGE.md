@@ -137,7 +137,7 @@ Code goes without a spec for one of these reasons:
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
-| `outside.ts`, `outsideWatch.ts` | all | `Outside` |
+| `outside.ts`, `outside_watch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
@@ -152,6 +152,6 @@ Code goes without a spec for one of these reasons:
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |
 | `calibration.ts` | all | `Calibration` |
 | `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
-| `panelHtml.ts` | `panelHtml`, `settingSpeed` | Format |
+| `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `webview/panel.css` | all | Look |
-| `panelMessages.ts` | | Types |
+| `panel_messages.ts` | | Types |

@@ -1,23 +1,23 @@
-import { createPatch, diffLines } from "diff"
-import type { Change } from "./ports"
+import { createPatch, diffLines } from 'diff';
+import type { Change } from './ports';
 
 /** A diff longer than this many lines is reported by its hunks' headers alone: the agent reads the file (#149). */
-export const MAX_DIFF_LINES = 200
+export const MAX_DIFF_LINES = 200;
 
-/** A unified diff of the change, hunks only (the file is named in the event). */
-export function fileDiff(file: string, before: string, after: string): string {
-  const patch = createPatch(file, before, after, undefined, undefined, { context: 2 })
-  const firstHunk = patch.indexOf("\n@@")
-  return firstHunk === -1 ? "" : patch.slice(firstHunk + 1).trimEnd()
+/** Returns a unified diff of the change, hunks only (the file is named in the event). */
+function fileDiff(file: string, before: string, after: string): string {
+  const patch = createPatch(file, before, after, /* oldHeader= */ undefined, /* newHeader= */ undefined, { context: 2 });
+  const firstHunk = patch.indexOf('\n@@');
+  return firstHunk === -1 ? '' : patch.slice(firstHunk + 1).trimEnd();
 }
 
-/** `fileDiff`, bounded: over MAX_DIFF_LINES, only its hunks' headers, and how many lines were left out. */
+/** Returns `fileDiff`, bounded: over MAX_DIFF_LINES, only its hunks' headers, and how many lines were left out. */
 export function boundedDiff(file: string, before: string, after: string): { diff: string; omitted?: number } {
-  const diff = fileDiff(file, before, after)
-  const lines = diff.split("\n")
-  if (lines.length <= MAX_DIFF_LINES) return { diff }
-  const headers = lines.filter((line) => line.startsWith("@@"))
-  return { diff: headers.join("\n"), omitted: lines.length - headers.length }
+  const diff = fileDiff(file, before, after);
+  const lines = diff.split('\n');
+  if (lines.length <= MAX_DIFF_LINES) return { diff };
+  const headers = lines.filter((line) => line.startsWith('@@'));
+  return { diff: headers.join('\n'), omitted: lines.length - headers.length };
 }
 
 /**
@@ -28,29 +28,30 @@ export function boundedDiff(file: string, before: string, after: string): { diff
  * `Runs`.
  */
 export function lineChanges(before: string, changes: Change[]): Change[] {
-  const split: Change[] = []
-  let text = before
+  const split: Change[] = [];
+  let text = before;
   for (const change of changes) {
-    const removed = text.slice(change.offset, change.offset + change.deleteLength)
+    const removed = text.slice(change.offset, change.offset + change.deleteLength);
     // Left to right, each at its offset in the text the ones before it leave.
-    let at = change.offset
-    let hunk: Change | undefined
+    let at = change.offset;
+    let hunk: Change | undefined;
     for (const part of diffLines(removed, change.text)) {
       if (!part.added && !part.removed) {
-        if (hunk) split.push(hunk)
-        hunk = undefined
-        at += part.value.length
-        continue
+        if (hunk) split.push(hunk);
+        hunk = undefined;
+        at += part.value.length;
+        continue;
       }
-      hunk ??= { offset: at, deleteLength: 0, text: "" }
-      if (part.removed) hunk.deleteLength += part.value.length
-      else {
-        hunk.text += part.value
-        at += part.value.length
+      hunk ??= { offset: at, deleteLength: 0, text: '' };
+      if (part.removed) {
+        hunk.deleteLength += part.value.length;
+      } else {
+        hunk.text += part.value;
+        at += part.value.length;
       }
     }
-    if (hunk) split.push(hunk)
-    text = text.slice(0, change.offset) + change.text + text.slice(change.offset + change.deleteLength)
+    if (hunk) split.push(hunk);
+    text = text.slice(0, change.offset) + change.text + text.slice(change.offset + change.deleteLength);
   }
-  return split
+  return split;
 }
