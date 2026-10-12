@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # scripts/lint_shell.sh on scripts that keep each hand-checked rule, and ones that break each.
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   export ROOT
