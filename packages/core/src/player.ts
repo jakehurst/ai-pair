@@ -24,7 +24,7 @@ import { MS_PER_SECOND } from './constants';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from './places';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
-import type { Change, EditorPort, Focus, PanelPort } from './ports';
+import type { Change, Focus, PanelPort, PlayerEditor } from './ports';
 import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
 import { planTyping, readingTime } from './typing';
@@ -59,7 +59,7 @@ export interface Scene {
 
 /** Where actions take effect: the programmer's editor, or a copy of it in memory. */
 export interface Stage {
-  editor: EditorPort;
+  editor: PlayerEditor;
   panel: PanelPort;
   pacing: Pacing;
   config(): Config;
@@ -122,12 +122,12 @@ function failed(r: Resolution & { ok: false }, file: string, text: string, shown
 }
 
 /** Returns the absolute path for a path from the agent: relative to its working directory, if it gave one. */
-export function agentPath(editor: EditorPort, file: string, root?: string): string {
+export function agentPath(editor: PlayerEditor, file: string, root?: string): string {
   return editor.resolvePath(root === undefined ? file : nodePath.resolve(root, file));
 }
 
 /** Returns how to name a file to the agent. */
-export function displayPath(editor: EditorPort, file: string, root?: string): string {
+export function displayPath(editor: PlayerEditor, file: string, root?: string): string {
   if (root === undefined) return editor.displayPath(file);
   // Not by `relative` starting with "..": a folder in the root may be named `..cache` (#5).
   const inside = withinFolder(root, file);

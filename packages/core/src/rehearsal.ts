@@ -6,7 +6,7 @@ import type { Action, BatchResult } from '@ai-pair/protocol';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
 import { Player, transformScene, type Scene } from './player';
-import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort } from './ports';
+import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort, type PlayerEditor } from './ports';
 import { instant } from './timeline';
 
 /** A panel that shows nothing: a rehearsal is silent. */
@@ -21,7 +21,7 @@ export interface Rehearsal {
 }
 
 /** A copy of the editor: files it has edited are its own, the rest are read from the real one. */
-class MemoryEditor implements EditorPort {
+class MemoryEditor implements PlayerEditor {
   readonly edits = new Set<string>();
 
   constructor(
@@ -50,10 +50,6 @@ class MemoryEditor implements EditorPort {
     }
   }
 
-  isDirty(): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-
   async show(file: string): Promise<void> {
     if (this.texts.has(file)) return;
     try {
@@ -72,9 +68,7 @@ class MemoryEditor implements EditorPort {
   }
 
   async save(): Promise<void> {}
-  renderCursor(): void {}
   renderPoint(): void {}
-  reveal(): void {}
   follow(): void {}
 
   runCommand(): Promise<CommandOutcome> {
