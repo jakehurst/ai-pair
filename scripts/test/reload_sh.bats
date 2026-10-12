@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # .claude/skills/reload-extension/scripts/reload.sh against fake npm and code commands.
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   export ROOT

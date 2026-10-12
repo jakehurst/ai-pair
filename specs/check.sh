@@ -2,9 +2,11 @@
 #
 # Runs TLC on every config in specs/. Spec.cfg checks the code as it is and
 # must pass. With --coverage, TLC also counts how often each action fired, the
-# full statistics go to coverage/tla/<Spec>.txt, and an action that never fired
-# is named and fails the run, unless the spec's section of README.md says, in a
-# sentence naming it, that it never fires (#161).
+# full statistics go to coverage/tla/<Config>.txt, and an action that never
+# fired is named and fails the run, unless the spec's section of README.md
+# says, in a sentence naming it, that it never fires (#161).
+# A spec's other configs, Foo_<Model>.cfg (8.2 of the style guide), run
+# against Foo.tla, each with its own statistics file (#169).
 set -u
 
 cd "$(dirname "$0")" || exit 1
@@ -24,37 +26,44 @@ META="$(mktemp -d)" || exit 1
 readonly META
 status=0
 
-#######################################
-# Saves TLC's coverage statistics for a spec and names the actions that never
-# fired. An action's line reads `<Name line ... of module M>: distinct:total`:
-# the new states it produced, and the times it fired.
-# Globals:
-#   COVERAGE_DIR
-# Arguments:
-#   The spec's name, and TLC's output.
-# Outputs:
-#   One line per action that never fired, to stdout.
-#######################################
-report_coverage() {
-  local name="$1" out="$2" line action count
+# Saves TLC's coverage statistics for a config to COVERAGE_DIR.
+save_coverage() {
+  local name="$1" out="$2"
   { grep -v '^@!@!@' <<<"${out}" || true; } \
     | sed -n '/^The coverage statistics/,$p' >"${COVERAGE_DIR}/${name}.txt"
-  while IFS= read -r line; do
-    action="${line#<}"
-    action="${action%% *}"
-    count="${line##*: }"
-    if [[ "${count}" == *:0 ]]; then
-      printf '  %s: action %s never fired\n' "${name}" "${action}"
-    fi
-  done < <(grep -E '^<[A-Za-z_]+ line .*>: [0-9]+:[0-9]+$' <<<"${out}" || true)
+}
+
+#######################################
+# Names the actions that fired in none of a spec's configs, summing each
+# action's fires over the spec's statistics files. An action's line reads
+# `<Name line ... of module M>: distinct:total`, with the disjunct's location
+# in parentheses before `>` when the action is written inline in Next.
+# Globals:
+#   COVERAGE_DIR
+# Outputs:
+#   One line per action that never fired, to stdout, sorted.
+#######################################
+# shellcheck disable=SC2016 # $1 and $2 are awk's fields, not the shell's.
+never_fired() {
+  local program
+  program='/^<[A-Za-z_]+ line .*>: [0-9]+:[0-9]+$/ {'
+  program+=' spec = FILENAME; sub(/.*\//, "", spec); sub(/[_.].*/, "", spec);'
+  program+=' action = $1; sub(/^</, "", action);'
+  program+=' sub(/ line [^(>]*/, "", action);'
+  program+=' sub(/>$/, "", action); sub(/.*:/, "", $2);'
+  program+=' fires[spec ": action " action] += $2 }'
+  program+=' END { for (key in fires) if (fires[key] == 0)'
+  program+=' print "  " key " never fired" }'
+  { awk -F': ' "${program}" "${COVERAGE_DIR}"/*.txt || true; } | sort
 }
 
 for cfg in ./*.cfg; do
   file="${cfg#./}"
   name="${file%.cfg}"
+  spec="${name%%_*}"
   out="$(
     "${TLC_COMMAND[@]}" -workers auto -cleanup -metadir "${META}/${name}" \
-      ${coverage[@]+"${coverage[@]}"} -config "${file}" "${name}.tla" 2>&1
+      ${coverage[@]+"${coverage[@]}"} -config "${file}" "${spec}.tla" 2>&1
   )"
   if [[ "${out}" == *'No error has been found'* ]]; then
     result='pass'
@@ -69,18 +78,19 @@ for cfg in ./*.cfg; do
     mark='FAILED'
     status=1
   fi
-  printf '%-20s %-9s %s\n' "${file}" "${result}" "${mark}"
+  printf '%-22s %-9s %s\n' "${file}" "${result}" "${mark}"
   if [[ "${mark}" != 'ok' ]]; then
     excerpt="$(grep -v '^@!@!@' <<<"${out}")"
     tail -n 60 <<<"${excerpt}" >&2
   fi
   if ((${#coverage[@]} > 0)); then
-    report_coverage "${name}" "${out}"
+    save_coverage "${name}" "${out}"
   fi
 done
 
 rm -rf "${META}"
 if ((${#coverage[@]} > 0)); then
+  never_fired
   node ../scripts/coverage_report.ts --tla --check || status=1
 fi
 exit "${status}"

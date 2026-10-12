@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # packages/vscode/scripts/integration.sh against a fake Code binary that records how it was run.
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   export ROOT
