@@ -9,7 +9,9 @@ set -u
 readonly MAX_COLUMNS=80
 readonly MAX_LINES=100
 
-cd "$(dirname "$0")/.." || exit 1
+# LINT_SHELL_ROOT: the repository to lint; this one by default. The test sets
+# it, so the script runs from where it lives and its coverage is recorded.
+cd "${LINT_SHELL_ROOT:-$(dirname "$0")/..}" || exit 1
 LISTING="$(git ls-files --cached --others --exclude-standard '*.sh')" || exit 1
 readonly LISTING
 FILES=()

@@ -12,11 +12,11 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: unit, 2026-10-12.
+Last updated: shell, 2026-10-12.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
-| `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | - | - |
+| `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | L 100.0% (16 of 16) | - |
 | `packages/core/src/bridge.ts` | TypeScript | L 95.1% B 78.6% F 100.0% | L 88.4% B 64.0% F 94.1% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/constants.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -64,7 +64,7 @@ Last updated: unit, 2026-10-12.
 | `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 99.3% R 93.3% F 100.0% | - | - |
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.1% R 98.2% F 97.9% | - | - |
-| `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
+| `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | L 86.7% (26 of 30) | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/vscode/src/agents.ts` | TypeScript | L 93.8% B 81.6% F 87.2% | L 42.8% B 66.7% F 12.8% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 97.4% B 86.4% F 100.0% | L 58.6% B 66.7% F 33.3% | - | - | - | - |
@@ -189,5 +189,5 @@ Last updated: unit, 2026-10-12.
 | `specs/Typing.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
-| `specs/check.sh` | Shell | - | - | - | - | - | - |
+| `specs/check.sh` | Shell | - | - | - | - | L 97.7% (43 of 44) | - |
 | `vitest.config.ts` | TypeScript | - | - | - | - | - | - |

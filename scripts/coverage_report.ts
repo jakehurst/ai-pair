@@ -140,16 +140,19 @@ function readSwift(): Map<string, string> {
   return cells;
 }
 
-/** Returns kcov's report: the merged one over every run, or the one run's when there was one. */
+/** Returns kcov's report: the merged one over every run (which kcov nests), or the one run's when there was one. */
 function shellSummary(): string | undefined {
   if (!fs.existsSync(SHELL_DIR)) return undefined;
-  const runs = fs.readdirSync(SHELL_DIR).filter((entry) => fs.existsSync(path.join(SHELL_DIR, entry, 'coverage.json')));
-  const chosen = runs.includes('kcov-merged') ? 'kcov-merged' : runs[0];
-  return chosen === undefined ? undefined : path.join(SHELL_DIR, chosen, 'coverage.json');
+  const merged = ['kcov-merged/kcov-merged', 'kcov-merged']
+    .map((dir) => path.join(SHELL_DIR, dir, 'coverage.json'))
+    .find((file) => fs.existsSync(file));
+  if (merged !== undefined) return merged;
+  const run = fs.readdirSync(SHELL_DIR).find((entry) => fs.existsSync(path.join(SHELL_DIR, entry, 'coverage.json')));
+  return run === undefined ? undefined : path.join(SHELL_DIR, run, 'coverage.json');
 }
 
 /** Returns the cells of kcov's report: lines covered, per script. */
-function readShell(): Map<string, string> {
+function readShell(sources: readonly string[]): Map<string, string> {
   const cells = new Map<string, string>();
   const summary = shellSummary();
   if (summary === undefined) return cells;
@@ -157,11 +160,12 @@ function readShell(): Map<string, string> {
   if (!isRecord(parsed) || !Array.isArray(parsed.files)) return cells;
   for (const file of parsed.files) {
     if (!isRecord(file) || typeof file.file !== 'string' || typeof file.percent_covered !== 'string') continue;
+    // The report may be CI's, where the root differs: the source is the path's tail.
+    const measured = file.file;
+    const source = sources.find((candidate) => measured.endsWith(`/${candidate}`));
+    if (source === undefined) continue;
     const covered = Number(file.percent_covered);
-    cells.set(
-      path.relative(ROOT, file.file),
-      `L ${covered.toFixed(PERCENT_DIGITS)}% (${String(file.covered_lines)} of ${String(file.total_lines)})`,
-    );
+    cells.set(source, `L ${covered.toFixed(PERCENT_DIGITS)}% (${String(file.covered_lines)} of ${String(file.total_lines)})`);
   }
   return cells;
 }
@@ -204,17 +208,18 @@ function main(): void {
     console.error(`Usage: node scripts/coverage_report.ts ${TOOLS.map((tool) => `--${tool}`).join(' | ')}`);
     process.exit(1);
   }
+  const sources = sourceFiles();
   const readers: Record<Tool, () => Map<string, string>> = {
     unit: () => readSummary(UNIT_SUMMARY),
     integration: () => readSummary(INTEGRATION_SUMMARY),
     tla: readTlc,
     swift: readSwift,
-    shell: readShell,
+    shell: () => readShell(sources),
     css: readCss,
   };
   const fresh = readers[column]();
   const kept = readReport();
-  const rows = sourceFiles().map((file) => {
+  const rows = sources.map((file) => {
     const cells: Cells = kept.get(file) ?? {};
     cells[column] = fresh.get(file) ?? (file.includes('/test/') || file.endsWith('.test.ts') ? 'test' : '-');
     const type = TYPES.get(path.extname(file)) ?? '';
