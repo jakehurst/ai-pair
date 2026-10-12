@@ -1,10 +1,11 @@
 #!/bin/bash
 #
 # Runs the shell scripts' tests (bats, in scripts/test) under kcov, which
-# traces bash line by line, and puts the merged report in coverage/shell for
-# COVERAGE.md. Needs kcov (apt install kcov), on Linux: on macOS, kcov's bash
-# tracing rides on stderr, which bats captures, so every script reads 0 there.
-# CI runs it on Ubuntu; its COVERAGE.md is in the check job's artifact.
+# traces bash line by line, puts the merged report in coverage/shell for
+# COVERAGE.md, and fails below coverage_thresholds.json (#161). Needs kcov
+# (apt install kcov), on Linux: on macOS, kcov's bash tracing rides on
+# stderr, which bats captures, so every script reads 0 there. CI runs it on
+# Ubuntu; its COVERAGE.md is in the check job's artifact.
 set -eu
 
 # COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
@@ -34,4 +35,4 @@ for tests in scripts/test/*.bats; do
     "${parse[@]}" "${run}" node_modules/.bin/bats "${tests}"
 done
 kcov --merge "${COVERAGE_DIR}/kcov-merged" "${runs[@]}"
-node scripts/coverage_report.ts --shell
+node scripts/coverage_report.ts --shell --check

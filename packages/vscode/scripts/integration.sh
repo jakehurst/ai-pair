@@ -3,7 +3,8 @@
 # Runs test/integration.ts inside a fresh, isolated VS Code instance. With
 # EXTENSION_PATH set (e.g. to an unpacked .vsix), tests that instead of the
 # dev build. With --coverage, the extension host writes V8 coverage of the
-# bundle, and c8 reports it against the sources, in coverage/integration/.
+# bundle, c8 reports it against the sources, in coverage/integration/, and the
+# run fails below the file's minimums in coverage_thresholds.json (#161).
 set -e
 
 readonly MAC_CODE='/Applications/Visual Studio Code.app/Contents/MacOS/Code'
@@ -59,6 +60,6 @@ if ((coverage)); then
       --reports-dir "${COVERAGE_DIR}" \
       --reporter text-summary --reporter lcov --reporter json-summary \
       --include 'packages/vscode/dist/**' --all=false \
-      && node scripts/coverage_report.ts --integration
+      && node scripts/coverage_report.ts --integration --check
   )
 fi

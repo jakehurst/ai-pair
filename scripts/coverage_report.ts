@@ -271,7 +271,7 @@ function shortfalls(tool: Tool, fresh: ReadonlyMap<string, Measured>, thresholds
     const measures = fresh.get(file)?.measures;
     for (const [measure, minimum] of minimums) {
       const value = measures?.get(measure);
-      if (value === undefined || value < minimum) {
+      if (value === undefined || Number(value.toFixed(PERCENT_DIGITS)) < minimum) {
         const reading = value === undefined ? 'not measured' : percent(value);
         below.push(`${file}: ${tool} ${measure} ${reading}, minimum ${String(minimum)}%`);
       }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+-   Every coverage run now fails when a file drops below its measured
+    coverage, held in `coverage_thresholds.json` at the root (#161): vitest
+    holds each file's unit numbers, `scripts/coverage_report.ts --check` the
+    integration, Swift, shell, and CSS columns, and `specs/check.sh --coverage`
+    fails on an action that never fired unless the spec's section of
+    `specs/README.md` says it never fires. CI keeps COVERAGE.md and the reports
+    as artifacts on a failed run too. The extension works the same.
+
 ## 0.6.11
 
 -   Every TypeScript file now follows Google's TypeScript Style Guide, not

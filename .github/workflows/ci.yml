@@ -56,6 +56,7 @@ jobs:
       # kcov traces bash line by line, for the shell scripts' tests.
       - run: npm run test:shell:coverage
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: coverage-unit-css-shell
           path: |
@@ -78,6 +79,7 @@ jobs:
       - run: npm run typecheck:swift
       - run: npm run test:swift:coverage
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: coverage-swift
           path: coverage/swift
@@ -108,6 +110,7 @@ jobs:
         env:
           VSCODE_ARGS: --no-sandbox --disable-gpu
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: coverage-integration
           path: coverage/integration
@@ -130,6 +133,7 @@ jobs:
         env:
           TLC: java -XX:+UseParallelGC -cp ${{ runner.temp }}/tla2tools.jar tlc2.TLC
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: coverage-tla
           path: coverage/tla

@@ -167,6 +167,14 @@ Set by Justine on 2026-10-07.
         check job is where that column fills; its COVERAGE.md is in the job's
         artifact. Run `npm run coverage` and commit the file with a change that
         moves the numbers (set by Justine on 2026-10-11).
+    -   Every coverage run fails below `coverage_thresholds.json` (file, tool,
+        measure, minimum percent; set by Justine on 2026-10-11, #161): vitest
+        holds the unit column per file, and `scripts/coverage_report.ts --check`
+        the other columns; `specs/check.sh --coverage` fails on an action that
+        never fired unless the spec's section of `specs/README.md` says, in a
+        sentence naming it in backticks, that it never fires. A change that
+        raises a file's coverage raises its minimum in the same PR, to the new
+        number rounded down; a file that leaves a run leaves the thresholds too.
     -   Every file type with a test tool has tests (set by Justine on
         2026-10-11): a shell script gets a bats test in `scripts/test/`,
         against fakes on the PATH; the icon's Swift package in

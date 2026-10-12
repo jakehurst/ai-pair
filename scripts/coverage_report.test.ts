@@ -103,3 +103,8 @@ it("--tla --check ignores another spec's section saying the action never fires",
   const result = runTla('### `Other`\n\n`Never` can never fire.\n');
   expect(result.status).toBe(1);
 });
+
+it("--check compares at the table's precision, one decimal", () => {
+  const result = run({ rules: 2500, matched: 2499, minimum: 100 });
+  expect(result.status).toBe(0);
+});

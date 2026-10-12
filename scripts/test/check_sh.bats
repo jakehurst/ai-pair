@@ -50,8 +50,10 @@ TLC
   [[ "${output}" != *'FAILED'* ]]
 }
 
-@test "--coverage keeps the statistics, names an action that never fired, and updates the table" {
+@test "--coverage keeps the statistics, names an action that never fired, fails on it, and updates the table" {
   run --separate-stderr bash "${ROOT}/specs/check.sh" --coverage
+  [[ "${status}" -eq 1 ]]
+  [[ "${stderr}" == *'specs/Serialize.tla: action Never never fired, and specs/README.md does not say it never fires'* ]]
   [[ -f "${COVERAGE_ROOT}/tla/Serialize.txt" ]]
   [[ "$(head -1 "${COVERAGE_ROOT}/tla/Serialize.txt")" == 'The coverage statistics'* ]]
   [[ "${output}" == *'  Serialize: action Never never fired'* ]]

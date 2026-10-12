@@ -13,7 +13,7 @@
     "release": "node scripts/release.ts",
     "package": "npm run package -w packages/vscode",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage && node scripts/coverage_report.ts --unit && node scripts/coverage_report.ts --css",
+    "test:coverage": "vitest run --coverage && node scripts/coverage_report.ts --unit && node scripts/coverage_report.ts --css --check",
     "test:integration:coverage": "npm run test:integration:coverage -w packages/vscode",
     "test:shell": "bats scripts/test",
     "test:shell:coverage": "bash scripts/coverage_shell.sh",
