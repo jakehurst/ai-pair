@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.2
+
+-   The unit tests now cover every line, branch, and function of
+    `packages/core/src` and `packages/protocol/src` (#162); the thresholds in
+    `coverage_thresholds.json` are 100 for each of those files. `core`'s
+    `index.ts` and `paths.ts` only re-export, so they leave the unit run.
+    New tests cover the bridge's WebSocket conversation, the player's refused
+    actions and interrupts, the controller's no-session guards, trace, and
+    restored reports, the rehearsal, the timeline's pause path, and the
+    protocol's frames. Branches no sequence of calls could reach are gone,
+    with no change for any state that can occur: a second check where the
+    first had already run, an `?? undefined`, a lookup of an event that always
+    exists, a `default` after every kind of call, and a queued batch typed as
+    maybe lacking its rehearsal. `Player` takes a `PlayerEditor`, an
+    `EditorPort` without the three methods only the controller calls. The
+    extension works the same.
+
 ## 0.7.1
 
 -   Every action of every TLA+ spec now fires in a config CI checks (#169).
