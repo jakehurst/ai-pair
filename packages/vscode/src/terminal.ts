@@ -10,6 +10,8 @@ import { MAX_OUTPUT, outcomeOf, Tail } from './output';
 const SHELL_INTEGRATION_MS = 5000;
 /** After the command ends, how long its output stream gets to drain. */
 const DRAIN_MS = 500;
+/** The tail keeps this many times the output it reports, so a cut at its start loses nothing it shows. */
+const TAIL_SLACK = 4;
 
 interface Owned {
   terminal: vscode.Terminal;
@@ -146,7 +148,7 @@ export class PairTerminals implements vscode.Disposable {
       owned.busy = false;
     });
 
-    const output = new Tail(MAX_OUTPUT * 4);
+    const output = new Tail(MAX_OUTPUT * TAIL_SLACK);
     const drained = (async () => {
       for await (const data of execution.read()) {
         output.push(data);

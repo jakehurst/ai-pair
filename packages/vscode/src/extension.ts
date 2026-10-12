@@ -125,9 +125,13 @@ export function activate(context: vscode.ExtensionContext): Api {
   function passage(): Passage {
     const chosen: unknown = config().get(CALIBRATION_PASSAGE);
     const text = isRecord(chosen) ? stringOf(chosen.text) : undefined;
-    if (!text?.trim()) return builtInPassage(context.extensionPath);
+    if (text === undefined || text.trim() === '') return builtInPassage(context.extensionPath);
     const notice = isRecord(chosen) ? stringOf(chosen.notice) : undefined;
-    return { title: (isRecord(chosen) && stringOf(chosen.title)) || 'Your passage', text, ...(notice ? { notice } : {}) };
+    return {
+      title: (isRecord(chosen) ? stringOf(chosen.title) : undefined) ?? 'Your passage',
+      text,
+      ...(notice === undefined ? {} : { notice }),
+    };
   }
   const calibration = new Calibration(
     {
@@ -191,8 +195,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
   });
   const ready = bridge.start();
-  ready.catch((e: unknown) => {
-    void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(e)}`);
+  ready.catch((error: unknown) => {
+    void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(error)}`);
   });
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
@@ -241,7 +245,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       }
     }),
     vscode.commands.registerCommand('aiPair.playDemo', () => {
-      if (!vscode.workspace.workspaceFolders?.length) {
+      if ((vscode.workspace.workspaceFolders?.length ?? 0) === 0) {
         void vscode.window.showErrorMessage('Open a folder first: the demo creates files in ai-pair-demo/.');
         return;
       }
@@ -287,7 +291,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     { dispose: save },
   );
-  if (!context.globalState.get(OFFERED_SETUP)) {
+  if (context.globalState.get<unknown>(OFFERED_SETUP) !== true) {
     void context.globalState.update(OFFERED_SETUP, true);
     void vscode.window.showInformationMessage('AI Pair is installed. Connect it to your agent?', 'Set Up Agent').then((answer) => {
       if (answer) void setUp();

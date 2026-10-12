@@ -155,9 +155,9 @@ function target(action: Action): { file?: string; line?: number } | undefined {
 export async function stepScript(controller: Controller, batch: Action[], current: { file?: string }): Promise<Report> {
   for (const action of batch) {
     const file = target(action)?.file;
-    if (file) current.file = file;
+    if (file !== undefined) current.file = file;
   }
-  if (current.file && batch.some((a) => target(a)?.line !== undefined)) {
+  if (current.file !== undefined && batch.some((a) => target(a)?.line !== undefined)) {
     // A file the batch creates isn't there to read yet; its one line is empty.
     await controller.read(current.file).catch(() => {});
   }
@@ -207,8 +207,8 @@ export async function playDemo(controller: Controller, root: string): Promise<vo
       return;
     }
     await controller.end(SUMMARY);
-  } catch (e) {
+  } catch (error) {
     // The session was ended or replaced.
-    console.error('AI Pair demo stopped:', e);
+    console.error('AI Pair demo stopped:', error);
   }
 }

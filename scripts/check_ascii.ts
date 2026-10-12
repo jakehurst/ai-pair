@@ -12,6 +12,9 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const SKIPPED = /^(package-lock\.json|.*\.(png|gif))$/;
 
 const ASCII_DELETE = 0x7f; // the last ASCII code point
+const HEX = 16;
+/** U+XXXX: a code point is written with at least four hex digits. */
+const CODE_POINT_DIGITS = 4;
 
 // The characters ALLOWED names, by their Unicode names.
 const CURSOR_MARKER = 0x258c; // LEFT HALF BLOCK
@@ -40,7 +43,7 @@ const ALLOWED: ReadonlyMap<string, readonly number[]> = new Map([
 ]);
 
 const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0');
-const files = tracked.filter((file) => file && !SKIPPED.test(file) && fs.existsSync(path.join(ROOT, file)));
+const files = tracked.filter((file) => file !== '' && !SKIPPED.test(file) && fs.existsSync(path.join(ROOT, file)));
 
 let found = 0;
 for (const file of files) {
@@ -52,7 +55,7 @@ for (const file of files) {
       column++;
       const code = char.codePointAt(0);
       if (code !== undefined && code > ASCII_DELETE && !allowed.has(code)) {
-        console.error(`${file}:${i + 1}:${column}: U+${code.toString(16).toUpperCase().padStart(4, '0')}`);
+        console.error(`${file}:${i + 1}:${column}: U+${code.toString(HEX).toUpperCase().padStart(CODE_POINT_DIGITS, '0')}`);
         found++;
       }
     }

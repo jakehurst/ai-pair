@@ -44,6 +44,13 @@ const TIP_MARGIN = 6;
 
 /** The tallest the reply box grows, in pixels, before it scrolls. */
 const REPLY_MAX_HEIGHT = 120;
+/** A shell's exit code after Ctrl+C, and after SIGTERM. */
+const EXIT_INTERRUPTED = 130;
+const EXIT_TERMINATED = 143;
+/** A speed shown with one decimal is a whole number of tenths. */
+const TENTHS = 10;
+/** How close a menu speed must be to the setting to count as chosen. */
+const SPEED_TOLERANCE = 0.01;
 
 type RunPhase = Extract<PanelEvent, { type: 'run' }>['phase'];
 
@@ -207,7 +214,7 @@ function addOutside(files: string[]): void {
 }
 
 function addYou(text: string | undefined, ref: Ref | undefined): void {
-  const el = entry('you', text ? rich(text) : '');
+  const el = entry('you', text === undefined ? '' : rich(text));
   if (ref) el.append(refLink(ref));
   add(el);
   // specs/PanelScroll.tla, `AddYours`: the programmer's message scrolls the history to its top (#139).
@@ -228,7 +235,7 @@ function setOutcome(el: Element, phase: RunPhase, exitCode: number | undefined):
   } else if (exitCode === 0) {
     outcome.classList.add('ok');
     outcome.textContent = 'exit 0';
-  } else if (exitCode === 130 || exitCode === 143) {
+  } else if (exitCode === EXIT_INTERRUPTED || exitCode === EXIT_TERMINATED) {
     // Interrupted (Ctrl+C) or terminated, like a server being restarted: not a failure.
     outcome.textContent = 'stopped';
   } else {
@@ -379,7 +386,7 @@ function setTip(el: HTMLElement, text: string): void {
 
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer);
-  if ((el === ui.speed && !ui.speedMenu.hidden) || (el === ui.readingSpeed && !ui.readingMenu.hidden)) return;
+  if ((el === ui.speed && ui.speedMenu.hidden === false) || (el === ui.readingSpeed && ui.readingMenu.hidden === false)) return;
   tipTarget = el;
   ui.tip.textContent = el.dataset.tip ?? '';
   ui.tip.hidden = false;
@@ -477,10 +484,10 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
     });
   }
   document.addEventListener('click', (e) => {
-    if (!menu.hidden && !(e.target instanceof Node && menu.contains(e.target))) close();
+    if (menu.hidden === false && !(e.target instanceof Node && menu.contains(e.target))) close();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !menu.hidden) {
+    if (e.key === 'Escape' && menu.hidden === false) {
       close();
       button.focus();
     }
@@ -509,11 +516,11 @@ function setActive(on: boolean): void {
 
 // One decimal, so the menu's speeds line up; a setting with more keeps them.
 function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
-  const label = `${Number.isInteger(value * 10) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
+  const label = `${Number.isInteger(value * TENTHS) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
   button.textContent = prefix + label;
   button.setAttribute('aria-label', `${name}: ${label}`);
   for (const b of menu.querySelectorAll('button')) {
-    b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < 0.01));
+    b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < SPEED_TOLERANCE));
   }
 }
 
@@ -560,7 +567,7 @@ function handle(message: ToPanel): void {
         ui.ref.innerHTML = '';
         pointed = undefined;
         addDivider(
-          `Session started${message.task ? `: ${message.task}` : ''}${message.rules ? `${LABEL_SEPARATOR}rules from ${message.rules.join(', ')}` : ''}`,
+          `Session started${message.task === undefined ? '' : `: ${message.task}`}${message.rules === undefined ? '' : `${LABEL_SEPARATOR}rules from ${message.rules.join(', ')}`}`,
         );
         setActive(true);
       } else {
@@ -568,7 +575,7 @@ function handle(message: ToPanel): void {
         current = undefined;
         addDivider(ENDED[message.reason]);
         ui.idleTitle.textContent = message.reason === 'disconnected' ? 'The agent disconnected' : 'Session ended';
-        ui.idleSummary.innerHTML = message.summary ? rich(message.summary) : '';
+        ui.idleSummary.innerHTML = message.summary === undefined ? '' : rich(message.summary);
         ui.idleText.textContent = 'Ask your agent to pair again.';
         // specs/Start.tla, `EndSession`: the idle view, and its button, are back.
         setActive(false);
@@ -594,7 +601,7 @@ function handle(message: ToPanel): void {
       return;
     case 'turn':
       addDivider(message.to === 'user' ? 'You took the turn' : 'You handed the turn back');
-      if (message.message || message.ref) addYou(message.message, message.ref);
+      if (message.message !== undefined || message.ref !== undefined) addYou(message.message, message.ref);
       ui.reply.placeholder = message.to === 'user' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
       return;
     case 'point':
@@ -750,7 +757,7 @@ document.documentElement.addEventListener('pointerleave', () => {
 document.addEventListener('pointerdown', hideTip, /* useCapture= */ true);
 document.addEventListener('focusin', (e) => {
   const el = elementOf(e);
-  if (el?.matches('[data-tip]:focus-visible')) showTip(el);
+  if (el?.matches('[data-tip]:focus-visible') === true) showTip(el);
 });
 document.addEventListener('focusout', (e) => {
   if (e.target === tipTarget) hideTip();
@@ -781,9 +788,9 @@ document.addEventListener('click', (e) => {
   const target = e.target instanceof Element ? e.target : undefined;
   if (target?.closest('a[href]')) e.preventDefault();
   const a = target?.closest<HTMLElement>('a.file, a.url, a.command');
-  if (a?.dataset.file) vscode.postMessage({ type: 'openFile', file: a.dataset.file });
-  if (a?.dataset.url) vscode.postMessage({ type: 'openUrl', url: a.dataset.url });
-  if (a?.dataset.command) vscode.postMessage({ type: 'command', command: a.dataset.command });
+  if (a?.dataset.file !== undefined) vscode.postMessage({ type: 'openFile', file: a.dataset.file });
+  if (a?.dataset.url !== undefined) vscode.postMessage({ type: 'openUrl', url: a.dataset.url });
+  if (a?.dataset.command !== undefined) vscode.postMessage({ type: 'command', command: a.dataset.command });
 });
 
 // Start a session: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115).

@@ -1,8 +1,19 @@
 // The protocol state machine: sessions, the batch queue, and reports. Playing a batch is player.ts.
 // See PROTOCOL.md for the rules implemented here.
 
-import type { Action, BatchResult, Event, Excerpt, FileContent, Passage, PauseReason, Report, Turn } from '@ai-pair/protocol';
-import { CURSOR_MARKER, ToolError } from '@ai-pair/protocol';
+import {
+  CURSOR_MARKER,
+  ToolError,
+  type Action,
+  type BatchResult,
+  type Event,
+  type Excerpt,
+  type FileContent,
+  type Passage,
+  type PauseReason,
+  type Report,
+  type Turn,
+} from '@ai-pair/protocol';
 import { boundedDiff, lineChanges } from './diff';
 import { LineIds, type Sighting } from './lines';
 import { agentPath, displayPath, Player, type Scene } from './player';
@@ -187,9 +198,9 @@ export class Controller {
   start(task?: string, root?: string, rules?: string[]): Promise<Report> {
     return this.serialize(async () => {
       // In the editor's spelling, so paths inside it are reported relative to it.
-      const at = root && this.editor.resolvePath(root);
+      const at = root === undefined ? undefined : this.editor.resolvePath(root);
       const waiting = this.session;
-      if (waiting?.suspended) {
+      if (waiting?.suspended === true) {
         // Its agent is back, from its directory: it carries on where it left off (#25, specs/Resume.tla, `Start`).
         if (waiting.scene.root === at) return this.resumeSession(waiting, rules);
         // Another directory: another session, which ends the one waiting.
@@ -208,8 +219,8 @@ export class Controller {
         allowedCommands: new Set(),
       };
       this.open(scene, task);
-      this.trace?.(`session started${task ? `: ${task}` : ''}`);
-      this.panel.post({ type: 'session', active: true, task, ...(rules?.length ? { rules } : {}) });
+      this.trace?.(`session started${task === undefined ? '' : `: ${task}`}`);
+      this.panel.post({ type: 'session', active: true, task, ...(rules !== undefined && rules.length > 0 ? { rules } : {}) });
       this.render();
       return { batches: [], events: [], turn: scene.turn };
     });
@@ -224,7 +235,13 @@ export class Controller {
     this.trace?.('session resumed');
     session.seen = new Map();
     session.seenCursor = undefined;
-    this.panel.post({ type: 'session', active: true, task: session.task, resumed: true, ...(rules?.length ? { rules } : {}) });
+    this.panel.post({
+      type: 'session',
+      active: true,
+      task: session.task,
+      resumed: true,
+      ...(rules !== undefined && rules.length > 0 ? { rules } : {}),
+    });
     this.render();
     return this.withCursor(session, { ...this.snapshot(session, /* waiting= */ false), resumed: true });
   }
@@ -327,12 +344,12 @@ export class Controller {
       // (specs/Controller.tla: `FailRehearsal`, else `PassRehearsal`).
       const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
-      if (current && rehearsal.result.status === 'failed') return this.rejectBatch(session, actions, rehearsal);
+      if (current === true && rehearsal.result.status === 'failed') return this.rejectBatch(session, actions, rehearsal);
       const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal?.after };
-      if (current) {
+      if (current === true) {
         session.queue.push(batch);
         this.trace?.(`batch ${batch.id} queued: ${actions.length} actions`);
-        if (anchor?.anchored) session.anchorNeeded = false;
+        if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);
       } else {
         this.discard(session, batch);
@@ -384,8 +401,8 @@ export class Controller {
   private async textOrMissing(session: Session, path: string): Promise<string> {
     try {
       return await this.editor.getText(path);
-    } catch (e) {
-      if (!(e instanceof MissingFile)) throw e;
+    } catch (error) {
+      if (!(error instanceof MissingFile)) throw error;
       throw new ToolError('invalid_arguments', `${this.displayPath(session, path)} doesn't exist. A \`move\` to it creates it, empty.`);
     }
   }
@@ -487,7 +504,7 @@ export class Controller {
     if (!session) return;
     // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
     const changes = lineChanges(before, reported);
-    const planned = session.queue.some((b) => b.after?.edits.has(file));
+    const planned = session.queue.some((b) => b.after?.edits.has(file) === true);
     // The queued rehearsals follow it, reading the file's line identities from the editor (specs/Rehearsal.tla,
     // `EditAsOther`).
     if (!planned) {
@@ -541,7 +558,7 @@ export class Controller {
     session.scene.turn = 'agent';
     clearTimeout(session.navigatorTimer);
     const event: Event = { kind: 'turn', to: 'agent' };
-    if (message) event.message = message;
+    if (message !== undefined) event.message = message;
     if (selection) event.selection = this.excerpt(session, selection);
     session.events.push(event);
     this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
@@ -730,7 +747,7 @@ export class Controller {
     this.endQuiet();
     // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
     function guarded(): Promise<T> {
-      return signal?.aborted ? Promise.reject(cancelled()) : fn();
+      return signal?.aborted === true ? Promise.reject(cancelled()) : fn();
     }
     const run = this.chain.then(guarded, guarded);
     // The chain carries on past a call that failed; its caller got the rejection.
@@ -797,7 +814,7 @@ export class Controller {
    */
   private block(kind: Call['kind'], opts: { batch?: Batch; summary?: string }, signal?: AbortSignal): Promise<Report> {
     // An abort that fired while the batch was rehearsed won't fire again (specs/Serialize.tla, `Rehearse`).
-    if (signal?.aborted) return Promise.reject(cancelled());
+    if (signal?.aborted === true) return Promise.reject(cancelled());
     return new Promise((resolve, reject) => {
       const call: Call = {
         kind,
@@ -1006,7 +1023,7 @@ export class Controller {
     const held = session.held.shift();
     if (held) report.rejected = held.rejected;
     // Its own mark: a report before it may have taken session.mayRepeat (specs/Controller.tla, `Commit` with MarkHeld).
-    if (held?.mayRepeat) report.repeated = true;
+    if (held?.mayRepeat === true) report.repeated = true;
     if (session.held.length > 0) session.stale = true;
     return report;
   }

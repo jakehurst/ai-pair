@@ -154,11 +154,11 @@ button:disabled {
 /*
  * In a session, room for the header and two lines of message, so the reply box does not move for
  * short messages: 32px for the header, plus two lines at line height 1.5 of the message's font,
- * which is 1.3 times the editor's.
+ * which is 1.3 times the editor's: 2 * 1.5 * 1.3 = 3.9 of it.
  */
 .active .main {
   box-sizing: border-box;
-  min-height: calc(32px + 2 * 1.5 * 1.3 * var(--vscode-editor-font-size, 13px));
+  min-height: calc(32px + var(--vscode-editor-font-size, 13px) * 3.9);
 }
 
 /* The header: the status and the controls. Without a session, the idle screen's title says it all. */

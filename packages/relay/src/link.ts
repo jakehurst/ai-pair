@@ -55,8 +55,8 @@ function alive(pid: number): boolean {
   try {
     process.kill(pid, /* signal= */ 0);
     return true;
-  } catch (e) {
-    return e instanceof Error && 'code' in e && e.code === 'EPERM';
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'EPERM';
   }
 }
 
@@ -181,7 +181,7 @@ export class EditorLink {
     }
     // An abort that fired before the listener below is added won't fire again (#29). A call never
     // sent takes no report, so there is nothing to hand back (`Send` with CheckAbort).
-    if (signal?.aborted) throw new RelayError('cancelled', 'The call was cancelled.');
+    if (signal?.aborted === true) throw new RelayError('cancelled', 'The call was cancelled.');
     const { calls, cancelled } = state;
     const id = this.nextId++;
     const pending: Pending = { tool, cancelled: false, resolve: () => {}, reject: () => {} };
@@ -191,9 +191,9 @@ export class EditorLink {
       calls.set(id, pending);
       try {
         ws.send(JSON.stringify({ type: 'call', id, tool, args }));
-      } catch (e) {
+      } catch (error) {
         calls.delete(id);
-        reject(new RelayError('no_editor', `Couldn't send to the editor: ${e instanceof Error ? e.message : String(e)}`));
+        reject(new RelayError('no_editor', `Couldn't send to the editor: ${error instanceof Error ? error.message : String(error)}`));
       }
     });
     // specs/Wire.tla, `Abort`: the relay handles the client's cancel of a call it sent.
@@ -258,8 +258,8 @@ export class EditorLink {
     for (const window of findWindows([this.folder], this.dir).windows) {
       try {
         return await this.openWindow(window);
-      } catch (e) {
-        first ??= e;
+      } catch (error) {
+        first ??= error;
       }
     }
     throw first;
@@ -302,7 +302,7 @@ export class EditorLink {
           // The call returned before our cancellation reached the editor, so the agent will never
           // see this report. Hand it back to be delivered with the next one (specs/Wire.tla, `Reply`;
           // specs/Controller.tla, `Bounce`).
-          if (call?.cancelled && REPORTING.has(call.tool)) {
+          if (call?.cancelled === true && REPORTING.has(call.tool)) {
             ws.send(JSON.stringify({ type: 'return', report: message.result }));
           } else if (call && REPORTING.has(call.tool) && typeof message.result === 'object' && message.result !== null) {
             this.answeredOn.set(message.result, ws);

@@ -1,9 +1,26 @@
 // Playing batches: what each action does, at a human pace. The same code plays a batch in the
 // programmer's editor and, to check it before it's queued, in memory (see rehearsal.ts).
 
-import type { Action, BatchError, BatchResult, Candidate, Code, ErrorKind, RunResult, SpanTarget, Turn } from '@ai-pair/protocol';
 import * as nodePath from 'node:path';
-import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, typeProblem, withinFolder } from '@ai-pair/protocol';
+import {
+  actionKinds,
+  CURSOR_MARKER,
+  fieldsProblem,
+  moveProblem,
+  spanProblem,
+  typeProblem,
+  withinFolder,
+  type Action,
+  type BatchError,
+  type BatchResult,
+  type Candidate,
+  type Code,
+  type ErrorKind,
+  type RunResult,
+  type SpanTarget,
+  type Turn,
+} from '@ai-pair/protocol';
+import { MS_PER_SECOND } from './constants';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from './places';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
@@ -106,12 +123,12 @@ function failed(r: Resolution & { ok: false }, file: string, text: string, shown
 
 /** Returns the absolute path for a path from the agent: relative to its working directory, if it gave one. */
 export function agentPath(editor: EditorPort, file: string, root?: string): string {
-  return editor.resolvePath(root ? nodePath.resolve(root, file) : file);
+  return editor.resolvePath(root === undefined ? file : nodePath.resolve(root, file));
 }
 
 /** Returns how to name a file to the agent. */
 export function displayPath(editor: EditorPort, file: string, root?: string): string {
-  if (!root) return editor.displayPath(file);
+  if (root === undefined) return editor.displayPath(file);
   // Not by `relative` starting with "..": a folder in the root may be named `..cache` (#5).
   const inside = withinFolder(root, file);
   return inside === undefined ? file : nodePath.relative(root, inside);
@@ -183,7 +200,7 @@ export class Player {
   async code({ span, moved }: { span?: Range; moved: boolean }): Promise<{ code: Code; sighting: Sighting } | undefined> {
     const scene = this.scene;
     const file = span?.file ?? (moved ? scene.cursor?.file : undefined);
-    if (!file) return undefined;
+    if (file === undefined) return undefined;
     const text = await this.stage.editor.getText(file);
     const { lines, finalNewline } = fileLines(text);
     const at = scene.cursor?.file === file ? position(text, scene.cursor.offset) : undefined;
@@ -239,12 +256,12 @@ export class Player {
       let outcome: Outcome;
       try {
         outcome = await this.perform(action, playing);
-      } catch (e) {
-        outcome = fail('invalid_action', e instanceof Error ? e.message : String(e));
+      } catch (error) {
+        outcome = fail('invalid_action', error instanceof Error ? error.message : String(error));
       }
       const rest = actions.slice(i + 1);
       if (outcome.kind === 'interrupted') {
-        if (outcome.consumed) return this.stopped(id, rest, /* effect= */ true);
+        if (outcome.consumed === true) return this.stopped(id, rest, /* effect= */ true);
         if (outcome.rest) return this.stopped(id, [outcome.rest, ...rest], /* effect= */ true);
         return this.stopped(id, actions.slice(i), effect);
       }
@@ -253,7 +270,7 @@ export class Player {
         const error: BatchError = { kind: outcome.error, message: outcome.message };
         if (outcome.candidates) error.candidates = outcome.candidates;
         const result: BatchResult = { id, status: 'failed', error };
-        const unplayed = outcome.consumed ? rest : actions.slice(i);
+        const unplayed = outcome.consumed === true ? rest : actions.slice(i);
         if (unplayed.length > 0) result.unplayed = unplayed;
         return result;
       }
@@ -295,7 +312,7 @@ export class Player {
     const named = this.names(action, playing);
     if (typeof named === 'object') return named;
     const fields = fieldsProblem(action);
-    if (fields) return fail('invalid_action', fields);
+    if (fields !== undefined) return fail('invalid_action', fields);
     // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
     if (scene.turn === 'user' && !('say' in action) && !('point' in action)) {
       return fail('not_your_turn', "During the programmer's turn, only `say` and `point` are allowed.");
@@ -342,9 +359,9 @@ export class Player {
     if ('move' in action) {
       const move = action.move;
       const problem = moveProblem(move);
-      if (problem) return fail('invalid_action', problem);
+      if (problem !== undefined) return fail('invalid_action', problem);
       const file = this.fileOf(move, playing);
-      if (!file) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
+      if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: 'interrupted' };
       // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
       await editor.show(file);
@@ -378,9 +395,9 @@ export class Player {
     if ('select' in action) {
       const target = action.select;
       const problem = spanProblem(target);
-      if (problem) return fail('invalid_action', problem);
+      if (problem !== undefined) return fail('invalid_action', problem);
       const file = this.fileOf(target, playing);
-      if (!file) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
+      if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeSelectMs))) return { kind: 'interrupted' };
       await editor.show(file);
       const span = await this.span(file, target, 'select');
@@ -397,7 +414,7 @@ export class Player {
       const fast = 'type_fast' in action;
       const text: unknown = fast ? action.type_fast : action.type;
       const problem = typeProblem(text);
-      if (problem || typeof text !== 'string') return fail('invalid_action', problem ?? 'Give the text to type.');
+      if (problem !== undefined || typeof text !== 'string') return fail('invalid_action', problem ?? 'Give the text to type.');
       // typeProblem passed: exactly one marker.
       const marker = text.indexOf(CURSOR_MARKER);
       return this.type(text.slice(0, marker), text.slice(marker + CURSOR_MARKER.length), fast, playing);
@@ -412,7 +429,7 @@ export class Player {
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
       // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: 'interrupted' };
-      if (!scene.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
+      if (scene.selection === undefined) return fail('no_selection', 'Nothing is selected; `select` first.');
       const { start, end } = scene.selection;
       playing.edited = true;
       this.clearPoint();
@@ -429,9 +446,9 @@ export class Player {
     if ('point' in action) {
       const target = action.point;
       const problem = spanProblem(target);
-      if (problem) return fail('invalid_action', problem);
+      if (problem !== undefined) return fail('invalid_action', problem);
       const file = this.fileOf(target, playing);
-      if (!file) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
+      if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (scene.turn === 'agent') await editor.show(file);
       const span = await this.span(file, target, 'point');
       if ('kind' in span) return span;
@@ -491,7 +508,7 @@ export class Player {
       }
     }
 
-    const requested = action.wait !== undefined ? action.wait * 1000 : config.runWaitMs;
+    const requested = action.wait !== undefined ? action.wait * MS_PER_SECOND : config.runWaitMs;
     const waitMs = Math.max(0, Math.min(config.maxRunWaitMs, requested));
     // specs/RunBox.tla, `SaveAndRun`, or `Go` after a confirm.
     panel.post({ type: 'run', id, command, phase: 'running' });
@@ -501,28 +518,28 @@ export class Player {
     let outcome;
     try {
       outcome = await editor.runCommand(command, { cwd: scene.root ?? editor.resolvePath('.'), waitMs, signal });
-    } catch (e) {
+    } catch (error) {
       panel.post({ type: 'run', id, command, phase: 'declined' });
-      throw e;
+      throw error;
     } finally {
       this.commandRunning = false;
       this.stage.render();
     }
-    if (outcome.notStarted) {
+    if (outcome.notStarted === true) {
       panel.post({ type: 'run', id, command, phase: 'declined' });
       return { kind: 'interrupted' };
     }
 
     const result: RunResult = { command, output: outcome.output };
-    if (outcome.exitCode !== undefined && !outcome.running) result.exit_code = outcome.exitCode;
-    if (outcome.truncated) result.truncated = true;
-    if (outcome.running) result.running = true;
-    if (outcome.shell) result.shell = outcome.shell;
+    if (outcome.exitCode !== undefined && outcome.running !== true) result.exit_code = outcome.exitCode;
+    if (outcome.truncated === true) result.truncated = true;
+    if (outcome.running === true) result.running = true;
+    if (outcome.shell !== undefined) result.shell = outcome.shell;
     playing.runs.push(result);
-    const phase = outcome.running ? 'background' : 'done';
+    const phase = outcome.running === true ? 'background' : 'done';
     panel.post({ type: 'run', id, command, phase, exitCode: result.exit_code });
     // The panel keeps showing it as running until it ends, whenever that is.
-    if (outcome.running) {
+    if (outcome.running === true) {
       void outcome.exited?.then(
         (exitCode) => {
           panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
@@ -534,7 +551,7 @@ export class Player {
     }
 
     // specs/Actions.tla, `StopWhileRunning`: the command runs on, so it counts as played.
-    if (outcome.running && signal.aborted) return { kind: 'interrupted', consumed: true };
+    if (outcome.running === true && signal.aborted) return { kind: 'interrupted', consumed: true };
     if (result.exit_code !== undefined && result.exit_code !== 0) {
       return { kind: 'error', error: 'command_failed', message: `The command exited with ${result.exit_code}.`, consumed: true };
     }
@@ -708,8 +725,8 @@ export class Player {
     for (const file of playing.touched) {
       try {
         await this.stage.editor.save(file);
-      } catch (e) {
-        unsaved.push({ file: this.displayPath(file), error: e instanceof Error ? e.message : String(e) });
+      } catch (error) {
+        unsaved.push({ file: this.displayPath(file), error: error instanceof Error ? error.message : String(error) });
       }
     }
     return unsaved;

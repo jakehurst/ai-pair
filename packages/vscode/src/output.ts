@@ -31,7 +31,7 @@ export function outcomeOf(
 ): CommandOutcome {
   const text = terminalText(output.text);
   const outcome: CommandOutcome = { output: text.length > MAX_OUTPUT ? text.slice(-MAX_OUTPUT) : text };
-  if (run.shell) outcome.shell = run.shell;
+  if (run.shell !== undefined) outcome.shell = run.shell;
   if (output.dropped || text.length > MAX_OUTPUT) outcome.truncated = true;
   if (run.finished) {
     const exitCode = run.exitCode();

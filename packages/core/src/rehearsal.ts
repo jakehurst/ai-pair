@@ -50,17 +50,17 @@ class MemoryEditor implements EditorPort {
     }
   }
 
-  async isDirty(): Promise<boolean> {
-    return false;
+  isDirty(): Promise<boolean> {
+    return Promise.resolve(false);
   }
 
   async show(file: string): Promise<void> {
     if (this.texts.has(file)) return;
     try {
       await this.real.getText(file);
-    } catch (e) {
+    } catch (error) {
       // Showing a file creates it.
-      if (!(e instanceof MissingFile)) throw e;
+      if (!(error instanceof MissingFile)) throw error;
       this.texts.set(file, '');
     }
   }
@@ -77,8 +77,8 @@ class MemoryEditor implements EditorPort {
   reveal(): void {}
   follow(): void {}
 
-  async runCommand(): Promise<CommandOutcome> {
-    return { exitCode: 0, output: '' };
+  runCommand(): Promise<CommandOutcome> {
+    return Promise.resolve({ exitCode: 0, output: '' });
   }
 }
 

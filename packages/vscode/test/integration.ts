@@ -78,7 +78,7 @@ async function insertAsProgrammer(uri: vscode.Uri, position: vscode.Position, te
 
 /** Returns whether `e` is the rejection of a `read` of a file that doesn't exist (#89). */
 function missing(e: unknown): boolean {
-  return e instanceof Error && 'code' in e && e.code === 'invalid_arguments' && /doesn't exist/.test(e.message);
+  return e instanceof Error && 'code' in e && e.code === 'invalid_arguments' && e.message.includes("doesn't exist");
 }
 
 /** Returns whether `v` is the extension's `Api`, by its members: the bundle's classes are not this bundle's, so no `instanceof`. */
@@ -673,7 +673,7 @@ export async function run(): Promise<void> {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const content = result.content as Array<{ type: string; text: string }>;
     const part = content[0];
-    assert.ok(!result.isError, part?.text ?? 'tool error');
+    assert.ok(result.isError !== true, part?.text ?? 'tool error');
     assert.ok(part, `${name} answered with no text`);
     return part.text;
   }
@@ -736,7 +736,7 @@ export async function run(): Promise<void> {
     assert.match(back, /may repeat/);
     assert.match(back, new RegExp(`"line":${i + 5}`));
   }
-  assert.ok((await agent.callTool({ name: 'listen', arguments: {} })).isError, 'the ended session is still open');
+  assert.ok((await agent.callTool({ name: 'listen', arguments: {} })).isError === true, 'the ended session is still open');
   console.log('rejections handed back after their answers each come again, marked, before an ended session closes');
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).

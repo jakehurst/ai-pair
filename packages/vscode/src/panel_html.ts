@@ -5,7 +5,14 @@
 import { randomBytes } from 'node:crypto';
 import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
+/** The range `aiPair.speed` declares in package.json. */
+const MIN_SPEED = 0.25;
+const MAX_SPEED = 4;
+/** The CSP nonce's length before base64 encoding. */
+const NONCE_BYTES = 16;
+
 /** Speeds offered in the panel's menu. The `aiPair.speed` setting takes any value in its range. */
+// oxlint-disable-next-line eslint/no-magic-numbers -- the list is the constant
 export const SPEEDS: readonly number[] = [0.4, 0.6, 1, 1.5, 2, 3];
 
 /**
@@ -13,7 +20,7 @@ export const SPEEDS: readonly number[] = [0.4, 0.6, 1, 1.5, 2, 3];
  * for what isn't a finite number. VS Code only warns about a value out of range in settings.json (#17).
  */
 export function settingSpeed(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.min(4, Math.max(0.25, value)) : 1;
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(MAX_SPEED, Math.max(MIN_SPEED, value)) : 1;
 }
 
 function svg(paths: string, cls = ''): string {
@@ -41,7 +48,7 @@ const ICONS = {
 
 /** Renders the page. `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
 export function panelHtml(cspSource: string, styleUri: string, scriptUri: string): string {
-  const nonce = randomBytes(16).toString('base64');
+  const nonce = randomBytes(NONCE_BYTES).toString('base64');
   const speeds = SPEEDS.map(
     (s) => `<button type="button" role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}${SPEED_SUFFIX}</button>`,
   ).join('');

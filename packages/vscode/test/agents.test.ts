@@ -18,8 +18,9 @@ beforeEach(() => {
     home: fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-agents-')),
     env: { PATH: '' },
     platform: process.platform,
-    exec: async (program, args) => {
+    exec: (program, args) => {
       calls.push([program, ...args]);
+      return Promise.resolve();
     },
   };
 });

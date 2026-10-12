@@ -13,6 +13,8 @@ export const SERVER = 'pair';
 
 const HEADER = /^\s*\[\[?\s*([^\]]*?)\s*\]\]?\s*(#.*)?$/;
 
+// execFile returns the child process, which promisify ignores; Node documents this call.
+// oxlint-disable-next-line typescript/strict-void-return
 const execFileAsync = promisify(execFile);
 
 /** Where the agents keep their configuration, and how to run their CLIs: the real machine, or a test's. */
@@ -39,16 +41,16 @@ export interface Agent {
 // ---- Configuration paths ---------------------------------------------------
 
 function claudeFile(host: Host): string {
-  return path.join(host.env.CLAUDE_CONFIG_DIR || host.home, '.claude.json');
+  return path.join(host.env.CLAUDE_CONFIG_DIR ?? host.home, '.claude.json');
 }
 
 function codexDir(host: Host): string {
-  return host.env.CODEX_HOME || path.join(host.home, '.codex');
+  return host.env.CODEX_HOME ?? path.join(host.home, '.codex');
 }
 
 /** Returns OpenCode's configuration folder, under `~/.config` on every OS, Windows included. */
 function opencodeDir(host: Host): string {
-  return path.join(host.env.XDG_CONFIG_HOME || path.join(host.home, '.config'), 'opencode');
+  return path.join(host.env.XDG_CONFIG_HOME ?? path.join(host.home, '.config'), 'opencode');
 }
 
 function geminiFile(host: Host): string {
@@ -64,7 +66,7 @@ function cursorFile(host: Host): string {
 function pathVar(host: Host): string | undefined {
   // Windows names it `Path`, and a copy of the environment is no longer case-insensitive.
   const key = Object.keys(host.env).find((k) => k.toUpperCase() === 'PATH');
-  return key && host.env[key];
+  return key === undefined ? undefined : host.env[key];
 }
 
 /** Returns the program `name` on the PATH, or in one of `extra` (where installers put it off the PATH). */
@@ -106,9 +108,9 @@ function hasStderr(value: unknown): value is { stderr: string } {
 export async function execProgram(file: string, args: string[]): Promise<void> {
   try {
     await execFileAsync(file, args, { windowsVerbatimArguments: /cmd(\.exe)?$/i.test(file), timeout: 30_000 });
-  } catch (e) {
-    const stderr = hasStderr(e) ? e.stderr.trim() : '';
-    throw new Error(stderr || (e instanceof Error ? e.message : String(e)), { cause: e });
+  } catch (error) {
+    const stderr = hasStderr(error) ? error.stderr.trim() : '';
+    throw new Error(stderr || (error instanceof Error ? error.message : String(error)), { cause: error });
   }
 }
 
@@ -210,7 +212,7 @@ export function tomlTable(text: string, name: string): string | undefined {
 /** Returns whether `line` is a key line defining the server outside its own table: `mcp_servers.pair = ...`, or `pair = ...` in `[mcp_servers]`. */
 function definesInline(table: string, line: string, name: string): boolean {
   const key = /^\s*([^=#]+?)\s*=/.exec(line)?.[1];
-  if (!key) return false;
+  if (key === undefined) return false;
   const full = [
     table,
     key
@@ -285,12 +287,12 @@ export const AGENTS: Agent[] = [
   {
     id: 'claude',
     label: 'Claude Code',
-    detect: (host) => !!which(host, 'claude', [path.join(host.home, '.local', 'bin')]) || exists(claudeFile(host)),
+    detect: (host) => which(host, 'claude', [path.join(host.home, '.local', 'bin')]) !== undefined || exists(claudeFile(host)),
     isSetUp: (host, command) => at(readJson(claudeFile(host)), 'mcpServers', SERVER, 'command') === command,
     async setUp(host, command) {
       // Claude Code rewrites its file all the time, so its own CLI is the safer writer, when it's there.
       const cli = which(host, 'claude', [path.join(host.home, '.local', 'bin')]);
-      if (!cli) {
+      if (cli === undefined) {
         editJson(claudeFile(host), ['mcpServers', SERVER], { type: 'stdio', command, args: [], env: {} });
         return claudeFile(host);
       }
@@ -303,56 +305,56 @@ export const AGENTS: Agent[] = [
   {
     id: 'codex',
     label: 'Codex',
-    detect: (host) => !!which(host, 'codex') || exists(codexDir(host)),
+    detect: (host) => which(host, 'codex') !== undefined || exists(codexDir(host)),
     isSetUp: (host, command) => {
       const text = readText(path.join(codexDir(host), 'config.toml'));
       return text !== undefined && tomlTable(text, SERVER)?.includes(`command = ${tomlString(command)}`) === true;
     },
-    async setUp(host, command) {
+    setUp(host, command) {
       // Written directly rather than with `codex mcp add`: the npm shim's binary goes missing easily.
       const file = path.join(codexDir(host), 'config.toml');
       const text = readText(file) ?? '';
       write(file, withTomlTable(text, SERVER, [`command = ${tomlString(command)}`, 'args = []']));
-      return file;
+      return Promise.resolve(file);
     },
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    detect: (host) => !!which(host, 'opencode', [path.join(host.home, '.opencode', 'bin')]) || exists(opencodeDir(host)),
+    detect: (host) => which(host, 'opencode', [path.join(host.home, '.opencode', 'bin')]) !== undefined || exists(opencodeDir(host)),
     isSetUp: (host, command) =>
       ['config.json', 'opencode.json', 'opencode.jsonc'].some((name) => {
         // A list: the program, then its arguments. A string isn't OpenCode's form (#11).
         const configured = at(readJson(path.join(opencodeDir(host), name)), 'mcp', SERVER, 'command');
         return Array.isArray(configured) && configured[0] === command;
       }),
-    async setUp(host, command) {
+    setUp(host, command) {
       const dir = opencodeDir(host);
       const file = ['opencode.jsonc', 'opencode.json'].map((name) => path.join(dir, name)).find((candidate) => exists(candidate));
       const target = file ?? path.join(dir, 'opencode.json');
-      if (!file) write(target, `{\n  "$schema": "https://opencode.ai/config.json"\n}\n`);
+      if (file === undefined) write(target, `{\n  "$schema": "https://opencode.ai/config.json"\n}\n`);
       editJson(target, ['mcp', SERVER], { type: 'local', command: [command], enabled: true });
-      return target;
+      return Promise.resolve(target);
     },
   },
   {
     id: 'gemini',
     label: 'Gemini CLI',
-    detect: (host) => !!which(host, 'gemini') || exists(path.join(host.home, '.gemini')),
+    detect: (host) => which(host, 'gemini') !== undefined || exists(path.join(host.home, '.gemini')),
     isSetUp: (host, command) => at(readJson(geminiFile(host)), 'mcpServers', SERVER, 'command') === command,
-    async setUp(host, command) {
+    setUp(host, command) {
       editJson(geminiFile(host), ['mcpServers', SERVER], { command, args: [] });
-      return geminiFile(host);
+      return Promise.resolve(geminiFile(host));
     },
   },
   {
     id: 'cursor',
     label: 'Cursor',
-    detect: (host) => !!which(host, 'cursor') || exists(path.join(host.home, '.cursor')),
+    detect: (host) => which(host, 'cursor') !== undefined || exists(path.join(host.home, '.cursor')),
     isSetUp: (host, command) => at(readJson(cursorFile(host)), 'mcpServers', SERVER, 'command') === command,
-    async setUp(host, command) {
+    setUp(host, command) {
       editJson(cursorFile(host), ['mcpServers', SERVER], { type: 'stdio', command, args: [] });
-      return cursorFile(host);
+      return Promise.resolve(cursorFile(host));
     },
   },
 ];

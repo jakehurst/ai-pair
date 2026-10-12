@@ -42,13 +42,13 @@ const spanSchema = z
   )
   .superRefine((span, ctx) => {
     const problem = spanProblem(span);
-    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+    if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
   });
 
 /** The text to type, with `CURSOR_MARKER` where the cursor ends. */
 const typeText = z.string({ error: (issue) => typeProblem(issue.input) }).superRefine((text, ctx) => {
   const problem = typeProblem(text);
-  if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
 });
 
 function combined(input: unknown): string | undefined {
@@ -118,7 +118,7 @@ const actionSchema = z.union(
         )
         .superRefine((m, ctx) => {
           const problem = moveProblem(m);
-          if (problem) ctx.addIssue({ code: 'custom', message: problem });
+          if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
         })
         .describe(
           `Move your cursor to a spot, \`at\`: the text around it with ${CURSOR_MARKER} where your cursor goes (\`line: 3, at: "import { ${CURSOR_MARKER}type Context"\` lands right before \`type Context\`), or to the end of the line with \`to: "line_end"\`. On \`line\`, exactly: a spot that isn't on it is rejected. Without \`line\`, on your cursor's line: that's how you step past a close you just typed on your line, e.g. \`{ to: "line_end" }\`.`,

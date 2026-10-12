@@ -14,6 +14,8 @@ const PAUSE_REASONS: Record<PauseReason, string> = {
 
 /** Who made an edit the programmer didn't make. */
 const OTHER_EDITOR = 'A tool, a formatter, or something on disk';
+/** The shortest code fence Markdown allows; a longer one wraps output that has backticks of its own. */
+const MIN_FENCE = 3;
 
 /** The tools whose result is a report, rendered as one. */
 export type ReportingTool = 'start' | 'step' | 'listen' | 'end' | 'calibrate';
@@ -50,7 +52,7 @@ function renderLines(lines: Code['lines'], note?: string): string {
     out.push(`${String(number).padStart(width)}  ${text}`.trimEnd());
     previous = number;
   }
-  if (note) out.push(`${' '.repeat(width)}  ${note}`);
+  if (note !== undefined) out.push(`${' '.repeat(width)}  ${note}`);
   return out.join('\n');
 }
 
@@ -74,9 +76,9 @@ function renderError(error: BatchError): string {
 function renderRun(run: RunResult): string {
   const outcome =
     run.exit_code !== undefined ? `exited with ${run.exit_code}` : run.running ? 'still running in its terminal' : 'exit code unknown';
-  const shell = run.shell ? ` in ${run.shell}` : '';
+  const shell = run.shell === undefined ? '' : ` in ${run.shell}`;
   if (run.output === '') return `Ran \`${run.command}\`${shell}: ${outcome}, no output.`;
-  const fence = '`'.repeat(Math.max(3, longestRun(run.output, '`') + 1));
+  const fence = '`'.repeat(Math.max(MIN_FENCE, longestRun(run.output, '`') + 1));
   return `Ran \`${run.command}\`${shell}: ${outcome}. Output${run.truncated ? ', its end' : ''}:\n${fence}\n${run.output}\n${fence}`;
 }
 
@@ -127,7 +129,7 @@ function renderEvent(event: Event): string {
       return 'The programmer pressed Interrupt.';
     case 'turn':
       if (event.to === 'user') return 'The programmer took the turn.';
-      return `The programmer handed the turn back to you${event.message ? `:\n${quote(event.message)}` : '.'}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
+      return `The programmer handed the turn back to you${event.message === undefined ? '.' : `:\n${quote(event.message)}`}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
     case 'end':
       return 'The programmer ended the session. This is the final report: stop using the pair tools.';
     default:

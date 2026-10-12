@@ -1,7 +1,7 @@
 // Offset <-> line/column conversions. Lines and columns are 1-based.
 
 /** In `terminalText`, where a line was erased: what came before it on the line is gone. */
-const ERASED_LINE = '\x00';
+const ERASED_LINE = '\u0000';
 
 /** A position in text, by line and column, both from 1. */
 export interface Position {
@@ -78,21 +78,21 @@ export function isLineStart(text: string, offset: number): boolean {
 
 /** Returns raw terminal output as plain text: no escape sequences, carriage-return overwrites resolved. */
 export function terminalText(raw: string): string {
-  // Escape sequences start with ESC (\x1b) and some end with BEL (\x07): matching control characters is the point.
+  // Escape sequences start with ESC (\u001b) and some end with BEL (\u0007): matching control characters is the point.
   // oxlint-disable no-control-regex
   const plain = raw
     // ECMA-48: CSI G or 1G moves the cursor to column 1; CSI K or 0K erases from it to the end, CSI 2K the whole line.
-    .replaceAll(/\x1b\[1?G\x1b\[0?K|\x1b\[2K/g, ERASED_LINE)
-    .replaceAll(/\x1b\[1?G/g, '\r')
-    .replaceAll(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-    .replaceAll(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
-    .replaceAll(/\x1b[@-Z\\-_]/g, '');
+    .replaceAll(/\u001B\[1?G\u001B\[0?K|\u001B\[2K/g, ERASED_LINE)
+    .replaceAll(/\u001B\[1?G/g, '\r')
+    .replaceAll(/\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)/g, '')
+    .replaceAll(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replaceAll(/\u001B[@-Z\\-_]/g, '');
   return plain
     .replaceAll('\r\n', '\n')
     .split('\n')
     .map((line) => {
       const parts = (line.split(ERASED_LINE).at(-1) ?? '').split('\r').filter((p) => p !== '');
-      return (parts.at(-1) ?? '').replaceAll(/[\x00-\x08\x0b-\x1f\x7f]/g, '').trimEnd();
+      return (parts.at(-1) ?? '').replaceAll(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trimEnd();
       // oxlint-enable no-control-regex
     })
     .join('\n')

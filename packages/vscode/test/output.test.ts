@@ -24,7 +24,7 @@ describe('outcomeOf', () => {
   const ended = Promise.resolve();
 
   it("gives a finished command's output as text, its shell, and its exit code", () => {
-    const outcome = outcomeOf(tail('\x1b[32mok\x1b[0m\r\n'), { shell: 'zsh', finished: true, exitCode: () => 0, ended });
+    const outcome = outcomeOf(tail('\u001B[32mok\u001B[0m\r\n'), { shell: 'zsh', finished: true, exitCode: () => 0, ended });
     expect(outcome).toEqual({ output: 'ok', shell: 'zsh', exitCode: 0 });
   });
 

@@ -12,14 +12,14 @@ import { Timeline } from '../src/timeline';
 import { containing, FakeEditor } from './fake';
 
 // Terminal output as VS Code's shell integration reports it: OSC 633 marks, and ANSI colors.
-const COMMAND_OUTPUT_START = '\x1b]633;C\x07';
-const COMMAND_FINISHED_OK = '\x1b]633;D;0\x07';
-const GREEN = '\x1b[32m';
-const RESET_COLOR = '\x1b[0m';
+const COMMAND_OUTPUT_START = '\u001B]633;C\u0007';
+const COMMAND_FINISHED_OK = '\u001B]633;D;0\u0007';
+const GREEN = '\u001B[32m';
+const RESET_COLOR = '\u001B[0m';
 // Line redraws, as Prettier and npm write them.
-const ERASE_LINE = '\x1b[2K';
-const ERASE_TO_LINE_END = '\x1b[0K';
-const CURSOR_TO_COLUMN_1 = '\x1b[1G';
+const ERASE_LINE = '\u001B[2K';
+const ERASE_TO_LINE_END = '\u001B[0K';
+const CURSOR_TO_COLUMN_1 = '\u001B[1G';
 
 describe('terminal text', () => {
   it('drops colors and shell integration sequences, and resolves progress overwrites', () => {

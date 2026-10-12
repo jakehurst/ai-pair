@@ -17,3 +17,12 @@ export const LEFT_ARROW = '<-';
 
 /** After a playback speed, `1.0x`. */
 export const SPEED_SUFFIX = 'x';
+
+/** Milliseconds in a second. */
+export const MS_PER_SECOND = 1000;
+
+/** Seconds in a minute. */
+const SECONDS_PER_MINUTE = 60;
+
+/** Milliseconds in a minute. */
+export const MS_PER_MINUTE = SECONDS_PER_MINUTE * MS_PER_SECOND;

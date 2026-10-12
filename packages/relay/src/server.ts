@@ -31,7 +31,10 @@ export function agentGuide(markdown: string): string {
 
 /** Builds the `start` prompt's message: the task, or a question to ask the programmer for one. */
 export function startPrompt(task?: string): string {
-  const what = task?.trim() ? `The task: ${task.trim()}` : "Ask me what we're working on, unless it's clear from our conversation.";
+  const what =
+    task !== undefined && task.trim() !== ''
+      ? `The task: ${task.trim()}`
+      : "Ask me what we're working on, unless it's clear from our conversation.";
   return `Let's pair program. ${what}\n\nStart a session with the \`start\` tool of the pair server, then follow the guide it returns.`;
 }
 
@@ -87,16 +90,16 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       if (tool === 'start') content.push({ type: 'text', text: `# Pairing guide\n\n${guide}` });
       if (tool === 'start' && guides.length > 0) content.push({ type: 'text', text: renderGuides(guides, shownPath) });
       return { content };
-    } catch (e) {
-      const code = e instanceof RelayError ? e.code : 'internal';
-      const message = e instanceof Error ? e.message : String(e);
+    } catch (error) {
+      const code = error instanceof RelayError ? error.code : 'internal';
+      const message = error instanceof Error ? error.message : String(error);
       return { isError: true, content: [{ type: 'text', text: `${code}: ${message}` }] };
     }
   }
 
   server.registerTool('start', TOOLS.start, ({ cwd: given, ...args }, extra) =>
     run('start', args, extra, async () => {
-      const folders = [...(given && path.isAbsolute(given) ? [given] : []), ...(await roots()), cwd];
+      const folders = [...(given !== undefined && path.isAbsolute(given) ? [given] : []), ...(await roots()), cwd];
       const located = link.locate(folders);
       const { folder, root } = link.workspace(located);
       guides = readGuides(aiPairHome(), folder, root);

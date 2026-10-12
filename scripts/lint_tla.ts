@@ -45,17 +45,16 @@ const MODEL_SEPARATOR = '_';
 /** A config line's keyword. */
 const CONFIG_KEYWORD = /^[A-Z_]+/;
 /** Each config keyword's place in a config (8.1); the four state-space controls share one. */
-const CONFIG_ORDER: ReadonlyMap<string, number> = new Map([
-  ['SPECIFICATION', 0],
-  ['CONSTANTS', 1],
-  ['INVARIANTS', 2],
-  ['PROPERTIES', 3],
-  ['SYMMETRY', 4],
-  ['CONSTRAINT', 4],
-  ['ACTION_CONSTRAINT', 4],
-  ['VIEW', 4],
-  ['CHECK_DEADLOCK', 5],
-]);
+const CONFIG_ORDER: ReadonlyMap<string, number> = new Map(
+  [
+    ['SPECIFICATION'],
+    ['CONSTANTS'],
+    ['INVARIANTS'],
+    ['PROPERTIES'],
+    ['SYMMETRY', 'CONSTRAINT', 'ACTION_CONSTRAINT', 'VIEW'],
+    ['CHECK_DEADLOCK'],
+  ].flatMap((keywords, rank) => keywords.map((keyword): [string, number] => [keyword, rank])),
+);
 /** The keywords TLC accepts that the guide replaces, with what replaces them (8.3, 8.4, 8.5). */
 const REPLACED: ReadonlyMap<string, string> = new Map([
   ['CONSTANT', 'CONSTANTS'],
@@ -175,14 +174,14 @@ export function checkConfig(text: string, hasVariables: boolean): Problem[] {
   function report(i: number, rule: string, message: string): void {
     problems.push({ line: i + 1, rule, message });
   }
-  if (!lines[0]?.startsWith(LINE_COMMENT)) report(0, '8.2', 'no leading comment saying what the model is for');
+  if (lines[0]?.startsWith(LINE_COMMENT) !== true) report(0, '8.2', 'no leading comment saying what the model is for');
   const invariants: string[] = [];
   let place = 0;
   let block: string | undefined;
   lines.forEach((line, i) => {
     if (line.length > COLUMN_LIMIT) report(i, '4.2', `${line.length} columns, over ${COLUMN_LIMIT}`);
     const code = codeOf(line).trimEnd();
-    const [keyword] = code.match(CONFIG_KEYWORD) ?? [];
+    const [keyword] = CONFIG_KEYWORD.exec(code) ?? [];
     if (keyword === undefined) {
       if (code !== '' && !ENTRY.test(code)) report(i, '8.4, 8.5', 'an entry is indented 4 spaces');
       const names = code.match(IDENTIFIER) ?? [];

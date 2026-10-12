@@ -85,7 +85,7 @@ export class OutsideChanges {
 /** Returns whether a change to `file` is marked: it is in one of `folders`, and not under an unwatched folder. */
 export function watched(file: string, folders: readonly string[]): boolean {
   const inside = folders.map((f) => ({ folder: f, path: withinFolder(f, file) })).find((f) => f.path !== undefined);
-  if (!inside?.path) return false;
+  if (inside?.path === undefined) return false;
   const parts = inside.path.slice(inside.folder.length).split(/[\\/]/);
   return !parts.some((p) => UNWATCHED.has(p));
 }

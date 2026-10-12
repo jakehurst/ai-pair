@@ -39,8 +39,8 @@ function reported(report: unknown): string {
       : '',
     Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(', ')}]` : '',
   ];
-  if ('rejected' in report && report.rejected) parts.push('rejected');
-  if ('waiting' in report && report.waiting) parts.push('waiting');
+  if ('rejected' in report && report.rejected !== undefined) parts.push('rejected');
+  if ('waiting' in report && report.waiting === true) parts.push('waiting');
   return parts.filter(Boolean).join(' ');
 }
 
@@ -70,6 +70,9 @@ function optionalStrings(v: unknown): string[] | undefined {
   return Array.isArray(v) && v.every((s) => typeof s === 'string') ? v : undefined;
 }
 
+/** The discovery token's length before hex encoding. */
+const TOKEN_BYTES = 24;
+
 function optionalNumber(v: unknown): number | undefined {
   return typeof v === 'number' ? v : undefined;
 }
@@ -77,7 +80,7 @@ function optionalNumber(v: unknown): number | undefined {
 /** The editor's end of the relay connection: a WebSocket server on localhost that forwards tool calls to the controller, found by relays through a discovery file. */
 export class Bridge {
   private server?: WebSocketServer;
-  private readonly token = randomBytes(24).toString('hex');
+  private readonly token = randomBytes(TOKEN_BYTES).toString('hex');
   private port = 0;
   private lastFocused = Date.now();
   /** The relay connection whose agent started the current (or last) session. */
@@ -137,8 +140,8 @@ export class Bridge {
       const written = `${this.file}.tmp`;
       fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 });
       fs.renameSync(written, this.file);
-    } catch (e) {
-      this.options.failed?.(e);
+    } catch (error) {
+      this.options.failed?.(error);
     }
   }
 
@@ -206,12 +209,12 @@ export class Bridge {
             (result) => {
               send({ type: 'result', id: message.id, result });
             },
-            (e: unknown) => {
+            (error: unknown) => {
               send({
                 type: 'error',
                 id: message.id,
-                code: e instanceof ToolError ? e.code : 'internal',
-                message: e instanceof Error ? e.message : String(e),
+                code: error instanceof ToolError ? error.code : 'internal',
+                message: error instanceof Error ? error.message : String(error),
               });
             },
           )
@@ -275,7 +278,7 @@ export class Bridge {
         }
         const notice = optionalString(args.notice);
         const text = fs.readFileSync(controller.resolveFile(args.file), 'utf8');
-        return controller.calibrate({ title: args.title, text, ...(notice ? { notice } : {}) });
+        return controller.calibrate({ title: args.title, text, ...(notice === undefined ? {} : { notice }) });
       }
       default:
         throw new ToolError('invalid_arguments', `Unknown tool: ${String(tool)}`);

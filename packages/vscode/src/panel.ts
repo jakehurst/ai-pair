@@ -18,6 +18,9 @@ export interface Starter {
   start(): Promise<void>;
 }
 
+/** How many files of a name to look for before asking which was meant. */
+const MAX_FOUND = 20;
+
 /** The AI Pair view: shows the agent's narration and status, and takes the programmer's replies and controls. */
 export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   static readonly viewId = 'aiPair.narration';
@@ -171,9 +174,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
-        if (this.calibration?.reply(message.text)) return;
+        if (this.calibration?.reply(message.text) === true) return;
         controller?.resume(undefined, { reveal: false });
-        controller?.userMessage(message.text, message.attach ? this.selection.current() : undefined);
+        controller?.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
@@ -196,7 +199,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'turn':
         controller?.resume();
         if (controller?.turn === 'user') {
-          controller.handBack(message.message, message.attach ? this.selection.current() : undefined);
+          controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
         } else {
           controller?.takeTurn();
         }
@@ -256,7 +259,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     } catch {
       // Not a path from the workspace's root: look for it by name.
     }
-    const found = await vscode.workspace.findFiles(`**/${name}`, '**/node_modules/**', 20);
+    const found = await vscode.workspace.findFiles(`**/${name}`, '**/node_modules/**', MAX_FOUND);
     let uri = found[0];
     if (uri === undefined) {
       void vscode.window.showInformationMessage(`AI Pair: couldn't find ${name} in the workspace.`);

@@ -101,7 +101,7 @@ it(
         }
       }
     }
-    expect(cases).toBeGreaterThan(1_000);
+    expect(cases).toBeGreaterThan(1000);
   },
   EXHAUSTIVE_MS,
 );

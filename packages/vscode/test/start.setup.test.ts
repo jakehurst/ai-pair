@@ -94,7 +94,7 @@ it('GroundedProp: offers the button only once Claude Code is set up, its CLI is 
   expect(await starter.available()).toBe(false);
 });
 
-it("RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command", async () => {
+it("RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command", () => {
   const cli = installCli();
   setUp();
   void starterHere().start();
@@ -107,7 +107,7 @@ it("RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the
   expect(executed).toEqual([]);
 });
 
-it("OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes", async () => {
+it("OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes", () => {
   installCli();
   setUp();
   const starter = starterHere();

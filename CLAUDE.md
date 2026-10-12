@@ -144,6 +144,23 @@ Set by Justine on 2026-10-07.
         `node:` imports. oxlint's `typescript/no-deprecated` and the
         `unicorn/prefer-*` rules in `.oxlintrc.json` check these (set by
         Justine on 2026-10-11).
+    -   Test a value's presence outright, as `strict-boolean-expressions`
+        asks: `x !== undefined` for a string that may be missing,
+        `x === true` for a boolean that may be, `text.trim() !== ''` where
+        the empty string is the case that matters; never `if (x)` on a
+        nullable (set by Justine on 2026-10-11).
+    -   Give every number outside a test a name: `no-magic-numbers` runs on
+        the packages' `src` and on `scripts/`, with 0, 1, -1, and 2 allowed.
+        A list that is the constant, like `SPEEDS`, carries a disable comment
+        saying so.
+    -   An `async` function awaits something; one that does not returns
+        `Promise.resolve(...)` or `Promise.reject(...)` without `async`
+        (`require-await`).
+    -   Keep every dependency at its latest version, with two held on
+        purpose: `@types/node` at the extension host's Node (22 for VS Code
+        1.106) and `@types/vscode` at `engines.vscode`, which stays the
+        oldest VS Code the extension supports (set by Justine on
+        2026-10-11).
 -   **Swift follows Google's Swift Style Guide**
     (https://google.github.io/swift/, #137). `.swift-format` turns on every rule
     swift-format has for it; `npm run lint:swift` and `npm run typecheck:swift`

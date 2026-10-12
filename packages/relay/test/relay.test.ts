@@ -250,7 +250,7 @@ describe('relay', () => {
     await call(client, 'start');
     await call(client, 'step', { actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }] });
     const abort = new AbortController();
-    const listening = call(client, 'listen', {}, abort.signal).catch((e: unknown) => e);
+    const listening = call(client, 'listen', {}, abort.signal).catch((error: unknown) => error);
     await new Promise((r) => {
       setTimeout(r, 50);
     });
@@ -297,7 +297,7 @@ describe('relay', () => {
 
     await call(client, 'start');
     const abort = new AbortController();
-    const listening = call(client, 'listen', {}, abort.signal).catch((e: unknown) => e);
+    const listening = call(client, 'listen', {}, abort.signal).catch((error: unknown) => error);
     await until(() => traced.some((l) => l.endsWith('listen')));
     hold = true;
     controller.userMessage('hello');
@@ -344,7 +344,7 @@ describe('relay', () => {
     await call(client, 'start');
     controller.userMessage('hello');
     const abort = new AbortController();
-    const cancelled = call(client, 'listen', {}, abort.signal).catch((e: unknown) => e);
+    const cancelled = call(client, 'listen', {}, abort.signal).catch((error: unknown) => error);
     abort.abort();
     expect(await cancelled).toBeInstanceOf(Error);
     expect((await call(client, 'listen')).text).toMatch(/hello/);
@@ -365,7 +365,7 @@ describe('relay', () => {
 
     const abort = new AbortController();
     const actions = [{ move: { file: 'a.ts', line: 5, to: 'line_end' } }];
-    const stepping = call(client, 'step', { actions }, abort.signal).catch((e: unknown) => e);
+    const stepping = call(client, 'step', { actions }, abort.signal).catch((error: unknown) => error);
     await atGate.promise;
     abort.abort();
     expect(await stepping).toBeInstanceOf(Error);

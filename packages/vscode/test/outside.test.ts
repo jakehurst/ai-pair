@@ -15,7 +15,7 @@ beforeEach(() => {
   reports = [];
   redraws = [];
   outside = new OutsideChanges(
-    async (file) => disk.get(file),
+    (file) => Promise.resolve(disk.get(file)),
     (files) => {
       reports.push(files);
     },

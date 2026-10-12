@@ -3,20 +3,22 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { MissingFile, samePath, withinFolder } from '@ai-pair/core';
 import { LABEL_SEPARATOR } from '@ai-pair/core/constants';
-import type {
-  AgentState,
-  Change,
-  CommandOutcome,
-  Controller,
-  CursorView,
-  EditOptions,
-  EditorPort,
-  Focus,
-  Ref,
-  RunOptions,
-  SharedSelection,
+import {
+  MissingFile,
+  samePath,
+  withinFolder,
+  type AgentState,
+  type Change,
+  type CommandOutcome,
+  type Controller,
+  type CursorView,
+  type EditOptions,
+  type EditorPort,
+  type Focus,
+  type Ref,
+  type RunOptions,
+  type SharedSelection,
 } from '@ai-pair/core';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport, type Lines } from './view';
 import { PairTerminals } from './terminal';
@@ -40,6 +42,12 @@ const FOLLOWING: ReadonlySet<AgentState> = new Set(['typing', 'read', 'thinking'
 const SELF_NAV_MS = 400;
 /** How often the read cursor pulses. */
 const PULSE_MS = 450;
+/** VS Code's default for `editor.stickyScroll.maxLineCount`. */
+const STICKY_LINES = 5;
+/** The cursor's opacity in each state. */
+const DIM = 0.6;
+const FAINT = 0.45;
+const SOFT = 0.8;
 
 /** With smooth scrolling, our own scroll has finished once the visible ranges stay unchanged this long. */
 const SCROLL_QUIET_MS = 50;
@@ -56,7 +64,7 @@ const MAX_EXCERPT = 8000;
 function cursorDecoration(color: string, style: string, opacity: number) {
   return vscode.window.createTextEditorDecorationType({
     before: {
-      contentText: '\u200b',
+      contentText: '\u200B',
       textDecoration: `none; position: relative; border-left: 2px ${style} ${color}; margin-left: -1px; margin-right: -1px; opacity: ${opacity};`,
     },
     rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
@@ -137,12 +145,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.cursorTypes = new Map([
       ['typing', cursorDecoration(CURSOR, 'solid', /* opacity= */ 1)],
       ['read', cursorDecoration(READ, 'solid', /* opacity= */ 1)],
-      ['readDim', cursorDecoration(CURSOR, 'solid', /* opacity= */ 0.6)],
-      ['thinking', cursorDecoration(CURSOR, 'solid', /* opacity= */ 0.45)],
-      ['running', cursorDecoration(CURSOR, 'solid', /* opacity= */ 0.6)],
-      ['paused', cursorDecoration(CURSOR, 'dashed', /* opacity= */ 0.6)],
-      ['listening', cursorDecoration(CURSOR, 'dotted', /* opacity= */ 0.8)],
-      ['navigator', cursorDecoration(CURSOR, 'dotted', /* opacity= */ 0.8)],
+      ['readDim', cursorDecoration(CURSOR, 'solid', /* opacity= */ DIM)],
+      ['thinking', cursorDecoration(CURSOR, 'solid', /* opacity= */ FAINT)],
+      ['running', cursorDecoration(CURSOR, 'solid', /* opacity= */ DIM)],
+      ['paused', cursorDecoration(CURSOR, 'dashed', /* opacity= */ DIM)],
+      ['listening', cursorDecoration(CURSOR, 'dotted', /* opacity= */ SOFT)],
+      ['navigator', cursorDecoration(CURSOR, 'dotted', /* opacity= */ SOFT)],
     ]);
     this.setAgentName(agentName);
     for (const doc of vscode.workspace.textDocuments) {
@@ -186,11 +194,11 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       ['typing', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ 1)],
       ['read', labelDecoration(name, READ, READ_TEXT, /* opacity= */ 1)],
       ['readDim', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ 1)],
-      ['thinking', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ 0.6)],
-      ['running', labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
-      ['paused', labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
-      ['listening', labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
-      ['navigator', labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, /* opacity= */ 0.8)],
+      ['thinking', labelDecoration(name, CURSOR, CURSOR_TEXT, /* opacity= */ DIM)],
+      ['running', labelDecoration(`${name}${LABEL_SEPARATOR}running`, CURSOR, CURSOR_TEXT, /* opacity= */ SOFT)],
+      ['paused', labelDecoration(`${name}${LABEL_SEPARATOR}paused`, CURSOR, CURSOR_TEXT, /* opacity= */ SOFT)],
+      ['listening', labelDecoration(`${name}${LABEL_SEPARATOR}listening`, CURSOR, CURSOR_TEXT, /* opacity= */ SOFT)],
+      ['navigator', labelDecoration(`${name}${LABEL_SEPARATOR}your turn`, CURSOR, CURSOR_TEXT, /* opacity= */ SOFT)],
     ]);
     this.redraw();
   }
@@ -204,7 +212,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (open) return open.uri.fsPath;
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const inside = withinFolder(folder.uri.fsPath, resolved);
-      if (inside) return inside;
+      if (inside !== undefined) return inside;
     }
     return resolved;
   }
@@ -222,8 +230,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     return (await this.document(file)).eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
   }
 
-  async isDirty(file: string): Promise<boolean> {
-    return this.openDocument(file)?.isDirty ?? false;
+  isDirty(file: string): Promise<boolean> {
+    return Promise.resolve(this.openDocument(file)?.isDirty ?? false);
   }
 
   async show(file: string): Promise<void> {
@@ -280,7 +288,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   async save(file: string): Promise<void> {
     const doc = this.openDocument(file);
-    if (!doc?.isDirty) return;
+    if (doc?.isDirty !== true) return;
     // First a round trip to the main thread: its answer comes after every change event VS Code sent
     // before it, so a change made before this save is handled before `saving` says otherwise (#40):
     // specs/EditorAdapter.tla, `StartSave`.
@@ -549,7 +557,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    */
   private revealTop(editor: vscode.TextEditor, top: number, height: number): Promise<void> {
     const options = vscode.workspace.getConfiguration('editor', editor.document);
-    const sticky = options.get('stickyScroll.enabled', true) ? options.get('stickyScroll.maxLineCount', 5) : 0;
+    const sticky = options.get('stickyScroll.enabled', true) ? options.get('stickyScroll.maxLineCount', STICKY_LINES) : 0;
     const room = Math.floor(Math.min(height / 2, Math.max(options.get('cursorSurroundingLines', 0), sticky)));
     return this.revealLine(editor, top + room, vscode.TextEditorRevealType.AtTop);
   }
@@ -673,7 +681,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    */
   private async document(file: string): Promise<vscode.TextDocument> {
     const doc = this.openDocument(file);
-    if (doc?.isDirty) return doc;
+    if (doc?.isDirty === true) return doc;
     if (!(await this.exists(file))) throw new MissingFile(file);
     return doc ?? (await vscode.workspace.openTextDocument(vscode.Uri.file(file)));
   }
@@ -696,7 +704,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private async create(file: string): Promise<void> {
     if (await this.exists(file)) return;
     const doc = this.openDocument(file);
-    if (doc?.isDirty) return;
+    if (doc?.isDirty === true) return;
     const text = doc?.getText() ?? '';
     if (doc && text !== '') {
       await this.edit(file, 0, text.length, '', { undoStopBefore: true, undoStopAfter: true });

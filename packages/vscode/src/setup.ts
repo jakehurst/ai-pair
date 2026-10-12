@@ -16,6 +16,8 @@ export const START_PROMPT = 'start pairing session';
  * session ends; and the pair server's tools allowed, since print mode refuses a tool that would ask.
  */
 export const START_ARGS: readonly string[] = ['-p', START_PROMPT, '--allowedTools', `mcp__${SERVER}`];
+/** The launcher's file mode: runnable by everyone, written by its owner. */
+const EXECUTABLE = 0o755;
 /** The name of the terminal the agent runs in. */
 export const START_TERMINAL = 'AI Pair: Claude Code';
 
@@ -55,10 +57,10 @@ export function writeLauncher(extensionPath: string): string {
     } else {
       fs.writeFileSync(launcher, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shQuoted(process.execPath)} ${shQuoted(relay)} "$@"\n`);
       // writeFileSync's `mode` applies only to a file it creates.
-      fs.chmodSync(launcher, 0o755);
+      fs.chmodSync(launcher, EXECUTABLE);
     }
-  } catch (e) {
-    const why = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
     void vscode.window.showErrorMessage(`AI Pair couldn't write its launcher at ${launcher}, so agents can't start it: ${why}`);
   }
   return launcher;
@@ -122,15 +124,15 @@ export async function setUpAgent(launcher: string): Promise<void> {
     placeHolder: 'GitHub Copilot in VS Code needs no setup: it already has the pair server.',
     canPickMany: true,
   });
-  if (!picked?.length) return;
+  if (picked === undefined || picked.length === 0) return;
 
   const done: string[] = [];
   for (const agent of AGENTS.filter((a) => picked.some((p) => p.id === a.id))) {
     try {
       await agent.setUp(host, launcher);
       done.push(agent.label);
-    } catch (e) {
-      void vscode.window.showErrorMessage(`Couldn't set up ${agent.label}: ${e instanceof Error ? e.message : String(e)}`);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Couldn't set up ${agent.label}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   if (picked.some((p) => p.id === 'other')) {
@@ -168,17 +170,17 @@ export function claudeStarter(
     return which(h, 'claude', [path.join(h.home, '.local', 'bin')]);
   }
   return {
-    async available() {
+    available() {
       // specs/Start.tla, `Answer`: Claude Code set up for the pair server, its CLI here, a folder open.
       const claude = AGENTS.find((a) => a.id === 'claude');
-      return !!claude?.isSetUp(h, launcher) && !!cli() && folders().length > 0;
+      return Promise.resolve(claude?.isSetUp(h, launcher) === true && cli() !== undefined && folders().length > 0);
     },
     async start() {
       // specs/Start.tla, `Click`: one agent at a time (OneAgent), in a terminal never shown (InTerminal).
       const shellPath = cli();
       const cwd = folders()[0];
       if (running) return exited;
-      if (!shellPath || !cwd) return;
+      if (shellPath === undefined || cwd === undefined) return;
       exited = new Promise((resolve) => {
         exit = resolve;
       });

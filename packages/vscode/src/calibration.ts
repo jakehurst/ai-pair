@@ -6,6 +6,7 @@
 // has reached the player (AwaitStore in the spec).
 
 import { readingChars } from '@ai-pair/core';
+import { MS_PER_MINUTE } from '@ai-pair/core/constants';
 import type { Passage } from './passage';
 
 /** Where a reading speed calibration is: not running, waiting for go, timing the passage, or saving the result. */
@@ -31,7 +32,7 @@ export interface CalibrationHost {
 /** Returns the passage's words over the minutes it took, rounded. */
 export function wordsPerMinute(text: string, elapsedMs: number): number {
   const words = text.split(/\s+/).filter(Boolean).length;
-  return Math.round(words / (elapsedMs / 60_000));
+  return Math.round(words / (elapsedMs / MS_PER_MINUTE));
 }
 
 /** Measures the reading speed: times the programmer reading a passage, and stores the result in the settings. */

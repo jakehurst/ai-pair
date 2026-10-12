@@ -1848,7 +1848,7 @@ describe('run', () => {
       ['running', undefined],
       ['background', undefined],
     ]);
-    await advance(8_000);
+    await advance(8000);
     expect(phases().at(-1)).toEqual(['exited', 1]);
   });
 
@@ -1963,9 +1963,7 @@ describe('run', () => {
 describe('saving', () => {
   it("says which files a batch couldn't save", async () => {
     const { editor, controller } = setup({ 'a.ts': 'x\n' });
-    editor.save = async () => {
-      throw new Error('the file on disk is newer');
-    };
+    editor.save = () => Promise.reject(new Error('the file on disk is newer'));
     await controller.start();
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: ` // a${CURSOR_MARKER}` }]);
@@ -1975,9 +1973,7 @@ describe('saving', () => {
 
   it("doesn't run a command after a save that failed, since it would read the old file", async () => {
     const { editor, controller } = setup({ 'a.ts': 'x\n' }, { confirmCommands: false });
-    editor.save = async () => {
-      throw new Error('the file on disk is newer');
-    };
+    editor.save = () => Promise.reject(new Error('the file on disk is newer'));
     editor.commandScript.set('node a.ts', { ms: 100, exitCode: 0 });
     await controller.start();
     await controller.read('a.ts');

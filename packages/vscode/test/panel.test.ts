@@ -11,8 +11,7 @@ import { panelHtml, SPEEDS } from '../src/panel_html';
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { window } = globalThis as unknown as { window: Window };
-// The tests need no styles, and the stylesheet would be fetched from a server that isn't there.
-window.happyDOM.settings.disableCSSFileLoading = true;
+// happy-dom loads no stylesheet unless asked; the tests need none, so the skipped fetch counts as a success.
 window.happyDOM.settings.handleDisabledFileLoadingAsSuccess = true;
 
 it("loads its script from the file it is given, with the page's nonce, and has no inline script", () => {
@@ -21,7 +20,7 @@ it("loads its script from the file it is given, with the page's nonce, and has n
   const policy = page.querySelector('meta[http-equiv="Content-Security-Policy"]');
   ok(policy);
   const csp = policy.getAttribute('content');
-  ok(csp);
+  ok(csp !== undefined && csp !== '');
   const scripts = [...page.querySelectorAll('script')];
   expect(scripts).toHaveLength(1);
   const script = scripts[0];
@@ -37,7 +36,7 @@ it('loads its styles from the file it is given, and allows no inline style', () 
   const policy = page.querySelector('meta[http-equiv="Content-Security-Policy"]');
   ok(policy);
   const csp = policy.getAttribute('content');
-  ok(csp);
+  ok(csp !== undefined && csp !== '');
   expect(csp).toContain('style-src vscode-resource:;');
   expect(csp).not.toContain('unsafe-inline');
   const links = [...page.querySelectorAll('link[rel="stylesheet"]')];

@@ -158,7 +158,56 @@
         "unicorn/prefer-array-index-of": "error",
         "unicorn/prefer-optional-catch-binding": "error",
         "unicorn/prefer-negative-index": "error",
-        "unicorn/prefer-event-target": "error"
+        "unicorn/prefer-event-target": "error",
+        // Code quality beyond the guide (asked by Justine, 2026-10-11).
+        "typescript/switch-exhaustiveness-check": [
+          "error",
+          {
+            "considerDefaultExhaustiveForUnions": true
+          }
+        ],
+        "typescript/prefer-nullish-coalescing": "error",
+        "typescript/use-unknown-in-catch-callback-variable": "error",
+        "typescript/strict-void-return": "error",
+        "typescript/prefer-regexp-exec": "error",
+        "typescript/prefer-includes": "error",
+        "typescript/strict-boolean-expressions": "error",
+        "typescript/require-await": "error",
+        "eslint/no-duplicate-imports": "error",
+        "unicorn/catch-error-name": "error",
+        "unicorn/numeric-separators-style": [
+          "error",
+          {
+            "hexadecimal": {
+              "onlyIfContainsSeparator": true
+            }
+          }
+        ],
+        "unicorn/no-hex-escape": "error",
+        "unicorn/escape-case": "error"
+      }
+    },
+    // A number in the code has a name (engineering rule: a named constant, not a magic value). Tests
+    // are data: line numbers, offsets, and delays are the point of each case.
+    {
+      "files": ["**/*.ts", "**/*.mts"],
+      "excludeFiles": ["**/test/**", "**/*.test.ts"],
+      "rules": {
+        "eslint/no-magic-numbers": [
+          "error",
+          {
+            "ignore": [0, 1, -1, 2],
+            "ignoreArrayIndexes": true,
+            "ignoreDefaultValues": true,
+            "ignoreClassFieldInitialValues": true,
+            "ignoreEnums": true,
+            "ignoreNumericLiteralTypes": true,
+            "ignoreReadonlyClassProperties": true,
+            "ignoreTypeIndexes": true,
+            "enforceConst": true,
+            "detectObjects": false
+          }
+        ]
       }
     }
   ],

@@ -26,9 +26,18 @@ export function row(ranges: readonly Lines[], line: number): number {
   return above + line - last.end - 1;
 }
 
+/** The share of the view at its top and bottom that is not comfortable to read at. */
+// oxlint-disable-next-line eslint/no-magic-numbers -- a share of the view, written as the fraction it is
+const EDGE = 1 / 4;
+/** Where a landing puts the target line: this far down the view. */
+// oxlint-disable-next-line eslint/no-magic-numbers -- a share of the view, written as the fraction it is
+const LANDING = 1 / 3;
+/** The glide's ease-out: a higher power settles sooner. */
+const EASE = 3;
+
 /** Returns whether a target `at` rows down a view of `height` is out of its top and bottom quarters. */
 export function comfortable(at: number, height: number): boolean {
-  return at >= height / 4 && at < (height * 3) / 4;
+  return at >= height * EDGE && at < height * (1 - EDGE);
 }
 
 /**
@@ -38,7 +47,7 @@ export function comfortable(at: number, height: number): boolean {
 export function landing(line: number, height: number, lineCount: number, beyondEnd: boolean): number {
   const last = lineCount - 1;
   const max = beyondEnd ? last : Math.max(0, last + 1 - height);
-  return Math.max(0, Math.min(max, line - Math.floor(height / 3)));
+  return Math.max(0, Math.min(max, line - Math.floor(height * LANDING)));
 }
 
 /**
@@ -63,7 +72,7 @@ export function viewport(
 
 /** Returns the top line `t` of the way through a glide from `from` to `to`, easing out. */
 export function glideTop(from: number, to: number, t: number): number {
-  return Math.round(from + (to - from) * (1 - (1 - t) ** 3));
+  return Math.round(from + (to - from) * (1 - (1 - t) ** EASE));
 }
 
 /** Returns whether a document's changes are exactly our oldest pending edit to it: one change, the same one. */

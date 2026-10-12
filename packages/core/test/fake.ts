@@ -3,17 +3,18 @@ import { expect, vi } from 'vitest';
 import { withinFolder } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
 import { Controller, isSavedSession, type SavedSession } from '../src/controller';
-import { MissingFile, type Change } from '../src/ports';
-import type {
-  AgentState,
-  CommandOutcome,
-  CursorView,
-  EditOptions,
-  EditorPort,
-  Focus,
-  PanelEvent,
-  PanelPort,
-  RunOptions,
+import {
+  MissingFile,
+  type Change,
+  type AgentState,
+  type CommandOutcome,
+  type CursorView,
+  type EditOptions,
+  type EditorPort,
+  type Focus,
+  type PanelEvent,
+  type PanelPort,
+  type RunOptions,
 } from '../src/ports';
 
 /** `/project` in this platform's form (`C:\project` on Windows), as the controller resolves it. */
@@ -52,20 +53,20 @@ export class FakeEditor implements EditorPort {
     const inside = withinFolder(ROOT, file);
     return inside === undefined ? file : nodePath.relative(ROOT, inside);
   }
-  async getText(file: string): Promise<string> {
+  getText(file: string): Promise<string> {
     const text = this.files.get(file);
-    if (text === undefined) throw new MissingFile(file);
-    return text;
+    return text === undefined ? Promise.reject(new MissingFile(file)) : Promise.resolve(text);
   }
-  async eol(file: string): Promise<string> {
-    return this.crlf.has(file) ? '\r\n' : '\n';
+  eol(file: string): Promise<string> {
+    return Promise.resolve(this.crlf.has(file) ? '\r\n' : '\n');
   }
-  async isDirty(file: string): Promise<boolean> {
-    return this.dirty.has(file);
+  isDirty(file: string): Promise<boolean> {
+    return Promise.resolve(this.dirty.has(file));
   }
-  async show(file: string): Promise<void> {
+  show(file: string): Promise<void> {
     if (!this.files.has(file)) this.files.set(file, '');
     if (this.shown.at(-1) !== file) this.shown.push(file);
+    return Promise.resolve();
   }
   async edit(file: string, offset: number, deleteLength: number, text: string, options: EditOptions): Promise<void> {
     const old = await this.getText(file);
@@ -73,9 +74,10 @@ export class FakeEditor implements EditorPort {
     this.dirty.add(file);
     this.edits.push({ file, offset, deleteLength, text, options });
   }
-  async save(file: string): Promise<void> {
+  save(file: string): Promise<void> {
     this.dirty.delete(file);
     this.saved.push(file);
+    return Promise.resolve();
   }
   renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void {
     this.cursor = cursor;
@@ -95,7 +97,7 @@ export class FakeEditor implements EditorPort {
 
   async runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
     const script = this.commandScript.get(command) ?? { ms: 0, exitCode: 0 };
-    if (script.startMs) {
+    if (script.startMs !== undefined && script.startMs > 0) {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, script.startMs);
         options.signal.addEventListener('abort', () => {
@@ -222,9 +224,9 @@ export function track<T>(promise: Promise<T>) {
       tracked.done = true;
       tracked.value = v;
     },
-    (e) => {
+    (error: unknown) => {
       tracked.done = true;
-      tracked.error = e;
+      tracked.error = error;
     },
   );
   return tracked;

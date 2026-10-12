@@ -4,7 +4,7 @@
  * Marks the agent cursor: in a report's code, where a spot puts it, and where a `type` leaves it.
  * Spans ignore it, so code can be copied from a report as is.
  */
-export const CURSOR_MARKER = '\u{258c}';
+export const CURSOR_MARKER = '\u{258C}';
 
 /** The keys that name an action. An action object has exactly one of them. */
 export const ACTION_KINDS = ['say', 'move', 'select', 'type', 'type_fast', 'delete', 'point', 'run'] as const;
@@ -238,7 +238,7 @@ export function moveProblem(target: MoveTarget): string | undefined {
     return `A spot is one text, \`at\`: the text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`at: "import { ${CURSOR_MARKER}type Context"\`.`;
   }
   const line = lineProblem(target.line);
-  if (line) return line;
+  if (line !== undefined) return line;
   if (target.to !== undefined && target.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
   if (target.at !== undefined && target.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
   if (target.at === undefined && target.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
@@ -251,7 +251,7 @@ export function spanProblem(span: SpanTarget): string | undefined {
   if ('near_line' in span) return 'Give `line`: the line the code starts on, exactly as your latest `read` or report shows it.';
   if ('to' in span) return 'The end of a range is `through`: `from` and `through` are both texts.';
   const line = lineProblem(span.line);
-  if (line) return line;
+  if (line !== undefined) return line;
   const range = span.from !== undefined || span.through !== undefined;
   if (span.text !== undefined && range) return 'Give `text`, or `from` and `through`, not both.';
   if (range && (typeof span.from !== 'string' || typeof span.through !== 'string')) {
@@ -284,7 +284,7 @@ export function fieldsProblem(action: object): string | undefined {
   if (typeof place === 'object' && place !== null) {
     // The place's own check first: it knows what a mistaken field was meant to be.
     const problem = kind === 'move' ? moveProblem(place) : spanProblem(place);
-    if (problem) return problem;
+    if (problem !== undefined) return problem;
     const fields = kind === 'move' ? MOVE_FIELDS : SPAN_FIELDS;
     const unknown = Object.keys(place).filter((k) => !fields.includes(k));
     if (unknown.length > 0) return `Unknown field ${fieldList(unknown)} in \`${kind}\`: it takes ${fieldList(fields)}.`;
