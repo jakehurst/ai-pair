@@ -43,15 +43,18 @@ save_coverage() {
 # Outputs:
 #   One line per action that never fired, to stdout, sorted.
 #######################################
+# shellcheck disable=SC2016 # $1 and $2 are awk's fields, not the shell's.
 never_fired() {
-  { awk -F': ' '/^<[A-Za-z_]+ line .*>: [0-9]+:[0-9]+$/ {
-    spec = FILENAME; sub(/.*\//, "", spec); sub(/[_.].*/, "", spec)
-    action = $1; sub(/^</, "", action); sub(/ line [^(>]*/, "", action)
-    sub(/>$/, "", action); sub(/.*:/, "", $2)
-    fires[spec ": action " action] += $2
-  } END {
-    for (key in fires) if (fires[key] == 0) print "  " key " never fired"
-  }' "${COVERAGE_DIR}"/*.txt || true; } | sort
+  local program
+  program='/^<[A-Za-z_]+ line .*>: [0-9]+:[0-9]+$/ {'
+  program+=' spec = FILENAME; sub(/.*\//, "", spec); sub(/[_.].*/, "", spec);'
+  program+=' action = $1; sub(/^</, "", action);'
+  program+=' sub(/ line [^(>]*/, "", action);'
+  program+=' sub(/>$/, "", action); sub(/.*:/, "", $2);'
+  program+=' fires[spec ": action " action] += $2 }'
+  program+=' END { for (key in fires) if (fires[key] == 0)'
+  program+=' print "  " key " never fired" }'
+  { awk -F': ' "${program}" "${COVERAGE_DIR}"/*.txt || true; } | sort
 }
 
 for cfg in ./*.cfg; do
