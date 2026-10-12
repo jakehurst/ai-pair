@@ -14,14 +14,15 @@ permissions:
 jobs:
   check:
     # Debian trixie, in a container: it packages kcov, which the shell tests' coverage needs and
-    # Ubuntu 24.04 does not carry. The actions need git, curl, and certificates in the container.
+    # Ubuntu 24.04 does not carry. The actions need git, curl, and certificates in the container,
+    # and Node's binary links libatomic.
     runs-on: ubuntu-latest
     container: debian:trixie
     steps:
       - name: Install Debian's packages
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git kcov shellcheck
+          apt-get install -y --no-install-recommends ca-certificates curl git kcov libatomic1 shellcheck xz-utils
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
