@@ -28,6 +28,8 @@ runs=()
 for tests in scripts/test/*.bats; do
   run="${COVERAGE_DIR}/$(basename "${tests}" .bats)"
   runs+=("${run}")
+  # Debian's kcov writes its bash helper there before it makes the folder.
+  mkdir -p "${run}"
   kcov --include-path="${include}" --exclude-pattern=/test/,.cfg,.tla \
     "${parse[@]}" "${run}" node_modules/.bin/bats "${tests}"
 done
