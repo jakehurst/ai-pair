@@ -64,13 +64,6 @@
       "functions": 100
     }
   },
-  "packages/core/src/index.ts": {
-    "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
-    }
-  },
   "packages/core/src/lines.ts": {
     "unit": {
       "lines": 100,
@@ -81,13 +74,6 @@
       "lines": 100,
       "branches": 93,
       "functions": 100
-    }
-  },
-  "packages/core/src/paths.ts": {
-    "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
     }
   },
   "packages/core/src/places.ts": {

@@ -8,6 +8,9 @@ import { defineConfig } from 'vitest/config';
 
 const THRESHOLDS = path.join(import.meta.dirname, 'coverage_thresholds.json');
 
+// Files that only re-export, so there is nothing in them to execute (#162).
+const REEXPORT_ONLY = ['packages/core/src/index.ts', 'packages/core/src/paths.ts'];
+
 /** A file's unit minimums in coverage_thresholds.json, in percent. */
 interface UnitMinimums {
   lines: number;
@@ -58,7 +61,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts', 'scripts/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/*.d.ts', 'scripts/stylelint.config.ts'],
+      exclude: ['**/*.test.ts', '**/*.d.ts', 'scripts/stylelint.config.ts', ...REEXPORT_ONLY],
       reporter: ['text', 'lcov', 'json-summary'],
       reportsDirectory: 'coverage/unit',
       thresholds: unitThresholds(),
