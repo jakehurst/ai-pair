@@ -24,6 +24,9 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl git kcov libatomic1 shellcheck xz-utils
       - uses: actions/checkout@v4
+      # The checkout's safe-directory entry lives in a temporary config that goes with its step; the
+      # scripts run git too, as the container's root over files another user owns.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 26
