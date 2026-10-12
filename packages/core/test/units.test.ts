@@ -5,7 +5,7 @@ import { applyChange, LineIds } from '../src/lines';
 import type { Change } from '../src/ports';
 import { boundedDiff, MAX_DIFF_LINES } from '../src/diff';
 import { planTyping, readingTime } from '../src/typing';
-import { terminalText } from '../src/text';
+import { lineEnd, lineSpan, terminalText } from '../src/text';
 import { samePath, withinFolder, type PathStyle } from '../src/paths';
 import { displayPath } from '../src/player';
 import { Timeline } from '../src/timeline';
@@ -31,6 +31,18 @@ describe('terminal text', () => {
     const prettier = `Checking formatting...\r\na.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}b.ts${ERASE_LINE}${CURSOR_TO_COLUMN_1}All matched files use Prettier code style!\r\n`;
     const npmSpinner = `/${CURSOR_TO_COLUMN_1}${ERASE_TO_LINE_END}`;
     expect(terminalText(prettier + npmSpinner)).toBe('Checking formatting...\nAll matched files use Prettier code style!');
+  });
+});
+
+describe('line offsets', () => {
+  const text = 'a\nb';
+
+  it('has no span for line 0', () => {
+    expect(lineSpan(text, 0)).toBeUndefined();
+  });
+
+  it('ends a line past the last at the end of the text', () => {
+    expect(lineEnd(text, 5)).toBe(text.length);
   });
 });
 
@@ -122,6 +134,19 @@ describe('places', () => {
     // The line is the one the spot is on, after a `before` that ends with a newline.
     expect(resolveSpot(text, { at: `b = 1\n${CURSOR_MARKER}`, line: 3 })).toEqual({ ok: true, range: { start: 12, end: 12 } });
   });
+
+  it('finds nothing in a span with only `from`, or with neither `from` nor `text`', () => {
+    expect(resolveSpan(text, { line: 2, from: 'b' })).toMatchObject({
+      ok: false,
+      kind: 'not_found',
+      message: 'Text not found after `from`: ""',
+    });
+    expect(resolveSpan(text, { line: 1 })).toMatchObject({
+      ok: false,
+      kind: 'not_found',
+      message: 'Text not found: ""; line 1 reads "a = 1"',
+    });
+  });
 });
 
 /** Returns which line of `text` (from 1) each line is after the change, or 0 for a new one. */
@@ -174,6 +199,18 @@ describe('line identities', () => {
     editor.adopt(fork);
     expect(editor.of('a.ts', 'helloabc\nWORLD\n')).toEqual(before);
   });
+
+  it('does not start tracking a file when a change to it is applied', () => {
+    const editor = LineIds.editor();
+    editor.apply('a.ts', { offset: 0, deleteLength: 0, text: 'x' });
+    expect(editor.of('a.ts', 'x\ny')).toHaveLength(2);
+  });
+
+  it('refuses a version with fewer identities than its text has lines', () => {
+    expect(() => applyChange({ text: 'a\nb', ids: [1] }, { offset: 2, deleteLength: 0, text: '\nx' })).toThrow(
+      'Line 2 has no identity: the text has 1 lines.',
+    );
+  });
 });
 
 describe('diffs', () => {
@@ -183,6 +220,10 @@ describe('diffs', () => {
     const bounded = boundedDiff('a.ts', '', long);
     expect(bounded.diff).toBe(`@@ -0,0 +1,${MAX_DIFF_LINES} @@`);
     expect(bounded.omitted).toBe(MAX_DIFF_LINES);
+  });
+
+  it('reports no diff for a file that did not change', () => {
+    expect(boundedDiff('a.ts', 'a\n', 'a\n')).toEqual({ diff: '' });
   });
 });
 
@@ -235,6 +276,7 @@ describe('typing', () => {
 describe('timeline', () => {
   const sleepMs = 100;
   const longerSleepMs = 300;
+  const beforePauseMs = 40;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -262,5 +304,68 @@ describe('timeline', () => {
     expect(results).toEqual([false]);
     await vi.advanceTimersByTimeAsync(sleepMs);
     expect(results).toEqual([false, true]);
+  });
+
+  it('NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that', async () => {
+    const timeline = new Timeline(/* paused= */ false);
+    const results: boolean[] = [];
+    void timeline.sleep(sleepMs).then((completed) => {
+      results.push(completed);
+    });
+    await vi.advanceTimersByTimeAsync(beforePauseMs);
+    timeline.pause();
+    await vi.advanceTimersByTimeAsync(sleepMs);
+    expect(results).toEqual([]);
+
+    timeline.resume();
+    await vi.advanceTimersByTimeAsync(sleepMs - beforePauseMs - 1);
+    expect(results).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(results).toEqual([true]);
+  });
+
+  it('ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time', async () => {
+    const timeline = new Timeline(/* paused= */ true);
+    const results: boolean[] = [];
+    void timeline.sleep(sleepMs).then((completed) => {
+      results.push(completed);
+    });
+    await vi.advanceTimersByTimeAsync(sleepMs);
+    expect(results).toEqual([]);
+
+    timeline.resume();
+    await vi.advanceTimersByTimeAsync(sleepMs);
+    expect(results).toEqual([true]);
+  });
+
+  it('an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short', async () => {
+    const timeline = new Timeline(/* paused= */ false);
+    const results: boolean[] = [];
+    void timeline.sleep(sleepMs).then((completed) => {
+      results.push(completed);
+    });
+    void timeline.sleep(longerSleepMs).then((completed) => {
+      results.push(completed);
+    });
+    await vi.advanceTimersByTimeAsync(sleepMs);
+    expect(results).toEqual([true]);
+
+    timeline.interrupt();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(results).toEqual([true, false]);
+  });
+
+  it('ResumeContinues: leaves a sleep that was never paused on its own deadline', async () => {
+    const timeline = new Timeline(/* paused= */ false);
+    const results: boolean[] = [];
+    void timeline.sleep(sleepMs).then((completed) => {
+      results.push(completed);
+    });
+    await vi.advanceTimersByTimeAsync(beforePauseMs);
+    timeline.resume();
+    await vi.advanceTimersByTimeAsync(sleepMs - beforePauseMs - 1);
+    expect(results).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(results).toEqual([true]);
   });
 });

@@ -91,7 +91,10 @@ export function terminalText(raw: string): string {
     .replaceAll('\r\n', '\n')
     .split('\n')
     .map((line) => {
-      const parts = (line.split(ERASED_LINE).at(-1) ?? '').split('\r').filter((p) => p !== '');
+      const parts = line
+        .slice(line.lastIndexOf(ERASED_LINE) + 1)
+        .split('\r')
+        .filter((p) => p !== '');
       return (parts.at(-1) ?? '').replaceAll(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trimEnd();
       // oxlint-enable no-control-regex
     })
