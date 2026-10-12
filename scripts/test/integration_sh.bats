@@ -19,6 +19,9 @@ CODE
   export EXTENSION_PATH="${ROOT}/packages/vscode"
   export COVERAGE_ROOT="${BATS_TEST_TMPDIR}/coverage"
   export COVERAGE_MD="${BATS_TEST_TMPDIR}/COVERAGE.md"
+  # No minimums: the fake Code writes no coverage for them to hold.
+  export COVERAGE_THRESHOLDS="${BATS_TEST_TMPDIR}/coverage_thresholds.json"
+  printf '{}\n' >"${COVERAGE_THRESHOLDS}"
 }
 
 @test "runs Code isolated: its own user data, extensions, and workspace, with the test bundle" {
@@ -45,4 +48,11 @@ CODE
   [[ "${status}" -eq 0 ]]
   grep -q "^NODE_V8_COVERAGE=${COVERAGE_ROOT}/integration/v8\$" "${ENV_RECORD}"
   [[ -f "${COVERAGE_MD}" ]]
+}
+
+@test "--coverage fails below coverage_thresholds.json" {
+  printf '{"packages/core/src/bridge.ts": {"integration": {"lines": 1}}}\n' >"${COVERAGE_THRESHOLDS}"
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh" --coverage
+  [[ "${status}" -eq 1 ]]
+  [[ "${stderr}" == *'packages/core/src/bridge.ts: integration lines not measured, minimum 1%'* ]]
 }

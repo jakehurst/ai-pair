@@ -237,10 +237,10 @@ npm run test:swift        # the icon's Swift package: its drawing, and that medi
 npm run test:visual       # the panel's page in Chromium against its screenshots; test:visual:update records them
 npm run test:coverage     # the unit tests, with coverage, in coverage/unit/
 npm run test:integration:coverage  # the integration test, with coverage of the bundle mapped to the sources, in coverage/integration/
-npm run coverage:tla      # every spec, with TLC counting how often each action fired, in coverage/tla/
+npm run coverage:tla      # every spec, with TLC counting how often each action fired, in coverage/tla/; an action that never fired fails it
 npm run test:shell:coverage  # the shell tests under kcov, in coverage/shell/ (Linux; on macOS kcov records nothing under bats)
 npm run test:swift:coverage  # the Swift tests with llvm-cov, in coverage/swift/ (macOS)
-npm run coverage          # all of them; each rewrites its column of COVERAGE.md, the whole project's coverage in one table
+npm run coverage          # all of them; each rewrites its column of COVERAGE.md, and fails below coverage_thresholds.json
 npm run package           # production build -> ai-pair-<version>.vsix
 ```
 

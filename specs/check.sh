@@ -3,7 +3,8 @@
 # Runs TLC on every config in specs/. Spec.cfg checks the code as it is and
 # must pass. With --coverage, TLC also counts how often each action fired, the
 # full statistics go to coverage/tla/<Spec>.txt, and an action that never fired
-# is named: a model with such an action does not cover its case.
+# is named and fails the run, unless the spec's section of README.md says, in a
+# sentence naming it, that it never fires (#161).
 set -u
 
 cd "$(dirname "$0")" || exit 1
@@ -80,6 +81,6 @@ done
 
 rm -rf "${META}"
 if ((${#coverage[@]} > 0)); then
-  node ../scripts/coverage_report.ts --tla
+  node ../scripts/coverage_report.ts --tla --check || status=1
 fi
 exit "${status}"

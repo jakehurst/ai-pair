@@ -8,11 +8,15 @@ extension host, mapped back to the sources), `npm run coverage:tla` the TLC
 column (how many of a spec's actions fired in its checked config),
 `npm run test:swift:coverage` the Swift column (llvm-cov), and
 `npm run test:shell:coverage` the Shell column (kcov over the bats tests).
+A run with `--check` fails below the minimums in
+[coverage_thresholds.json](coverage_thresholds.json), each file's measured
+coverage rounded down; a change that raises a file's coverage raises its
+minimum in the same PR (#161).
 L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: shell, 2026-10-12.
+Last updated: css, 2026-10-12.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -70,7 +74,7 @@ Last updated: shell, 2026-10-12.
 | `packages/vscode/src/calibration.ts` | TypeScript | L 97.4% B 86.4% F 100.0% | L 58.6% B 66.7% F 33.3% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 32.5% B 44.0% F 40.0% | L 92.5% B 68.0% F 80.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 95.0% B 83.8% F 95.8% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 77.6% B 62.5% F 63.6% | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 77.6% B 61.2% F 63.6% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 92.8% F 100.0% | L 86.4% B 37.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 92.8% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 100.0% B 96.3% F 100.0% | - | - | - | - |
@@ -87,7 +91,7 @@ Last updated: shell, 2026-10-12.
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.page.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/css.test.ts` | TypeScript | test | - | - | test | test | - |
+| `packages/vscode/test/css.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/draft.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/history.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -107,9 +111,10 @@ Last updated: shell, 2026-10-12.
 | `packages/vscode/test/start.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | - | - | test | test | - |
+| `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
 | `scripts/check_ascii.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
+| `scripts/coverage_report.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/coverage_report.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/coverage_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/coverage_swift.sh` | Shell | - | - | - | - | - | - |

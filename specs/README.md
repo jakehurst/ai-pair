@@ -5,8 +5,13 @@ with:
 
 ```sh
 specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
-specs/check.sh --coverage # also counts how often each action fired, to coverage/tla/, and names one that never did
+specs/check.sh --coverage # also counts how often each action fired, to coverage/tla/, and fails on one that never did
 ```
+
+An action that never fires in the checked config fails `check.sh --coverage`
+unless the spec's section below says so, in a sentence that names the action in
+backticks and says it never fires; `Discovery`'s `Focus` and `FinishWrite` are
+the two today (#161).
 
 [COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the
 spec that models it, or says why it has none.
