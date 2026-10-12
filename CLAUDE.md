@@ -321,6 +321,8 @@ semantic versioning as it applies to VS Code extensions:
     Justine's call, as above.
 -   The `CHANGELOG.md` in `packages/vscode` gets a section for the new version
     with the change, in the same PR.
+-   The coverage sub-issues of #160 (#169 and its siblings) are patch bumps,
+    whatever their label (set by Justine on 2026-10-12).
 
 ## Governance
 

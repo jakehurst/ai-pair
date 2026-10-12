@@ -8,10 +8,12 @@ specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
 specs/check.sh --coverage # also counts how often each action fired, to coverage/tla/, and fails on one that never did
 ```
 
-An action that never fires in the checked config fails `check.sh --coverage`
-unless the spec's section below says so, in a sentence that names the action in
-backticks and says it never fires; `Discovery`'s `Focus` and `FinishWrite` are
-the two today (#161).
+An action that never fires in any of a spec's configs fails
+`check.sh --coverage` unless the spec's section below says so, in a sentence
+that names the action in backticks and says it never fires (#161); no spec needs
+that today. A spec's other configs are `Spec_<Model>.cfg`, each run against
+`Spec.tla`, with its own statistics file (#169): `Discovery_InPlace.cfg` is the
+one, where `Focus` and `FinishWrite` fire.
 
 [COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the
 spec that models it, or says why it has none.
@@ -23,7 +25,7 @@ job.
 
 CI runs `check.sh` on every push to `main` and every pull request
 (`.github/workflows/ci.yml`), with TLA+ tools 1.8.0. `check.sh` runs TLC on
-every `.cfg`. A config is named after its spec. `Spec.cfg` models the code as it
+every `.cfg`. `Spec.cfg` models the code as it
 is on `main`, and has to pass. Regressions are caught by the unit and
 integration tests. A spec's constants that switch a fix on or off still say
 which bug each one fixed; the configs that reproduced those bugs were dropped
@@ -66,6 +68,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
 | `Controller.cfg` | `NumBatches = 2` batches, `NumEvents = 1` event, `NumQuietEdits = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
 | `Discovery.cfg` | `NumWindows = 2` windows, one junk file, a write that may fail | holds | 217 |
+| `Discovery_InPlace.cfg` | the same, `AtomicWrite = FALSE`: the write in place, so `Focus` and `FinishWrite` fire; `FindsRunningProp` left out | holds | 302 |
 | `EditorAdapter.cfg` | `MaxChanges = 5` changes | holds | 311 |
 | `FollowMode.cfg` | one move to another file, the programmer looking away, `HoldWhileShowing = TRUE` | holds | 13 |
 | `Bridge.cfg` | `NumSockets = 2` sockets | holds | 76 |
@@ -368,9 +371,10 @@ test's title carries its name:
 for #72: a window rewrites its file each time it gains focus, and written in
 place, a relay reading it mid-write skipped it. `locate` switching windows
 mid-session is `Close` in `Wire`. With `AtomicWrite = TRUE`, `Focus` and
-`FinishWrite` can never fire, and `check.sh --coverage` says so: they are the
-write in place that the fix removed, and the `AtomicWrite = FALSE` mutation
-below is where they run.
+`FinishWrite` are not enabled: they are the write in place that the fix
+removed. `Discovery_InPlace.cfg` sets `AtomicWrite = FALSE`, so they fire in a
+checked run (#169); it leaves out `FindsRunningProp`, since that write is what
+breaks it, as the mutation below shows.
 
 | Spec | Code |
 |---|---|

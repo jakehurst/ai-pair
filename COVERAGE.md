@@ -5,7 +5,7 @@ Each run rewrites its own column: `npm run test:coverage` the unit column
 (vitest, v8) and the CSS column (the stylesheet's rules the page matched),
 `npm run test:integration:coverage` the integration column (c8 over the
 extension host, mapped back to the sources), `npm run coverage:tla` the TLC
-column (how many of a spec's actions fired in its checked config),
+column (how many of a spec's actions fired in any of its configs),
 `npm run test:swift:coverage` the Swift column (llvm-cov), and
 `npm run test:shell:coverage` the Shell column (kcov over the bats tests).
 A run with `--check` fails below the minimums in
@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-10-12.
+Last updated: tla, 2026-10-12.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -137,7 +137,8 @@ Last updated: css, 2026-10-12.
 | `specs/Controller.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
 | `specs/Discovery.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Discovery.tla` | TLA+ | - | - | 9 of 11 actions (never: Focus, FinishWrite) | - | - | - |
+| `specs/Discovery.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
+| `specs/Discovery_InPlace.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Draft.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Draft.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/EditEvents.cfg` | TLC config | - | - | - | - | - | - |

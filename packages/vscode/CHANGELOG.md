@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1
+
+-   Every action of every TLA+ spec now fires in a config CI checks (#169).
+    `specs/Discovery_InPlace.cfg` models the write in place that #72 removed,
+    so `Focus` and `FinishWrite` fire there; `specs/check.sh --coverage` and
+    `scripts/coverage_report.ts` sum an action's fires over a spec's configs
+    (`Spec.cfg` and `Spec_<Model>.cfg`), telling the disjuncts of an inline
+    `Next` apart by their location, and name only an action that fired in
+    none. The extension works the same.
+
 ## 0.7.0
 
 -   Every coverage run now fails when a file drops below its measured

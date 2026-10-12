@@ -37,8 +37,10 @@ const TYPES: ReadonlyMap<string, string> = new Map([
   ['.swift', 'Swift'],
   ['.css', 'CSS'],
 ]);
-/** A TLC action's statistics line: `<Name line ... of module M>: distinct:total`. */
-const ACTION = /^<([A-Za-z_]\w*) line .*>: \d+:(\d+)$/;
+/** A TLC action's statistics line: `<Name line ... of module M>: distinct:total`, with the disjunct's location in parentheses before `>` when the action is written inline in `Next`. */
+const ACTION = /^<([A-Za-z_]\w*) line [^(>]*(\([\d ]+\))?>: \d+:(\d+)$/;
+/** What separates the module's name from the model's in `Foo_<Model>.cfg`, and so in its statistics file (8.2). */
+const MODEL_SEPARATOR = '_';
 /** A row of the table: the file, its type, then one cell per tool. */
 const ROW = /^\| `([^`]+)` \| [^|]+ \| (.*) \|$/;
 const PERCENT_DIGITS = 1;
@@ -63,7 +65,7 @@ interface FileSummary {
 interface Measured {
   cell: string;
   measures: ReadonlyMap<string, number>;
-  /** For a spec: the actions that never fired in its checked config. */
+  /** For a spec: the actions that never fired in any of its configs. */
   never?: readonly string[];
 }
 
@@ -121,25 +123,33 @@ function readSummary(file: string): Map<string, Measured> {
   return cells;
 }
 
-/** Returns the cells of TLC's statistics: for each spec, how many of its actions fired. */
+/** Returns the cells of TLC's statistics: for each spec, how many of its actions fired in any of its configs. */
 function readTlc(): Map<string, Measured> {
   const cells = new Map<string, Measured>();
   if (!fs.existsSync(TLA_DIR)) return cells;
-  for (const file of fs.readdirSync(TLA_DIR)) {
+  const fires = new Map<string, Map<string, number>>();
+  for (const file of fs.readdirSync(TLA_DIR).toSorted()) {
     if (!file.endsWith('.txt')) continue;
     const actions = fs
       .readFileSync(path.join(TLA_DIR, file), 'utf8')
       .split('\n')
       .map((line) => ACTION.exec(line))
       .filter((match) => match !== null);
-    const fired = actions.filter((match) => match[2] !== '0');
-    const never = actions
-      .filter((match) => match[2] === '0')
-      .map((match) => match[1])
-      .filter((name) => name !== undefined);
+    const name = path.basename(file, '.txt');
+    const [spec = name] = name.split(MODEL_SEPARATOR);
+    const counts = fires.get(spec) ?? new Map<string, number>();
+    fires.set(spec, counts);
+    for (const match of actions) {
+      if (match[1] === undefined) continue;
+      const key = match[1] + (match[2] ?? '');
+      counts.set(key, (counts.get(key) ?? 0) + Number(match[3]));
+    }
+  }
+  for (const [spec, counts] of fires) {
+    const never = [...counts].filter(([, total]) => total === 0).map(([action]) => action);
     const note = never.length === 0 ? '' : ` (never: ${never.join(', ')})`;
-    cells.set(`specs/${file.replace(/\.txt$/, '.tla')}`, {
-      cell: `${fired.length} of ${actions.length} actions${note}`,
+    cells.set(`specs/${spec}.tla`, {
+      cell: `${counts.size - never.length} of ${counts.size} actions${note}`,
       measures: new Map<string, number>(),
       never,
     });
@@ -294,7 +304,7 @@ function saysNeverFires(readme: string, spec: string, action: string): boolean {
     .some((sentence) => sentence.includes(`\`${action}\``) && sentence.includes('never fire'));
 }
 
-/** Returns one line per action that never fired in a spec's checked config and that the spec's README section does not excuse. */
+/** Returns one line per action that never fired in any of a spec's configs and that the spec's README section does not excuse. */
 function neverFired(fresh: ReadonlyMap<string, Measured>): string[] {
   const readme = fs.existsSync(SPECS_README) ? fs.readFileSync(SPECS_README, 'utf8') : '';
   const lines: string[] = [];
@@ -309,11 +319,12 @@ function neverFired(fresh: ReadonlyMap<string, Measured>): string[] {
   return lines;
 }
 
-/** Returns every file of a listed type git tracks or would add, by path from the root. */
+/** Returns every file of a listed type git tracks or would add, by path from the root, in path order. */
 function sourceFiles(): string[] {
   return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' })
     .split('\n')
-    .filter((file) => TYPES.has(path.extname(file)));
+    .filter((file) => TYPES.has(path.extname(file)))
+    .toSorted();
 }
 
 function main(): void {
@@ -348,7 +359,7 @@ Each run rewrites its own column: \`npm run test:coverage\` the unit column
 (vitest, v8) and the CSS column (the stylesheet's rules the page matched),
 \`npm run test:integration:coverage\` the integration column (c8 over the
 extension host, mapped back to the sources), \`npm run coverage:tla\` the TLC
-column (how many of a spec's actions fired in its checked config),
+column (how many of a spec's actions fired in any of its configs),
 \`npm run test:swift:coverage\` the Swift column (llvm-cov), and
 \`npm run test:shell:coverage\` the Shell column (kcov over the bats tests).
 A run with \`--check\` fails below the minimums in

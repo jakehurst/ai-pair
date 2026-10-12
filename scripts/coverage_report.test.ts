@@ -24,12 +24,15 @@ interface Fixture {
 interface Run {
   status: number;
   stderr: string;
+  /** The COVERAGE.md the run wrote. */
+  report: string;
 }
 
-/** Runs the script as Node does, with the given env paths, and returns its exit status and stderr. */
+/** Runs the script as Node does, with the given env paths, and returns its exit status, stderr, and the table it wrote. */
 function invoke(args: readonly string[], env: NodeJS.ProcessEnv): Run {
   const result = spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
-  return { status: result.status ?? 1, stderr: result.stderr };
+  const report = env.COVERAGE_MD;
+  return { status: result.status ?? 1, stderr: result.stderr, report: report === undefined ? '' : fs.readFileSync(report, 'utf8') };
 }
 
 /** Runs the script with `--css` on the fixture, in a temp folder, through the env paths it takes. */
@@ -46,17 +49,32 @@ function run(fixture: Fixture): Run {
   return invoke(args, { COVERAGE_ROOT: coverage, COVERAGE_MD: path.join(dir, 'COVERAGE.md'), COVERAGE_THRESHOLDS: thresholds });
 }
 
-/** Runs the script with `--tla --check` on a spec whose `Never` action never fired, against the README text given. */
-function runTla(readme: string): Run {
+/**
+ * Runs the script with `--tla --check` on a spec whose `Never` action never fired, against the README text given.
+ * `spec` names the spec, `Fake` by default; with `otherFires`, a second config, `<spec>_Other`, fires `Never`.
+ * With `inlineNext`, two disjuncts of an inline `Next`, told apart by their location, one of which never fired.
+ */
+function runTla(readme: string, options: { spec?: string; otherFires?: boolean; inlineNext?: boolean } = {}): Run {
+  const { spec = 'Fake', otherFires = false, inlineNext = false } = options;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage_report-'));
   const coverage = path.join(dir, 'coverage');
   fs.mkdirSync(path.join(coverage, 'tla'), { recursive: true });
   const statistics = [
     '<Init line 1, col 1 to line 1, col 4 of module Fake>: 1:1',
     '<Never line 2, col 1 to line 2, col 5 of module Fake>: 0:0',
+    ...(inlineNext
+      ? [
+          '<Next line 3, col 1 to line 3, col 4 of module Fake (5 8 5 20)>: 1:4',
+          '<Next line 3, col 1 to line 3, col 4 of module Fake (6 8 6 20)>: 0:0',
+        ]
+      : []),
     '',
   ];
-  fs.writeFileSync(path.join(coverage, 'tla/Fake.txt'), statistics.join('\n'));
+  fs.writeFileSync(path.join(coverage, `tla/${spec}.txt`), statistics.join('\n'));
+  if (otherFires) {
+    const other = statistics.map((line) => line.replace(': 0:0', ': 3:9'));
+    fs.writeFileSync(path.join(coverage, `tla/${spec}_Other.txt`), other.join('\n'));
+  }
   const readmeFile = path.join(dir, 'README.md');
   fs.writeFileSync(readmeFile, readme);
   return invoke(['--tla', '--check'], { COVERAGE_ROOT: coverage, COVERAGE_MD: path.join(dir, 'COVERAGE.md'), SPECS_README: readmeFile });
@@ -107,4 +125,16 @@ it("--tla --check ignores another spec's section saying the action never fires",
 it("--check compares at the table's precision, one decimal", () => {
   const result = run({ rules: 2500, matched: 2499, minimum: 100 });
   expect(result.status).toBe(0);
+});
+
+it("--tla --check counts an action as fired when any of the spec's configs fires it", () => {
+  const result = runTla('### `Serialize`\n\n`Never` is the step the code takes on a miss.\n', { spec: 'Serialize', otherFires: true });
+  expect(result.status).toBe(0);
+  expect(result.report).toContain('| `specs/Serialize.tla` | TLA+ | - | - | 2 of 2 actions |');
+});
+
+it('--tla --check keeps the disjuncts of an inline Next apart by their location, and names one that never fired', () => {
+  const result = runTla('### `Fake`\n\n`Never` can never fire.\n', { inlineNext: true });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('specs/Fake.tla: action Next(6 8 6 20) never fired');
 });
