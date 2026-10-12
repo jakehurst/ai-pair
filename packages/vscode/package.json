@@ -44,6 +44,7 @@
     "vscode:prepublish": "node scripts/build.mts --production",
     "build": "node scripts/build.mts",
     "test:integration": "bash scripts/integration.sh",
+    "test:integration:coverage": "bash scripts/integration.sh --coverage",
     "package": "node scripts/build.mts --production && vsce package --no-dependencies --out ../.."
   },
   "dependencies": {

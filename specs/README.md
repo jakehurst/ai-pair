@@ -5,6 +5,7 @@ with:
 
 ```sh
 specs/check.sh            # TLC=<command> to use another TLC; default `tlc`
+specs/check.sh --coverage # also counts how often each action fired, to coverage/tla/, and names one that never did
 ```
 
 [COVERAGE.md](COVERAGE.md) maps every source file, function by function, to the
@@ -361,7 +362,10 @@ test's title carries its name:
 `open` in `link.ts`. `CheckFiles` is the fix for #31. `AtomicWrite` is the fix
 for #72: a window rewrites its file each time it gains focus, and written in
 place, a relay reading it mid-write skipped it. `locate` switching windows
-mid-session is `Close` in `Wire`.
+mid-session is `Close` in `Wire`. With `AtomicWrite = TRUE`, `Focus` and
+`FinishWrite` can never fire, and `check.sh --coverage` says so: they are the
+write in place that the fix removed, and the `AtomicWrite = FALSE` mutation
+below is where they run.
 
 | Spec | Code |
 |---|---|

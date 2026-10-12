@@ -232,7 +232,10 @@ npm run lint:web          # the panel's HTML and CSS to Google's HTML/CSS Style 
 npm run lint:md           # Markdown to Google's Markdown style guide
 npm run build             # development build of the extension
 npm run test:integration  # plays a session inside a real, isolated VS Code (macOS; VSCODE_BIN for another)
-npm run test:coverage     # the unit tests, with coverage
+npm run test:coverage     # the unit tests, with coverage, in coverage/unit/
+npm run test:integration:coverage  # the integration test, with coverage of the bundle mapped to the sources, in coverage/integration/
+npm run coverage:tla      # every spec, with TLC counting how often each action fired, in coverage/tla/
+npm run coverage          # all three; each rewrites its column of COVERAGE.md, the whole project's coverage in one table
 npm run package           # production build -> ai-pair-<version>.vsix
 ```
 

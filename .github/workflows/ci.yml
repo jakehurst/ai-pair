@@ -41,7 +41,11 @@ jobs:
       - run: npm run lint:md
       - run: npm run lint:tla
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/unit
 
   swift:
     # Xcode has swift-format, and the SDK with the frameworks the script imports.
@@ -63,10 +67,14 @@ jobs:
       - name: Download VS Code
         run: echo "VSCODE_BIN=$(node scripts/vscode_bin.mts | tail -1)" >> "$GITHUB_ENV"
         working-directory: packages/vscode
-      - name: Run the integration test
-        run: xvfb-run -a npm run test:integration
+      - name: Run the integration test, with coverage
+        run: xvfb-run -a npm run test:integration:coverage
         env:
           VSCODE_ARGS: --no-sandbox --disable-gpu
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage/integration
 
   specs:
     runs-on: ubuntu-latest
@@ -81,7 +89,11 @@ jobs:
         run: |
           curl -sSL -o "$RUNNER_TEMP/tla2tools.jar" https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
           echo "7beec0f04818732a62fa193731711a99aa4f11279499b2360a7d156c519ea78d  $RUNNER_TEMP/tla2tools.jar" | sha256sum -c
-      - name: Check every spec
-        run: specs/check.sh
+      - name: Check every spec, with coverage
+        run: specs/check.sh --coverage
         env:
           TLC: java -XX:+UseParallelGC -cp ${{ runner.temp }}/tla2tools.jar tlc2.TLC
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-tla
+          path: coverage/tla

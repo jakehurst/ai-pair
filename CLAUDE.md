@@ -156,6 +156,13 @@ Set by Justine on 2026-10-07.
     -   An `async` function awaits something; one that does not returns
         `Promise.resolve(...)` or `Promise.reject(...)` without `async`
         (`require-await`).
+    -   `COVERAGE.md` holds every source file's coverage in one table. Each
+        coverage run rewrites its own column through
+        `scripts/coverage_report.ts`: `npm run test:coverage` the unit
+        column, `npm run test:integration:coverage` the integration column,
+        `npm run coverage:tla` the TLC column. Run `npm run coverage` and
+        commit the file with a change that moves the numbers (set by Justine
+        on 2026-10-11).
     -   Keep every dependency at its latest version, with two held on
         purpose: `@types/node` at the extension host's Node (22 for VS Code
         1.106) and `@types/vscode` at `engines.vscode`, which stays the

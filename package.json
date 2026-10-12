@@ -13,7 +13,8 @@
     "release": "node scripts/release.ts",
     "package": "npm run package -w packages/vscode",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage && node scripts/coverage_report.ts --unit",
+    "test:integration:coverage": "npm run test:integration:coverage -w packages/vscode",
     "test:integration": "npm run test:integration -w packages/vscode",
     "typecheck": "tsc -p . && tsc -p packages/vscode/src/webview && tsc -p scripts && tsc -p packages/vscode/scripts",
     "lint": "oxlint",
@@ -25,13 +26,16 @@
     "lint:sh": "bash scripts/lint_shell.sh",
     "lint:web": "node scripts/lint_web.ts",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
-    "lint:tla": "node scripts/lint_tla.ts"
+    "lint:tla": "node scripts/lint_tla.ts",
+    "coverage:tla": "bash specs/check.sh --coverage",
+    "coverage": "npm run test:coverage && npm run coverage:tla && npm run test:integration:coverage"
   },
   "devDependencies": {
     "@stylistic/stylelint-plugin": "^5.3.0",
     "@types/node": "~22.19.0",
     "@vitest/coverage-v8": "^5.0.3",
     "@vscode/test-electron": "^3.1.0",
+    "c8": "^12.0.0",
     "esbuild": "^0.28.2",
     "happy-dom": "^21.0.0",
     "html-validate": "^11.16.0",
