@@ -41,8 +41,11 @@ interface Batch {
   actions: Action[];
   state: 'queued' | 'playing' | 'done';
   result?: BatchResult;
-  /** What it leaves behind, played in memory when it was queued: where the next batch is rehearsed from. */
-  after?: Rehearsal;
+}
+
+/** A batch in the queue: played in memory when it was queued, so it knows where the next batch is rehearsed from. */
+interface QueuedBatch extends Batch {
+  after: Rehearsal;
 }
 
 /** Like `Event`, but edits usually get their diff when the report is taken. */
@@ -84,7 +87,7 @@ interface Session {
   scene: Scene;
   player: Player;
   /** Batches not yet finished; the head may be playing. */
-  queue: Batch[];
+  queue: QueuedBatch[];
   /** Finished batches not yet reported. */
   finished: BatchResult[];
   events: PendingEvent[];
@@ -133,6 +136,26 @@ interface Call {
 function interrupting(e: PendingEvent): boolean {
   return e.kind !== 'edit' || e.by === 'programmer' || e.interrupted === true;
 }
+
+/** Returns the edits to `file` that await their diff: one at most, since a file's edits are one event until a report takes them. */
+function pendingEdits(session: Session, file: string): EditEvent[] {
+  return session.events.filter((e): e is EditEvent => e.kind === 'edit' && e.file === file && e.diff === undefined);
+}
+
+/** Whether a call of each kind can return its report now: specs/Serialize.tla, `Finish`. */
+const CALL_READY: Record<Call['kind'], (session: Session, call: Call) => boolean> = {
+  // A step's batch is done, or plays next (`AtHead`): the step returns once the one before it has (#150).
+  step: (session, call) => (call.batch ? call.batch.state === 'done' || session.queue[0] === call.batch : session.queue.length === 0),
+  end: (session) => session.queue.length === 0,
+  listen: (session) => {
+    if (session.held.length > 0) return true;
+    if (session.finished.some((r) => r.status !== 'completed')) return true;
+    if (session.queue.length > 0) return false;
+    if (session.scene.turn === 'agent') return session.events.some(interrupting);
+    // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
+    return session.events.some((e) => e.kind !== 'edit') || (session.navigatorReady && session.events.some(interrupting));
+  },
+};
 
 /** Returns a report in one log line: its batches, events, flags, and size (#149). */
 function describeReport(report: Report): string {
@@ -345,15 +368,16 @@ export class Controller {
       const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current === true && rehearsal.result.status === 'failed') return this.rejectBatch(session, actions, rehearsal);
-      const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal?.after };
+      const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued' };
       if (current === true) {
-        session.queue.push(batch);
+        const queued: QueuedBatch = { ...batch, after: rehearsal.after };
+        session.queue.push(queued);
         this.trace?.(`batch ${batch.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);
-      } else {
-        this.discard(session, batch);
+        return this.block('step', { batch: queued }, signal);
       }
+      this.discard(session, batch);
       return this.block('step', { batch }, signal);
     }, signal);
   }
@@ -504,18 +528,19 @@ export class Controller {
     if (!session) return;
     // A file reloaded from disk comes as one change spanning lines that didn't change (#65).
     const changes = lineChanges(before, reported);
-    const planned = session.queue.some((b) => b.after?.edits.has(file) === true);
+    const planned = session.queue.some((b) => b.after.edits.has(file));
     // The queued rehearsals follow it, reading the file's line identities from the editor (specs/Rehearsal.tla,
     // `EditAsOther`).
     if (!planned) {
       for (const b of session.queue) {
-        if (b.after) followChange(b.after, file, after, changes);
+        followChange(b.after, file, after, changes);
       }
     }
     this.recordEdit(session, file, before, after, changes, 'other');
     if (planned) {
-      const e = session.events.find((p): p is EditEvent => p.kind === 'edit' && p.file === file && p.diff === undefined);
-      if (e) e.interrupted = true;
+      for (const e of pendingEdits(session, file)) {
+        e.interrupted = true;
+      }
       this.interrupt(session);
     }
     this.update();
@@ -534,8 +559,9 @@ export class Controller {
       session.events.push({ kind: 'edit', file, by });
       this.trace?.(`edit ${file} by ${by}`);
     } else if (by === 'programmer') {
-      const pending = session.events.find((e): e is EditEvent => e.kind === 'edit' && e.file === file && e.diff === undefined);
-      if (pending) pending.by = 'programmer';
+      for (const e of pendingEdits(session, file)) {
+        e.by = 'programmer';
+      }
     }
     session.latest.set(file, after);
   }
@@ -735,7 +761,7 @@ export class Controller {
   }
 
   get turn(): Turn | undefined {
-    return this.activeSession()?.scene.turn ?? undefined;
+    return this.activeSession()?.scene.turn;
   }
 
   // ---- Calls and reports -------------------------------------------------
@@ -823,7 +849,7 @@ export class Controller {
         reject,
         // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `TimeOut`.
         timer: setTimeout(() => {
-          this.finishCall(/* timedOut= */ true);
+          this.finishCall(call, /* timedOut= */ true);
         }, this.config.maxBlockMs),
       };
       this.endGrace();
@@ -845,37 +871,18 @@ export class Controller {
     if (session.ended) return true;
     // An interrupted batch finishes promptly; wait for it, so the report says what was typed.
     if (session.queue[0]?.state === 'playing' && session.timeline.isInterrupted) return false;
-    switch (call.kind) {
-      case 'step':
-        // specs/Serialize.tla, `Finish`: a step's batch is done, or plays next (`AtHead`): the step returns once the one before it
-        // has (#150).
-        if (!call.batch) return session.queue.length === 0;
-        return call.batch.state === 'done' || session.queue[0] === call.batch;
-      case 'end':
-        return session.queue.length === 0;
-      case 'listen':
-        if (session.held.length > 0) return true;
-        if (session.finished.some((r) => r.status !== 'completed')) return true;
-        if (session.queue.length > 0) return false;
-        if (session.scene.turn === 'agent') return session.events.some(interrupting);
-        // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
-        return session.events.some((e) => e.kind !== 'edit') || (session.navigatorReady && session.events.some(interrupting));
-      default:
-        throw new Error(`Unknown call: ${JSON.stringify(call.kind satisfies never)}`);
-    }
+    return CALL_READY[call.kind](session, call);
   }
 
   private pump(): void {
     const call = this.call;
     const session = this.session;
     // specs/Serialize.tla, `Finish`.
-    if (call && session && this.ready(call, session)) this.finishCall(/* timedOut= */ false);
+    if (call && session && this.ready(call, session)) this.finishCall(call, /* timedOut= */ false);
   }
 
   /** Finishes the open call with a report: `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
-  private finishCall(timedOut: boolean): void {
-    const call = this.call;
-    if (!call) return;
+  private finishCall(call: Call, timedOut: boolean): void {
     // specs/Serialize.tla, `Commit`.
     this.call = undefined;
     clearTimeout(call.timer);
@@ -1030,7 +1037,7 @@ export class Controller {
 
   private close(session: Session): void {
     this.trace?.('session closed');
-    if (this.session === session) this.session = undefined;
+    this.session = undefined;
     session.timeline.interrupt();
     clearTimeout(session.navigatorTimer);
     this.endGrace();
@@ -1086,7 +1093,7 @@ export class Controller {
         if (this.session !== session) break;
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
         // (specs/Rehearsal.tla, `Play`).
-        if (result.status === 'completed' && batch.after) session.lines.adopt(batch.after.lines);
+        if (result.status === 'completed') session.lines.adopt(batch.after.lines);
         for (const sighting of sightings) {
           this.saw(session, session.lines, sighting);
         }
