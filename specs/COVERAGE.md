@@ -9,7 +9,7 @@ Code goes without a spec for one of these reasons:
 | Reason | What it means | What checks it instead |
 |---|---|---|
 | Pure | A function of its arguments, no state or concurrency | Unit tests; exhaustive tests where a spec's `ASSUME`s state the contract |
-| Format | Text or markup built from values | Unit tests, and `render.fields.test.ts` for reports |
+| Format | Text or markup built from values | Unit tests, and `render.test.ts`'s every field test for reports |
 | Glue | Wiring: registering, constructing, passing a call through | The integration test, which runs it in VS Code |
 | Look | How the panel or the editor draws things, with no effect on what the agent or the programmer is told | Page tests (`packages/vscode/test/*.test.ts`) |
 | Types | Declarations and re-exports, no code | `tsc` |
@@ -89,7 +89,7 @@ Code goes without a spec for one of these reasons:
 | `server.ts` | `createServer`, `agentGuide`, `startPrompt`, `shownPath` | Glue: registers the tools, each a call through `link.ts` |
 | | `serve` | `Wire` (`Shutdown`) |
 | `tools.ts` | `action`, `actionError`, `combined` | Pure: the tools' schemas; `validation.test.ts` holds them to the player's checks |
-| `render.ts` | all | Format; `render.fields.test.ts` |
+| `render.ts` | all | Format; `render.test.ts` |
 | `main.ts` | the entry: `serve` with the process's stdio | Glue |
 | `md.d.ts` | | Types |
 
