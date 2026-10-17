@@ -53,12 +53,6 @@
     "jsonc-parser": "^3.3.1"
   },
   "contributes": {
-    "mcpServerDefinitionProviders": [
-      {
-        "id": "aiPair.pair",
-        "label": "AI Pair"
-      }
-    ],
     "viewsContainers": {
       "secondarySidebar": [
         {

@@ -8,7 +8,7 @@ import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
 import { settingSpeed } from './panel_html';
-import { claudeStarter, registerServerProvider, setUpAgent, writeLauncher } from './setup';
+import { claudeStarter, setUpAgent, writeLauncher } from './setup';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 
@@ -207,7 +207,6 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.askStart();
     });
   }
-  registerServerProvider(context);
 
   context.subscriptions.push(
     log,

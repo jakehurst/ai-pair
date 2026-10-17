@@ -42,8 +42,8 @@ explaining it in the Pair
 panel](https://raw.githubusercontent.com/faiface/ai-pair/main/media/explain-line-by-line.gif)
 
 It works in VS Code, with the coding agent you already use. Setup is built in
-for Claude Code, Codex, OpenCode, Gemini CLI, Cursor and GitHub Copilot, and any
-agent that supports MCP can be connected by hand.
+for Claude Code, Codex, OpenCode, Gemini CLI and Cursor, and any agent that
+supports MCP can be connected by hand.
 
 **Note:** It works best with strong models; weaker ones tend to struggle with
 this way of working.
@@ -55,7 +55,7 @@ this way of working.
     OpenCode, Gemini CLI, Cursor. It adds a `pair` server to each one's
     user-wide MCP configuration. **Another agent** copies an MCP configuration
     instead: a stdio server named `pair` running `~/.ai-pair/bin/pair-mcp`
-    (`pair-mcp.cmd` on Windows). GitHub Copilot needs no setup.
+    (`pair-mcp.cmd` on Windows).
 3.  Restart your agent.
 
 ## Pair
