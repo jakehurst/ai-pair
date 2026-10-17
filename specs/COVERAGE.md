@@ -80,25 +80,28 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `link.ts` | `call`, `connect`, `open`, `openWindow`, `handBack`, `close`, `locate` | `Wire` |
-| | `findWindows`, `alive`, `isDiscovery` | `Discovery` |
+| | `findWindows`, `alive` | `Discovery` |
 | | `workspace`, `contains`, `realpath` | Pure |
-| | `EDITOR_DISCONNECTED` | Format |
+| | `EDITOR_DISCONNECTED`, `LINK_CLOSED` | Format |
 | `guide.ts` | `projectGuides` | `ProjectGuide` |
 | | `gitIgnores`, `readGuides` | Glue: git and the file system |
 | | `renderGuides` | Format |
 | `server.ts` | `createServer`, `agentGuide`, `startPrompt`, `shownPath` | Glue: registers the tools, each a call through `link.ts` |
+| | `serve` | `Wire` (`Shutdown`) |
 | `tools.ts` | `action`, `actionError`, `combined` | Pure: the tools' schemas; `validation.test.ts` holds them to the player's checks |
 | `render.ts` | all | Format; `render.fields.test.ts` |
-| `main.ts` | `main` | Glue |
+| `main.ts` | the entry: `serve` with the process's stdio | Glue |
 | `md.d.ts` | | Types |
 
 ## protocol
 
 | File | Functions | Spec |
 |---|---|---|
-| `wire.ts` | `parseFrame`, `parseEditorMessage`, `parseRelayMessage` | `Wire` (`SendGarbage`) |
+| `wire.ts` | `frameJson`, `parseEditorMessage`, `parseRelayMessage` | `Wire` (`SendGarbage`) |
 | | `aiPairHome`, `discoveryDir` | Pure |
-| `index.ts` | `actionKinds` and the `*Problem` checks | Pure; `validation.test.ts` |
+| `index.ts` | `moveProblem`, `spanProblem` | `ActionValidation` |
+| | `actionKinds`, `fieldsProblem`, `typeProblem` | Pure; `validation.test.ts` |
+| `schemas.ts` | the schemas, and the types taken from them | Types: data declarations, which the parsers above apply (#163) |
 | `paths.ts` | `samePath`, `withinFolder` | Pure |
 
 ## vscode

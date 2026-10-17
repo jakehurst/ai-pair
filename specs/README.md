@@ -91,6 +91,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
+| `ActionValidation.cfg` | every move and span place by the kind of value in each field (180 moves, 960 spans), `CheckAtText = TRUE` | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
@@ -1398,7 +1399,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd: reuses a terminal once its command ends |
 | `RunReturns` | `terminal.test.ts`: RunReturns: doesn't wait for shell integration once playback is interrupted |
 
-### Pure functions: `LineIdentity`, `Places`, `Typing`
+### Pure functions: `LineIdentity`, `Places`, `Typing`, `ActionValidation`
 
 These have no state or concurrency, so each spec is a model of the function and
 `ASSUME`s that TLC checks over every small input. Each also has an exhaustive
@@ -1410,6 +1411,7 @@ code are held to one contract.
 | `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.exhaustive.test.ts` |
 | `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts`, with `through` up to 2 characters (the spec: 3) |
 | `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts`, texts up to 5 characters (the spec: 7) |
+| `ActionValidation` | `moveProblem`, `spanProblem` in `protocol/src/index.ts` | a place gets no problem exactly when it is valid, and no place makes either check throw | `protocol/test/index.test.ts`, with the same kinds of value as the spec |
 
 Each is a module of `ASSUME`s alone, with a config that only gives the
 constants (the guide's 8.7, item 6): TLC checks the `ASSUME`s and explores no
@@ -1470,14 +1472,37 @@ Each names the test that proves the code obeys it:
 | `ConcatenatesToText` | `typing.exhaustive.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
 | `ChunksAreUnits` | the same test |
 
+#### `ActionValidation`
+
+The checks both the relay's schema and the player ask (#45), over every
+`move` and every `select` or `point`, by the kind of value in each field: 180
+moves and 960 spans. Each `ASSUME` was proved to bite with a mutation, run in
+TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `CheckAtText = FALSE`, the code before #163, where `{ at: 5 }` threw in `spotProblem` | `NeverThrows` |
+| `MoveProblem` without its check for neither `at` nor `to` | `MoveExactly` |
+| `SpanProblem` without its check for empty code | `SpanExactly` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other |
+| `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other |
+| `NeverThrows` | both tests |
+
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
 These three contracts from #19 are about what the code accepts or writes, not
-about states, so they are tests on the code, not TLA+.
+about states, so they are tests on the code, not TLA+. `ActionValidation`'s
+two checks, `moveProblem` and `spanProblem`, also have a spec of their own,
+above (#163); this contract holds the relay's schema and the player to them.
 
 | Contract | Test |
 |---|---|
-| The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: 68 actions through both |
+| The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: every action in its table through both, malformed ones above all |
 | Every field of a `Report` appears in its rendered text | `relay/test/render.fields.test.ts` |
 | Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/setup.properties.test.ts`: TOML and JSON configs |
 
