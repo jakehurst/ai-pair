@@ -105,6 +105,10 @@ Set by Justine on 2026-10-07.
 -   **A test file covers its source file 100 percent by itself:** lines,
     branches, and functions, counting only its own tests (set by Justine on
     2026-10-16).
+-   **A coverage floor is never lowered.** A run below one in
+    `coverage_thresholds.json` gets the test cases that bring it back up;
+    the floor itself stays (set by Justine on 2026-10-17: "you always add
+    cases to meet the floor").
 -   **Every code change ships with unit and integration tests, both at 100
     percent** of lines, branches, and functions for each source file it
     touches, on macOS and on Linux, where CI runs the integration test (set
