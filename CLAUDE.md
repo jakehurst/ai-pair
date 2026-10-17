@@ -85,7 +85,18 @@ Set by Justine on 2026-10-07.
     soloist): it tests one source file, and every collaborator that file
     uses is replaced by a mock. When Justine says unit test, she means this
     style, never the sociable style, which runs real collaborators (#176;
-    set by Justine on 2026-10-16).
+    set by Justine on 2026-10-16). Mocked: the
+    file's other source files, in this package or another, anything that
+    does I/O (`fs`, `child_process`, `os`, `ws`), and a framework object the
+    file builds on, such as the MCP SDK's `McpServer`. Real: constants
+    ("constants are constants"), types, pure computation such as
+    `node:path`, and `zod`.
+-   **`zod` schemas are a shared library, like the constants,** in
+    `@ai-pair/protocol`: production code parses what crosses a boundary
+    with them and takes its types from them with `z.infer`; unit tests
+    parse each mock's inputs and outputs with the same schemas, so a mock
+    cannot drift from the API it stands in for (set by Justine on
+    2026-10-16).
 -   **Each source file's unit tests live in its own test file,** named for
     it: `server.ts` in `server.test.ts`, never one file for several
     sources. An end-to-end test that runs several files at once, like
