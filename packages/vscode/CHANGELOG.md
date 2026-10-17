@@ -23,6 +23,13 @@
     file's mocks always apply; a run takes about a second longer.
     `units.test.ts` and `render.fields.test.ts` are split into the test files
     of the sources they test.
+-   The integration run gains three cases: every malformed action the
+    checks refuse, sent over a relay link, is refused by name in the editor,
+    and a frame that is not a message is dropped; a pause holds a `say` until
+    the resume, and an interrupt during a move's `show` cuts the batch; and a
+    relay skips a window that answers its hello with something that is not a
+    message, and starts without `AI_PAIR_HOME`. `timeline.ts`, the
+    protocol's `index.ts`, and `wire.ts` are at 100 percent of lines in it.
 
 ## 0.7.2
 

@@ -21,20 +21,20 @@ Last updated: unit, 2026-10-17.
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
 | `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | L 0.0% (0 of 16) | - |
-| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.4% B 64.0% F 94.1% | - | - | - | - |
+| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.1% B 68.5% F 94.1% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/constants.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.6% B 84.9% F 86.9% | - | - | - | - |
+| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.1% B 85.9% F 86.9% | - | - | - | - |
 | `packages/core/src/diff.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.7% B 80.0% F 100.0% | - | - | - | - |
 | `packages/core/src/index.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 93.3% F 100.0% | - | - | - | - |
 | `packages/core/src/paths.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/places.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 75.2% B 47.6% F 66.7% | - | - | - | - |
-| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.5% B 70.1% F 93.3% | - | - | - | - |
+| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.8% B 71.6% F 93.3% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 93.3% F 100.0% | - | - | - | - |
 | `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.0% B 77.8% F 87.5% | - | - | - | - |
-| `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.6% B 85.7% F 80.0% | - | - | - | - |
+| `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 89.5% F 100.0% | - | - | - | - |
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/test/bridge.discovery.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -56,19 +56,19 @@ Last updated: unit, 2026-10-17.
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.0% B 53.7% F 90.9% | - | - | - | - |
+| `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 83.3% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.2% B 45.5% F 100.0% | - | - | - | - |
+| `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 84.6% F 100.0% | - | - | - | - |
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 75.0% F 100.0% | - | - | - | - |
-| `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 82.2% B 63.3% F 94.1% | - | - | - | - |
+| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 81.3% F 100.0% | - | - | - | - |
+| `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.0% B 71.8% F 94.1% | - | - | - | - |
 | `packages/relay/src/main.ts` | TypeScript | - | L 83.3% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
-| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.8% B 48.9% F 69.2% | - | - | - | - |
-| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.1% B 73.7% F 88.9% | - | - | - | - |
+| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.8% B 50.0% F 69.2% | - | - | - | - |
+| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.1% B 79.5% F 88.9% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.8% B 60.0% F 14.3% | - | - | - | - |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -88,7 +88,7 @@ Last updated: unit, 2026-10-17.
 | `packages/vscode/src/calibration.ts` | TypeScript | L 97.4% B 86.4% F 100.0% | L 58.6% B 66.7% F 33.3% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 32.5% B 44.0% F 40.0% | L 92.5% B 68.0% F 80.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 95.0% B 83.8% F 95.8% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 77.6% B 62.5% F 63.6% | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 77.6% B 61.2% F 63.6% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 92.8% F 100.0% | L 86.4% B 37.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 92.8% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 100.0% B 96.3% F 100.0% | - | - | - | - |

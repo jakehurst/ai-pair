@@ -11,8 +11,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 88,
-      "branches": 64,
+      "lines": 89,
+      "branches": 68,
       "functions": 94
     }
   },
@@ -47,8 +47,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 90,
-      "branches": 84,
+      "lines": 91,
+      "branches": 85,
       "functions": 86
     }
   },
@@ -96,7 +96,7 @@
     },
     "integration": {
       "lines": 91,
-      "branches": 69,
+      "branches": 71,
       "functions": 93
     }
   },
@@ -119,9 +119,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 98,
+      "lines": 100,
       "branches": 93,
-      "functions": 86
+      "functions": 100
     }
   },
   "packages/core/src/text.ts": {
@@ -132,7 +132,7 @@
     },
     "integration": {
       "lines": 98,
-      "branches": 75,
+      "branches": 77,
       "functions": 87
     }
   },
@@ -143,9 +143,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 85,
-      "branches": 85,
-      "functions": 80
+      "lines": 100,
+      "branches": 89,
+      "functions": 100
     }
   },
   "packages/core/src/timing.ts": {
@@ -179,9 +179,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 93,
-      "branches": 54,
-      "functions": 90
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/protocol/src/paths.ts": {
@@ -191,8 +191,15 @@
       "functions": 100
     },
     "integration": {
-      "lines": 93,
-      "branches": 70,
+      "lines": 100,
+      "branches": 83,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/schemas.ts": {
+    "integration": {
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     }
   },
@@ -203,8 +210,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 97,
-      "branches": 50,
+      "lines": 100,
+      "branches": 84,
       "functions": 100
     }
   },
@@ -216,7 +223,7 @@
     },
     "integration": {
       "lines": 98,
-      "branches": 75,
+      "branches": 81,
       "functions": 100
     }
   },
@@ -227,8 +234,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 82,
-      "branches": 63,
+      "lines": 87,
+      "branches": 71,
       "functions": 94
     }
   },
@@ -247,7 +254,7 @@
     },
     "integration": {
       "lines": 66,
-      "branches": 48,
+      "branches": 50,
       "functions": 69
     }
   },
@@ -259,7 +266,7 @@
     },
     "integration": {
       "lines": 93,
-      "branches": 73,
+      "branches": 79,
       "functions": 88
     }
   },
@@ -301,8 +308,8 @@
       "functions": 87
     },
     "integration": {
-      "lines": 41,
-      "branches": 55,
+      "lines": 42,
+      "branches": 66,
       "functions": 12
     }
   },
@@ -337,8 +344,8 @@
       "functions": 0
     },
     "integration": {
-      "lines": 94,
-      "branches": 82,
+      "lines": 95,
+      "branches": 83,
       "functions": 95
     }
   },
@@ -374,7 +381,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 95,
+      "branches": 100,
       "functions": 100
     }
   },

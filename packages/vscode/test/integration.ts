@@ -9,7 +9,8 @@ import { Worker } from 'node:worker_threads';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import * as vscode from 'vscode';
-import { CURSOR_MARKER, discoveryDir, type Report, type ToolName } from '@ai-pair/protocol';
+import { WebSocket, WebSocketServer } from 'ws';
+import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProblem, type Report, type ToolName } from '@ai-pair/protocol';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
@@ -84,6 +85,11 @@ function missing(e: unknown): boolean {
 /** Returns whether `v` is the extension's `Api`, by its members: the bundle's classes are not this bundle's, so no `instanceof`. */
 function isApi(v: unknown): v is Api {
   return typeof v === 'object' && v !== null && 'controller' in v && 'editor' in v && 'bridge' in v && 'playDemo' in v && 'ready' in v;
+}
+
+/** Returns the extension host's environment without `leftOut`, for a relay the test starts. */
+function relayEnv(leftOut = ''): Record<string, string> {
+  return Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== leftOut));
 }
 
 /** Runs every scenario inside VS Code; the extension host exits with its result. */
@@ -283,6 +289,77 @@ export async function run(): Promise<void> {
   // The bridge disconnects the socket's session when it sees the close; let that happen before the next start.
   await sleep(300);
   console.log('a cancelled report is restored before the next call');
+
+  // Every check of an action refuses it by name in the editor, when the relay's own schema is skipped, as a link
+  // can (specs/ActionValidation.tla); and a frame that isn't JSON, or isn't a message, is dropped (specs/Wire.tla,
+  // `SendGarbage`), while the socket goes on.
+  const refusing = new EditorLink(root, discoveryDir());
+  await refusing.call('start', { task: 'refusals', cwd: root });
+  const refusals: object[] = [
+    {},
+    { move: { before: 'x' } },
+    { move: { line: 0, to: 'line_end' } },
+    { move: { to: 'start' } },
+    { move: { at: `x${CURSOR_MARKER}`, to: 'line_end' } },
+    { move: {} },
+    { move: { at: 5 } },
+    { move: { at: 'x' } },
+    { move: { at: `x${CURSOR_MARKER}y${CURSOR_MARKER}` } },
+    { move: { at: CURSOR_MARKER } },
+    { move: { to: 'line_end', extra: 1 } },
+    { select: { near_line: 3, text: 'a' } },
+    { select: { to: 'y' } },
+    { select: { line: 1.5, text: 'a' } },
+    { select: { text: 'a', from: 'a', through: 'b' } },
+    { select: { from: 'a' } },
+    { select: {} },
+    { select: { text: '' } },
+    { select: [] },
+    { point: 5 },
+    { say: 'x', loud: true },
+    { delete: false },
+    { run: 'true', wait: '2' },
+    { type: ['x'] },
+    { type: 5 },
+    { type: 'x' },
+    { type: `${CURSOR_MARKER}x${CURSOR_MARKER}` },
+  ];
+  for (const action of refusals) {
+    // The editor answers a step with a report.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const answer = (await refusing.call('step', { actions: [action] })) as Report;
+    const expected = fieldsProblem(action) ?? ('type' in action ? typeProblem(action.type) : undefined);
+    assert.equal(answer.rejected?.error.kind, 'invalid_action', JSON.stringify(action));
+    if (expected !== undefined) {
+      assert.equal(answer.rejected.error.message, expected, JSON.stringify(action));
+    }
+  }
+  const window = findWindows([root], discoveryDir()).windows[0];
+  const raw = new WebSocket(`ws://127.0.0.1:${window.port}`);
+  const frames: string[] = [];
+  raw.on('message', (data: Buffer) => {
+    frames.push(data.toString('utf8'));
+  });
+  await new Promise<void>((resolve, reject) => {
+    raw.once('open', () => {
+      resolve();
+    });
+    raw.once('error', reject);
+  });
+  raw.send(JSON.stringify({ type: 'hello', token: window.token, protocolVersion: PROTOCOL_VERSION }));
+  await until(() => frames.length === 1);
+  raw.send('not json');
+  raw.send(JSON.stringify({ type: 'bogus' }));
+  raw.send(JSON.stringify({ type: 'call', id: 1, tool: 'listen', args: {} }));
+  await until(() => frames.length === 2);
+  assert.match(frames[1] ?? '', /^\{"type":"error","id":1,"code":"no_session"/);
+  raw.close();
+  await refusing.call('end', {});
+  refusing.close();
+  await sleep(300);
+  console.log(
+    `MoveExactly, SpanExactly, NeverThrows: ${refusals.length} malformed actions refused by name in the editor; frames that aren't messages dropped`,
+  );
 
   // A file changed on disk, as a git checkout does, comes from VS Code as one change spanning the
   // lines between the changed ones; the agent's selection there stays on its text (#65).
@@ -511,6 +588,45 @@ export async function run(): Promise<void> {
   await controller.end();
   console.log('a batch interrupted after a type with nothing to type is discarded');
 
+  // A pause holds a sleep with what is left of it, and the resume plays the rest (specs/Timeline.tla, `Pause`,
+  // `Resume`). An interrupt while a move waits for its file to show cuts the move's next pause at once, and the
+  // next batch plays on a timeline reset (`Interrupt`, `Reset`).
+  fs.writeFileSync(file('paused.txt'), 'a\nb\n');
+  await controller.start('paused');
+  await controller.read('paused.txt');
+  controller.setReadingSpeed(1);
+  await controller.step([{ say: Array.from({ length: 10 }, (_, i) => `word${i}`).join(' ') }]);
+  await sleep(200);
+  controller.pause('user');
+  await sleep(1000);
+  assert.equal(controller.isPaused, true);
+  controller.resume('user');
+  assert.deepEqual(
+    (await controller.step([])).batches.map((b) => b.status),
+    ['completed'],
+  );
+  controller.setReadingSpeed(10);
+  const show = api.editor.show.bind(api.editor);
+  api.editor.show = (f) => {
+    api.editor.show = show;
+    controller.userInterrupt();
+    return show(f);
+  };
+  await controller.step([{ move: { file: 'paused.txt', line: 1, to: 'line_end' } }, { say: 'Not said.' }]);
+  assert.deepEqual(
+    (await controller.listen()).batches.map((b) => b.status),
+    ['interrupted'],
+  );
+  await controller.step([{ move: { file: 'paused.txt', line: 2, to: 'line_end' } }]);
+  assert.deepEqual(
+    (await controller.step([])).batches.map((b) => b.status),
+    ['completed'],
+  );
+  await controller.end();
+  console.log(
+    'NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played',
+  );
+
   // A line a tool inserts, read while a queued batch edits other files, is accepted (specs/Rehearsal.tla).
   fs.writeFileSync(file('inserted.txt'), 'hello\n');
   const inserted = await vscode.workspace.openTextDocument(file('inserted.txt'));
@@ -654,7 +770,7 @@ export async function run(): Promise<void> {
   const transport = new StdioClientTransport({
     command: api.launcher,
     cwd: root,
-    env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)),
+    env: relayEnv(),
   });
   const agent = new Client({ name: 'integration', version: '0' });
   await agent.connect(transport);
@@ -751,4 +867,49 @@ export async function run(): Promise<void> {
   await until(() => new RegExp(`\\[info\\] socket \\d+ ${LEFT_ARROW} call \\d+ start`).test(traced()));
   await vscode.workspace.getConfiguration('aiPair').update('trace', undefined, vscode.ConfigurationTarget.Global);
   console.log("relay session OK, with the project's guide");
+
+  // A relay whose first window answers its hello with something that isn't a message tries the next one
+  // (specs/Wire.tla, `SendGarbage`; specs/Discovery.tla, `Try`). The impostor holds a folder inside this window's,
+  // so it is tried first.
+  const impostor = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve) => {
+    impostor.once('listening', resolve);
+  });
+  impostor.on('connection', (socket) => {
+    socket.on('message', () => {
+      socket.send('not a message');
+    });
+  });
+  const address = impostor.address();
+  // ws gives null before the server listens, a string for a pipe, and an object for a port.
+  assert.ok(typeof address === 'object' && address !== null);
+  fs.mkdirSync(file('impostor'), { recursive: true });
+  const impostorFile = path.join(discoveryDir(), 'impostor.json');
+  fs.writeFileSync(
+    impostorFile,
+    JSON.stringify({
+      pid: process.pid,
+      workspaceFolders: [file('impostor')],
+      port: address.port,
+      token: 'impostor',
+      protocolVersion: PROTOCOL_VERSION,
+      lastFocused: Date.now(),
+    }),
+  );
+  const fooled = new Client({ name: 'integration', version: '0' });
+  await fooled.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env: relayEnv() }));
+  const fooledStart = await fooled.callTool({ name: 'start', arguments: { task: 'impostor', cwd: file('impostor') } });
+  assert.ok(fooledStart.isError !== true, JSON.stringify(fooledStart.content));
+  await fooled.callTool({ name: 'end', arguments: { summary: 'Bye.' } });
+  await fooled.close();
+  fs.rmSync(impostorFile);
+  impostor.close();
+  // A relay with no AI_PAIR_HOME looks for the windows under the home directory; listing its tools reads nothing.
+  const homeless = new Client({ name: 'integration', version: '0' });
+  await homeless.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env: relayEnv('AI_PAIR_HOME') }));
+  assert.equal((await homeless.listTools()).tools.length, tools.tools.length);
+  await homeless.close();
+  console.log(
+    'RelayStaysUp, ConnectedToOpen: a relay skipped a window that answered with something not a message, and started without AI_PAIR_HOME',
+  );
 }
