@@ -15,7 +15,7 @@ import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
 import { CURSOR_MARKER, PROTOCOL_VERSION } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
-import { agentGuide, createServer, serve } from '../src/server';
+import { createServer, serve } from '../src/server';
 
 const fast = {
   ...testConfig,
@@ -65,19 +65,13 @@ afterEach(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-/** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them; `'fails'`: it claims them, then fails the request. */
-async function connect(cwd = '/project/src', roots?: string[] | 'fails'): Promise<Client> {
+/** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
+async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const server = createServer(new EditorLink(cwd, dir), 'THE GUIDE', cwd);
   await server.connect(serverSide);
   const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
-  if (roots === 'fails') {
-    client.setRequestHandler(ListRootsRequestSchema, () => {
-      throw new Error('no roots today');
-    });
-  } else if (roots !== undefined) {
-    client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
-  }
+  if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
   await client.connect(clientSide);
   clients.push(client);
   return client;
@@ -228,8 +222,6 @@ describe('relay', () => {
     expect(range.text).toMatch(/The end of a range is `through`/);
     const nothing = await call(client, 'step', { actions: [{ select: { line: 1 } }] });
     expect(nothing.text).toMatch(/Give the code: `text`, or `from` and `through`/);
-    const said = await call(client, 'step', { actions: [{ say: 3 }] });
-    expect(said.error).toBe(true);
     const spot = await call(client, 'step', { actions: [{ move: { line: 1, at: 5 } }] });
     expect(spot.text).toMatch(/`at` is a text/);
   });
@@ -529,11 +521,6 @@ describe('relay', () => {
     expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(false);
   });
 
-  it('treats a harness whose roots request fails as one with none', async () => {
-    const client = await connect('/', 'fails');
-    expect((await call(client, 'start')).text).toMatch(/^no_editor: No VS Code window has \/ open/);
-  });
-
   it('ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163)', async () => {
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     // The stdio transport reads stdin, so it flows, and its end is seen.
@@ -624,13 +611,5 @@ describe('discovery', () => {
     expect(bridge.connections().size).toBe(0);
     expect((await call(client, 'start')).error).toBe(false);
     expect(bridge.connections().size).toBe(1);
-  });
-});
-
-describe('agent guide', () => {
-  it('is everything after the first horizontal rule, whatever the line endings', () => {
-    const lf = '# Agent Guide\n\nFor maintainers.\n\n---\n\n## You are pair programming\n\nDrive.\n';
-    expect(agentGuide(lf)).toBe('## You are pair programming\n\nDrive.');
-    expect(agentGuide(lf.replaceAll('\n', '\r\n'))).toBe('## You are pair programming\r\n\r\nDrive.');
   });
 });

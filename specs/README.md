@@ -203,8 +203,8 @@ the test's title carries its name:
 | `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
 | `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
-| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67) |
-| `ExitsAfterShutdown` | `link.test.ts`: ExitsAfterShutdown: closes a socket the editor welcomes after the link closed, and opens none after it; `relay.test.ts`: ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163) |
+| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); `server.test.ts`: DroppedHandedBack: hands back an answered report once, and passes every message on to the SDK (#67) |
+| `ExitsAfterShutdown` | `link.test.ts`: ExitsAfterShutdown: closes a socket the editor welcomes after the link closed, and opens none after it; `server.test.ts`: ExitsAfterShutdown: connects, and once stdin ends, closes the server and then the link (#163); `relay.test.ts`, end to end: ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163) |
 
 ### `Panel`: the history
 

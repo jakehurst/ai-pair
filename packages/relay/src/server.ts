@@ -24,6 +24,15 @@ const ROOTS_MS = 2000;
 /** Always loaded by the harness, so kept short; the full guide comes with `start`. */
 export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Never end your turn during a session; call \`listen\` instead.`;
 
+/** What `serve` runs with: the transport to the harness, the pairing guide, the relay's folder, the discovery folder, and the stream whose end closes the relay. */
+export interface ServeOptions {
+  transport: Transport;
+  guide: string;
+  cwd: string;
+  dir: string;
+  stdin: NodeJS.ReadableStream;
+}
+
 /** Returns the agent-facing part of AGENT_GUIDE.md: everything after the first horizontal rule. */
 export function agentGuide(markdown: string): string {
   const rule = /\r?\n---\r?\n/.exec(markdown);
@@ -145,15 +154,6 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   );
 
   return server;
-}
-
-/** What `serve` runs with: the transport to the harness, the pairing guide, the relay's folder, the discovery folder, and the stream whose end closes the relay. */
-export interface ServeOptions {
-  transport: Transport;
-  guide: string;
-  cwd: string;
-  dir: string;
-  stdin: NodeJS.ReadableStream;
 }
 
 /**
