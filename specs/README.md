@@ -199,11 +199,11 @@ the test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `OwnCloseOnly` | `link.test.ts`: OwnCloseOnly: rejects a call only when the socket it was sent on closes |
-| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a frame that is not JSON; RelayStaysUp: fails to connect, without crashing, when a window answers with JSON that isn't a message; RelayStaysUp: drops a frame that is not JSON after the welcome |
+| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a string, a number, an array, an object with no type, or a rejection whose reason isn't a text; RelayStaysUp: drops a frame that is not a message after the welcome, and an answer to no call |
 | `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
 | `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
-| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); `server.test.ts`: DroppedHandedBack: hands back an answered report once, and passes every message on to the SDK (#67) |
+| `DroppedHandedBack` | `link.test.ts`: DroppedHandedBack: hands a report back on the socket it came over, marked as maybe seen, and nothing it cannot; `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); `server.test.ts`: DroppedHandedBack: hands back an answered report once, and passes every message on to the SDK (#67) |
 | `ExitsAfterShutdown` | `link.test.ts`: ExitsAfterShutdown: closes a socket the editor welcomes after the link closed, and opens none after it; `server.test.ts`: ExitsAfterShutdown: connects, and once stdin ends, closes the server and then the link (#163); `relay.test.ts`, end to end: ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163) |
 
 ### `Panel`: the history
@@ -407,10 +407,10 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NoInternal` | `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
+| `NoInternal` | `link.test.ts`: NoInternal: skips a file that isn't JSON, JSON that isn't a window's, and a file not named as JSON; `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
 | `FindsRunningProp` | `bridge.discovery.test.ts`: FindsRunningProp: rewrites the discovery file on focus without a reader ever seeing it half written |
-| `ConnectedToOpen` | `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process |
-| `FindsOpen` | `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
+| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process |
+| `FindsOpen` | `link.test.ts`: FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed; `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
 
 ### `EditorAdapter`: who made a change
 

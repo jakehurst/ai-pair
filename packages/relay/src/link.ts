@@ -68,7 +68,7 @@ function alive(pid: number): boolean {
  * Finds the first of `folders` inside a live window's workspace folder, and the windows it's in,
  * best first: the most closely containing workspace folder, then the most recently focused window.
  */
-export function findWindows(folders: string[], dir: string): { folder: string; windows: Discovery[] } {
+export function findWindows(folders: string[], dir: string): { folder: string; windows: [Discovery, ...Discovery[]] } {
   const windows: Discovery[] = [];
   let files: string[] = [];
   try {
@@ -97,9 +97,9 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
         .map((f) => f.length);
       if (lengths.length > 0) matches.push({ window, length: Math.max(...lengths) });
     }
-    if (matches.length === 0) continue;
     matches.sort((a, b) => b.length - a.length || b.window.lastFocused - a.window.lastFocused);
-    return { folder, windows: matches.map((m) => m.window) };
+    const [best, ...rest] = matches.map((m) => m.window);
+    if (best) return { folder, windows: [best, ...rest] };
   }
   throw new RelayError(
     'no_editor',
@@ -144,8 +144,9 @@ export class EditorLink {
    */
   workspace(folder: string): { folder: string; root: string } {
     const here = realpath(folder);
-    const { windows } = findWindows([folder], this.dir);
-    const roots = (windows[0]?.workspaceFolders ?? []).map((f) => realpath(f)).filter((f) => contains(f, here));
+    const [best] = findWindows([folder], this.dir).windows;
+    const roots = best.workspaceFolders.map((f) => realpath(f)).filter((f) => contains(f, here));
+    // A folder's real path can change between the two reads (a symlink moved), and then none holds it.
     return { folder: here, root: roots.toSorted((a, b) => b.length - a.length)[0] ?? here };
   }
 

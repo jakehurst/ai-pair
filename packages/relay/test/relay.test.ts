@@ -378,9 +378,7 @@ describe('relay', () => {
   });
 
   it("keeps serving after frames that aren't messages", async () => {
-    const window = findWindows(['/project'], dir).windows[0];
-    ok(window);
-    const { port } = window;
+    const { port } = findWindows(['/project'], dir).windows[0];
     const raw = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise((r) => {
       raw.once('open', r);
@@ -395,9 +393,7 @@ describe('relay', () => {
 
   it("OwnedByOpenSocket: doesn't leave a session to a socket that closed while it started", async () => {
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
-    const window = findWindows(['/project'], dir).windows[0];
-    ok(window);
-    const { port, token } = window;
+    const { port, token } = findWindows(['/project'], dir).windows[0];
     const start = controller.start.bind(controller);
     const gate = deferred();
     const atGate = deferred();
@@ -458,9 +454,7 @@ describe('relay', () => {
     await call(one, 'start', { task: 'one' });
     controller.endSession();
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
-    const window = findWindows(['/project'], dir).windows[0];
-    ok(window);
-    const { port, token } = window;
+    const { port, token } = findWindows(['/project'], dir).windows[0];
     const start = controller.start.bind(controller);
     const gate = deferred();
     const atGate = deferred();
@@ -544,36 +538,6 @@ describe('relay', () => {
 });
 
 describe('discovery', () => {
-  it('picks the most specific workspace folder, then the most recently focused window', () => {
-    function write(name: string, folders: string[], lastFocused: number): void {
-      fs.writeFileSync(
-        path.join(dir, name),
-        JSON.stringify({ pid: process.pid, workspaceFolders: folders, port: 1, token: name, protocolVersion: 1, lastFocused }),
-      );
-    }
-    write('outer.json', ['/work'], 3);
-    write('inner-old.json', ['/work/app'], 1);
-    write('inner-new.json', ['/work/app'], 2);
-    write('dead.json', ['/work/app/src'], 9);
-    const dead: unknown = JSON.parse(fs.readFileSync(path.join(dir, 'dead.json'), 'utf8'));
-    ok(typeof dead === 'object' && dead !== null);
-    fs.writeFileSync(path.join(dir, 'dead.json'), JSON.stringify({ ...dead, pid: 999_999_999 }));
-    function tokens(folders: string[]): string[] {
-      return findWindows(folders, dir).windows.map((w) => w.token);
-    }
-    expect(tokens(['/work/app/src'])).toEqual(['inner-new.json', 'inner-old.json', 'outer.json']);
-    expect(tokens(['/work/lib'])).toEqual(['outer.json']);
-    expect(findWindows(['/', '/work/lib', '/work/app'], dir).folder).toBe('/work/lib');
-  });
-
-  it('finds a window for a folder inside it whose name starts with two dots (#5)', () => {
-    fs.writeFileSync(
-      path.join(dir, 'w.json'),
-      JSON.stringify({ pid: process.pid, workspaceFolders: ['/work'], port: 1, token: 'w', protocolVersion: 1, lastFocused: 1 }),
-    );
-    expect(findWindows(['/work/..cache'], dir).windows.map((w) => w.token)).toEqual(['w']);
-  });
-
   it('ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process', async () => {
     fs.writeFileSync(
       path.join(dir, 'stale.json'),
