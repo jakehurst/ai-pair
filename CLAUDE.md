@@ -105,6 +105,16 @@ Set by Justine on 2026-10-07.
 -   **A test file covers its source file 100 percent by itself:** lines,
     branches, and functions, counting only its own tests (set by Justine on
     2026-10-16).
+-   **Every code change ships with unit and integration tests, both at 100
+    percent** of lines, branches, and functions for each source file it
+    touches, on macOS and on Linux, where CI runs the integration test (set
+    by Justine on 2026-10-16, #180).
+-   **Code no integration run can reach is removed,** as overengineering:
+    a path no real use of the extension and relay can take, such as a form
+    of input no caller produces. Found while working a change, it is removed
+    in the same set of changes, with its unit tests; a path that real use
+    can take but the test does not yet provoke gets an integration case
+    instead (set by Justine on 2026-10-16, #180).
 -   **Each source file's unit tests live in its own test file,** named for
     it: `server.ts` in `server.test.ts`, never one file for several
     sources. An end-to-end test that runs several files at once, like

@@ -3,7 +3,9 @@
 // planned against the text before them, and that a programmer edit interrupts, with an exact report.
 
 import * as assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -62,6 +64,14 @@ function sleep(ms: number): Promise<void> {
 /** A glide long enough to catch mid-way, set as both `glideMs` and `glideMaxMs`: 500 ms at speed 20. */
 const LONG_GLIDE_MS = 10_000;
 
+/** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
+interface RawSocket {
+  socket: WebSocket;
+  /** Resolves with the next frame the bridge sends, as JSON. One call at a time. */
+  next(): Promise<unknown>;
+  closed: Promise<void>;
+}
+
 /**
  * Inserts text as the programmer would, while the agent may be typing into the same document. VS Code
  * rejects an extension's edit made against a version the document has moved past, which the agent's
@@ -90,6 +100,99 @@ function isApi(v: unknown): v is Api {
 /** Returns the extension host's environment without `leftOut`, for a relay the test starts. */
 function relayEnv(leftOut = ''): Record<string, string> {
   return Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== leftOut));
+}
+
+/** Opens a socket to the bridge on `port`, as a relay or any other process on the machine can. */
+async function rawSocket(port: number): Promise<RawSocket> {
+  const socket = new WebSocket(`ws://127.0.0.1:${port}`);
+  const frames: unknown[] = [];
+  let wake: (() => void) | undefined;
+  socket.on('message', (data: Buffer) => {
+    const frame: unknown = JSON.parse(data.toString('utf8'));
+    frames.push(frame);
+    wake?.();
+  });
+  const closed = new Promise<void>((resolve) => {
+    socket.once('close', () => {
+      resolve();
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.once('open', () => {
+      resolve();
+    });
+    socket.once('error', reject);
+  });
+  return {
+    socket,
+    closed,
+    next: async () => {
+      for (;;) {
+        const frame = frames.shift();
+        if (frame !== undefined) {
+          return frame;
+        }
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+      }
+    },
+  };
+}
+
+/** Sends a call on `peer`, with `args` unless they are left out, and resolves with the bridge's answer. */
+function ask(peer: RawSocket, id: number, name: string, args?: Record<string, unknown>): Promise<unknown> {
+  peer.socket.send(JSON.stringify({ type: 'call', id, tool: name, ...(args === undefined ? {} : { args }) }));
+  return peer.next();
+}
+
+/** Calls `name` on `client` and returns whether it failed, and its text. */
+async function called(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<{ failed: boolean; text: string }> {
+  const result = await client.callTool({ name, arguments: args }, undefined, signal === undefined ? undefined : { signal });
+  // The relay answers with text parts only.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const parts = result.content as Array<{ text: string }>;
+  return { failed: result.isError === true, text: parts.map((part) => part.text).join('\n\n') };
+}
+
+/** Starts a WebSocket server standing in for an editor window, which runs `answer` on each frame it gets. */
+async function fakeEditor(answer: (socket: WebSocket) => void): Promise<{ server: WebSocketServer; port: number }> {
+  const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve) => {
+    server.once('listening', resolve);
+  });
+  server.on('connection', (socket) => {
+    socket.on('message', () => {
+      answer(socket);
+    });
+  });
+  const address = server.address();
+  // ws gives null before the server listens, a string for a pipe, and an object for a port.
+  assert.ok(typeof address === 'object' && address !== null);
+  return { server, port: address.port };
+}
+
+/** Writes the discovery file of a window that isn't this one, open on `folders`, and returns its path. */
+function fakeWindow(name: string, folders: string[], port: number, changes: { pid?: number; lastFocused?: number } = {}): string {
+  const written = path.join(discoveryDir(), `${name}.json`);
+  fs.writeFileSync(
+    written,
+    JSON.stringify({
+      pid: process.pid,
+      workspaceFolders: folders,
+      port,
+      token: name,
+      protocolVersion: PROTOCOL_VERSION,
+      lastFocused: Date.now(),
+      ...changes,
+    }),
+  );
+  return written;
 }
 
 /** Runs every scenario inside VS Code; the extension host exits with its result. */
@@ -360,6 +463,95 @@ export async function run(): Promise<void> {
   console.log(
     `MoveExactly, SpanExactly, NeverThrows: ${refusals.length} malformed actions refused by name in the editor; frames that aren't messages dropped`,
   );
+
+  // The bridge, driven by hand as any process on the machine could (specs/Bridge.tla). It turns away a socket without
+  // the token, or with another protocol version; it answers each kind of call a session's owner makes, and a call
+  // it can't take by name; it refuses a second agent; and a socket that closes, with a call open or while its start
+  // runs, leaves the session suspended to no one.
+  const here = findWindows([root], discoveryDir()).windows[0];
+  /** Opens a socket and greets the bridge with this window's token. */
+  async function greeted(): Promise<RawSocket> {
+    const peer = await rawSocket(here.port);
+    peer.socket.send(JSON.stringify({ type: 'hello', token: here.token, protocolVersion: PROTOCOL_VERSION }));
+    assert.deepEqual(await peer.next(), { type: 'welcome' });
+    return peer;
+  }
+  const tokenless = await rawSocket(here.port);
+  tokenless.socket.send(JSON.stringify({ type: 'hello', token: 5, protocolVersion: PROTOCOL_VERSION }));
+  assert.deepEqual(await tokenless.next(), { type: 'rejected', reason: 'Authentication failed.' });
+  await tokenless.closed;
+  const outdated = await rawSocket(here.port);
+  outdated.socket.send(JSON.stringify({ type: 'hello', token: here.token, protocolVersion: PROTOCOL_VERSION - 1 }));
+  assert.match(JSON.stringify(await outdated.next()), /^\{"type":"rejected","reason":"Protocol version mismatch/);
+  await outdated.closed;
+  const driver = await greeted();
+  assert.match(JSON.stringify(await ask(driver, 1, 'start', { task: 'by hand', cwd: root })), /^\{"type":"result","id":1,/);
+  assert.ok(api.bridge.connections().size > 0);
+  driver.socket.send(JSON.stringify({ type: 'cancel', id: 99 }));
+  const refusedCalls: Array<[string, Record<string, unknown> | undefined, string]> = [
+    ['step', undefined, '`actions` must be an array.'],
+    ['read', {}, '`file` must be a string.'],
+    ['calibrate', { title: 'Words' }, '`title` and `file` must be strings.'],
+    ['bogus', {}, 'Unknown tool: bogus'],
+  ];
+  for (const [i, [name, args, message]] of refusedCalls.entries()) {
+    assert.deepEqual(await ask(driver, i + 2, name, args), { type: 'error', id: i + 2, code: 'invalid_arguments', message });
+  }
+  fs.writeFileSync(file('lines.txt'), 'one\ntwo\nthree\n');
+  assert.match(
+    JSON.stringify(await ask(driver, 10, 'read', { file: 'lines.txt', from_line: 2, to_line: 2 })),
+    /"lines":\[\{"number":2,"text":"two"\}\]/,
+  );
+  assert.match(
+    JSON.stringify(await ask(driver, 11, 'calibrate', { title: 'Words', file: 'missing.txt' })),
+    /"code":"internal","message":"ENOENT/,
+  );
+  fs.writeFileSync(file('passage.txt'), 'Some words to read, timed.\n');
+  assert.match(
+    JSON.stringify(await ask(driver, 12, 'calibrate', { title: 'Words', file: 'passage.txt', notice: 'From the test.' })),
+    /^\{"type":"result","id":12,/,
+  );
+  assert.match(JSON.stringify(await ask(driver, 13, 'calibrate', { title: 'Words', file: 'passage.txt' })), /"code":"calibration_busy"/);
+  const second = await greeted();
+  assert.match(JSON.stringify(await ask(second, 1, 'start', { cwd: root })), /"code":"session_active"/);
+  driver.socket.send(JSON.stringify({ type: 'call', id: 14, tool: 'listen', args: {} }));
+  await sleep(300);
+  driver.socket.close();
+  await driver.closed;
+  await until(() => controller.isSuspended);
+  const realStart = controller.start.bind(controller);
+  controller.start = async (...args) => {
+    await second.closed;
+    return realStart(...args);
+  };
+  second.socket.send(JSON.stringify({ type: 'call', id: 2, tool: 'start', args: { cwd: root } }));
+  await sleep(300);
+  second.socket.close();
+  await second.closed;
+  await sleep(300);
+  controller.start = realStart;
+  assert.equal(controller.isSuspended, true);
+  controller.endSession();
+  assert.equal(controller.isPaused, false, 'the calibration still holds playback');
+  // A listen with nothing to report comes back once it waited its longest, saying so (specs/Navigator.tla, `Timeout`).
+  const waiter = await greeted();
+  await ask(waiter, 1, 'start', { cwd: root });
+  assert.match(JSON.stringify(await ask(waiter, 2, 'listen', {})), /"waiting":true/);
+  waiter.socket.close();
+  await waiter.closed;
+  controller.endSession();
+  await sleep(300);
+  // A discovery file the window can't write is reported, and the window goes on (#9; specs/Discovery.tla, `OpenWindow`
+  // unlisted). A regular file where the folder was fails the write even for root, as in a container.
+  const windows = discoveryDir();
+  fs.renameSync(windows, `${windows}.kept`);
+  fs.writeFileSync(windows, '');
+  api.bridge.focused();
+  fs.rmSync(windows);
+  fs.renameSync(`${windows}.kept`, windows);
+  api.bridge.focused();
+  assert.ok(fs.existsSync(api.bridge.file), 'the discovery file was not written again');
+  console.log('a socket driven by hand: turned away without the token, each call answered, a close leaves the session to no one');
 
   // A file changed on disk, as a git checkout does, comes from VS Code as one change spanning the
   // lines between the changed ones; the agent's selection there stays on its text (#65).
@@ -728,7 +920,7 @@ export async function run(): Promise<void> {
   assert.ok(reads > 0);
   assert.equal(broken, 0, `${broken} of ${reads} reads didn't parse`);
   assert.ok(findWindows([root], discoveryDir()).windows.some((w) => w.pid === process.pid));
-  console.log(`the discovery file is never half written (${reads} reads)`);
+  console.log(`FindsRunningProp: the discovery file is never half written (${reads} reads)`);
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = 'abcdefghijklmnopqrstuvwxyz';
@@ -868,48 +1060,145 @@ export async function run(): Promise<void> {
   await vscode.workspace.getConfiguration('aiPair').update('trace', undefined, vscode.ConfigurationTarget.Global);
   console.log("relay session OK, with the project's guide");
 
-  // A relay whose first window answers its hello with something that isn't a message tries the next one
-  // (specs/Wire.tla, `SendGarbage`; specs/Discovery.tla, `Try`). The impostor holds a folder inside this window's,
-  // so it is tried first.
-  const impostor = new WebSocketServer({ host: '127.0.0.1', port: 0 });
-  await new Promise((resolve) => {
-    impostor.once('listening', resolve);
+  // A relay tries the windows best first, skipping a file that isn't a window's, a window whose pid is gone, one whose
+  // port nothing answers, one that rejects its hello, and one that answers with something not a message; a folder that
+  // doesn't exist is no folder to look for (specs/Discovery.tla, `Start`, `Try`; specs/Wire.tla, `Reject`,
+  // `SendGarbage`). The windows that aren't hold this window's folder, focused later, so they come first.
+  const refused = await fakeEditor(() => undefined);
+  refused.server.close();
+  const rejecting = await fakeEditor((socket) => {
+    socket.send(JSON.stringify({ type: 'rejected', reason: 'Not you.' }));
+    socket.close();
   });
-  impostor.on('connection', (socket) => {
-    socket.on('message', () => {
-      socket.send('not a message');
-    });
+  const garbled = await fakeEditor((socket) => {
+    socket.send('not a message');
   });
-  const address = impostor.address();
-  // ws gives null before the server listens, a string for a pipe, and an object for a port.
-  assert.ok(typeof address === 'object' && address !== null);
-  fs.mkdirSync(file('impostor'), { recursive: true });
-  const impostorFile = path.join(discoveryDir(), 'impostor.json');
-  fs.writeFileSync(
-    impostorFile,
-    JSON.stringify({
-      pid: process.pid,
-      workspaceFolders: [file('impostor')],
-      port: address.port,
-      token: 'impostor',
-      protocolVersion: PROTOCOL_VERSION,
-      lastFocused: Date.now(),
-    }),
-  );
-  const fooled = new Client({ name: 'integration', version: '0' });
-  await fooled.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env: relayEnv() }));
-  const fooledStart = await fooled.callTool({ name: 'start', arguments: { task: 'impostor', cwd: file('impostor') } });
-  assert.ok(fooledStart.isError !== true, JSON.stringify(fooledStart.content));
-  await fooled.callTool({ name: 'end', arguments: { summary: 'Bye.' } });
+  const later = Date.now() + 60_000;
+  const gone = spawnSync('true').pid;
+  fs.writeFileSync(path.join(discoveryDir(), 'junk.json'), '{');
+  const fakes = [
+    path.join(discoveryDir(), 'junk.json'),
+    fakeWindow('gone', [root], garbled.port, { pid: gone, lastFocused: later + 4 }),
+    fakeWindow('refused', [root], refused.port, { lastFocused: later + 3 }),
+    fakeWindow('rejecting', [root], rejecting.port, { lastFocused: later + 2 }),
+    fakeWindow('garbled', [root], garbled.port, { lastFocused: later + 1 }),
+  ];
+  /** Starts a relay as a harness does, with `env`, in `cwd`. */
+  async function relayAgent(env: Record<string, string>, cwd = root): Promise<Client> {
+    const client = new Client({ name: 'integration', version: '0' });
+    await client.connect(new StdioClientTransport({ command: api.launcher, cwd, env }));
+    return client;
+  }
+  const fooled = await relayAgent(relayEnv());
+  const fooledStart = await called(fooled, 'start', { task: 'fakes', cwd: '/no/such/folder' });
+  assert.equal(fooledStart.failed, false, fooledStart.text);
+  // Another folder of the window: the relay closes its socket and finds the window again (specs/Wire.tla, `Close`).
+  fs.mkdirSync(file('sub'), { recursive: true });
+  const relocated = await called(fooled, 'start', { task: 'moved', cwd: file('sub') });
+  assert.equal(relocated.failed, false, relocated.text);
+  // A folder only a window that isn't one holds: every window fails, and the first failure is the answer.
+  const outsider = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-outsider-'));
+  fakes.push(fakeWindow('outside', [outsider], refused.port));
+  const nowhere = await called(fooled, 'start', { task: 'outside', cwd: outsider });
+  assert.ok(nowhere.failed && nowhere.text.startsWith("no_editor: Couldn't connect to the editor: "), nowhere.text);
+  assert.equal((await called(fooled, 'start', { task: 'back', cwd: root })).failed, false);
+  // A listen the agent cancels before the editor answers: the next call waits until that answer comes, and goes
+  // back to the editor first (specs/Wire.tla, `Abort`, `Send` with WaitCancelled, `Reply`).
+  const realListen = controller.listen.bind(controller);
+  let held = Promise.withResolvers<void>();
+  controller.listen = async () => {
+    await held.promise;
+    return realListen();
+  };
+  controller.userMessage('held');
+  const cancelling = new AbortController();
+  const cancelled = called(fooled, 'listen', {}, cancelling.signal).catch(() => undefined);
+  await sleep(300);
+  cancelling.abort();
+  await cancelled;
+  const afterCancel = called(fooled, 'step', { actions: [] });
+  await sleep(300);
+  held.resolve();
+  assert.match((await afterCancel).text, /held/);
+  // The editor's end closing during a call: the agent is told to start again (#138; specs/Wire.tla, `HandleClose`).
+  const dropped = called(fooled, 'listen', {});
+  await sleep(300);
+  for (const socket of api.bridge.connections()) {
+    socket.terminate();
+  }
+  const droppedAnswer = await dropped;
+  assert.ok(droppedAnswer.failed && droppedAnswer.text.includes('call `start` again'), droppedAnswer.text);
+  await until(() => controller.isSuspended);
+  // The harness going away while a call waits for a cancelled one: the relay shuts down, and the waiting call
+  // opens no socket (specs/Wire.tla, `Shutdown`, `Open` with CloseAfterShutdown).
+  assert.equal((await called(fooled, 'start', { task: 'resumed', cwd: root })).failed, false);
+  held = Promise.withResolvers<void>();
+  const abandoning = new AbortController();
+  const abandoned = called(fooled, 'listen', {}, abandoning.signal).catch(() => undefined);
+  await sleep(300);
+  abandoning.abort();
+  await abandoned;
+  void fooled.callTool({ name: 'step', arguments: { actions: [] } }).catch(() => undefined);
+  await sleep(300);
   await fooled.close();
-  fs.rmSync(impostorFile);
-  impostor.close();
+  await sleep(500);
+  held.resolve();
+  controller.listen = realListen;
+  controller.endSession();
+  for (const fake of fakes) {
+    fs.rmSync(fake);
+  }
+  rejecting.server.close();
+  garbled.server.close();
+  // A relay whose windows' folder holds no windows file yet, and one whose folder no window has open.
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-home-'));
+  const lonely = await relayAgent({ ...relayEnv(), AI_PAIR_HOME: empty });
+  const noWindow = await called(lonely, 'start', { task: 'none' });
+  assert.ok(noWindow.failed && noWindow.text.includes('No VS Code window with the AI Pair extension is running'), noWindow.text);
+  await lonely.close();
+  const elsewhere = await relayAgent(relayEnv(), outsider);
+  const notOpen = await called(elsewhere, 'start', { task: 'elsewhere', cwd: outsider });
+  assert.ok(notOpen.failed && notOpen.text.includes(`No VS Code window has ${outsider} open`), notOpen.text);
+  // A window slowEditor to welcome: a call the agent cancels meanwhile isn't sent, and a welcome after the harness went
+  // away closes its socket (specs/Wire.tla, `Send` with CheckAbort; `Welcome` with CloseAfterShutdown).
+  const greetedSlowly: WebSocket[] = [];
+  const slowEditor = await fakeEditor((socket) => {
+    greetedSlowly.push(socket);
+  });
+  const slowFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-slowEditor-'));
+  const slowFile = fakeWindow('slow', [slowFolder], slowEditor.port);
+  const impatient = new AbortController();
+  const gaveUp = called(elsewhere, 'start', { task: 'slow', cwd: slowFolder }, impatient.signal).catch(() => undefined);
+  await sleep(500);
+  impatient.abort();
+  await gaveUp;
+  await sleep(300);
+  greetedSlowly.at(-1)?.send(JSON.stringify({ type: 'welcome' }));
+  await sleep(300);
+  await elsewhere.close();
+  const leaving = await relayAgent(relayEnv(), outsider);
+  void leaving.callTool({ name: 'start', arguments: { task: 'leaving', cwd: slowFolder } }).catch(() => undefined);
+  await sleep(500);
+  // The SDK's close kills a relay still running after 2 s, and a killed one writes no coverage: the welcome comes first.
+  const closing = leaving.close();
+  await sleep(500);
+  greetedSlowly.at(-1)?.send(JSON.stringify({ type: 'welcome' }));
+  await closing;
+  fs.rmSync(slowFile);
+  slowEditor.server.close();
+  fs.rmSync(outsider, { recursive: true });
+  fs.rmSync(slowFolder, { recursive: true });
+  fs.rmSync(empty, { recursive: true });
   // A relay with no AI_PAIR_HOME looks for the windows under the home directory; listing its tools reads nothing.
-  const homeless = new Client({ name: 'integration', version: '0' });
-  await homeless.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env: relayEnv('AI_PAIR_HOME') }));
+  const homeless = await relayAgent(relayEnv('AI_PAIR_HOME'));
   assert.equal((await homeless.listTools()).tools.length, tools.tools.length);
   await homeless.close();
   console.log(
-    'RelayStaysUp, ConnectedToOpen: a relay skipped a window that answered with something not a message, and started without AI_PAIR_HOME',
+    'RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME',
   );
+
+  // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
+  // (specs/Discovery.tla, `CloseWindow`).
+  await greeted();
+  fs.rmSync(api.bridge.file);
 }

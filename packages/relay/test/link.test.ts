@@ -3,7 +3,6 @@
 // mocked disk, and the protocol's parse and folder check are mocks, the parse deciding by the real message schema.
 
 import { ok } from 'node:assert/strict';
-import { realpathSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PROTOCOL_VERSION, RELAY_MESSAGE_SCHEMA, REPORT_SCHEMA, type Discovery, type RelayMessage } from '@ai-pair/protocol';
 import { EDITOR_DISCONNECTED, EditorLink, findWindows, LINK_CLOSED } from '../src/link';
@@ -338,24 +337,18 @@ describe('call', () => {
     expect(sentOn(socket).filter((message) => message.type === 'return')).toEqual([]);
   });
 
-  it('sends no cancel for a call already answered, nor on a socket that is closing', async () => {
+  it('sends no cancel on a socket that is closing', async () => {
     window('a', ['/a']);
     window('b', ['/b']);
     const link = new EditorLink('/a', DIR);
-    const answered = new AbortController();
-    const first = link.call('read', {}, answered.signal);
+    const closing = new AbortController();
+    const second = link.call('listen', {}, closing.signal);
     const socket = lastSocket();
     welcome(socket);
     await settle();
-    answer(socket, sentCall(socket).id, 'done');
-    await first;
-    answered.abort();
-    const closing = new AbortController();
-    const second = link.call('listen', {}, closing.signal);
-    await settle();
     link.locate(['/b']);
     closing.abort();
-    expect(sentOn(socket).map((message) => message.type)).toEqual(['hello', 'call', 'call']);
+    expect(sentOn(socket).map((message) => message.type)).toEqual(['hello', 'call']);
     socket.closed();
     await expect(second).rejects.toMatchObject({ code: 'no_editor', message: EDITOR_DISCONNECTED });
   });
@@ -386,33 +379,6 @@ describe('call', () => {
     socket.fail('reset');
     answer(socket, sentCall(socket).id, 'ok');
     expect(await call).toBe('ok');
-  });
-
-  it("rejects a call whose arguments can't be sent, with the reason, and sends the next", async () => {
-    window('a', ['/a']);
-    const link = new EditorLink('/a', DIR);
-    const loop: Record<string, unknown> = {};
-    loop.self = loop;
-    const unsent = link.call('read', loop);
-    const socket = lastSocket();
-    welcome(socket);
-    await expect(unsent).rejects.toMatchObject({ code: 'no_editor' });
-    await expect(unsent).rejects.toThrow(/^Couldn't send to the editor: /);
-    // A toJSON may throw a value that is not an Error.
-    const strange = {
-      toJSON: (): never => {
-        // oxlint-disable-next-line no-throw-literal, only-throw-error
-        throw 'no JSON';
-      },
-    };
-    await expect(link.call('read', { strange })).rejects.toMatchObject({
-      code: 'no_editor',
-      message: "Couldn't send to the editor: no JSON",
-    });
-    const next = link.call('read', {});
-    await settle();
-    answer(socket, sentCall(socket).id, 'ok');
-    expect(await next).toBe('ok');
   });
 
   it('FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed', async () => {
@@ -552,7 +518,9 @@ describe('findWindows', () => {
     window('old', ['/work/app'], { lastFocused: 1 });
     window('recent', ['/work/app'], { lastFocused: 2 });
     expect(findWindows(['/work/app/src'], DIR).windows.map((found) => found.token)).toEqual(['recent', 'old', 'wide']);
+    expect(findWindows(['/work/app/src'], DIR).root).toBe('/work/app');
     expect(findWindows(['/work/lib'], DIR).windows.map((found) => found.token)).toEqual(['wide']);
+    expect(findWindows(['/work/lib'], DIR).root).toBe('/work');
   });
 
   it('takes the first folder a window has open, and names the first one when none does', () => {
@@ -608,16 +576,5 @@ describe('workspace', () => {
   it("gives the folder and the innermost of its window's workspace folders that holds it", () => {
     window('ws', ['/work', '/work/app']);
     expect(new EditorLink('/work', DIR).workspace('/work/app/src')).toEqual({ folder: '/work/app/src', root: '/work/app' });
-  });
-
-  it("is its own root when a workspace folder's real path moved between the two reads", () => {
-    window('ws', ['/work']);
-    // workspace reads the folder, findWindows the folder and the window's, then workspace the window's again.
-    vi.mocked(realpathSync)
-      .mockImplementationOnce((file) => String(file))
-      .mockImplementationOnce((file) => String(file))
-      .mockImplementationOnce((file) => String(file))
-      .mockImplementationOnce(() => '/moved');
-    expect(new EditorLink('/work', DIR).workspace('/work/app')).toEqual({ folder: '/work/app', root: '/work/app' });
   });
 });

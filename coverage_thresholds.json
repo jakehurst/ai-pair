@@ -11,9 +11,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 89,
-      "branches": 68,
-      "functions": 94
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/core/src/config.ts": {
@@ -47,9 +47,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 91,
-      "branches": 85,
-      "functions": 86
+      "lines": 93,
+      "branches": 88,
+      "functions": 91
     }
   },
   "packages/core/src/diff.ts": {
@@ -144,7 +144,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 89,
+      "branches": 90,
       "functions": 100
     }
   },
@@ -191,8 +191,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 93,
-      "branches": 75,
+      "lines": 100,
+      "branches": 83,
       "functions": 100
     }
   },
@@ -211,7 +211,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 84,
+      "branches": 100,
       "functions": 100
     }
   },
@@ -223,7 +223,7 @@
     },
     "integration": {
       "lines": 98,
-      "branches": 81,
+      "branches": 88,
       "functions": 100
     }
   },
@@ -234,9 +234,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 87,
-      "branches": 71,
-      "functions": 94
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/relay/src/main.ts": {
@@ -253,8 +253,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 66,
-      "branches": 50,
+      "lines": 67,
+      "branches": 52,
       "functions": 69
     }
   },
@@ -266,7 +266,7 @@
     },
     "integration": {
       "lines": 93,
-      "branches": 79,
+      "branches": 83,
       "functions": 88
     }
   },
@@ -320,9 +320,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 58,
-      "branches": 66,
-      "functions": 33
+      "lines": 71,
+      "branches": 87,
+      "functions": 50
     }
   },
   "packages/vscode/src/demo.ts": {
@@ -356,9 +356,9 @@
       "functions": 0
     },
     "integration": {
-      "lines": 77,
-      "branches": 61,
-      "functions": 63
+      "lines": 82,
+      "branches": 66,
+      "functions": 75
     }
   },
   "packages/vscode/src/output.ts": {
@@ -404,9 +404,9 @@
       "functions": 69
     },
     "integration": {
-      "lines": 61,
-      "branches": 46,
-      "functions": 70
+      "lines": 62,
+      "branches": 47,
+      "functions": 76
     }
   },
   "packages/vscode/src/panel_html.ts": {
