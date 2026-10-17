@@ -551,14 +551,14 @@ carries the invariant's name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons: holds playback until the last pause reason is gone |
-| `NoTimerWhilePaused` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `units.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that |
-| `ResolvedOnce` | `units.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset` |
-| `ResumeContinues` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `units.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time |
+| `NoTimerWhilePaused` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that |
+| `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset` |
+| `ResumeContinues` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `timeline.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time |
 
 Two sleeps at once are outside the model: `Sleep` needs none pending, and the
 player awaits its sleeps one at a time. `sleep` does accept a second one, and
 the first's timer, running out, must leave the second pending, so an interrupt
-still cuts it short; `units.test.ts` checks that: an earlier sleep that runs
+still cuts it short; `timeline.test.ts` checks that: an earlier sleep that runs
 out leaves the later sleep that replaced it pending, for an interrupt to cut
 short.
 
@@ -1363,7 +1363,7 @@ Every invariant names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `AcceptedOnlyForThatLine` | `controller.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
 | `IdsDistinct` | `lines.exhaustive.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
-| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `units.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
+| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
 | `ReadIsStart` | `controller.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits |
 
 ### `Terminals`: running commands

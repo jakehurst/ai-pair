@@ -65,7 +65,8 @@ export class Timeline {
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
-    if (this.pending && this.pending.timer === undefined) this.arm(this.pending);
+    // A paused sleep has no timer (`NoTimerWhilePaused`), so a pending one is waiting, and is armed again.
+    if (this.pending) this.arm(this.pending);
   }
 
   /** Resolves the pending sleep `false`, and later ones too until `reset` (specs/Timeline.tla, `Interrupt`). */
