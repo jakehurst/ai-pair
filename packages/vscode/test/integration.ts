@@ -1197,6 +1197,44 @@ export async function run(): Promise<void> {
     'RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME',
   );
 
+  // Set Up Agent, with the agents' config folders in the run's folder and no agent installed (scripts/integration.sh):
+  // closing the picker changes nothing; Another agent puts the configuration on the clipboard; and of the agents
+  // picked, one whose file is broken is reported, and the rest are set up. The picker's items are Claude Code, Codex,
+  // OpenCode, Gemini CLI, Cursor, and Another agent, in that order, none ticked. Gemini CLI and Cursor write under the
+  // real home, so they are never picked here.
+  const agents = path.join(root, '..', 'agents');
+  /** Runs Set Up Agent, ticks the items at `indexes` in its picker with VS Code's quick input commands, and accepts, or hides it with none. */
+  async function setUpAgents(indexes: number[]): Promise<void> {
+    const running = vscode.commands.executeCommand('aiPair.setUpAgent');
+    await sleep(1000);
+    if (indexes.length === 0) {
+      await vscode.commands.executeCommand('quickInput.hide');
+    } else {
+      await vscode.commands.executeCommand('quickInput.first');
+      let at = 0;
+      for (const index of indexes) {
+        for (; at < index; at++) {
+          await vscode.commands.executeCommand('quickInput.next');
+        }
+        await vscode.commands.executeCommand('quickInput.toggleCheckbox');
+      }
+      await vscode.commands.executeCommand('quickInput.accept');
+    }
+    await running;
+  }
+  await vscode.env.clipboard.writeText('');
+  await setUpAgents([]);
+  assert.equal(await vscode.env.clipboard.readText(), '');
+  await setUpAgents([5]);
+  const copied: unknown = JSON.parse(await vscode.env.clipboard.readText());
+  assert.deepEqual(copied, { mcpServers: { pair: { command: api.launcher, args: [] } } });
+  fs.mkdirSync(path.join(agents, 'claude'), { recursive: true });
+  fs.writeFileSync(path.join(agents, 'claude', '.claude.json'), '{ "mcpServers": ');
+  await setUpAgents([0, 1]);
+  assert.equal(fs.readFileSync(path.join(agents, 'claude', '.claude.json'), 'utf8'), '{ "mcpServers": ', 'the broken file was changed');
+  assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
+  console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
   // (specs/Discovery.tla, `CloseWindow`).
   await greeted();
