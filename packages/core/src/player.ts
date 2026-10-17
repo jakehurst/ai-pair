@@ -210,14 +210,15 @@ export class Player {
 
   /** Returns the lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
   async code({ span, moved }: { span?: Range; moved: boolean }): Promise<{ code: Code; sighting: Sighting } | undefined> {
-    const scene = this.scene;
-    const file = span?.file ?? (moved ? scene.cursor?.file : undefined);
-    if (file === undefined) return undefined;
+    const cursor = this.scene.cursor;
+    // A batch edits at the cursor, in the one file it works in, so what it changed is in the cursor's file.
+    if (cursor === undefined || (span === undefined && !moved)) return undefined;
+    const { file } = cursor;
     const text = await this.stage.editor.getText(file);
     const { lines, finalNewline } = fileLines(text);
-    const at = scene.cursor?.file === file ? position(text, scene.cursor.offset) : undefined;
-    let from = at?.line ?? Infinity;
-    let to = at?.line ?? -Infinity;
+    const at = position(text, cursor.offset);
+    let from = at.line;
+    let to = at.line;
     if (span) {
       // Text ending with a newline changed the lines up to it, not the one after.
       const end = span.end > span.start && isLineStart(text, span.end) ? span.end - 1 : span.end;
@@ -227,17 +228,17 @@ export class Player {
     // The empty line after a final newline isn't one of the file's lines, but the cursor may be on it.
     const last = lines.length;
     from = Math.max(1, from - CONTEXT_LINES);
-    to = Math.min(Math.max(last, at?.line ?? 0), to + CONTEXT_LINES);
+    to = Math.min(Math.max(last, at.line), to + CONTEXT_LINES);
     const numbers: number[] = [];
     for (let n = from; n <= to; n++) {
       const long = to - from + 1 > MAX_CODE_LINES;
-      if (!long || n < from + MAX_CODE_LINES / 2 || n > to - MAX_CODE_LINES / 2 || n === at?.line) numbers.push(n);
+      if (!long || n < from + MAX_CODE_LINES / 2 || n > to - MAX_CODE_LINES / 2 || n === at.line) numbers.push(n);
     }
     const code: Code = {
       file: this.displayPath(file),
       lines: numbers.map((n) => {
         const line = lines[n - 1] ?? '';
-        if (n !== at?.line) return { number: n, text: line };
+        if (n !== at.line) return { number: n, text: line };
         return { number: n, text: line.slice(0, at.column - 1) + CURSOR_MARKER + line.slice(at.column - 1) };
       }),
     };
@@ -547,14 +548,10 @@ export class Player {
     panel.post({ type: 'run', id, command, phase, exitCode: result.exit_code });
     // The panel keeps showing it as running until it ends, whenever that is.
     if (outcome.running === true) {
-      void outcome.exited?.then(
-        (exitCode) => {
-          panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
-        },
-        () => {
-          // The terminal is gone; the panel keeps the last phase it saw.
-        },
-      );
+      // It ends, or its terminal closes: either way, it never rejects.
+      void outcome.exited?.then((exitCode) => {
+        panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
+      });
     }
 
     // specs/Actions.tla, `StopWhileRunning`: the command runs on, so it counts as played.

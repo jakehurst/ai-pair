@@ -38,7 +38,7 @@ Code goes without a spec for one of these reasons:
 | `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
 | `setSpeed`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
-| `calibrate`, `onCalibrate`, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
+| `calibrate`, with the bridge's `calibrate` option, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
 
 ### `player.ts`
 

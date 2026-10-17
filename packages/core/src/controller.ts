@@ -714,14 +714,13 @@ export class Controller {
     return this.resolvePath(this.requireSession(), file);
   }
 
-  /** The extension's reading speed calibration: false while one is under way (#109, specs/Calibration.tla). */
-  onCalibrate?: (passage: Passage) => boolean;
-
-  /** Hands a passage of the agent's own to the calibration: its `calibrate` tool. */
-  calibrate(passage: Passage): Report {
+  /**
+   * Hands a passage of the agent's own to the calibration, its `calibrate` tool, through `arm`: the editor's
+   * calibration, false while one is under way (#109, specs/Calibration.tla).
+   */
+  calibrate(passage: Passage, arm: (passage: Passage) => boolean): Report {
     const session = this.requireSession();
-    if (!this.onCalibrate) throw new ToolError('no_editor', 'This editor has no reading speed calibration.');
-    if (!this.onCalibrate(passage)) throw new ToolError('calibration_busy', 'A calibration is already under way in the Pair panel.');
+    if (!arm(passage)) throw new ToolError('calibration_busy', 'A calibration is already under way in the Pair panel.');
     return { batches: [], events: [], turn: session.scene.turn };
   }
 

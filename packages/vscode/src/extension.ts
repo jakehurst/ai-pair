@@ -39,6 +39,8 @@ export interface Api {
   ready: Promise<void>;
   /** The session as the workspace's storage holds it. */
   saved: () => SavedSession | undefined;
+  /** What the panel was posted, as a view replays it. */
+  history: () => readonly PanelEvent[];
 }
 
 function config(): vscode.WorkspaceConfiguration {
@@ -158,11 +160,6 @@ export function activate(context: vscode.ExtensionContext): Api {
     passage(),
   );
   panel.calibration = calibration;
-  controller.onCalibrate = (chosen) => {
-    if (!calibration.arm(chosen)) return false;
-    void config().update(CALIBRATION_PASSAGE, chosen, vscode.ConfigurationTarget.Global);
-    return true;
-  };
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel);
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
   // specs/Resume.tla, `Reload`): saved shortly after each change, and once more as the window goes (`Save`).
@@ -193,6 +190,11 @@ export function activate(context: vscode.ExtensionContext): Api {
     failed: once((e) => {
       void vscode.window.showErrorMessage(`AI Pair couldn't write its discovery file, so agents won't find this window: ${String(e)}`);
     }),
+    calibrate: (chosen) => {
+      if (!calibration.arm(chosen)) return false;
+      void config().update(CALIBRATION_PASSAGE, chosen, vscode.ConfigurationTarget.Global);
+      return true;
+    },
   });
   const ready = bridge.start();
   ready.catch((error: unknown) => {
@@ -309,6 +311,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       const kept: unknown = context.workspaceState.get(SAVED_SESSION);
       return isSavedSession(kept) ? kept : undefined;
     },
+    history: () => panel.history,
   };
 }
 

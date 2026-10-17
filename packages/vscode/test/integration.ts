@@ -16,6 +16,7 @@ import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProbl
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
+import { controllerPaths, playerPaths } from './integration_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -1046,6 +1047,23 @@ export async function run(): Promise<void> {
   }
   assert.ok((await agent.callTool({ name: 'listen', arguments: {} })).isError === true, 'the ended session is still open');
   console.log('rejections handed back after their answers each come again, marked, before an ended session closes');
+  // The relay's own schema refuses each malformed action before it reaches the editor, saying what is wrong
+  // (specs/ActionValidation.tla): the ones the editor refused above, and a few more only the schema sees.
+  const schemaRefusals: unknown[] = [
+    ...refusals,
+    5,
+    { say: 'a', type: `b${CURSOR_MARKER}` },
+    { move: { line: '3', to: 'line_end' } },
+    { select: { line: 1, text: 5 } },
+    { select: { text: 'a', extra: 1 } },
+    { type_fast: 5 },
+    { type_fast: 'x' },
+  ];
+  for (const action of schemaRefusals) {
+    const refused = await agent.callTool({ name: 'step', arguments: { actions: [action] } });
+    assert.equal(refused.isError, true, JSON.stringify(action));
+  }
+  console.log(`the relay's schema refused ${schemaRefusals.length} malformed actions`);
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');
@@ -1234,6 +1252,10 @@ export async function run(): Promise<void> {
   assert.equal(fs.readFileSync(path.join(agents, 'claude', '.claude.json'), 'utf8'), '{ "mcpServers": ', 'the broken file was changed');
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
   console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+
+  // Last, since they change the playback's settings: the player's and the controller's paths (#176).
+  await playerPaths(api, root);
+  await controllerPaths(api, root);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
   // (specs/Discovery.tla, `CloseWindow`).

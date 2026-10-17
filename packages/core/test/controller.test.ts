@@ -1249,15 +1249,14 @@ describe('settings', () => {
     expect(glideDuration).toHaveBeenCalledWith(defaultConfig.timing, 10, 2);
   });
 
-  it('hands a passage to the calibration, refusing with none, and while one is under way', async () => {
+  it('hands a passage to the calibration, refusing it while one is under way', async () => {
     const h = await started();
     const passage = { title: 'Words', text: 'Some words.' };
-    expect(() => h.controller.calibrate(passage)).toThrow('This editor has no reading speed calibration.');
-    h.controller.onCalibrate = vi.fn(() => false);
-    expect(() => h.controller.calibrate(passage)).toThrow('A calibration is already under way in the Pair panel.');
-    h.controller.onCalibrate = vi.fn(() => true);
-    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage))).toEqual({ batches: [], events: [], turn: 'agent' });
-    expect(() => harness().controller.calibrate(passage)).toThrow('No pairing session is active.');
+    const busy = vi.fn(() => false);
+    expect(() => h.controller.calibrate(passage, busy)).toThrow('A calibration is already under way in the Pair panel.');
+    expect(busy).toHaveBeenCalledWith(passage);
+    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage, () => true))).toEqual({ batches: [], events: [], turn: 'agent' });
+    expect(() => harness().controller.calibrate(passage, () => true)).toThrow('No pairing session is active.');
   });
 });
 
