@@ -56,6 +56,7 @@
     "stylelint-order": "^8.1.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3",
+    "vitest-mock-extended": "^5.1.1",
     "vnu-jar": "^26.9.16"
   },
   "license": "MIT",
