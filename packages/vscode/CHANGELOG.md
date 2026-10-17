@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.4
+
+-   Code no real run of the extension and relay reaches is gone (#180).
+    `wire.ts` takes a frame as the one Buffer `ws` hands over, not an
+    ArrayBuffer or an array of Buffers, since nothing sets `binaryType`.
+    `bridge.ts` drops checks for a report whose parts aren't arrays, a
+    server address that isn't a port, a server not made yet, and a thrown
+    value that isn't an Error. `link.ts` drops the try/catch around a send
+    on an open socket, the abort listener's check for an answered call,
+    `handBack`'s check for a value that isn't an object, and `workspace()`'s
+    fallback for a real path that moved between two reads: `findWindows`
+    gives the root it matched. Nothing changes for anyone using the
+    extension.
+-   `bridge.ts`, `link.ts`, and `wire.ts` are at 100 percent in both the
+    unit and the integration run, on macOS and Linux. The integration run
+    drives the bridge over raw sockets, and the relay against fake windows:
+    a dead pid, a junk file, a refused port, a rejected hello, a slow
+    welcome, a cancel, and a shutdown mid-call. `bridge.test.ts` is
+    solitary, and `bridge.discovery.test.ts` is folded into it and the
+    integration run.
+
 ## 0.7.3
 
 -   The relay now exits when its harness ends its stdin (#163): it closes its
