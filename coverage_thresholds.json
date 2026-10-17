@@ -344,9 +344,9 @@
   },
   "packages/vscode/src/editor.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 94,
@@ -404,9 +404,9 @@
   },
   "packages/vscode/src/panel.ts": {
     "unit": {
-      "lines": 50,
-      "branches": 34,
-      "functions": 69
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 62,

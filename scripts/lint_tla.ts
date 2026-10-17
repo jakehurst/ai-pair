@@ -217,7 +217,9 @@ function problemsIn(file: string): Problem[] {
   const name = path.basename(file, extension);
   if (extension === MODULE_EXTENSION) return checkModule(name, readSpec(file));
   if (extension !== CONFIG_EXTENSION) return [];
-  const [moduleName = name] = name.split(MODEL_SEPARATOR);
+  // Foo_Model.cfg is a config of Foo.tla, as Foo.cfg is (8.2).
+  const separator = name.indexOf(MODEL_SEPARATOR);
+  const moduleName = separator === -1 ? name : name.slice(0, separator);
   const module = readSpec(`${moduleName}${MODULE_EXTENSION}`);
   return checkConfig(readSpec(file), variables(module.split('\n')).names.length > 0);
 }

@@ -5,10 +5,18 @@
 
 import { ok } from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Window } from 'happy-dom';
 import { SPEED_SUFFIX } from '@ai-pair/core/constants';
 import { panelHtml, settingSpeed, SPEEDS } from '../src/panel_html';
+
+/** The page the page tests load in place of panel_html.ts, so they rely on webview/panel.ts alone (#176). */
+const FIXTURE = path.join(import.meta.dirname, 'fixtures', 'panel.html');
+
+/** The webview's source for its resources, as the fixture page has it. */
+const FIXTURE_CSP = 'vscode-resource:';
 
 /** The bytes the mocked randomBytes gives, which the nonce is made of. */
 const NONCE_BYTE = 7;
@@ -94,4 +102,10 @@ it('clamps a number to the range the setting declares, zero and below included',
 
 it("plays at 1 for NaN, Infinity, or what isn't a number", () => {
   expect([Number.NaN, Infinity, 'fast', undefined].map((value) => settingSpeed(value))).toEqual([1, 1, 1, 1]);
+});
+
+it('is the page the page tests load, test/fixtures/panel.html: run with UPDATE_FIXTURE=1 to write it again', () => {
+  const html = panelHtml(FIXTURE_CSP, 'panel.css', 'panel.js');
+  if (process.env.UPDATE_FIXTURE === '1') fs.writeFileSync(FIXTURE, html);
+  expect(html).toBe(fs.readFileSync(FIXTURE, 'utf8'));
 });

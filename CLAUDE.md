@@ -256,9 +256,9 @@ Set by Justine on 2026-10-07.
         against fakes on the PATH; the icon's Swift package in
         `packages/vscode/scripts/icon` has XCTest tests, one of which holds
         `media/icon.svg` to what the package writes; `panel.css` has the
-        rule-usage test in `packages/vscode/test/css.test.ts`, which fails on a
-        rule the page never matches, so a dead rule is removed, not kept; and
-        the panel's page has screenshots under `test/visual/baselines`,
+        rule-usage test in `packages/vscode/test/css.e2e.test.ts`, which fails
+        on a rule the page never matches, so a dead rule is removed, not kept;
+        and the panel's page has screenshots under `test/visual/baselines`,
         recorded on macOS with `npm run test:visual:update` when the page
         changes on purpose.
     -   Keep every dependency at its latest version, with two held on

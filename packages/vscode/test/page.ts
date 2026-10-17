@@ -1,9 +1,11 @@
 // Loads the narration panel's page into the happy-dom document and runs its script, as the
-// webview does: the markup from panel_html.ts, then the module webview/panel.ts.
+// webview does: the markup, then the module webview/panel.ts. The markup is test/fixtures/panel.html, which
+// panel_html.test.ts holds to what panel_html.ts writes, so a page test relies on webview/panel.ts alone (#176).
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { Element, Window } from 'happy-dom';
 import { vi } from 'vitest';
-import { panelHtml } from '../src/panel_html';
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -13,9 +15,12 @@ const { window, document } = globalThis as unknown as { window: Window; document
 // script has its own (src/webview/tsconfig.json).
 const SCRIPT = '../src/webview/panel';
 
+/** The page's markup, as panel_html.ts writes it. */
+const FIXTURE = path.join(import.meta.dirname, 'fixtures', 'panel.html');
+
 /** Loads the page. `post`: what the page posts to the extension. */
 export async function loadPage(post: (message: { type: string }) => void = () => {}): Promise<void> {
-  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const html = fs.readFileSync(FIXTURE, 'utf8');
   // happy-dom loads no stylesheet unless asked; the tests need none, so the skipped fetch counts as a success.
   window.happyDOM.settings.handleDisabledFileLoadingAsSuccess = true;
   // Parsed, without its script element: the script runs as the module below.

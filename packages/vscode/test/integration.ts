@@ -1270,6 +1270,8 @@ export async function run(): Promise<void> {
   await setUpAgents([0, 1]);
   assert.equal(fs.readFileSync(path.join(agents, 'claude', '.claude.json'), 'utf8'), '{ "mcpServers": ', 'the broken file was changed');
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
+  // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
+  await setUpAgents([]);
   console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).

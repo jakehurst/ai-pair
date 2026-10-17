@@ -296,9 +296,9 @@ Every invariant names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `ReplayShowsSession` | `replay.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
-| `Bounded` | `replay.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
-| `LogsPosts` | `replay.test.ts`: LogsPosts: a posted event is on the log a new view replays |
+| `ReplayShowsSession` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
+| `Bounded` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
+| `LogsPosts` | `panel.test.ts`: LogsPosts: a posted event is on the log a new view replays |
 
 ### `Controller`: what reaches the agent
 
@@ -740,18 +740,18 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types, in `Starter`, `FromPanel`, and `ToPanel` |
-| `OwnAnswer` | `start.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
+| `OwnAnswer` | `panel.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
 | `GroundedProp` | `start.setup.test.ts`: GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
-| `RunsAreClicks` | `start.test.ts`: RunsAreClicks: runs the starter once per start from the page; `start.page.test.ts`: RunsAreClicks: posts start when the button is clicked; `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
-| `ClicksNeedButtonProp` | `start.page.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one; `start.test.ts`: ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden |
-| `Offered` | `start.test.ts`: Offered: tells a new page whether it can start a session |
-| `ReaskedProp` | `start.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
+| `RunsAreClicks` | `panel.test.ts`: RunsAreClicks: runs the starter once per start from the page; `start.page.test.ts`: RunsAreClicks: posts start when the button is clicked; `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
+| `ClicksNeedButtonProp` | `start.page.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one; `panel.test.ts`: ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden |
+| `Offered` | `panel.test.ts`: Offered: tells a new page whether it can start a session |
+| `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
 | `KeepsLocation`, `StaysOnPair`, `StartsProp` | `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
 | `OneAtATime` | `start.setup.test.ts`: OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes |
 | `Closes` | the same test, for the terminal closing. Nothing yet proves the CLI exits when the session ends; that needs a run in the editor |
 | `AcknowledgedProp` | `start.page.test.ts`: AcknowledgedProp: shows the starting note at once when the button is clicked |
 | `NoteUntilSession` | `start.page.test.ts`: NoteUntilSession: hides the starting note when a session starts, new or resumed |
-| `Settles` | `start.page.test.ts`: Settles: hides the starting note once the agent has exited, with no session; `start.test.ts`: Settles: tells the page once the agent a start ran has exited; `start.setup.test.ts`: Settles: resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once |
+| `Settles` | `start.page.test.ts`: Settles: hides the starting note once the agent has exited, with no session; `panel.test.ts`: Settles: tells the page once the agent a start ran has exited; `start.setup.test.ts`: Settles: resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 
@@ -892,8 +892,8 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `ReplyMeansDraft` | `draft.test.ts`: ReplyMeansDraft: ends the draft's pause when the view is disposed with it; ReplyMeansDraft: ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for |
-| `DraftPausesProp` | `draft.test.ts`: DraftPausesProp: a draft in the reply box pauses playback |
+| `ReplyMeansDraft` | `panel.test.ts`: ReplyMeansDraft: ends the draft's pause when the view is disposed with it; ReplyMeansDraft: ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for |
+| `DraftPausesProp` | `panel.test.ts`: DraftPausesProp: a draft in the reply box pauses playback |
 
 ### `RunBox`: the panel's run box
 
