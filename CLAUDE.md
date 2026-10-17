@@ -64,6 +64,20 @@ Set by Justine on 2026-10-07.
 -   **Spec first.** For a new feature, write its TLA+ spec first, so the
     mechanics are right, and check it with TLC; then write the code that follows
     the spec (set by Justine on 2026-10-07).
+-   **Every code change goes through its spec first,** not only a new feature.
+    When a change to code that a spec models looks needed, change the spec
+    first, check that TLC passes it, then write the code that follows the
+    passing model; never the code first and the spec after. A change that
+    leaves behavior alone still gets its spec's table in `specs/README.md`
+    updated (set by Justine on 2026-10-16).
+
+## Edits in a pairing session
+
+-   **Every edit is done in the foreground,** through the pair tools, where
+    Justine sees it. An edit is done in the background only with her explicit
+    permission for that edit; the agent never decides it on its own. That
+    covers mechanical edits too, and formatting, which runs as a visible
+    `run`, never from the agent's own shell (set by Justine on 2026-10-16).
 
 ## Problems found along the way
 
