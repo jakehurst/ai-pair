@@ -100,6 +100,7 @@ Last updated: css, 2026-10-17.
 | `packages/vscode/test/calibration.page.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/css.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/draft.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | - | - | - | - | test |
