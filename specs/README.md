@@ -118,7 +118,7 @@ at the top of `block()` (#1).
 | `Reject` | `rejectBatch`: the call answers with the rejection at once; an abort meanwhile ends it with that, not `cancelled` |
 | `Abort` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Play` | the player finishing batches in queue order |
-| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()`, where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call` |
+| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()`, where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call`, and reports on `call.session`, the session the call was made on |
 | `Resolve` | `withCursor(...).then(call.resolve)`: the report handed back after the commit |
 | `Finished` | every call settled: the agent makes no more calls |
 
@@ -326,7 +326,7 @@ report, where before it closed with the first.
 |---|---|
 | `Submit`, `Listen` | `step` with a batch; `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
 | `EndSession` | `endSession()`: `ended`, the `end` event, `interrupt()` |
-| `FailRehearsal`, `PassRehearsal` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
+| `FailRehearsal`, `PassRehearsal` | `rejectBatch()` with the action the rehearsal `failed` at; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
 | `Interrupt` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
 | `Commit` | `finishCall` -> `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |

@@ -16,7 +16,7 @@ import {
 } from '@ai-pair/protocol';
 import { boundedDiff, lineChanges } from './diff';
 import { LineIds, type Sighting } from './lines';
-import { agentPath, displayPath, Player, type Scene } from './player';
+import { agentPath, displayPath, Player, type Failure, type Scene } from './player';
 import {
   MissingFile,
   type AgentState,
@@ -126,6 +126,8 @@ interface Session {
 
 interface Call {
   kind: 'step' | 'listen' | 'end';
+  /** The session it was made on: the one it reports on. */
+  session: Session;
   batch?: Batch;
   summary?: string;
   timer: ReturnType<typeof setTimeout>;
@@ -368,7 +370,7 @@ export class Controller {
     return this.serialize(async () => {
       const session = this.requireSession();
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
-      if (actions.length === 0) return this.block('step', {}, signal);
+      if (actions.length === 0) return this.block('step', session, {}, signal);
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
       // specs/Anchor.tla, `SubmitAnchored` and `SubmitUnanchored`).
       const anchor = cursorAnchor(actions);
@@ -379,34 +381,32 @@ export class Controller {
       // (specs/Controller.tla: `FailRehearsal`, else `PassRehearsal`).
       const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
-      if (current === true && rehearsal.result.status === 'failed') return this.rejectBatch(session, actions, rehearsal);
+      if (current === true && rehearsal.failed !== undefined) return this.rejectBatch(session, rehearsal.failed, rehearsal);
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
         this.trace?.(`batch ${queued.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);
-        return this.block('step', { batch: queued }, signal);
+        return this.block('step', session, { batch: queued }, signal);
       }
       const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued' };
       this.discard(session, batch);
-      return this.block('step', { batch }, signal);
+      return this.block('step', session, { batch }, signal);
     }, signal);
   }
 
   /** Blocks until there is something to report: `Listen` in specs/Controller.tla. */
   listen(signal?: AbortSignal): Promise<Report> {
     return this.serialize(() => {
-      this.requireSession();
-      return this.block('listen', {}, signal);
+      return this.block('listen', this.requireSession(), {}, signal);
     }, signal);
   }
 
   /** Ends the session, the agent's way: specs/Resume.tla, `EndByAgent`. */
   end(summary?: string, signal?: AbortSignal): Promise<Report> {
     return this.serialize(() => {
-      this.requireSession();
-      return this.block('end', { summary }, signal);
+      return this.block('end', this.requireSession(), { summary }, signal);
     }, signal);
   }
 
@@ -813,16 +813,9 @@ export class Controller {
   }
 
   /** Reports a batch that played in memory failed, without queuing it; nothing else changes. */
-  private async rejectBatch(session: Session, actions: Action[], rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
-    const rehearsed = rehearsal.result;
-    const index = actions.length - (rehearsed.unplayed?.length ?? 0) + 1;
-    const action = actions[index - 1];
-    const { error } = rehearsed;
-    if (action === undefined || error === undefined) {
-      throw new Error(`The rehearsal failed at action ${index} of ${actions.length}, but recorded no error.`);
-    }
-    const rejected: NonNullable<Report['rejected']> = { index, action, error };
-    if (rehearsed.code) rejected.code = rehearsed.code;
+  private async rejectBatch(session: Session, failed: Failure, rehearsal: Awaited<ReturnType<typeof rehearse>>): Promise<Report> {
+    const rejected: NonNullable<Report['rejected']> = { ...failed };
+    if (rehearsal.result.code) rejected.code = rehearsal.result.code;
     for (const sighting of rehearsal.sightings) {
       this.saw(session, rehearsal.after.lines, sighting);
     }
@@ -857,12 +850,13 @@ export class Controller {
    * Blocks until the call is ready to report. Cancelling releases the call without taking a
    * report, so nothing is lost: a submitted batch stays queued and is reported on the next call.
    */
-  private block(kind: Call['kind'], opts: { batch?: Batch; summary?: string }, signal?: AbortSignal): Promise<Report> {
+  private block(kind: Call['kind'], session: Session, opts: { batch?: Batch; summary?: string }, signal?: AbortSignal): Promise<Report> {
     // An abort that fired while the batch was rehearsed won't fire again (specs/Serialize.tla, `Rehearse`).
     if (signal?.aborted === true) return Promise.reject(cancelled());
     return new Promise((resolve, reject) => {
       const call: Call = {
         kind,
+        session,
         ...opts,
         resolve,
         reject,
@@ -895,9 +889,8 @@ export class Controller {
 
   private pump(): void {
     const call = this.call;
-    const session = this.session;
     // specs/Serialize.tla, `Finish`.
-    if (call && session && this.ready(call, session)) this.finishCall(call, /* timedOut= */ false);
+    if (call && this.ready(call, call.session)) this.finishCall(call, /* timedOut= */ false);
   }
 
   /** Finishes the open call with a report: `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
@@ -905,11 +898,7 @@ export class Controller {
     // specs/Serialize.tla, `Commit`.
     this.call = undefined;
     clearTimeout(call.timer);
-    const session = this.session;
-    if (!session) {
-      call.reject(new ToolError('no_session', 'The session has ended.'));
-      return;
-    }
+    const session = call.session;
     // `Commit` in specs/Controller.tla. Nothing more to wait for once the session is ending.
     const report = this.snapshot(session, /* waiting= */ timedOut && !session.ended && call.kind !== 'end', call.batch);
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).

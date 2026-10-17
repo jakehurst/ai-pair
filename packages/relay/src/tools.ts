@@ -8,9 +8,11 @@ import {
   moveProblem,
   MOVE_TARGET_SCHEMA,
   spanProblem,
+  SPAN_SCHEMA,
   SPAN_TARGET_SCHEMA,
   typeProblem,
   type Action,
+  type SpanTarget,
 } from '@ai-pair/protocol';
 import { ELLIPSIS } from '@ai-pair/core/constants';
 
@@ -45,7 +47,10 @@ const spanSchema = z
   .superRefine((span, ctx) => {
     const problem = spanProblem(span);
     if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
-  });
+  })
+  // A span spanProblem passed is a SpanTarget; agents are shown the fields above. Not a pipe into
+  // SPAN_SCHEMA itself: a union after a pipe drops the unknown-key issue before it (zod 4.6.7).
+  .pipe(z.custom<SpanTarget>((span) => SPAN_SCHEMA.safeParse(span).success));
 
 /** The text to type, with `CURSOR_MARKER` where the cursor ends. */
 const typeText = z.string({ error: (issue) => typeProblem(issue.input) }).superRefine((text, ctx) => {

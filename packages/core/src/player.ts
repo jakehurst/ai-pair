@@ -93,6 +93,13 @@ type Outcome =
   | { kind: 'interrupted'; rest?: Action; consumed?: boolean }
   | { kind: 'error'; error: ErrorKind; message: string; candidates?: Candidate[]; consumed?: boolean; sighting?: Sighting };
 
+/** The action that failed a batch, by its number from 1, and why. */
+export interface Failure {
+  index: number;
+  action: Action;
+  error: BatchError;
+}
+
 /** The batch being played: what it touched, for saving and for its report's code. */
 interface Playing {
   touched: Set<string>;
@@ -105,6 +112,8 @@ interface Playing {
   /** The text its edits changed, tracked through later edits. */
   span?: Range;
   moved: boolean;
+  /** The action that failed it, once one has. */
+  failed?: Failure;
 }
 
 function fail(error: ErrorKind, message: string): Outcome {
@@ -132,11 +141,9 @@ export function displayPath(editor: PlayerEditor, file: string, root?: string): 
   return inside === undefined ? file : nodePath.relative(root, inside);
 }
 
-/** Returns the text a span looks for: its `text`, or its `from`. `spanProblem` has checked that it has one. */
+/** Returns the text a span looks for: its `text`, or its `from`. */
 export function spanText(target: SpanTarget): string {
-  const find = target.text ?? target.from;
-  if (find === undefined) throw new Error('A span has `text` or `from`: spanProblem checks it before the span is played.');
-  return find;
+  return 'text' in target ? target.text : target.from;
 }
 
 /** Returns a function mapping a position in the text before `change` to the same place after it. */
@@ -173,7 +180,7 @@ export class Player {
   ) {}
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
-  async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[] }> {
+  async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[]; failed?: Failure }> {
     // specs/BatchFile.tla, `EndBatch`: each batch starts with no file named and nothing edited; the cursor stays.
     const playing: Playing = { touched: new Set(), runs: [], sightings: [], edited: false, moved: false };
     this.playing = playing;
@@ -198,7 +205,7 @@ export class Player {
     const unsaved = await this.save(playing);
     // A `save_failed` error already names them.
     if (unsaved.length > 0 && result.error?.kind !== 'save_failed') result.unsaved = unsaved;
-    return { result, sightings: playing.sightings };
+    return { result, sightings: playing.sightings, failed: playing.failed };
   }
 
   /** Returns the lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
@@ -274,6 +281,7 @@ export class Player {
         if (outcome.sighting) playing.sightings.push(outcome.sighting);
         const error: BatchError = { kind: outcome.error, message: outcome.message };
         if (outcome.candidates) error.candidates = outcome.candidates;
+        playing.failed = { index: i + 1, action, error };
         const result: BatchResult = { id, status: 'failed', error };
         const unplayed = outcome.consumed === true ? rest : actions.slice(i);
         if (unplayed.length > 0) result.unplayed = unplayed;

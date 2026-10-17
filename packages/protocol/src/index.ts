@@ -1,6 +1,6 @@
 // Types of the agent-facing protocol. See PROTOCOL.md.
 
-import type { MoveTarget, SpanTarget, ToolErrorCode } from './schemas';
+import type { MoveTarget, SpanFields, ToolErrorCode } from './schemas';
 
 /**
  * Marks the agent cursor: in a report's code, where a spot puts it, and where a `type` leaves it.
@@ -67,7 +67,7 @@ export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
 }
 
 /** Returns what's wrong with a `select`'s or `point`'s combination of fields, if anything. */
-export function spanProblem(span: Unchecked<SpanTarget>): string | undefined {
+export function spanProblem(span: Unchecked<SpanFields>): string | undefined {
   if ('near_line' in span) return 'Give `line`: the line the code starts on, exactly as your latest `read` or report shows it.';
   if ('to' in span) return 'The end of a range is `through`: `from` and `through` are both texts.';
   const line = lineProblem(span.line);

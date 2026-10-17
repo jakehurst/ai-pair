@@ -14,7 +14,7 @@ import { Controller, isSavedSession, type SavedSession } from '../src/controller
 import { boundedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
-import type { Scene, Stage } from '../src/player';
+import type { Failure, Scene, Stage } from '../src/player';
 import type { EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
 
@@ -336,16 +336,21 @@ function holdPlay(): (result?: Partial<BatchResult>, sightings?: Sighting[]) => 
   };
 }
 
-/** Makes the next rehearsal answer with `result`, leaving `texts` in its files and `edits` as the files it edits. */
+/**
+ * Makes the next rehearsal answer with `result`, leaving `texts` in its files and `edits` as the files it edits;
+ * `failed` is the action it failed at.
+ */
 function rehearsed(
   result: Partial<BatchResult> = {},
   texts: Record<string, string> = {},
   edits: string[] = [],
+  failed?: Failure,
 ): ReturnType<typeof fakes.fakeLines> {
   const lines = fakes.fakeLines();
   vi.mocked(rehearse).mockResolvedValueOnce({
     result: { id: 0, status: 'completed', ...result },
     sightings: [],
+    failed,
     after: {
       scene: scene(),
       texts: new Map(Object.entries(texts).map(([name, text]) => [path.join(ROOT, name), text])),
@@ -556,6 +561,7 @@ describe('steps and their batches', () => {
     vi.mocked(rehearse).mockResolvedValueOnce({
       result: { id: 0, status: 'failed', error: { kind: 'not_found', message: 'Not there.' }, unplayed: [{ say: 'Hi.' }], code },
       sightings: [{ file: A, text: 'x\ny', lines: [2] }],
+      failed: { index: 2, action: { say: 'Hi.' }, error: { kind: 'not_found', message: 'Not there.' } },
       after: { scene: scene(), texts: new Map(), lines: asLines(lines), edits: new Set() },
     });
     const rejected = await report(h.controller.step(actions));
@@ -565,16 +571,11 @@ describe('steps and their batches', () => {
     expect(h.traced.at(-1)).toMatch(/^report to step: batches \[\], events \[\], rejected at action 2: not_found, \d+ chars$/);
   });
 
-  it('rejects a failed rehearsal without code, and stops on one that recorded no error, as a bug', async () => {
+  it('rejects a failed rehearsal without code', async () => {
     const h = await started();
-    rehearsed({ status: 'failed', error: { kind: 'no_line', message: 'No line 9.' }, unplayed: SAY });
-    expect((await report(h.controller.step(SAY))).rejected).toEqual({
-      index: 1,
-      action: SAY[0],
-      error: { kind: 'no_line', message: 'No line 9.' },
-    });
-    rehearsed({ status: 'failed' });
-    await expect(h.controller.step(SAY)).rejects.toThrow('The rehearsal failed at action 2 of 1, but recorded no error.');
+    const error = { kind: 'no_line' as const, message: 'No line 9.' };
+    rehearsed({ status: 'failed', error, unplayed: SAY }, {}, [], { index: 1, action: { say: 'Hi.' }, error });
+    expect((await report(h.controller.step(SAY))).rejected).toEqual({ index: 1, action: { say: 'Hi.' }, error });
   });
 
   it('PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen', async () => {
@@ -1100,17 +1101,6 @@ describe("the programmer's input", () => {
     expect((await report(end)).batches).toEqual([{ id: 1, status: 'completed' }]);
     expect(h.controller.isActive).toBe(false);
     await expect(h.controller.listen()).rejects.toMatchObject({ code: 'no_session' });
-  });
-
-  it('rejects a call left open in a suspended session the programmer then ended, once it times out', async () => {
-    const h = await started();
-    h.controller.disconnect();
-    const listen = h.controller.listen();
-    const refused = expect(listen).rejects.toMatchObject({ code: 'no_session', message: 'The session has ended.' });
-    await settle();
-    h.controller.endSession();
-    await settle(CONFIG.maxBlockMs);
-    await refused;
   });
 });
 

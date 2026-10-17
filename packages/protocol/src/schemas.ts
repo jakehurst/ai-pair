@@ -15,7 +15,7 @@ export const MOVE_TARGET_SCHEMA = z.object({
   to: z.literal('line_end').optional(),
 });
 
-/** Checks a {@link SpanTarget}. */
+/** Checks the fields a span may have, before `spanProblem` holds them to a {@link SpanTarget}. */
 export const SPAN_TARGET_SCHEMA = z.object({
   file: z.string().optional(),
   /** The line the code starts on, from 1. Omitted: the cursor's line. */
@@ -25,15 +25,21 @@ export const SPAN_TARGET_SCHEMA = z.object({
   through: z.string().optional(),
 });
 
+/** Checks a {@link SpanTarget}: its `text`, or its `from` and `through`. */
+export const SPAN_SCHEMA = z.union([
+  SPAN_TARGET_SCHEMA.pick({ file: true, line: true }).extend({ text: z.string() }),
+  SPAN_TARGET_SCHEMA.pick({ file: true, line: true }).extend({ from: z.string(), through: z.string() }),
+]);
+
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
   z.object({ say: z.string() }),
   z.object({ move: MOVE_TARGET_SCHEMA }),
-  z.object({ select: SPAN_TARGET_SCHEMA }),
+  z.object({ select: SPAN_SCHEMA }),
   z.object({ type: z.string() }),
   z.object({ type_fast: z.string() }),
   z.object({ delete: z.literal(true) }),
-  z.object({ point: SPAN_TARGET_SCHEMA }),
+  z.object({ point: SPAN_SCHEMA }),
   z.object({ run: z.string(), wait: z.number().optional() }),
 ]);
 
@@ -244,7 +250,10 @@ export type MoveTarget = z.infer<typeof MOVE_TARGET_SCHEMA>;
  * The code a `select` or `point` takes: `text`, starting on `line`, exactly, or from `from`,
  * starting on it, through the first `through` after it. Without `line`, on the cursor's line.
  */
-export type SpanTarget = z.infer<typeof SPAN_TARGET_SCHEMA>;
+export type SpanTarget = z.infer<typeof SPAN_SCHEMA>;
+
+/** The fields a {@link SpanTarget} may have, each optional: a span as it arrives, before it is checked. */
+export type SpanFields = z.infer<typeof SPAN_TARGET_SCHEMA>;
 
 /** One thing the agent does in a batch: a word to the programmer, a cursor move, a selection, typing, a command. */
 export type Action = z.infer<typeof ACTION_SCHEMA>;

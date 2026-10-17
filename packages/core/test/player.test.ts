@@ -256,10 +256,9 @@ describe('agentPath and displayPath', () => {
 });
 
 describe('spanText', () => {
-  it('is the text of a span, or else its from, and refuses a span with neither', () => {
+  it('is the text of a span, or else its from', () => {
     expect(spanText({ text: 'a' })).toBe('a');
     expect(spanText({ from: 'b', through: 'c' })).toBe('b');
-    expect(() => spanText({})).toThrow('A span has `text` or `from`');
   });
 });
 
