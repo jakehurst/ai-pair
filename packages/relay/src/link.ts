@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import WebSocket from 'ws';
-import { parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, type ToolName } from '@ai-pair/protocol';
+import { DISCOVERY_SCHEMA, parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, type ToolName } from '@ai-pair/protocol';
 
 /** A call's error when its window's socket closes: a reloaded window keeps the session for a `start` (#25, #138). */
 export const EDITOR_DISCONNECTED = 'The editor disconnected. If its window was reloaded, call `start` again to resume the session.';
@@ -64,27 +64,6 @@ function alive(pid: number): boolean {
   }
 }
 
-/** Returns whether a discovery file holds a Discovery: one that parses but doesn't is skipped like garbage (#31). */
-function isDiscovery(value: unknown): value is Discovery {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'pid' in value &&
-    typeof value.pid === 'number' &&
-    'port' in value &&
-    typeof value.port === 'number' &&
-    'token' in value &&
-    typeof value.token === 'string' &&
-    'protocolVersion' in value &&
-    typeof value.protocolVersion === 'number' &&
-    'lastFocused' in value &&
-    typeof value.lastFocused === 'number' &&
-    'workspaceFolders' in value &&
-    Array.isArray(value.workspaceFolders) &&
-    value.workspaceFolders.every((f: unknown) => typeof f === 'string')
-  );
-}
-
 /**
  * Finds the first of `folders` inside a live window's workspace folder, and the windows it's in,
  * best first: the most closely containing workspace folder, then the most recently focused window.
@@ -100,8 +79,9 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
   for (const f of files) {
     try {
       const d: unknown = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-      // specs/Discovery.tla, `Start`: the candidates hold a Discovery (`CheckFiles`) with a live pid.
-      if (isDiscovery(d) && alive(d.pid)) windows.push(d);
+      // specs/Discovery.tla, `Start`: the candidates hold a Discovery by its schema (`CheckFiles`), with a live pid.
+      const parsed = DISCOVERY_SCHEMA.safeParse(d);
+      if (parsed.success && alive(parsed.data.pid)) windows.push(parsed.data);
     } catch {
       // Being written, or garbage.
     }

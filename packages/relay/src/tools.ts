@@ -6,8 +6,11 @@ import {
   actionKinds,
   CURSOR_MARKER,
   moveProblem,
+  MOVE_TARGET_SCHEMA,
   spanProblem,
+  SPAN_TARGET_SCHEMA,
   typeProblem,
+  type Action,
   type MoveTarget,
   type SpanTarget,
 } from '@ai-pair/protocol';
@@ -27,6 +30,7 @@ const inFile = file.optional().describe("Switch to this file, only before your b
 const spanSchema = z
   .strictObject(
     {
+      ...SPAN_TARGET_SCHEMA.shape,
       file: inFile,
       line,
       text: z
@@ -93,6 +97,7 @@ const actionSchema = z.union(
       move: z
         .strictObject(
           {
+            ...MOVE_TARGET_SCHEMA.shape,
             file: file
               .optional()
               .describe(
@@ -155,7 +160,7 @@ const actionSchema = z.union(
     }),
   ],
   { error: actionError },
-);
+) satisfies z.ZodType<Action>;
 
 /** The MCP tools the relay offers an agent: each one's description and input schema. */
 export const TOOLS = {

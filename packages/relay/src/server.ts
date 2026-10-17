@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isJSONRPCNotification, type CallToolResult, type RequestId } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import { aiPairHome, type FileContent, type Report, type ToolName } from '@ai-pair/protocol';
+import { aiPairHome, FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type ToolName } from '@ai-pair/protocol';
 import { readGuides, renderGuides, type Guide } from './guide';
 import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
@@ -16,7 +16,7 @@ declare const AI_PAIR_VERSION: string | undefined;
 const VERSION = typeof AI_PAIR_VERSION === 'string' ? AI_PAIR_VERSION : 'dev';
 
 /** How many answered reports the relay keeps, for a cancel that arrives after its answer (#67). */
-const MAX_ANSWERED = 16;
+export const MAX_ANSWERED = 16;
 
 /** How long to wait for the harness to list its roots: one that claims to but never answers mustn't block `start`. */
 const ROOTS_MS = 2000;
@@ -84,9 +84,9 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
           if (answered.size > MAX_ANSWERED) answered.delete(id);
         }
       }
-      // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts).
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const text = tool === 'read' ? renderFile(result as FileContent) : renderReport(result as Report, tool);
+      // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts); an answer
+      // that doesn't fit its schema throws, and reaches the agent as an internal error.
+      const text = tool === 'read' ? renderFile(FILE_CONTENT_SCHEMA.parse(result)) : renderReport(REPORT_SCHEMA.parse(result), tool);
       const content: CallToolResult['content'] = [{ type: 'text', text }];
       if (tool === 'start') content.push({ type: 'text', text: `# Pairing guide\n\n${guide}` });
       if (tool === 'start' && guides.length > 0) content.push({ type: 'text', text: renderGuides(guides, shownPath) });
