@@ -166,12 +166,12 @@ earlier one (`RepeatsMarked`).
 |---|---|
 | `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
-| `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
+| `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, which the SDK runs only while the call is unanswered, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
-| `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer |
+| `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer; the socket is open and the arguments are JSON, so the send cannot fail, and the model has no failed send (#180) |
 | `Close`, `HandleClose` | `locate()` closing `this.connection`, or the editor's end closing; the `close` handler rejecting `Victims` |
 | `Reply` | a `result` frame: `result`, or `return` for a call the relay marked cancelled |
-| `SendGarbage` | a frame that isn't a message (`parseEditorMessage`) |
+| `SendGarbage` | a frame that isn't a message (`parseEditorMessage`); `ws` hands every frame over as one `Buffer`, so the model has no other forms of a frame (#180) |
 | `Reject` | a `rejected` answer to the hello, after which the bridge closes its end: `openWindow()` rejects, and the `close` handler runs with no welcome |
 | `Shutdown` | `serve()` in `server.ts`: the harness ends stdin, and it closes the server and `link.close()`, which closes `this.connection` and marks the link closed |
 | `Finished` | nothing: the model's sockets are used up, the relay crashed, or it shut down and closed the sockets it opened, and the run ends |
@@ -387,7 +387,7 @@ breaks it, as the mutation below shows.
 | `OpenWindow`, `CloseWindow`, `Crash`, `Reuse` | a window writing its file; `dispose()` removing it; a crash leaving it; its `pid` reused |
 | `Focus`, `FinishWrite` | `focused()` -> `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
 | `OpenWindow` unlisted, `ListWindow` | the write failing (`failed`): the window runs, and no relay finds it; a later focus writing it |
-| `Start` | `locate` -> `findWindows`: files that hold a `Discovery` with a live `pid`, and parse |
+| `Start` | `locate` -> `findWindows`: files that hold a `Discovery` with a live `pid`, and parse; it gives the workspace folder it matched too, which `workspace()` takes as the root (#180) |
 | `Try` | `openWindow` on one candidate, best first |
 | `Disconnect` | the socket closing, so the next call opens again |
 
