@@ -287,6 +287,13 @@
       "functions": 14
     }
   },
+  "packages/vscode/scripts/build.mts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift": {
     "swift": {
       "lines": 99,
@@ -304,6 +311,13 @@
   "packages/vscode/scripts/integration.sh": {
     "shell": {
       "lines": 86
+    }
+  },
+  "packages/vscode/scripts/vscode_bin.mts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/vscode/src/agents.ts": {
@@ -488,44 +502,44 @@
   },
   "packages/vscode/src/webview/panel.ts": {
     "unit": {
-      "lines": 77,
-      "branches": 59,
-      "functions": 64
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/check_ascii.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/coverage_report.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/lint_tla.ts": {
     "unit": {
-      "lines": 86,
-      "branches": 90,
-      "functions": 85
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/lint_web.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/release.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "specs/check.sh": {

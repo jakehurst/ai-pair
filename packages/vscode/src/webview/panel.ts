@@ -127,6 +127,8 @@ let pointed: HTMLAnchorElement | undefined = undefined;
 let draftEmpty = true;
 let tipTarget: HTMLElement | undefined = undefined;
 let tipTimer: ReturnType<typeof setTimeout> | undefined;
+/** The element a hover waits to show the tip of, while `tipTimer` runs. */
+let tipPending: HTMLElement | undefined;
 let tipWarmUntil = 0;
 
 // ---- Messages as HTML ------------------------------------------------------
@@ -386,6 +388,7 @@ function setTip(el: HTMLElement, text: string): void {
 
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer);
+  tipPending = undefined;
   if ((el === ui.speed && ui.speedMenu.hidden === false) || (el === ui.readingSpeed && ui.readingMenu.hidden === false)) return;
   tipTarget = el;
   ui.tip.textContent = el.dataset.tip ?? '';
@@ -396,6 +399,7 @@ function showTip(el: HTMLElement): void {
 
 function hideTip(): void {
   clearTimeout(tipTimer);
+  tipPending = undefined;
   if (!tipTarget) return;
   tipTarget.removeAttribute('aria-describedby');
   tipTarget = undefined;
@@ -404,13 +408,15 @@ function hideTip(): void {
 }
 
 function hoverTip(el: HTMLElement | undefined): void {
-  if (el === tipTarget) return;
+  // The same element again, shown or waited for: a move between its children. Anything else ends the wait.
+  if (el === (tipTarget ?? tipPending)) return;
   const warm = tipTarget !== undefined || performance.now() < tipWarmUntil;
   hideTip();
   if (!el) return;
   if (warm) {
     showTip(el);
   } else {
+    tipPending = el;
     tipTimer = setTimeout(() => {
       showTip(el);
     }, TIP_DELAY_MS);
