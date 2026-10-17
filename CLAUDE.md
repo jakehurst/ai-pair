@@ -79,6 +79,28 @@ Set by Justine on 2026-10-07.
     covers mechanical edits too, and formatting, which runs as a visible
     `run`, never from the agent's own shell (set by Justine on 2026-10-16).
 
+## Tests
+
+-   **A unit test is solitary,** in Martin Fowler's terms (Justine says
+    soloist): it tests one source file, and every collaborator that file
+    uses is replaced by a mock. When Justine says unit test, she means this
+    style, never the sociable style, which runs real collaborators (#176;
+    set by Justine on 2026-10-16).
+-   **Each source file's unit tests live in its own test file,** named for
+    it: `server.ts` in `server.test.ts`, never one file for several
+    sources. An end-to-end test that runs several files at once, like
+    `relay.test.ts`, is its own kind and keeps its own file.
+-   **Mock the way the Vitest community does now** (checked on 2026-10-16,
+    sources on #176): a collaborator passed in gets a typed fake, `vi.fn()`
+    per method or `mock<T>()` from `vitest-mock-extended`; `vi.mock` is for
+    an import that cannot be passed in, such as `fs`, `ws`, or `vscode`.
+    Type a mocked import with `vi.mocked()`, never `as`; give a `vi.mock`
+    factory its variables through `vi.hoisted`; restore mocks between
+    tests. A call within the same file cannot be mocked, so code that needs
+    one takes the collaborator as a parameter instead.
+-   **A unit test found that is not solitary is transformed** into the
+    solitary style, wherever it is found, without being asked.
+
 ## Problems found along the way
 
 -   **Fix them inline.** A problem found while fixing or testing another one is
