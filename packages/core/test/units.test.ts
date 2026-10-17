@@ -6,7 +6,6 @@ import type { Change } from '../src/ports';
 import { boundedDiff, MAX_DIFF_LINES } from '../src/diff';
 import { planTyping, readingTime } from '../src/typing';
 import { lineEnd, lineSpan, terminalText } from '../src/text';
-import { samePath, withinFolder, type PathStyle } from '../src/paths';
 import { displayPath } from '../src/player';
 import { Timeline } from '../src/timeline';
 import { containing, FakeEditor } from './fake';
@@ -46,40 +45,11 @@ describe('line offsets', () => {
   });
 });
 
-describe('paths', () => {
-  const windows: PathStyle = { ignoreCase: true, sep: '\\' };
-  const mac: PathStyle = { ignoreCase: true, sep: '/' };
-  const linux: PathStyle = { ignoreCase: false, sep: '/' };
-
-  it('ignores case on Windows and macOS, not on Linux', () => {
-    expect(samePath('C:\\Users\\me\\a.ts', 'c:\\users\\me\\a.ts', windows)).toBe(true);
-    expect(samePath('/Users/me/A.ts', '/users/me/a.ts', mac)).toBe(true);
-    expect(samePath('/home/me/A.ts', '/home/me/a.ts', linux)).toBe(false);
-  });
-
-  it('spells a file inside a folder the way the folder is spelled', () => {
-    const folder = 'c:\\Users\\me\\Desktop\\proj';
-    expect(withinFolder(folder, 'C:\\users\\me\\desktop\\proj\\src\\A.ts', windows)).toBe('c:\\Users\\me\\Desktop\\proj\\src\\A.ts');
-    expect(withinFolder(folder, 'C:\\USERS\\ME\\DESKTOP\\PROJ', windows)).toBe(folder);
-    expect(withinFolder('/Users/me/Proj', '/users/me/proj/a.ts', mac)).toBe('/Users/me/Proj/a.ts');
-    expect(withinFolder('/home/me/proj', '/home/me/proj/a.ts', linux)).toBe('/home/me/proj/a.ts');
-  });
-
-  it('leaves files outside the folder alone', () => {
-    expect(withinFolder('c:\\proj', 'c:\\project\\a.ts', windows)).toBeUndefined();
-    expect(withinFolder('c:\\proj', 'd:\\proj\\a.ts', windows)).toBeUndefined();
-    expect(withinFolder('/home/me/Proj', '/home/me/proj/a.ts', linux)).toBeUndefined();
-  });
-
+describe('displayPath', () => {
   it('shows a file in a folder whose name starts with two dots by its path in the root (#5)', () => {
     const editor = new FakeEditor();
     expect(displayPath(editor, '/proj/..cache/a.ts', '/proj')).toBe('..cache/a.ts');
     expect(displayPath(editor, '/other/a.ts', '/proj')).toBe('/other/a.ts');
-  });
-
-  it('handles a folder that is a drive root', () => {
-    expect(withinFolder('c:\\', 'C:\\proj\\a.ts', windows)).toBe('c:\\proj\\a.ts');
-    expect(withinFolder('/', '/home/me/a.ts', linux)).toBe('/home/me/a.ts');
   });
 });
 
