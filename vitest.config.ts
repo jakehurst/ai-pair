@@ -59,8 +59,9 @@ export default defineConfig({
   test: {
     // Only vitest's tests: Playwright's are *.spec.ts, under test/visual.
     include: ['**/*.test.ts'],
-    // One worker per test file costs about 200 ms each to start; the files share workers instead (Justine, 2026-10-11).
-    isolate: false,
+    // Each file gets its own module cache, so a file's vi.mock applies even when another file loaded the module first.
+    // Shared workers (isolate: false, 2026-10-11) failed solitary tests at random (Justine, 2026-10-16, #163).
+    isolate: true,
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts', 'scripts/**/*.ts'],
