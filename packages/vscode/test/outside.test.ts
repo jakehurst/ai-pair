@@ -1,8 +1,13 @@
 // Marking files changed outside the protocol, as specs/Outside.tla has it (#15): when a group of
-// watcher events settles, a file is marked only if it differs from the text we know of it.
+// watcher events settles, a file is marked only if it differs from the text we know of it. Solitary: the protocol's
+// withinFolder is a mock that takes a path under a folder, by its text, as inside it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GROUP_MS, OutsideChanges, watched } from '../src/outside';
+
+vi.mock('@ai-pair/protocol', () => ({
+  withinFolder: vi.fn((folder: string, file: string) => (file.startsWith(`${folder}/`) ? file : undefined)),
+}));
 
 let disk: Map<string, string>;
 let reports: string[][];
@@ -79,6 +84,14 @@ describe('OutsideChanges', () => {
     outside.seen('/p/a.ts', 'x');
     await settle();
     expect([outside.isMarked('/p/a.ts'), reports]).toEqual([false, []]);
+  });
+
+  it('reports a marked file written again, without drawing its mark again', async () => {
+    written('/p/a.ts', 'x');
+    await settle();
+    written('/p/a.ts', 'y');
+    await settle();
+    expect([reports, redraws]).toEqual([[['/p/a.ts'], ['/p/a.ts']], [['/p/a.ts']]]);
   });
 
   it('groups files written close together into one entry, and skips one gone again', async () => {

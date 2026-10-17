@@ -1,4 +1,5 @@
-// Follow mode's arithmetic and own-edit matching, from editor.ts, without VS Code (#7).
+// Follow mode's arithmetic and own-edit matching, from editor.ts, without VS Code (#7). view.ts imports only a type,
+// so the test needs no mocks.
 
 import { describe, expect, it } from 'vitest';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport } from '../src/view';
@@ -15,6 +16,10 @@ describe('row', () => {
     expect(row(folded, 12)).toBe(2);
     expect(row(folded, 17)).toBe(3);
     expect(row(folded, 19)).toBe(5);
+  });
+
+  it('needs at least one visible range', () => {
+    expect(() => row([], 1)).toThrow('row needs at least one visible range.');
   });
 
   it('puts a folded line where its fold is', () => {
