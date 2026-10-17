@@ -282,7 +282,7 @@ export function fieldsProblem(action: object): string | undefined {
   if ('wait' in action && action.wait !== undefined && typeof action.wait !== 'number') return '`wait` is a number: the seconds to wait.';
   const place: unknown = 'move' in action ? action.move : 'select' in action ? action.select : 'point' in action ? action.point : undefined;
   const fields = kind === 'move' ? MOVE_FIELDS : SPAN_FIELDS;
-  if (typeof place === 'object' && place !== null) {
+  if (typeof place === 'object' && place !== null && !Array.isArray(place)) {
     // The place's own check first: it knows what a mistaken field was meant to be.
     const problem = kind === 'move' ? moveProblem(place) : spanProblem(place);
     if (problem !== undefined) return problem;

@@ -142,20 +142,25 @@ function pendingEdits(session: Session, file: string): EditEvent[] {
   return session.events.filter((e): e is EditEvent => e.kind === 'edit' && e.file === file && e.diff === undefined);
 }
 
-/** Whether a call of each kind can return its report now: specs/Serialize.tla, `Finish`. */
-const CALL_READY: Record<Call['kind'], (session: Session, call: Call) => boolean> = {
-  // A step's batch is done, or plays next (`AtHead`): the step returns once the one before it has (#150).
-  step: (session, call) => (call.batch ? call.batch.state === 'done' || session.queue[0] === call.batch : session.queue.length === 0),
-  end: (session) => session.queue.length === 0,
-  listen: (session) => {
-    if (session.held.length > 0) return true;
-    if (session.finished.some((r) => r.status !== 'completed')) return true;
-    if (session.queue.length > 0) return false;
-    if (session.scene.turn === 'agent') return session.events.some(interrupting);
-    // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
-    return session.events.some((e) => e.kind !== 'edit') || (session.navigatorReady && session.events.some(interrupting));
-  },
-};
+/** Returns whether a call can return its report now: specs/Serialize.tla, `Finish`. */
+function callReady(session: Session, call: Call): boolean {
+  switch (call.kind) {
+    case 'step':
+      // A step's batch is done, or plays next (`AtHead`): the step returns once the one before it has (#150).
+      return call.batch ? call.batch.state === 'done' || session.queue[0] === call.batch : session.queue.length === 0;
+    case 'end':
+      return session.queue.length === 0;
+    default:
+      // The last kind, `listen`: a new kind would widen `call.kind` here and fail the `satisfies`.
+      call.kind satisfies 'listen';
+      if (session.held.length > 0) return true;
+      if (session.finished.some((r) => r.status !== 'completed')) return true;
+      if (session.queue.length > 0) return false;
+      if (session.scene.turn === 'agent') return session.events.some(interrupting);
+      // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
+      return session.events.some((e) => e.kind !== 'edit') || (session.navigatorReady && session.events.some(interrupting));
+  }
+}
 
 /** Returns a report in one log line: its batches, events, flags, and size (#149). */
 function describeReport(report: Report): string {
@@ -368,15 +373,15 @@ export class Controller {
       const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current === true && rehearsal.result.status === 'failed') return this.rejectBatch(session, actions, rehearsal);
-      const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued' };
       if (current === true) {
-        const queued: QueuedBatch = { ...batch, after: rehearsal.after };
+        const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
-        this.trace?.(`batch ${batch.id} queued: ${actions.length} actions`);
+        this.trace?.(`batch ${queued.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);
         return this.block('step', { batch: queued }, signal);
       }
+      const batch: Batch = { id: this.nextBatchId++, actions, state: 'queued' };
       this.discard(session, batch);
       return this.block('step', { batch }, signal);
     }, signal);
@@ -871,7 +876,7 @@ export class Controller {
     if (session.ended) return true;
     // An interrupted batch finishes promptly; wait for it, so the report says what was typed.
     if (session.queue[0]?.state === 'playing' && session.timeline.isInterrupted) return false;
-    return CALL_READY[call.kind](session, call);
+    return callReady(session, call);
   }
 
   private pump(): void {

@@ -14,7 +14,7 @@ import { containing, FakeEditor, FakePanel, testConfig } from './fake';
 /** A relay's end of a socket to the bridge. */
 interface Client {
   socket: WebSocket;
-  /** Resolves with the next frame the bridge sends, in order. */
+  /** Resolves with the next frame the bridge sends, in order. One call at a time: a second call while one waits replaces its waiter. */
   next(): Promise<EditorMessage>;
   /** Resolves once the socket has closed. */
   closed: Promise<void>;

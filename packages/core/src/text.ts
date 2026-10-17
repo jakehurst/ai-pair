@@ -92,7 +92,7 @@ export function terminalText(raw: string): string {
     .split('\n')
     .map((line) => {
       const parts = line
-        .slice(line.lastIndexOf(ERASED_LINE) + 1)
+        .slice(line.lastIndexOf(ERASED_LINE) + ERASED_LINE.length)
         .split('\r')
         .filter((p) => p !== '');
       return (parts.at(-1) ?? '').replaceAll(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trimEnd();
