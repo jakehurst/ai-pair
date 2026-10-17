@@ -328,7 +328,7 @@ Set by Justine on 2026-10-07.
     `panel_html.ts`. It runs in CI's `check` job. These rules no tool checks, so
     follow them by hand:
     -   Give the script its hooks as `data-ui` attributes, and styling as
-        classes; no `id`s, which `panel.test.ts` checks (id Attributes).
+        classes; no `id`s, which `panel_html.test.ts` checks (id Attributes).
     -   Use each element for its purpose: a `button` for an action, an `a` for a
         link, a heading for a heading (Semantics).
     -   Leave out every optional tag: `</li>`, `</p>`, `<head>`, `<body>`; keep
