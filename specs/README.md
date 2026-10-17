@@ -1375,7 +1375,7 @@ the command, and what ends each wait.
 |---|---|
 | `Start` | `acquire()`: a terminal that isn't busy, whose shell is alive, in the run's directory, or a new one there; `busy = true`. The signal may have fired before (an interrupt during the save) |
 | `ExecuteCommand`, `AbortBeforeStart`, `RejectClosed` | `shellIntegration()`: integration or its timer, then `executeCommand`; the signal; a terminal closed meanwhile (VS Code throws for its `sendText`) |
-| `End`, `StopWaiting`, `Close` | `onDidEndTerminalShellExecution`; `stopWaiting` (the wait or an interrupt); `onDidCloseTerminal` |
+| `End`, `StopWaiting`, `Close` | `onDidEndTerminalShellExecution`; `stopWaiting` (the wait or an interrupt during it: one before it is `SkipAborted`, and nothing awaits between that check and the wait, #176); `onDidCloseTerminal` |
 | `SendText` | the timer fires with no integration: the command is typed in (`sendText`), and the terminal stays busy for good |
 | `SkipAborted` | a signal that fired before the run: `shellIntegration()` returns at once, and `run()` reports `notStarted` |
 | `Exit` | the shell exits (`exitStatus`); the terminal stays open, and `acquire()` won't reuse it |
