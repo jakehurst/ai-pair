@@ -4,6 +4,7 @@ import { ok } from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -14,7 +15,7 @@ import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
 import { CURSOR_MARKER, PROTOCOL_VERSION } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
-import { agentGuide, createServer } from '../src/server';
+import { agentGuide, createServer, serve } from '../src/server';
 
 const fast = {
   ...testConfig,
@@ -64,13 +65,19 @@ afterEach(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-/** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
-async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> {
+/** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them; `'fails'`: it claims them, then fails the request. */
+async function connect(cwd = '/project/src', roots?: string[] | 'fails'): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const server = createServer(new EditorLink(cwd, dir), 'THE GUIDE', cwd);
   await server.connect(serverSide);
-  const client = new Client({ name: 'test', version: '0' }, { capabilities: roots ? { roots: {} } : {} });
-  if (roots) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
+  const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
+  if (roots === 'fails') {
+    client.setRequestHandler(ListRootsRequestSchema, () => {
+      throw new Error('no roots today');
+    });
+  } else if (roots !== undefined) {
+    client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
+  }
   await client.connect(clientSide);
   clients.push(client);
   return client;
@@ -221,6 +228,8 @@ describe('relay', () => {
     expect(range.text).toMatch(/The end of a range is `through`/);
     const nothing = await call(client, 'step', { actions: [{ select: { line: 1 } }] });
     expect(nothing.text).toMatch(/Give the code: `text`, or `from` and `through`/);
+    const said = await call(client, 'step', { actions: [{ say: 3 }] });
+    expect(said.error).toBe(true);
   });
 
   it('OwnedByOpenSocket: lets only one agent pair in a window at a time', async () => {
@@ -516,6 +525,32 @@ describe('relay', () => {
     const client = await connect('/project/src');
     expect((await call(client, 'start', { cwd: '/elsewhere' })).error).toBe(false);
     expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(false);
+  });
+
+  it('treats a harness whose roots request fails as one with none', async () => {
+    const client = await connect('/', 'fails');
+    expect((await call(client, 'start')).text).toMatch(/^no_editor: No VS Code window has \/ open/);
+  });
+
+  it('ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163)', async () => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    // The stdio transport reads stdin, so it flows, and its end is seen.
+    const stdin = new PassThrough().resume();
+    const served = serve({ transport: serverSide, guide: 'THE GUIDE', cwd: '/project/src', dir, stdin });
+    const client = new Client({ name: 'test', version: '0' });
+    let closed = false;
+    // A Client has only this one close handler.
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener
+    client.onclose = () => {
+      closed = true;
+    };
+    await client.connect(clientSide);
+    expect((await call(client, 'start')).error).toBe(false);
+    expect(bridge.connections().size).toBe(1);
+    stdin.end();
+    await served;
+    expect(closed).toBe(true);
+    await until(() => bridge.connections().size === 0);
   });
 });
 

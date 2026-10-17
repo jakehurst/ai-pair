@@ -11,6 +11,9 @@ const THRESHOLDS = path.join(import.meta.dirname, 'coverage_thresholds.json');
 // Files that only re-export, so there is nothing in them to execute (#162).
 const REEXPORT_ONLY = ['packages/core/src/index.ts', 'packages/core/src/paths.ts'];
 
+// Entry points that only hand the process's stdio to code the tests run; the integration run covers them (#163).
+const ENTRY_ONLY = ['packages/relay/src/main.ts'];
+
 /** A file's unit minimums in coverage_thresholds.json, in percent. */
 interface UnitMinimums {
   lines: number;
@@ -61,7 +64,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts', 'scripts/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/*.d.ts', 'scripts/stylelint.config.ts', ...REEXPORT_ONLY],
+      exclude: ['**/*.test.ts', '**/*.d.ts', 'scripts/stylelint.config.ts', ...REEXPORT_ONLY, ...ENTRY_ONLY],
       reporter: ['text', 'lcov', 'json-summary'],
       reportsDirectory: 'coverage/unit',
       thresholds: unitThresholds(),

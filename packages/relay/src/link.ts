@@ -8,6 +8,9 @@ import { parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, typ
 /** A call's error when its window's socket closes: a reloaded window keeps the session for a `start` (#25, #138). */
 export const EDITOR_DISCONNECTED = 'The editor disconnected. If its window was reloaded, call `start` again to resume the session.';
 
+/** A call's error once the link is closed: the harness ended the relay's stdin (#163). */
+export const LINK_CLOSED = 'The relay is shutting down.';
+
 /** A port a stale window file points at may now belong to something that never answers. */
 const HANDSHAKE_MS = 5000;
 
@@ -21,8 +24,9 @@ interface Pending {
   reject: (error: RelayError) => void;
 }
 
-/** What a welcomed socket carries, which `openWindow` registers before it resolves. */
-interface SocketState {
+/** A welcomed socket, with its calls: what `openWindow` resolves with. */
+interface Connection {
+  ws: WebSocket;
   /** The socket's calls waiting for an answer, so that its close rejects only its own. */
   calls: Map<number, Pending>;
   /** The socket's cancelled calls not yet answered: settled once the editor's answer arrives. */
@@ -127,10 +131,10 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
 
 /** A lazily (re)connected link to the editor window for the agent's folder, `cwd` until `locate` says otherwise. */
 export class EditorLink {
-  private ws: WebSocket | undefined;
-  private connecting: Promise<WebSocket> | undefined;
+  private connection: Connection | undefined;
+  private connecting: Promise<Connection> | undefined;
+  private closed = false;
   private nextId = 1;
-  private readonly sockets = new WeakMap<WebSocket, SocketState>();
   /** The socket each report came over, for `handBack`. */
   private readonly answeredOn = new WeakMap<object, WebSocket>();
   private folder: string;
@@ -148,8 +152,8 @@ export class EditorLink {
     if (folder !== this.folder) {
       this.folder = folder;
       // specs/Wire.tla, `Close`: calls no longer go out on this socket; its close handler rejects its own.
-      this.ws?.close();
-      this.ws = undefined;
+      this.connection?.ws.close();
+      this.connection = undefined;
     }
     return folder;
   }
@@ -171,31 +175,26 @@ export class EditorLink {
     // goes out after it, so the editor restores the report before it takes this call (#59; specs/Wire.tla,
     // `Send` with WaitCancelled; specs/Controller.tla, `Sendable` with WaitForReturn). The socket may close
     // meanwhile, so it is taken again after each wait; from there to `send`, nothing awaits.
-    let ws: WebSocket;
-    let state: SocketState;
+    let connection: Connection;
     for (;;) {
-      ws = await this.connect();
-      state = this.stateOf(ws);
-      if (state.cancelled.size === 0) break;
-      await Promise.all(state.cancelled);
+      connection = await this.connect();
+      if (connection.cancelled.size === 0) break;
+      await Promise.all(connection.cancelled);
     }
     // An abort that fired before the listener below is added won't fire again (#29). A call never
     // sent takes no report, so there is nothing to hand back (`Send` with CheckAbort).
     if (signal?.aborted === true) throw new RelayError('cancelled', 'The call was cancelled.');
-    const { calls, cancelled } = state;
+    const { ws, calls, cancelled } = connection;
     const id = this.nextId++;
-    const pending: Pending = { tool, cancelled: false, resolve: () => {}, reject: () => {} };
-    const answer = new Promise((resolve, reject) => {
-      pending.resolve = resolve;
-      pending.reject = reject;
-      calls.set(id, pending);
-      try {
-        ws.send(JSON.stringify({ type: 'call', id, tool, args }));
-      } catch (error) {
-        calls.delete(id);
-        reject(new RelayError('no_editor', `Couldn't send to the editor: ${error instanceof Error ? error.message : String(error)}`));
-      }
-    });
+    const { promise: answer, resolve, reject } = Promise.withResolvers<unknown>();
+    const pending: Pending = { tool, cancelled: false, resolve, reject };
+    calls.set(id, pending);
+    try {
+      ws.send(JSON.stringify({ type: 'call', id, tool, args }));
+    } catch (error) {
+      calls.delete(id);
+      reject(new RelayError('no_editor', `Couldn't send to the editor: ${error instanceof Error ? error.message : String(error)}`));
+    }
     // specs/Wire.tla, `Abort`: the relay handles the client's cancel of a call it sent.
     signal?.addEventListener(
       'abort',
@@ -229,18 +228,16 @@ export class EditorLink {
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'return', report, mayRepeat: true }));
   }
 
+  /** Closes the link for good: its socket closes, and it opens no other (specs/Wire.tla, `Shutdown`). */
   close(): void {
-    this.ws?.close();
+    this.closed = true;
+    this.connection?.ws.close();
   }
 
-  private stateOf(ws: WebSocket): SocketState {
-    const state = this.sockets.get(ws);
-    if (!state) throw new Error('A welcomed socket has no state: openWindow registers it before resolving.');
-    return state;
-  }
-
-  private connect(): Promise<WebSocket> {
-    if (this.ws?.readyState === WebSocket.OPEN) return Promise.resolve(this.ws);
+  private connect(): Promise<Connection> {
+    // specs/Wire.tla, `Open` with CloseAfterShutdown: a closed link opens no socket.
+    if (this.closed) return Promise.reject(new RelayError('no_editor', LINK_CLOSED));
+    if (this.connection?.ws.readyState === WebSocket.OPEN) return Promise.resolve(this.connection);
     // specs/Wire.tla, `Open`: with no socket open, one attempt at a time.
     this.connecting ??= this.open().finally(() => {
       this.connecting = undefined;
@@ -253,7 +250,7 @@ export class EditorLink {
    * down cleanly, and its pid can then belong to another process, so an unreachable one is skipped
    * (specs/Discovery.tla, `Try`).
    */
-  private async open(): Promise<WebSocket> {
+  private async open(): Promise<Connection> {
     let first: unknown;
     for (const window of findWindows([this.folder], this.dir).windows) {
       try {
@@ -265,12 +262,12 @@ export class EditorLink {
     throw first;
   }
 
-  private openWindow(window: Discovery): Promise<WebSocket> {
+  private openWindow(window: Discovery): Promise<Connection> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: HANDSHAKE_MS });
       let welcomed = false;
       const calls = new Map<number, Pending>();
-      this.sockets.set(ws, { calls, cancelled: new Set() });
+      const connection: Connection = { ws, calls, cancelled: new Set() };
       function settle(id: number): Pending | undefined {
         const p = calls.get(id);
         calls.delete(id);
@@ -291,10 +288,17 @@ export class EditorLink {
           return;
         }
         if (message.type === 'welcome') {
+          // specs/Wire.tla, `Welcome` with CloseAfterShutdown: after the link closed, the socket closes, so
+          // nothing keeps the relay's process alive.
+          if (this.closed) {
+            reject(new RelayError('no_editor', LINK_CLOSED));
+            ws.close();
+            return;
+          }
           // specs/Wire.tla, `Welcome`: calls go out on this socket.
           welcomed = true;
-          this.ws = ws;
-          resolve(ws);
+          this.connection = connection;
+          resolve(connection);
         } else if (message.type === 'rejected') {
           reject(new RelayError('no_editor', message.reason));
         } else if (message.type === 'result') {
@@ -308,7 +312,7 @@ export class EditorLink {
             this.answeredOn.set(message.result, ws);
           }
           call?.resolve(message.result);
-        } else if (message.type === 'error') {
+        } else {
           settle(message.id)?.reject(new RelayError(message.code, message.message));
         }
       });
@@ -318,7 +322,7 @@ export class EditorLink {
       // specs/Wire.tla, `HandleClose`: a close rejects only this socket's calls (#3).
       ws.on('close', () => {
         // specs/Discovery.tla, `Disconnect`: the next call opens again.
-        if (this.ws === ws) this.ws = undefined;
+        if (this.connection?.ws === ws) this.connection = undefined;
         if (!welcomed) reject(new RelayError('no_editor', 'The editor closed the connection.'));
         for (const p of calls.values()) {
           p.reject(new RelayError('no_editor', EDITOR_DISCONNECTED));

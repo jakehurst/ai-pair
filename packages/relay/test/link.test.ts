@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { parseRelayMessage, PROTOCOL_VERSION } from '@ai-pair/protocol';
-import { EDITOR_DISCONNECTED, EditorLink } from '../src/link';
+import { EDITOR_DISCONNECTED, EditorLink, LINK_CLOSED } from '../src/link';
 
 let dir: string;
 const servers: WebSocketServer[] = [];
@@ -60,6 +60,8 @@ async function fakeWindow(folder: string, greeting = JSON.stringify({ type: 'wel
       const m = parseRelayMessage(data);
       if (m?.type === 'hello') {
         ws.send(greeting);
+        // The bridge closes a socket it rejects.
+        if (greeting.includes('"rejected"')) ws.close();
       } else if (m) {
         received.push(m.type);
       }
@@ -231,5 +233,42 @@ describe('link', () => {
     answer(next, 'second');
     expect(await second).toBe('second');
     link.close();
+  });
+
+  it("rejects a call with the editor's reason when a window answers `rejected` instead of a welcome", async () => {
+    await fakeWindow('/a', JSON.stringify({ type: 'rejected', reason: 'Authentication failed.' }));
+    const link = new EditorLink('/a', dir);
+    await expect(link.call('read', {})).rejects.toMatchObject({ code: 'no_editor', message: 'Authentication failed.' });
+  });
+
+  it("rejects a call whose arguments can't be sent, and sends the next", async () => {
+    const fake = await fakeWindow('/a');
+    const link = new EditorLink('/a', dir);
+    const loop: Record<string, unknown> = {};
+    loop.self = loop;
+    const unsent = link.call('read', loop);
+    await expect(unsent).rejects.toThrow("Couldn't send to the editor");
+    await expect(unsent).rejects.toMatchObject({ code: 'no_editor' });
+    const next = link.call('read', {});
+    await until(() => fake.calls.length === 1);
+    const sent = fake.calls[0];
+    ok(sent);
+    answer(sent, 'ok');
+    expect(await next).toBe('ok');
+    link.close();
+  });
+
+  it('ExitsAfterShutdown: closes a socket the editor welcomes after the link closed, and opens none after it', async () => {
+    const fake = await fakeWindow('/a');
+    const link = new EditorLink('/a', dir);
+    // The call opens the socket at once; the welcome comes after the close.
+    const first = link.call('read', {});
+    link.close();
+    await expect(first).rejects.toMatchObject({ code: 'no_editor', message: LINK_CLOSED });
+    const socket = fake.sockets[0];
+    ok(socket);
+    await until(() => socket.readyState === socket.CLOSED);
+    await expect(link.call('read', {})).rejects.toMatchObject({ code: 'no_editor', message: LINK_CLOSED });
+    expect(fake.sockets).toHaveLength(1);
   });
 });

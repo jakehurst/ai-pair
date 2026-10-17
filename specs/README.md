@@ -62,7 +62,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not | holds | 709 |
-| `Wire.cfg` | `MaxSockets = 2` sockets, `MaxCalls = 2` calls | holds | 24,714 |
+| `Wire.cfg` | `MaxSockets = 2` sockets, `MaxCalls = 2` calls | holds | 43,426 |
 | `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
 | `PanelScroll.cfg` | `MaxEntries = 5`, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
@@ -152,7 +152,8 @@ test's title carries its name:
 `packages/relay/src/link.ts`, with the editor's replies from
 `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse`
 (#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked
-in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67). The agent's MCP
+in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67),
+`CloseAfterShutdown` (#163). The agent's MCP
 client is modeled too: it drops an answer once it has canceled, and it sends a
 cancel even after it took the answer, since the SDK never removes its abort
 listener. So the relay can't tell whether the agent saw a report whose cancel
@@ -162,15 +163,17 @@ earlier one (`RepeatsMarked`).
 
 | Spec | Code |
 |---|---|
-| `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
+| `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
 | `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
 | `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer |
-| `Close`, `HandleClose` | `locate()` closing `this.ws`, or the editor's end closing; the `close` handler rejecting `Victims` |
+| `Close`, `HandleClose` | `locate()` closing `this.connection`, or the editor's end closing; the `close` handler rejecting `Victims` |
 | `Reply` | a `result` frame: `result`, or `return` for a call the relay marked cancelled |
 | `SendGarbage` | a frame that isn't a message (`parseEditorMessage`) |
-| `Finished` | nothing: the model's sockets are used up, or the relay crashed, and the run ends |
+| `Reject` | a `rejected` answer to the hello, after which the bridge closes its end: `openWindow()` rejects, and the `close` handler runs with no welcome |
+| `Shutdown` | `serve()` in `server.ts`: the harness ends stdin, and it closes the server and `link.close()`, which closes `this.connection` and marks the link closed |
+| `Finished` | nothing: the model's sockets are used up, the relay crashed, or it shut down and closed the sockets it opened, and the run ends |
 
 Each invariant and property was proved to bite with a mutation of a copy of
 the model, run in TLC and then reverted:
@@ -185,7 +188,8 @@ the model, run in TLC and then reverted:
 | `HandBackAnswered = FALSE`, the code before #67 | `DroppedHandedBack` |
 | no fairness on `Reply` | `CallsAnswered` |
 | `Finished` left out of `Next` | the deadlock check |
-| `WaitCancelled = FALSE`, the code before #59 | nothing here, with the same 24,714 states: what it is for is checked in `Controller` |
+| `CloseAfterShutdown = FALSE`, the code before #163 | `ExitsAfterShutdown`: the harness ends stdin while socket 1 connects, socket 1 fails, `open()` goes on to socket 2, and its welcome leaves it open with nothing to close it (49,428 states) |
+| `WaitCancelled = FALSE`, the code before #59 | nothing here, with the same 43,426 states: what it is for is checked in `Controller` |
 
 Every invariant and property names the test that proves the code obeys it;
 the test's title carries its name:
@@ -199,6 +203,7 @@ the test's title carries its name:
 | `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
 | `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67) |
+| `ExitsAfterShutdown` | `link.test.ts`: ExitsAfterShutdown: closes a socket the editor welcomes after the link closed, and opens none after it; `relay.test.ts`: ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163) |
 
 ### `Panel`: the history
 

@@ -3,10 +3,11 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isJSONRPCNotification, type CallToolResult, type RequestId } from '@modelcontextprotocol/sdk/types.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
 import { aiPairHome, type FileContent, type Report, type ToolName } from '@ai-pair/protocol';
 import { readGuides, renderGuides, type Guide } from './guide';
-import { RelayError, type EditorLink } from './link';
+import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
 import { TOOLS } from './tools';
 
@@ -144,4 +145,30 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   );
 
   return server;
+}
+
+/** What `serve` runs with: the transport to the harness, the pairing guide, the relay's folder, the discovery folder, and the stream whose end closes the relay. */
+export interface ServeOptions {
+  transport: Transport;
+  guide: string;
+  cwd: string;
+  dir: string;
+  stdin: NodeJS.ReadableStream;
+}
+
+/**
+ * Runs the relay on `transport` until `stdin` ends, which is how the harness closes it (the SDK's client ends stdin, then
+ * signals two seconds later), and closes the server and the link. The process then exits normally, so V8 writes its
+ * coverage in the integration run (#163).
+ */
+export async function serve({ transport, guide, cwd, dir, stdin }: ServeOptions): Promise<void> {
+  const link = new EditorLink(cwd, dir);
+  const server = createServer(link, guide, cwd);
+  await server.connect(transport);
+  await new Promise<void>((resolve) => {
+    stdin.once('end', resolve);
+  });
+  // specs/Wire.tla, `Shutdown`: no call comes in, and none goes out.
+  await server.close();
+  link.close();
 }

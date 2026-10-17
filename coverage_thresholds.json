@@ -222,13 +222,6 @@
       "functions": 92
     }
   },
-  "packages/relay/src/main.ts": {
-    "unit": {
-      "lines": 0,
-      "branches": 100,
-      "functions": 0
-    }
-  },
   "packages/relay/src/render.ts": {
     "unit": {
       "lines": 98,
