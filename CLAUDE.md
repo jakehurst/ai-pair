@@ -97,6 +97,11 @@ Set by Justine on 2026-10-07.
     parse each mock's inputs and outputs with the same schemas, so a mock
     cannot drift from the API it stands in for (set by Justine on
     2026-10-16).
+-   **Every test is idempotent and cleans up after itself:** it starts
+    from a known state, gives the same result run after run, and leaves
+    nothing on disk; a temporary folder it makes is removed in its
+    `afterEach` (set by Justine on 2026-10-16; the tests that do not yet
+    are listed on #176).
 -   **Each source file's unit tests live in its own test file,** named for
     it: `server.ts` in `server.test.ts`, never one file for several
     sources. An end-to-end test that runs several files at once, like
