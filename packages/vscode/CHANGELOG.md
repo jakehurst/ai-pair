@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.3
+
+-   The relay now exits when its harness ends its stdin (#163): it closes its
+    MCP server, then its link to the editor, which closes its socket and
+    opens no other; a call after that is refused with "The relay is shutting
+    down." `specs/Wire.tla` models it with `Shutdown` and
+    `CloseAfterShutdown`, and `ExitsAfterShutdown` checks it.
+-   A `move` whose `at` is not a text, such as `{ move: { at: 5 } }`, is now
+    refused by name: "`at` is a text, with the cursor marker where your
+    cursor goes." It used to throw a TypeError. `specs/ActionValidation.tla`
+    checks that no place makes `moveProblem` or `spanProblem` throw.
+-   The protocol's types are zod schemas in `@ai-pair/protocol`, and both ends
+    parse whole frames with them: a frame whose fields have the wrong types
+    is not a message, as one that isn't JSON already was. The editor drops
+    it; the relay drops it after the welcome, and before it fails to
+    connect. The relay checks discovery files, reports, and file contents
+    the same way.
+-   Every relay source file is at 100 percent from its own unit test, and
+    each test is solitary: it tests one source file and mocks the rest. The
+    unit tests run isolated, each file with its own module cache, so a
+    file's mocks always apply; a run takes about a second longer.
+    `units.test.ts` and `render.fields.test.ts` are split into the test files
+    of the sources they test.
+
 ## 0.7.2
 
 -   The unit tests now cover every line, branch, and function of
