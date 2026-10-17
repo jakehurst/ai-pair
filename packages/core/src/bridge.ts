@@ -14,6 +14,7 @@ import {
   type Action,
   type Discovery,
   type EditorMessage,
+  type Passage,
   type RelayMessage,
 } from '@ai-pair/protocol';
 import type { Controller } from './controller';
@@ -28,6 +29,8 @@ export interface BridgeOptions {
   trace?: (line: string) => void;
   /** Called when the discovery file can't be written, so relays won't find this window (#9). */
   failed?: (error: unknown) => void;
+  /** Hands an agent's passage to the editor's reading speed calibration; false while one is under way (#109). */
+  calibrate: (passage: Passage) => boolean;
 }
 
 /** What a bridge calls on the controller: the pair tools, and whether a session runs. */
@@ -283,7 +286,7 @@ export class Bridge {
         }
         const notice = optionalString(args.notice);
         const text = fs.readFileSync(controller.resolveFile(args.file), 'utf8');
-        return controller.calibrate({ title: args.title, text, ...(notice === undefined ? {} : { notice }) });
+        return controller.calibrate({ title: args.title, text, ...(notice === undefined ? {} : { notice }) }, this.options.calibrate);
       }
       default:
         throw new ToolError('invalid_arguments', `Unknown tool: ${tool}`);

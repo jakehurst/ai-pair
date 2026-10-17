@@ -32,7 +32,7 @@ export interface CommandOutcome {
   shell?: string;
   /** Interrupted before the command was sent to the terminal. */
   notStarted?: boolean;
-  /** For a command still running: settles when it ends, with its exit code if the terminal reported one. */
+  /** For a command still running: resolves when it ends or its terminal closes, with its exit code if the terminal reported one; never rejects. */
   exited?: Promise<number | undefined>;
 }
 

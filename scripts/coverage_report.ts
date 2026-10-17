@@ -39,6 +39,10 @@ const TYPES: ReadonlyMap<string, string> = new Map([
 ]);
 /** A TLC action's statistics line: `<Name line ... of module M>: distinct:total`, with the disjunct's location in parentheses before `>` when the action is written inline in `Next`. */
 const ACTION = /^<([A-Za-z_]\w*) line [^(>]*(\([\d ]+\))?>: \d+:(\d+)$/;
+/** ACTION's groups: the action's name, its inline location (optional), and how many times it fired. */
+const ACTION_NAME = 1;
+const ACTION_LOCATION = 2;
+const ACTION_TOTAL = 3;
 /** What separates the module's name from the model's in `Foo_<Model>.cfg`, and so in its statistics file (8.2). */
 const MODEL_SEPARATOR = '_';
 /** A row of the table: the file, its type, then one cell per tool. */
@@ -123,6 +127,11 @@ function readSummary(file: string): Map<string, Measured> {
   return cells;
 }
 
+/** Returns a match's group `n`, or '' for an optional one that did not match. */
+function group(match: RegExpExecArray, n: number): string {
+  return match[n] ?? '';
+}
+
 /** Returns the cells of TLC's statistics: for each spec, how many of its actions fired in any of its configs. */
 function readTlc(): Map<string, Measured> {
   const cells = new Map<string, Measured>();
@@ -136,13 +145,14 @@ function readTlc(): Map<string, Measured> {
       .map((line) => ACTION.exec(line))
       .filter((match) => match !== null);
     const name = path.basename(file, '.txt');
-    const [spec = name] = name.split(MODEL_SEPARATOR);
+    // Foo_Model.txt is a config of Foo.tla, as Foo.txt is (8.2).
+    const separator = name.indexOf(MODEL_SEPARATOR);
+    const spec = separator === -1 ? name : name.slice(0, separator);
     const counts = fires.get(spec) ?? new Map<string, number>();
     fires.set(spec, counts);
     for (const match of actions) {
-      if (match[1] === undefined) continue;
-      const key = match[1] + (match[2] ?? '');
-      counts.set(key, (counts.get(key) ?? 0) + Number(match[3]));
+      const key = group(match, ACTION_NAME) + group(match, ACTION_LOCATION);
+      counts.set(key, (counts.get(key) ?? 0) + Number(group(match, ACTION_TOTAL)));
     }
   }
   for (const [spec, counts] of fires) {
@@ -319,12 +329,17 @@ function neverFired(fresh: ReadonlyMap<string, Measured>): string[] {
   return lines;
 }
 
-/** Returns every file of a listed type git tracks or would add, by path from the root, in path order. */
-function sourceFiles(): string[] {
-  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' })
-    .split('\n')
-    .filter((file) => TYPES.has(path.extname(file)))
-    .toSorted();
+/** Returns every file of a listed type git tracks or would add, by path from the root, in path order, with its type. */
+function sourceFiles(): ReadonlyMap<string, string> {
+  const listed = new Map<string, string>();
+  const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).split(
+    '\n',
+  );
+  for (const file of files.toSorted()) {
+    const type = TYPES.get(path.extname(file));
+    if (type !== undefined) listed.set(file, type);
+  }
+  return listed;
 }
 
 function main(): void {
@@ -340,15 +355,14 @@ function main(): void {
     integration: () => readSummary(INTEGRATION_SUMMARY),
     tla: readTlc,
     swift: readSwift,
-    shell: () => readShell(sources),
+    shell: () => readShell([...sources.keys()]),
     css: readCss,
   };
   const fresh = readers[column]();
   const kept = readReport();
-  const rows = sources.map((file) => {
+  const rows = [...sources].map(([file, type]) => {
     const cells: Cells = kept.get(file) ?? {};
     cells[column] = fresh.get(file)?.cell ?? (file.includes('/test/') || file.endsWith('.test.ts') ? 'test' : '-');
-    const type = TYPES.get(path.extname(file)) ?? '';
     return `| \`${file}\` | ${type} | ${TOOLS.map((t) => cells[t] ?? '-').join(' | ')} |`;
   });
   const today = new Date().toISOString().slice(0, 'YYYY-MM-DD'.length);

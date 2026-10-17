@@ -173,6 +173,9 @@ interface FakeController extends BridgeController {
 let controller: FakeController;
 let traced: string[];
 
+/** The calibration the bridge hands passages to: it takes each one. */
+const arm = vi.fn<BridgeOptions['calibrate']>(() => true);
+
 /** Returns a controller with no session, whose calls answer with REPORT. */
 function fakeController(): FakeController {
   return {
@@ -205,6 +208,7 @@ async function started(options: Partial<BridgeOptions> = {}): Promise<{ bridge: 
     trace: (line) => {
       traced.push(line);
     },
+    calibrate: arm,
     ...options,
   });
   const server = lastServer();
@@ -295,7 +299,7 @@ describe('start', () => {
   });
 
   it('fails to start when its server cannot listen', async () => {
-    const bridge = new Bridge(controller, { dir: DIR, workspaceFolders: () => [] });
+    const bridge = new Bridge(controller, { dir: DIR, workspaceFolders: () => [], calibrate: arm });
     lastServer().fail(new Error('EADDRINUSE'));
     await expect(bridge.start()).rejects.toThrow('EADDRINUSE');
   });
@@ -496,8 +500,8 @@ describe('calls', () => {
     await call(socket, 3, 'calibrate', { title: 'Words', file: 'passage.txt' });
     expect(readFileSync).toHaveBeenCalledWith('/project/passage.txt', 'utf8');
     expect(vi.mocked(controller.calibrate).mock.calls).toEqual([
-      [{ title: 'Words', text: 'Some words.', notice: 'From nowhere.' }],
-      [{ title: 'Words', text: 'Some words.' }],
+      [{ title: 'Words', text: 'Some words.', notice: 'From nowhere.' }, arm],
+      [{ title: 'Words', text: 'Some words.' }, arm],
     ]);
   });
 

@@ -14,7 +14,7 @@ import { Controller, isSavedSession, type SavedSession } from '../src/controller
 import { boundedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
-import type { Scene, Stage } from '../src/player';
+import type { Failure, Scene, Stage } from '../src/player';
 import type { EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
 
@@ -54,7 +54,7 @@ const fakes = vi.hoisted(() => {
     }
   }
 
-  /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no code. */
+  /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no cursor. */
   class FakePlayer {
     reading = false;
     commandRunning = false;
@@ -62,7 +62,8 @@ const fakes = vi.hoisted(() => {
       Promise.resolve({ result: { id, status: 'completed' }, sightings: [] }),
     );
     readonly transform = vi.fn();
-    readonly code = vi.fn((): Promise<unknown> => Promise.resolve(undefined));
+    /** By default, the cursor's file can't be read, so a report adds no cursor. */
+    readonly codeAt = vi.fn((): Promise<unknown> => Promise.reject(new Error('unread')));
     readonly scene: unknown;
     readonly stage: unknown;
 
@@ -336,16 +337,21 @@ function holdPlay(): (result?: Partial<BatchResult>, sightings?: Sighting[]) => 
   };
 }
 
-/** Makes the next rehearsal answer with `result`, leaving `texts` in its files and `edits` as the files it edits. */
+/**
+ * Makes the next rehearsal answer with `result`, leaving `texts` in its files and `edits` as the files it edits;
+ * `failed` is the action it failed at.
+ */
 function rehearsed(
   result: Partial<BatchResult> = {},
   texts: Record<string, string> = {},
   edits: string[] = [],
+  failed?: Failure,
 ): ReturnType<typeof fakes.fakeLines> {
   const lines = fakes.fakeLines();
   vi.mocked(rehearse).mockResolvedValueOnce({
     result: { id: 0, status: 'completed', ...result },
     sightings: [],
+    failed,
     after: {
       scene: scene(),
       texts: new Map(Object.entries(texts).map(([name, text]) => [path.join(ROOT, name), text])),
@@ -556,6 +562,7 @@ describe('steps and their batches', () => {
     vi.mocked(rehearse).mockResolvedValueOnce({
       result: { id: 0, status: 'failed', error: { kind: 'not_found', message: 'Not there.' }, unplayed: [{ say: 'Hi.' }], code },
       sightings: [{ file: A, text: 'x\ny', lines: [2] }],
+      failed: { index: 2, action: { say: 'Hi.' }, error: { kind: 'not_found', message: 'Not there.' } },
       after: { scene: scene(), texts: new Map(), lines: asLines(lines), edits: new Set() },
     });
     const rejected = await report(h.controller.step(actions));
@@ -565,16 +572,11 @@ describe('steps and their batches', () => {
     expect(h.traced.at(-1)).toMatch(/^report to step: batches \[\], events \[\], rejected at action 2: not_found, \d+ chars$/);
   });
 
-  it('rejects a failed rehearsal without code, and stops on one that recorded no error, as a bug', async () => {
+  it('rejects a failed rehearsal without code', async () => {
     const h = await started();
-    rehearsed({ status: 'failed', error: { kind: 'no_line', message: 'No line 9.' }, unplayed: SAY });
-    expect((await report(h.controller.step(SAY))).rejected).toEqual({
-      index: 1,
-      action: SAY[0],
-      error: { kind: 'no_line', message: 'No line 9.' },
-    });
-    rehearsed({ status: 'failed' });
-    await expect(h.controller.step(SAY)).rejects.toThrow('The rehearsal failed at action 2 of 1, but recorded no error.');
+    const error = { kind: 'no_line' as const, message: 'No line 9.' };
+    rehearsed({ status: 'failed', error, unplayed: SAY }, {}, [], { index: 1, action: { say: 'Hi.' }, error });
+    expect((await report(h.controller.step(SAY))).rejected).toEqual({ index: 1, action: { say: 'Hi.' }, error });
   });
 
   it('PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen', async () => {
@@ -1101,56 +1103,36 @@ describe("the programmer's input", () => {
     expect(h.controller.isActive).toBe(false);
     await expect(h.controller.listen()).rejects.toMatchObject({ code: 'no_session' });
   });
-
-  it('rejects a call left open in a suspended session the programmer then ended, once it times out', async () => {
-    const h = await started();
-    h.controller.disconnect();
-    const listen = h.controller.listen();
-    const refused = expect(listen).rejects.toMatchObject({ code: 'no_session', message: 'The session has ended.' });
-    await settle();
-    h.controller.endSession();
-    await settle(CONFIG.maxBlockMs);
-    await refused;
-  });
 });
 
 describe('the cursor in a report', () => {
   it("adds the cursor's line to a report when it moved since the agent last saw it, and knows its line from then", async () => {
     const h = await started();
-    const shown = {
-      code: { file: 'a.ts', lines: [{ number: 2, text: `x${CURSOR_MARKER}` }] },
-      sighting: { file: A, text: 'a\nx', lines: [2] },
-    };
+    const cursorLine = { number: 2, text: `x${CURSOR_MARKER}` };
+    const shown = { code: { file: 'a.ts', lines: [cursorLine] }, sighting: { file: A, text: 'a\nx', lines: [2] }, cursorLine };
     scene().cursor = { file: A, offset: 3 };
-    player().code.mockResolvedValue(shown);
+    player().codeAt.mockResolvedValue(shown);
     h.controller.userInterrupt();
     expect((await report(h.controller.listen())).cursor).toEqual(shown.code);
+    expect(player().codeAt).toHaveBeenCalledWith({ file: A, offset: 3 });
     expect(sessionLines().of).toHaveBeenCalledWith(A, 'a\nx');
     h.controller.userInterrupt();
     expect((await report(h.controller.listen())).cursor).toBeUndefined();
   });
 
-  it("leaves it out when a batch's code showed it, when no line is marked, and when the code can't be read", async () => {
+  it("leaves it out when a batch's code showed it, and when the code can't be read", async () => {
     const h = await started();
     scene().cursor = { file: A, offset: 1 };
-    const code = { file: 'a.ts', lines: [{ number: 1, text: `x${CURSOR_MARKER}` }] };
-    player().code.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] } });
+    const cursorLine = { number: 1, text: `x${CURSOR_MARKER}` };
+    const code = { file: 'a.ts', lines: [cursorLine] };
+    player().codeAt.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] }, cursorLine });
     player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [] });
     await report(h.controller.step(SAY));
     await settle();
     expect((await report(h.controller.listen())).cursor).toBeUndefined();
-    player().code.mockResolvedValueOnce({
-      code: { file: 'a.ts', lines: [{ number: 1, text: 'x' }] },
-      sighting: { file: A, text: 'x', lines: [1] },
-    });
-    h.controller.userInterrupt();
-    expect((await report(h.controller.listen())).cursor).toBeUndefined();
-    player().code.mockRejectedValueOnce(new Error('gone'));
+    player().codeAt.mockRejectedValueOnce(new Error('gone'));
     h.controller.userInterrupt();
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'interrupt' }]);
-    player().code.mockResolvedValueOnce(undefined);
-    h.controller.userInterrupt();
-    expect((await report(h.controller.listen())).cursor).toBeUndefined();
   });
 });
 
@@ -1259,15 +1241,14 @@ describe('settings', () => {
     expect(glideDuration).toHaveBeenCalledWith(defaultConfig.timing, 10, 2);
   });
 
-  it('hands a passage to the calibration, refusing with none, and while one is under way', async () => {
+  it('hands a passage to the calibration, refusing it while one is under way', async () => {
     const h = await started();
     const passage = { title: 'Words', text: 'Some words.' };
-    expect(() => h.controller.calibrate(passage)).toThrow('This editor has no reading speed calibration.');
-    h.controller.onCalibrate = vi.fn(() => false);
-    expect(() => h.controller.calibrate(passage)).toThrow('A calibration is already under way in the Pair panel.');
-    h.controller.onCalibrate = vi.fn(() => true);
-    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage))).toEqual({ batches: [], events: [], turn: 'agent' });
-    expect(() => harness().controller.calibrate(passage)).toThrow('No pairing session is active.');
+    const busy = vi.fn(() => false);
+    expect(() => h.controller.calibrate(passage, busy)).toThrow('A calibration is already under way in the Pair panel.');
+    expect(busy).toHaveBeenCalledWith(passage);
+    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage, () => true))).toEqual({ batches: [], events: [], turn: 'agent' });
+    expect(() => harness().controller.calibrate(passage, () => true)).toThrow('No pairing session is active.');
   });
 });
 

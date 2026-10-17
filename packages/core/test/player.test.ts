@@ -256,10 +256,9 @@ describe('agentPath and displayPath', () => {
 });
 
 describe('spanText', () => {
-  it('is the text of a span, or else its from, and refuses a span with neither', () => {
+  it('is the text of a span, or else its from', () => {
     expect(spanText({ text: 'a' })).toBe('a');
     expect(spanText({ from: 'b', through: 'c' })).toBe('b');
-    expect(() => spanText({})).toThrow('A span has `text` or `from`');
   });
 });
 
@@ -345,18 +344,9 @@ describe('play', () => {
 });
 
 describe('code', () => {
-  it('shows the lines around a span in a file the cursor is not in, with no cursor marked', async () => {
-    const h = harness({ files: { 'b.ts': 'one\ntwo\nthree\n' }, scene: { cursor: { file: A, offset: 0 } } });
-    const shown = await h.player.code({ span: { file: B, start: 4, end: 8 }, moved: false });
-    expect(shown?.code).toEqual({
-      file: 'b.ts',
-      lines: [
-        { number: 1, text: 'one' },
-        { number: 2, text: 'two' },
-        { number: 3, text: 'three' },
-      ],
-      end: { final_newline: true },
-    });
+  it('shows nothing before the cursor is in a file', async () => {
+    const h = harness({ files: { 'a.ts': 'x' } });
+    expect(await h.player.code({ moved: false })).toBeUndefined();
   });
 
   it("shows the cursor's file after a move, and nothing for a batch that neither moved nor edited", async () => {
@@ -874,16 +864,12 @@ describe('run', () => {
 
   it('StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted', async () => {
     const exited = Promise.withResolvers<number | undefined>();
-    const gone = Promise.withResolvers<number | undefined>();
     const h = harness();
-    h.editor.runCommand
-      .mockResolvedValueOnce(runningOutcome({ exited: exited.promise }))
-      .mockResolvedValueOnce(runningOutcome({ exited: gone.promise }));
+    h.editor.runCommand.mockResolvedValueOnce(runningOutcome({ exited: exited.promise }));
     const first = await played(h, [{ run: 'build' }]);
     expect(first.result.runs).toEqual([{ command: 'build', output: 'so far', running: true }]);
     exited.resolve(0);
-    await played(h, [{ run: 'serve' }]);
-    gone.reject(new Error('terminal gone'));
+    await Promise.resolve();
     expect(phases(h).filter((phase) => phase === 'exited')).toEqual(['exited']);
     for (const [actions, unplayed] of [
       [[{ run: 'watch' }], undefined],

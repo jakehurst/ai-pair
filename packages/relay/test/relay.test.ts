@@ -10,7 +10,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
-import { Bridge, Controller } from '@ai-pair/core';
+import { Bridge, Controller, type BridgeOptions } from '@ai-pair/core';
 import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
 import { CURSOR_MARKER, PROTOCOL_VERSION } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
@@ -35,6 +35,8 @@ let panel: FakePanel;
 let controller: Controller;
 let bridge: Bridge;
 let traced: string[];
+/** The editor's calibration, as the bridge is given it: each test sets what it answers. */
+let arm: BridgeOptions['calibrate'];
 const clients: Client[] = [];
 
 beforeEach(async () => {
@@ -47,12 +49,14 @@ beforeEach(async () => {
   // Its own, since the last test's bridge may still see its socket close.
   const lines: string[] = [];
   traced = lines;
+  arm = () => true;
   bridge = new Bridge(controller, {
     dir,
     workspaceFolders: () => ['/project'],
     trace: (line) => {
       lines.push(line);
     },
+    calibrate: (passage) => arm(passage),
   });
   await bridge.start();
 });
@@ -123,7 +127,7 @@ describe('relay', () => {
     await call(client, 'start');
     const passages: string[] = [];
     // The first passage is taken; the hook refuses the next, as the calibration does while one runs.
-    controller.onCalibrate = (p) => passages.push(`${p.title}: ${p.text}`) === 1;
+    arm = (p) => passages.push(`${p.title}: ${p.text}`) === 1;
     const file = path.join(dir, 'passage.txt');
     fs.writeFileSync(file, 'one two three');
     const first = await call(client, 'calibrate', { title: 'Sample', file });

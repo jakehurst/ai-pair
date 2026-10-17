@@ -118,7 +118,7 @@ at the top of `block()` (#1).
 | `Reject` | `rejectBatch`: the call answers with the rejection at once; an abort meanwhile ends it with that, not `cancelled` |
 | `Abort` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Play` | the player finishing batches in queue order |
-| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()`, where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call` |
+| `Finish`, `TimeOut`, `Commit` | `finishCall` from `ready()`, where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call`, and reports on `call.session`, the session the call was made on |
 | `Resolve` | `withCursor(...).then(call.resolve)`: the report handed back after the commit |
 | `Finished` | every call settled: the agent makes no more calls |
 
@@ -235,9 +235,9 @@ Every invariant names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NewestFirst` | `history.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers; NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
-| `NoneLost` | `history.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers |
-| `NoDuplicates` | `history.test.ts`: NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
+| `NewestFirst` | `webview/panel.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers; NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
+| `NoneLost` | `webview/panel.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers |
+| `NoDuplicates` | `webview/panel.test.ts`: NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
 
 ### `PanelScroll`: the history's scroll position
 
@@ -266,8 +266,8 @@ carries the invariant's name:
 
 | Invariant | Proved by |
 |---|---|
-| `YoursInView` | `history.test.ts`: YoursInView: your message scrolls the history back to its top (#139) |
-| `KeepsPlace` | `history.test.ts`: KeepsPlace: entries other than your message leave the history where you scrolled it (#139) |
+| `YoursInView` | `webview/panel.test.ts`: YoursInView: your message scrolls the history back to its top (#139) |
+| `KeepsPlace` | `webview/panel.test.ts`: KeepsPlace: entries other than your message leave the history where you scrolled it (#139) |
 | `InRange` | Nothing: the browser keeps `scrollTop` within the history |
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 
@@ -296,9 +296,9 @@ Every invariant names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `ReplayShowsSession` | `replay.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
-| `Bounded` | `replay.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
-| `LogsPosts` | `replay.test.ts`: LogsPosts: a posted event is on the log a new view replays |
+| `ReplayShowsSession` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
+| `Bounded` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
+| `LogsPosts` | `panel.test.ts`: LogsPosts: a posted event is on the log a new view replays |
 
 ### `Controller`: what reaches the agent
 
@@ -326,7 +326,7 @@ report, where before it closed with the first.
 |---|---|
 | `Submit`, `Listen` | `step` with a batch; `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
 | `EndSession` | `endSession()`: `ended`, the `end` event, `interrupt()` |
-| `FailRehearsal`, `PassRehearsal` | `rejectBatch()`; the batch queued, or discarded when `stale`, then `block()` |
+| `FailRehearsal`, `PassRehearsal` | `rejectBatch()` with the action the rehearsal `failed` at; the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Finish` | `run()` |
 | `Interrupt` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
 | `Commit` | `finishCall` -> `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
@@ -447,7 +447,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `RightAuthor`, `ChangesHandled` | `integration.ts`, in VS Code: RightAuthor, ChangesHandled: changes by others are reported as theirs; RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's |
+| `RightAuthor`, `ChangesHandled` | `integration.ts`, in VS Code: RightAuthor, ChangesHandled: changes by others are reported as theirs; RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's; `editor.test.ts`: RightAuthor, ChangesHandled: reports a keystroke as the programmer's, its changes from the highest offset down; RightAuthor: reports a reload from disk, read without its BOM, as others'; RightAuthor: counts as the programmer's a clean change that isn't what's on disk, an unreadable file, and an undo; RightAuthor, ChangesHandled: reports changes while we save as others', and after it as the programmer's; RightAuthor: edits a file in view through its editor, with its undo stops, and takes its change event for its own |
 
 ### `FollowMode`: our own navigation against looking away
 
@@ -477,8 +477,8 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NoPauseFromOurOwnShow`, `MoveEnds` | `integration.ts`, in VS Code: NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause |
-| `LookAwayPauses` | Nothing yet: no test looks away in VS Code |
+| `NoPauseFromOurOwnShow`, `MoveEnds` | `integration.ts`, in VS Code: NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause; `editor.test.ts`: NoPauseFromOurOwnShow, MoveEnds: a change of active editor during our show, or SELF_NAV_MS after, pauses nothing; LookAwayPauses: one later pauses |
+| `LookAwayPauses` | `editor.test.ts`: NoPauseFromOurOwnShow, MoveEnds: a change of active editor during our show, or SELF_NAV_MS after, pauses nothing; LookAwayPauses: one later pauses; LookAwayPauses: follows the point when the focus is on it, and the cursor when there is no point. No test looks away in VS Code yet |
 
 ### `Bridge`: who drives the session
 
@@ -740,18 +740,18 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types, in `Starter`, `FromPanel`, and `ToPanel` |
-| `OwnAnswer` | `start.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
+| `OwnAnswer` | `panel.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
 | `GroundedProp` | `start.setup.test.ts`: GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
-| `RunsAreClicks` | `start.test.ts`: RunsAreClicks: runs the starter once per start from the page; `start.page.test.ts`: RunsAreClicks: posts start when the button is clicked; `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
-| `ClicksNeedButtonProp` | `start.page.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one; `start.test.ts`: ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden |
-| `Offered` | `start.test.ts`: Offered: tells a new page whether it can start a session |
-| `ReaskedProp` | `start.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
+| `RunsAreClicks` | `panel.test.ts`: RunsAreClicks: runs the starter once per start from the page; `webview/panel.test.ts`: RunsAreClicks: posts start when the button is clicked; `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
+| `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one; `panel.test.ts`: ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden |
+| `Offered` | `panel.test.ts`: Offered: tells a new page whether it can start a session |
+| `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
 | `KeepsLocation`, `StaysOnPair`, `StartsProp` | `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
 | `OneAtATime` | `start.setup.test.ts`: OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes |
 | `Closes` | the same test, for the terminal closing. Nothing yet proves the CLI exits when the session ends; that needs a run in the editor |
-| `AcknowledgedProp` | `start.page.test.ts`: AcknowledgedProp: shows the starting note at once when the button is clicked |
-| `NoteUntilSession` | `start.page.test.ts`: NoteUntilSession: hides the starting note when a session starts, new or resumed |
-| `Settles` | `start.page.test.ts`: Settles: hides the starting note once the agent has exited, with no session; `start.test.ts`: Settles: tells the page once the agent a start ran has exited; `start.setup.test.ts`: Settles: resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once |
+| `AcknowledgedProp` | `webview/panel.test.ts`: AcknowledgedProp: shows the starting note at once when the button is clicked |
+| `NoteUntilSession` | `webview/panel.test.ts`: NoteUntilSession: hides the starting note when a session starts, new or resumed |
+| `Settles` | `webview/panel.test.ts`: Settles: hides the starting note once the agent has exited, with no session; `panel.test.ts`: Settles: tells the page once the agent a start ran has exited; `start.setup.test.ts`: Settles: resolves a start once its agent's terminal closes, a refused start with it, and a start that runs nothing at once |
 
 ### `Actions`: what an interrupted batch reports as unplayed
 
@@ -892,8 +892,8 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `ReplyMeansDraft` | `draft.test.ts`: ReplyMeansDraft: ends the draft's pause when the view is disposed with it; ReplyMeansDraft: ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for |
-| `DraftPausesProp` | `draft.test.ts`: DraftPausesProp: a draft in the reply box pauses playback |
+| `ReplyMeansDraft` | `panel.test.ts`: ReplyMeansDraft: ends the draft's pause when the view is disposed with it; ReplyMeansDraft: ends the draft's pause when the view's page reloads, keeping a pause the programmer asked for |
+| `DraftPausesProp` | `panel.test.ts`: DraftPausesProp: a draft in the reply box pauses playback |
 
 ### `RunBox`: the panel's run box
 
@@ -926,8 +926,8 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `BoxMatches` | `runbox.page.test.ts`: BoxMatches: shows the box while a command waits for a decision, and while it runs |
-| `Clears` | `runbox.page.test.ts`: Clears: a %s phase clears the box (done, background, declined); Clears: the session ending clears the box |
+| `BoxMatches` | `webview/panel.test.ts`: BoxMatches: shows the box while a command waits for a decision, and while it runs |
+| `Clears` | `webview/panel.test.ts`: Clears: a %s phase clears the box (done, background, declined); Clears: the session ending clears the box |
 
 ### `FileText`: the text the session takes for a file
 
@@ -963,7 +963,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NotStale`, `MissingIsReported`, `CreatedIsEmpty`, `KeepsUnsavedProp` | `integration.ts`, in VS Code: NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty |
+| `NotStale`, `MissingIsReported`, `CreatedIsEmpty`, `KeepsUnsavedProp` | `integration.ts`, in VS Code: NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty; `editor.test.ts`: NotStale: takes the text of a document with unsaved changes, whether its file exists or not; MissingIsReported: reports a file that isn't on disk as missing, whatever document VS Code kept; CreatedIsEmpty: creates a missing file empty, with its folder, and says it wrote it; CreatedIsEmpty: empties and saves the document VS Code kept for a deleted file; KeepsUnsavedProp: leaves a deleted file's document with unsaved changes as it is, and shows it |
 
 ### `Outside`: marking files changed outside the protocol
 
@@ -1077,7 +1077,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
-| `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `history.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
+| `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
 
 ### `Navigator`: the programmer's edits, reported when they pause
 
@@ -1235,7 +1235,7 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `InRange` | `view.test.ts`: InRange: stops at the top of the document; InRange: stops with the last line at the top when the editor scrolls beyond the end, else at the bottom |
-| `Settles` | `integration.ts`, in VS Code: Settles: a scroll a command cut short went on to line 250 |
+| `Settles` | `integration.ts`, in VS Code: Settles: a scroll a command cut short went on to line 250; `editor.test.ts`: Settles: glides the target to a third of the way down, a frame at a time, leaving room for sticky scroll; Settles: a measure that a command cuts short goes on once the command is done; Settles: a glide a command cuts short goes on once it is done, not while paused, and not on the programmer's turn; Settles: catches up after a glide with a target that moved on in its file, and lets go of one that left it; Settles: reveal shows the target and follows it there, and does nothing with no target |
 
 ### `Turns`: only talk during the programmer's turn
 

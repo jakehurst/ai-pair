@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.6
+
+-   A tooltip no longer shows after the pointer has left its button: moving
+    off it before the tooltip appeared, onto anything without one, now
+    cancels it.
+-   The rest of the unit tests are solitary (#176): `extension`, `editor`,
+    `panel`, `demo`, the panel's page script (on a fixture page, which
+    `panel_html.test.ts` keeps equal to the real one), and the scripts, each
+    at 100 percent by itself. Tests across files are `demo.e2e.test.ts` and
+    `css.e2e.test.ts`.
+-   Code no real run reaches is gone: `select` and `point` take a span typed
+    as `text`, or `from` and `through`; a rehearsal hands back the action it
+    failed at; a call keeps its own session; the calibration is the bridge's
+    required `calibrate` option; and the report's cursor comes from the
+    cursor's file. What the agent sees of the tools is unchanged.
+-   The integration run plays the player's, the controller's, and the
+    extension's paths: every refusal, every way a run ends, a failed save, an
+    interrupt in each pause, the programmer's input without a session, the
+    commands, and the settings. Core's files are at 100 percent there, but
+    for two fallbacks the types force.
+
 ## 0.7.5
 
 -   The Copilot server provider is gone (#182): the extension no longer

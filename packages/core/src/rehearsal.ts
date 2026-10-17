@@ -5,7 +5,7 @@
 import type { Action, BatchResult } from '@ai-pair/protocol';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
-import { Player, transformScene, type Scene } from './player';
+import { Player, transformScene, type Failure, type Scene } from './player';
 import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort, type PlayerEditor } from './ports';
 import { instant } from './timeline';
 
@@ -87,7 +87,7 @@ export async function rehearse(
   from: Rehearsal,
   actions: Action[],
   knows: (file: string, line: number, id: number) => boolean,
-): Promise<{ result: BatchResult; sightings: Sighting[]; after: Rehearsal }> {
+): Promise<{ result: BatchResult; sightings: Sighting[]; failed?: Failure; after: Rehearsal }> {
   const scene: Scene = {
     ...from.scene,
     cursor: from.scene.cursor && { ...from.scene.cursor },
@@ -108,8 +108,8 @@ export async function rehearse(
     lines,
     knows,
   });
-  const { result, sightings } = await player.play(/* id= */ 0, actions);
-  return { result, sightings, after: { scene, texts: memory.texts, lines, edits: memory.edits } };
+  const { result, sightings, failed } = await player.play(/* id= */ 0, actions);
+  return { result, sightings, failed, after: { scene, texts: memory.texts, lines, edits: memory.edits } };
 }
 
 /**

@@ -14,12 +14,7 @@ export interface Range {
 export type Resolution = { ok: true; range: Range } | { ok: false; kind: ErrorKind; message: string; candidates?: Candidate[] };
 
 /** A span on `line`: `text`, or from `from` through the first `through` after it. */
-export interface Span {
-  line: number;
-  text?: string;
-  from?: string;
-  through?: string;
-}
+export type Span = { line: number } & ({ text: string } | { from: string; through: string });
 
 const MAX_CANDIDATES = 20;
 
@@ -102,11 +97,11 @@ export function resolveSpot(text: string, spot: { at: string; line: number }): R
  * `through` after `from`. specs/Places.tla, `ResolveText` and `ResolveRange`.
  */
 export function resolveSpan(text: string, span: Span): Resolution {
-  const first = unmarked(span.text ?? span.from ?? '');
+  const first = unmarked('text' in span ? span.text : span.from);
   const start = onLine(text, span.line, first, findAll(text, first), 'the text');
   if (typeof start !== 'number') return start;
-  if (span.from === undefined) return { ok: true, range: { start, end: start + first.length } };
-  const through = unmarked(span.through ?? '');
+  if ('text' in span) return { ok: true, range: { start, end: start + first.length } };
+  const through = unmarked(span.through);
   const end = through === '' ? -1 : text.indexOf(through, start + first.length);
   if (end === -1) return { ok: false, kind: 'not_found', message: `Text not found after \`from\`: ${JSON.stringify(through)}` };
   return { ok: true, range: { start, end: end + through.length } };

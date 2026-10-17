@@ -47,9 +47,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 93,
-      "branches": 88,
-      "functions": 91
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/core/src/diff.ts": {
@@ -60,7 +60,7 @@
     },
     "integration": {
       "lines": 94,
-      "branches": 80,
+      "branches": 81,
       "functions": 100
     }
   },
@@ -72,7 +72,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 93,
+      "branches": 95,
       "functions": 100
     }
   },
@@ -83,9 +83,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 75,
-      "branches": 47,
-      "functions": 66
+      "lines": 100,
+      "branches": 97,
+      "functions": 100
     }
   },
   "packages/core/src/player.ts": {
@@ -95,9 +95,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 91,
-      "branches": 71,
-      "functions": 93
+      "lines": 100,
+      "branches": 99,
+      "functions": 100
     }
   },
   "packages/core/src/ports.ts": {
@@ -120,7 +120,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 93,
+      "branches": 100,
       "functions": 100
     }
   },
@@ -131,9 +131,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 98,
-      "branches": 77,
-      "functions": 87
+      "lines": 100,
+      "branches": 83,
+      "functions": 100
     }
   },
   "packages/core/src/timeline.ts": {
@@ -144,7 +144,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 90,
+      "branches": 95,
       "functions": 100
     }
   },
@@ -282,9 +282,16 @@
       "functions": 100
     },
     "integration": {
-      "lines": 89,
-      "branches": 60,
-      "functions": 14
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/scripts/build.mts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift": {
@@ -306,6 +313,13 @@
       "lines": 86
     }
   },
+  "packages/vscode/scripts/vscode_bin.mts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/agents.ts": {
     "unit": {
       "lines": 100,
@@ -313,9 +327,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 62,
-      "branches": 63,
-      "functions": 64
+      "lines": 68,
+      "branches": 66,
+      "functions": 71
     }
   },
   "packages/vscode/src/calibration.ts": {
@@ -326,7 +340,7 @@
     },
     "integration": {
       "lines": 71,
-      "branches": 87,
+      "branches": 88,
       "functions": 50
     }
   },
@@ -337,33 +351,33 @@
       "functions": 40
     },
     "integration": {
-      "lines": 92,
-      "branches": 68,
-      "functions": 80
+      "lines": 95,
+      "branches": 81,
+      "functions": 100
     }
   },
   "packages/vscode/src/editor.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
-      "lines": 94,
-      "branches": 83,
-      "functions": 95
+      "lines": 98,
+      "branches": 88,
+      "functions": 97
     }
   },
   "packages/vscode/src/extension.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
-      "lines": 83,
-      "branches": 67,
-      "functions": 78
+      "lines": 92,
+      "branches": 91,
+      "functions": 82
     }
   },
   "packages/vscode/src/output.ts": {
@@ -373,8 +387,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 86,
-      "branches": 37,
+      "lines": 93,
+      "branches": 90,
       "functions": 100
     }
   },
@@ -404,14 +418,14 @@
   },
   "packages/vscode/src/panel.ts": {
     "unit": {
-      "lines": 50,
-      "branches": 34,
-      "functions": 69
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
-      "lines": 62,
-      "branches": 47,
-      "functions": 76
+      "lines": 65,
+      "branches": 53,
+      "functions": 82
     }
   },
   "packages/vscode/src/panel_html.ts": {
@@ -452,8 +466,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 81,
-      "branches": 75,
+      "lines": 82,
+      "branches": 76,
       "functions": 66
     }
   },
@@ -464,8 +478,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 90,
-      "branches": 83,
+      "lines": 98,
+      "branches": 98,
       "functions": 92
     }
   },
@@ -488,44 +502,44 @@
   },
   "packages/vscode/src/webview/panel.ts": {
     "unit": {
-      "lines": 77,
-      "branches": 59,
-      "functions": 64
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/check_ascii.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/coverage_report.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/lint_tla.ts": {
     "unit": {
-      "lines": 86,
-      "branches": 90,
-      "functions": 85
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/lint_web.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "scripts/release.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "specs/check.sh": {

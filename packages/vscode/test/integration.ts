@@ -16,6 +16,7 @@ import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProbl
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
+import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -63,6 +64,12 @@ function sleep(ms: number): Promise<void> {
 
 /** A glide long enough to catch mid-way, set as both `glideMs` and `glideMaxMs`: 500 ms at speed 20. */
 const LONG_GLIDE_MS = 10_000;
+
+/** With no call open this long, the panel says the agent isn't listening: the controller's `absentMs`. */
+const ABSENT_MS = 45_000;
+
+/** Past a timer, so it has fired. */
+const GRACE_SLACK_MS = 1000;
 
 /** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
 interface RawSocket {
@@ -537,6 +544,17 @@ export async function run(): Promise<void> {
   const waiter = await greeted();
   await ask(waiter, 1, 'start', { cwd: root });
   assert.match(JSON.stringify(await ask(waiter, 2, 'listen', {})), /"waiting":true/);
+  // "Your move" stays for the grace, then, with no call open for longer, the panel says the agent isn't
+  // listening, until its next call (#126, #149, specs/ListenGrace.tla: `Expire`, `GoQuiet`, `Call`).
+  await sleep(ABSENT_MS + GRACE_SLACK_MS);
+  assert.ok(
+    api.history().some((e) => e.type === 'state' && e.state === 'absent'),
+    'the panel never said the agent was absent',
+  );
+  await ask(waiter, 3, 'read', { file: 'other.txt' });
+  // A call made during the grace ends it at once (`Call`).
+  assert.match(JSON.stringify(await ask(waiter, 4, 'listen', {})), /"waiting":true/);
+  await ask(waiter, 5, 'read', { file: 'other.txt' });
   waiter.socket.close();
   await waiter.closed;
   controller.endSession();
@@ -546,6 +564,8 @@ export async function run(): Promise<void> {
   const windows = discoveryDir();
   fs.renameSync(windows, `${windows}.kept`);
   fs.writeFileSync(windows, '');
+  api.bridge.focused();
+  // Failing again says nothing more: the error was shown once.
   api.bridge.focused();
   fs.rmSync(windows);
   fs.renameSync(`${windows}.kept`, windows);
@@ -1046,6 +1066,23 @@ export async function run(): Promise<void> {
   }
   assert.ok((await agent.callTool({ name: 'listen', arguments: {} })).isError === true, 'the ended session is still open');
   console.log('rejections handed back after their answers each come again, marked, before an ended session closes');
+  // The relay's own schema refuses each malformed action before it reaches the editor, saying what is wrong
+  // (specs/ActionValidation.tla): the ones the editor refused above, and a few more only the schema sees.
+  const schemaRefusals: unknown[] = [
+    ...refusals,
+    5,
+    { say: 'a', type: `b${CURSOR_MARKER}` },
+    { move: { line: '3', to: 'line_end' } },
+    { select: { line: 1, text: 5 } },
+    { select: { text: 'a', extra: 1 } },
+    { type_fast: 5 },
+    { type_fast: 'x' },
+  ];
+  for (const action of schemaRefusals) {
+    const refused = await agent.callTool({ name: 'step', arguments: { actions: [action] } });
+    assert.equal(refused.isError, true, JSON.stringify(action));
+  }
+  console.log(`the relay's schema refused ${schemaRefusals.length} malformed actions`);
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');
@@ -1233,7 +1270,14 @@ export async function run(): Promise<void> {
   await setUpAgents([0, 1]);
   assert.equal(fs.readFileSync(path.join(agents, 'claude', '.claude.json'), 'utf8'), '{ "mcpServers": ', 'the broken file was changed');
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
+  // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
+  await setUpAgents([]);
   console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+
+  // Last, since they change the playback's settings: the player's and the controller's paths (#176).
+  await playerPaths(api, root);
+  await controllerPaths(api, root);
+  await extensionPaths(api, root);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
   // (specs/Discovery.tla, `CloseWindow`).

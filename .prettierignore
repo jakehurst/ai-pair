@@ -8,3 +8,5 @@ package-lock.json
 specs/
 blueprints/
 *.md
+# What panel_html.ts writes, byte for byte: panel_html.test.ts holds the two equal.
+packages/vscode/test/fixtures/panel.html

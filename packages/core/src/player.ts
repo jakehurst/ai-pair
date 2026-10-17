@@ -93,6 +93,13 @@ type Outcome =
   | { kind: 'interrupted'; rest?: Action; consumed?: boolean }
   | { kind: 'error'; error: ErrorKind; message: string; candidates?: Candidate[]; consumed?: boolean; sighting?: Sighting };
 
+/** The action that failed a batch, by its number from 1, and why. */
+export interface Failure {
+  index: number;
+  action: Action;
+  error: BatchError;
+}
+
 /** The batch being played: what it touched, for saving and for its report's code. */
 interface Playing {
   touched: Set<string>;
@@ -105,6 +112,8 @@ interface Playing {
   /** The text its edits changed, tracked through later edits. */
   span?: Range;
   moved: boolean;
+  /** The action that failed it, once one has. */
+  failed?: Failure;
 }
 
 function fail(error: ErrorKind, message: string): Outcome {
@@ -132,11 +141,9 @@ export function displayPath(editor: PlayerEditor, file: string, root?: string): 
   return inside === undefined ? file : nodePath.relative(root, inside);
 }
 
-/** Returns the text a span looks for: its `text`, or its `from`. `spanProblem` has checked that it has one. */
+/** Returns the text a span looks for: its `text`, or its `from`. */
 export function spanText(target: SpanTarget): string {
-  const find = target.text ?? target.from;
-  if (find === undefined) throw new Error('A span has `text` or `from`: spanProblem checks it before the span is played.');
-  return find;
+  return 'text' in target ? target.text : target.from;
 }
 
 /** Returns a function mapping a position in the text before `change` to the same place after it. */
@@ -173,7 +180,7 @@ export class Player {
   ) {}
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
-  async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[] }> {
+  async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[]; failed?: Failure }> {
     // specs/BatchFile.tla, `EndBatch`: each batch starts with no file named and nothing edited; the cursor stays.
     const playing: Playing = { touched: new Set(), runs: [], sightings: [], edited: false, moved: false };
     this.playing = playing;
@@ -198,19 +205,31 @@ export class Player {
     const unsaved = await this.save(playing);
     // A `save_failed` error already names them.
     if (unsaved.length > 0 && result.error?.kind !== 'save_failed') result.unsaved = unsaved;
-    return { result, sightings: playing.sightings };
+    return { result, sightings: playing.sightings, failed: playing.failed };
   }
 
-  /** Returns the lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
+  /** Returns the code a batch's report shows: what it changed in `span`, or where it moved; nothing for neither. */
   async code({ span, moved }: { span?: Range; moved: boolean }): Promise<{ code: Code; sighting: Sighting } | undefined> {
-    const scene = this.scene;
-    const file = span?.file ?? (moved ? scene.cursor?.file : undefined);
-    if (file === undefined) return undefined;
+    const cursor = this.scene.cursor;
+    // A batch edits at the cursor, in the one file it works in, so what it changed is in the cursor's file.
+    if (cursor === undefined || (span === undefined && !moved)) return undefined;
+    return this.codeAt(cursor, span);
+  }
+
+  /**
+   * Returns the lines around `cursor`, extended over `span` in its file, with context around, and the cursor
+   * marked; `cursorLine` is the cursor's line as the code shows it.
+   */
+  async codeAt(
+    cursor: NonNullable<Scene['cursor']>,
+    span?: Range,
+  ): Promise<{ code: Code; sighting: Sighting; cursorLine: Code['lines'][number] }> {
+    const { file } = cursor;
     const text = await this.stage.editor.getText(file);
     const { lines, finalNewline } = fileLines(text);
-    const at = scene.cursor?.file === file ? position(text, scene.cursor.offset) : undefined;
-    let from = at?.line ?? Infinity;
-    let to = at?.line ?? -Infinity;
+    const at = position(text, cursor.offset);
+    let from = at.line;
+    let to = at.line;
     if (span) {
       // Text ending with a newline changed the lines up to it, not the one after.
       const end = span.end > span.start && isLineStart(text, span.end) ? span.end - 1 : span.end;
@@ -220,22 +239,25 @@ export class Player {
     // The empty line after a final newline isn't one of the file's lines, but the cursor may be on it.
     const last = lines.length;
     from = Math.max(1, from - CONTEXT_LINES);
-    to = Math.min(Math.max(last, at?.line ?? 0), to + CONTEXT_LINES);
+    to = Math.min(Math.max(last, at.line), to + CONTEXT_LINES);
     const numbers: number[] = [];
     for (let n = from; n <= to; n++) {
       const long = to - from + 1 > MAX_CODE_LINES;
-      if (!long || n < from + MAX_CODE_LINES / 2 || n > to - MAX_CODE_LINES / 2 || n === at?.line) numbers.push(n);
+      if (!long || n < from + MAX_CODE_LINES / 2 || n > to - MAX_CODE_LINES / 2 || n === at.line) numbers.push(n);
     }
+    // The cursor's line is always among `numbers`: the map below sets it.
+    let cursorLine = { number: at.line, text: CURSOR_MARKER };
     const code: Code = {
       file: this.displayPath(file),
       lines: numbers.map((n) => {
         const line = lines[n - 1] ?? '';
-        if (n !== at?.line) return { number: n, text: line };
-        return { number: n, text: line.slice(0, at.column - 1) + CURSOR_MARKER + line.slice(at.column - 1) };
+        if (n !== at.line) return { number: n, text: line };
+        cursorLine = { number: n, text: line.slice(0, at.column - 1) + CURSOR_MARKER + line.slice(at.column - 1) };
+        return cursorLine;
       }),
     };
     if (to >= last) code.end = { final_newline: finalNewline };
-    return { code, sighting: { file, text, lines: numbers } };
+    return { code, sighting: { file, text, lines: numbers }, cursorLine };
   }
 
   /**
@@ -274,6 +296,7 @@ export class Player {
         if (outcome.sighting) playing.sightings.push(outcome.sighting);
         const error: BatchError = { kind: outcome.error, message: outcome.message };
         if (outcome.candidates) error.candidates = outcome.candidates;
+        playing.failed = { index: i + 1, action, error };
         const result: BatchResult = { id, status: 'failed', error };
         const unplayed = outcome.consumed === true ? rest : actions.slice(i);
         if (unplayed.length > 0) result.unplayed = unplayed;
@@ -539,14 +562,10 @@ export class Player {
     panel.post({ type: 'run', id, command, phase, exitCode: result.exit_code });
     // The panel keeps showing it as running until it ends, whenever that is.
     if (outcome.running === true) {
-      void outcome.exited?.then(
-        (exitCode) => {
-          panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
-        },
-        () => {
-          // The terminal is gone; the panel keeps the last phase it saw.
-        },
-      );
+      // It ends, or its terminal closes: either way, it never rejects.
+      void outcome.exited?.then((exitCode) => {
+        panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
+      });
     }
 
     // specs/Actions.tla, `StopWhileRunning`: the command runs on, so it counts as played.

@@ -129,9 +129,12 @@ describe('resolveSpan', () => {
     expect(resolveSpan(TEXT, { line: 2, text: `b =${CURSOR_MARKER} 1` })).toEqual({ ok: true, range: { start: 6, end: 11 } });
   });
 
-  it('finds nothing in a span with only `from`, or with neither `from` nor `text`', () => {
-    expect(resolveSpan(TEXT, { line: 2, from: 'b' })).toEqual({ ok: false, kind: 'not_found', message: 'Text not found after `from`: ""' });
-    expect(resolveSpan(TEXT, { line: 1 })).toEqual({ ok: false, kind: 'not_found', message: 'Text not found: ""; line 1 reads "a = 1"' });
+  it('finds nothing after `from` for a `through` that is only the cursor marker', () => {
+    expect(resolveSpan(TEXT, { line: 2, from: 'b', through: CURSOR_MARKER })).toEqual({
+      ok: false,
+      kind: 'not_found',
+      message: 'Text not found after `from`: ""',
+    });
   });
 });
 

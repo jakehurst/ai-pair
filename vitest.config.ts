@@ -64,7 +64,7 @@ export default defineConfig({
     isolate: true,
     coverage: {
       provider: 'v8',
-      include: ['packages/*/src/**/*.ts', 'scripts/**/*.ts'],
+      include: ['packages/*/src/**/*.ts', 'scripts/**/*.ts', 'packages/vscode/scripts/**/*.mts'],
       exclude: ['**/*.test.ts', '**/*.d.ts', 'scripts/stylelint.config.ts', ...REEXPORT_ONLY, ...ENTRY_ONLY],
       reporter: ['text', 'lcov', 'json-summary'],
       reportsDirectory: 'coverage/unit',
