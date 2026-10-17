@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: integration, 2026-10-17.
+Last updated: css, 2026-10-17.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -82,7 +82,7 @@ Last updated: integration, 2026-10-17.
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 71.7% B 88.9% F 50.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 32.5% B 44.0% F 40.0% | L 95.8% B 81.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 97.3% B 87.2% F 97.9% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | L 92.2% B 88.5% F 79.4% | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 92.2% B 88.5% F 79.4% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 90.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.4% F 100.0% | - | - | - | - |
@@ -102,9 +102,10 @@ Last updated: integration, 2026-10-17.
 | `packages/vscode/test/css.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/draft.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/extension.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/history.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/integration_paths.ts` | TypeScript | - | test | - | - | - | - |
+| `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |

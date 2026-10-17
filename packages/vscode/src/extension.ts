@@ -126,11 +126,12 @@ export function activate(context: vscode.ExtensionContext): Api {
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
   function passage(): Passage {
     const chosen: unknown = config().get(CALIBRATION_PASSAGE);
-    const text = isRecord(chosen) ? stringOf(chosen.text) : undefined;
+    if (!isRecord(chosen)) return builtInPassage(context.extensionPath);
+    const text = stringOf(chosen.text);
     if (text === undefined || text.trim() === '') return builtInPassage(context.extensionPath);
-    const notice = isRecord(chosen) ? stringOf(chosen.notice) : undefined;
+    const notice = stringOf(chosen.notice);
     return {
-      title: (isRecord(chosen) ? stringOf(chosen.title) : undefined) ?? 'Your passage',
+      title: stringOf(chosen.title) ?? 'Your passage',
       text,
       ...(notice === undefined ? {} : { notice }),
     };
