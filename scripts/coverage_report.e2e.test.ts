@@ -1,13 +1,16 @@
-// Tests for scripts/coverage_report.ts (#161): `--check` fails a run below coverage_thresholds.json, naming the file,
-// the measure, and both numbers; passes at the minimum; and fails a file in the thresholds that the run did not measure.
+// End to end for scripts/coverage_report.ts (#161): the script runs as Node runs it, a process of its own, on fixture
+// folders. `--check` fails a run below coverage_thresholds.json, naming the file, the measure, and both numbers; passes
+// at the minimum; and fails a file in the thresholds that the run did not measure. Each case's folder is removed after it.
 
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { expect, it } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 
 const SCRIPT = path.join(import.meta.dirname, 'coverage_report.ts');
+/** The fixture folders the cases made, removed after each. */
+const made: string[] = [];
 /** The one file the CSS reader reports, as the stylesheet's test names it. */
 const STYLESHEET = 'packages/vscode/src/webview/panel.css';
 
@@ -28,6 +31,19 @@ interface Run {
   report: string;
 }
 
+afterEach(() => {
+  for (const dir of made.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Returns a new fixture folder, removed after the case. */
+function fixtureDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage_report-'));
+  made.push(dir);
+  return dir;
+}
+
 /** Runs the script as Node does, with the given env paths, and returns its exit status, stderr, and the table it wrote. */
 function invoke(args: readonly string[], env: NodeJS.ProcessEnv): Run {
   const result = spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -37,7 +53,7 @@ function invoke(args: readonly string[], env: NodeJS.ProcessEnv): Run {
 
 /** Runs the script with `--css` on the fixture, in a temp folder, through the env paths it takes. */
 function run(fixture: Fixture): Run {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage_report-'));
+  const dir = fixtureDir();
   const coverage = path.join(dir, 'coverage');
   fs.mkdirSync(path.join(coverage, 'css'), { recursive: true });
   const summary = { file: STYLESHEET, rules: fixture.rules, matched: fixture.matched };
@@ -56,7 +72,7 @@ function run(fixture: Fixture): Run {
  */
 function runTla(readme: string, options: { spec?: string; otherFires?: boolean; inlineNext?: boolean } = {}): Run {
   const { spec = 'Fake', otherFires = false, inlineNext = false } = options;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage_report-'));
+  const dir = fixtureDir();
   const coverage = path.join(dir, 'coverage');
   fs.mkdirSync(path.join(coverage, 'tla'), { recursive: true });
   const statistics = [

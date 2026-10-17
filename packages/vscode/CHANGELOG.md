@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.7.5
+
+-   The Copilot server provider is gone (#182): the extension no longer
+    offers the pair server to VS Code's own chat agent. A Copilot user sets
+    it up with Set Up Agent's **Another agent**.
+-   The unit tests are solitary (#176, in part): each tests one source file,
+    with what it imports mocked, and covers it 100 percent by itself. Core's
+    tests are all solitary, with `session.e2e.test.ts` for the properties
+    that hold only where the controller and the player meet; in the vscode
+    package, so are the tests of `passage`, `output`, `outside`, `view`,
+    `calibration`, `panel_html`, `outside_watch`, `terminal`, `agents`, and
+    `setup`. Tests that need several real files are `*.e2e.test.ts`.
+-   No test leaves files behind: `agents.test.ts` and `setup.test.ts` use an
+    in-memory disk, `coverage_report.e2e.test.ts` removes its fixtures, and
+    `integration.sh` removes its temporary folder when it ends.
+-   The integration run covers Set Up Agent: its picker closed, Another
+    agent's configuration copied, and Claude Code and Codex picked. Code runs
+    with the agents' configuration folders in the run's own folder and only
+    the system's programs on its PATH, so the run changes no real
+    configuration.
+-   Code no run reaches is gone: two fallbacks in the controller's report of
+    edits (an edit event now carries its own texts), and a check in the
+    terminal's wait for a signal that can't have fired yet. Nothing changes
+    for anyone using the extension.
+
 ## 0.7.4
 
 -   Code no real run of the extension and relay reaches is gone (#180).

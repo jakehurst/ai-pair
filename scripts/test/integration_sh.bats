@@ -13,7 +13,7 @@ setup() {
   cat >"${FAKE}/code" <<'CODE'
 #!/bin/bash
 printf '%s\n' "$@" >"${RECORD}"
-env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME)=' >"${ENV_RECORD}" || true
+env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME)=' >"${ENV_RECORD}" || true
 CODE
   chmod +x "${FAKE}/code"
   export VSCODE_BIN="${FAKE}/code"
@@ -37,6 +37,24 @@ CODE
   grep -q '/workspace$' "${RECORD}"
   grep -q '^AI_PAIR_HOME=' "${ENV_RECORD}"
   ! grep -q '^ELECTRON_RUN_AS_NODE=' "${ENV_RECORD}"
+}
+
+@test "gives Code the run's own agent config folders, and the system's PATH" {
+  CODEX_HOME=/real/codex run --separate-stderr \
+    bash "${ROOT}/packages/vscode/scripts/integration.sh"
+  [[ "${status}" -eq 0 ]]
+  grep -q '^CODEX_HOME=.*/agents/codex$' "${ENV_RECORD}"
+  grep -q '^PATH=/usr/bin:/bin:/usr/sbin:/sbin$' "${ENV_RECORD}"
+  grep -q "^HOME=${HOME}\$" "${ENV_RECORD}"
+}
+
+@test "removes its temporary folder when it ends" {
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
+  [[ "${status}" -eq 0 ]]
+  local user
+  user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}")"
+  [[ -n "${user}" ]]
+  [[ ! -e "$(dirname "${user}")" ]]
 }
 
 @test "passes VSCODE_ARGS through, split on spaces" {

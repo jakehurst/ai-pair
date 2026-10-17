@@ -53,13 +53,12 @@ function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promi
   });
 }
 
-/** Resolves `false` when the wait is over or playback is interrupted (specs/Terminals.tla, `StopWaiting`). */
+/**
+ * Resolves `false` when the wait is over or playback is interrupted (specs/Terminals.tla, `StopWaiting`). The signal
+ * hasn't fired yet: `run` returned `notStarted` for one that had, and nothing awaits between that check and this.
+ */
 function stopWaiting(ms: number, signal: AbortSignal, ended: Promise<void>): Promise<false> {
   return new Promise((resolve) => {
-    if (signal.aborted) {
-      resolve(false);
-      return;
-    }
     const cleanup: Array<() => void> = [];
     function done(): void {
       for (const undo of cleanup) {

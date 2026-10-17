@@ -105,6 +105,10 @@ Set by Justine on 2026-10-07.
 -   **A test file covers its source file 100 percent by itself:** lines,
     branches, and functions, counting only its own tests (set by Justine on
     2026-10-16).
+-   **A coverage floor is never lowered.** A run below one in
+    `coverage_thresholds.json` gets the test cases that bring it back up;
+    the floor itself stays (set by Justine on 2026-10-17: "you always add
+    cases to meet the floor").
 -   **Every code change ships with unit and integration tests, both at 100
     percent** of lines, branches, and functions for each source file it
     touches, on macOS and on Linux, where CI runs the integration test (set
@@ -129,6 +133,13 @@ Set by Justine on 2026-10-07.
     one takes the collaborator as a parameter instead.
 -   **A unit test found that is not solitary is transformed** into the
     solitary style, wherever it is found, without being asked.
+-   **A test is a unit test only when it relies on its own source file
+    alone** (set by Justine on 2026-10-17, #176). The panel's page tests
+    run `webview/panel.ts` in happy-dom: as unit tests, they take the page
+    as a fixed fixture, with `panel_html.ts` mocked, not the page that
+    `panelHtml()` renders. A test that needs several real files at once,
+    such as the stylesheet's rule-usage test against the real page, is an
+    end-to-end test, its own kind, named as one (`*.e2e.test.ts`).
 
 ## Problems found along the way
 
@@ -321,7 +332,7 @@ Set by Justine on 2026-10-07.
     `panel_html.ts`. It runs in CI's `check` job. These rules no tool checks, so
     follow them by hand:
     -   Give the script its hooks as `data-ui` attributes, and styling as
-        classes; no `id`s, which `panel.test.ts` checks (id Attributes).
+        classes; no `id`s, which `panel_html.test.ts` checks (id Attributes).
     -   Use each element for its purpose: a `button` for an action, an `a` for a
         link, a heading for a heading (Semantics).
     -   Leave out every optional tag: `</li>`, `</p>`, `<head>`, `<body>`; keep

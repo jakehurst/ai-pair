@@ -66,45 +66,6 @@ export function writeLauncher(extensionPath: string): string {
   return launcher;
 }
 
-/** Checks that `value` has a string `version`, as the extension's package.json does. */
-function hasVersion(value: unknown): value is { version: string } {
-  return typeof value === 'object' && value !== null && 'version' in value && typeof value.version === 'string';
-}
-
-/**
- * Offers the pair server to agents running in VS Code itself (Copilot), with no setup: it runs the
- * relay directly, in the workspace, which is how the relay finds this window.
- */
-export function registerServerProvider(context: vscode.ExtensionContext): void {
-  // Missing in editors built on an older VS Code.
-  if (typeof vscode.lm?.registerMcpServerDefinitionProvider !== 'function') return;
-  const changed = new vscode.EventEmitter<void>();
-  context.subscriptions.push(
-    changed,
-    vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      changed.fire();
-    }),
-    vscode.lm.registerMcpServerDefinitionProvider('aiPair.pair', {
-      onDidChangeMcpServerDefinitions: changed.event,
-      provideMcpServerDefinitions: () => {
-        const folder = vscode.workspace.workspaceFolders?.[0];
-        if (!folder) return [];
-        // `packageJSON` is `any` in VS Code's API.
-        const manifest: unknown = context.extension.packageJSON;
-        const server = new vscode.McpStdioServerDefinition(
-          SERVER,
-          process.execPath,
-          [relayPath(context.extensionPath)],
-          { ELECTRON_RUN_AS_NODE: '1' },
-          hasVersion(manifest) ? manifest.version : undefined,
-        );
-        server.cwd = folder.uri;
-        return [server];
-      },
-    }),
-  );
-}
-
 function list(names: string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
@@ -121,7 +82,6 @@ export async function setUpAgent(launcher: string): Promise<void> {
   items.push({ id: 'other', label: 'Another agent', description: 'Copy an MCP server configuration to the clipboard' });
   const picked = await vscode.window.showQuickPick(items, {
     title: 'Which agents do you pair with?',
-    placeHolder: 'GitHub Copilot in VS Code needs no setup: it already has the pair server.',
     canPickMany: true,
   });
   if (picked === undefined || picked.length === 0) return;

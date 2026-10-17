@@ -26,6 +26,8 @@ readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
+# The run's workspace, user data, extensions, and home go when it ends (#176).
+trap 'rm -rf "${TMP}"' EXIT
 mkdir -p "${TMP}/workspace"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
 export AI_PAIR_HOME="${TMP}/home"
@@ -44,7 +46,13 @@ readonly CODE_ARGS
 # ELECTRON_RUN_AS_NODE, which runs the Code binary as plain Node: it would
 # reject every flag below (#152).
 unset ELECTRON_RUN_AS_NODE
-"${CODE}" "${CODE_ARGS[@]}" \
+# Set Up Agent writes agents' configurations: Claude Code's, Codex's, and
+# OpenCode's go to the run's folder, by the variables they honor, and only the
+# system's programs are on the PATH, so no agent's CLI is found. HOME stays:
+# on macOS, Code finds its keychain by it (#176).
+CLAUDE_CONFIG_DIR="${TMP}/agents/claude" CODEX_HOME="${TMP}/agents/codex" \
+  XDG_CONFIG_HOME="${TMP}/agents/xdg" PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
+  "${CODE}" "${CODE_ARGS[@]}" \
   --user-data-dir="${TMP}/user" \
   --extensions-dir="${TMP}/extensions" \
   --disable-workspace-trust --skip-welcome --skip-release-notes \

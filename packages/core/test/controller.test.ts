@@ -1,2208 +1,1388 @@
-import { ok } from 'node:assert/strict';
-import * as nodePath from 'node:path';
+// The controller on its own: sessions, the batch queue, calls and their reports, the programmer's input, pauses,
+// and the panel's status (specs/Controller.tla, specs/Serialize.tla, specs/ListenGrace.tla, specs/Navigator.tla,
+// specs/Resume.tla, specs/Anchor.tla, specs/EditEvents.tla, specs/Rehearsal.tla, specs/Timeline.tla). Solitary: the
+// Player, LineIds, Timeline, the rehearsal, diff.ts, text.ts, timing.ts's functions, and the protocol's ToolError are
+// fakes that record what the controller asks and answer as each case sets; the editor and panel are typed mocks;
+// timers are fake. Every report is parsed by REPORT_SCHEMA.
+
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
-import type { PanelEvent } from '../src/ports';
-import { advance, anyString, containing, matching, setup, testConfig, throughStorage, track, until } from './fake';
+import { mock } from 'vitest-mock-extended';
+import { CURSOR_MARKER, REPORT_SCHEMA, type Action, type BatchResult, type Report } from '@ai-pair/protocol';
+import { defaultConfig, type Config } from '../src/config';
+import { Controller, isSavedSession, type SavedSession } from '../src/controller';
+import { boundedDiff, lineChanges } from '../src/diff';
+import { followChange, rehearse } from '../src/rehearsal';
+import type { LineIds, Sighting } from '../src/lines';
+import type { Scene, Stage } from '../src/player';
+import type { EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
+import { glideDuration, withOverrides } from '../src/timing';
+
+/** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
+const fakes = vi.hoisted(() => {
+  /** A LineIds, faked: the methods the controller calls. */
+  interface FakeLines {
+    of: ReturnType<typeof vi.fn<(file: string, text: string) => number[]>>;
+    apply: ReturnType<typeof vi.fn>;
+    adopt: ReturnType<typeof vi.fn>;
+    fork: ReturnType<typeof vi.fn>;
+    forget: ReturnType<typeof vi.fn>;
+  }
+
+  /** The Timeline, faked: it records pauses, resumes, interrupts, and resets, and holds an abort signal. */
+  class FakeTimeline {
+    isInterrupted = false;
+    private abort = new AbortController();
+    readonly pause = vi.fn();
+    readonly resume = vi.fn();
+    readonly sleep = vi.fn(() => Promise.resolve(true));
+    readonly interrupt = vi.fn(() => {
+      this.isInterrupted = true;
+      this.abort.abort();
+    });
+    readonly reset = vi.fn(() => {
+      this.isInterrupted = false;
+      this.abort = new AbortController();
+    });
+
+    constructor(readonly paused: boolean) {
+      fakes.timelines.push(this);
+    }
+
+    get signal(): AbortSignal {
+      return this.abort.signal;
+    }
+  }
+
+  /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no code. */
+  class FakePlayer {
+    reading = false;
+    commandRunning = false;
+    readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[] }> =>
+      Promise.resolve({ result: { id, status: 'completed' }, sightings: [] }),
+    );
+    readonly transform = vi.fn();
+    readonly code = vi.fn((): Promise<unknown> => Promise.resolve(undefined));
+    readonly scene: unknown;
+    readonly stage: unknown;
+
+    constructor(given: unknown, on: unknown) {
+      this.scene = given;
+      this.stage = on;
+      fakes.players.push(this);
+    }
+  }
+
+  /** ports.ts's error for a file that doesn't exist, faked. */
+  class FakeMissingFile extends Error {
+    constructor(readonly file: string) {
+      super(`${file} doesn't exist`);
+    }
+  }
+
+  /** The protocol's ToolError, faked: a refused call, with its code. */
+  class FakeToolError extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message);
+    }
+  }
+
+  return {
+    /** Returns a LineIds, faked: each line's identity is its number, unless a test says otherwise. */
+    fakeLines: (): FakeLines => ({
+      of: vi.fn((...[, text]: [string, string]) => [...text.split('\n').keys()].map((i) => i + 1)),
+      apply: vi.fn(),
+      adopt: vi.fn(),
+      fork: vi.fn(),
+      forget: vi.fn(),
+    }),
+    FakeTimeline,
+    FakePlayer,
+    FakeMissingFile,
+    FakeToolError,
+    /** Each Timeline, Player, and LineIds.editor() the controller made, in order. */
+    timelines: [] as FakeTimeline[],
+    players: [] as FakePlayer[],
+    lines: [] as FakeLines[],
+  };
+});
+
+/** The agent's project. */
+const ROOT = '/project';
+
+/** A file of the project, and another. */
+const A = path.join(ROOT, 'a.ts');
+const B = path.join(ROOT, 'b.ts');
+
+/** The settings: short waits, so the tests can run them out. */
+const CONFIG: Config = {
+  ...defaultConfig,
+  maxBlockMs: 1000,
+  navigatorIdleMs: 300,
+  listenGraceMs: 500,
+  absentMs: 2000,
+  confirmCommands: true,
+};
+
+/** A batch the agent submits: one that says something. */
+const SAY: Action[] = [{ say: 'Hi.' }];
+
+/** A move that anchors the cursor, with its file and line. */
+const ANCHORED: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
+
+vi.mock('@ai-pair/protocol', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ai-pair/protocol')>()),
+  ToolError: fakes.FakeToolError,
+}));
+vi.mock('../src/player', () => ({
+  Player: vi.fn(fakes.FakePlayer),
+  agentPath: vi.fn((...[, file, root]: [unknown, string, string?]) => path.resolve(root ?? ROOT, file)),
+  displayPath: vi.fn((...[, file, root]: [unknown, string, string?]) => path.relative(root ?? ROOT, file)),
+}));
+vi.mock('../src/lines', () => ({
+  LineIds: {
+    editor: vi.fn(() => {
+      const lines = fakes.fakeLines();
+      fakes.lines.push(lines);
+      return lines;
+    }),
+  },
+}));
+vi.mock('../src/timeline', () => ({ Timeline: vi.fn(fakes.FakeTimeline) }));
+vi.mock('../src/ports', () => ({ MissingFile: fakes.FakeMissingFile }));
+vi.mock('../src/rehearsal', () => ({
+  rehearse: vi.fn(() =>
+    Promise.resolve({
+      result: { id: 0, status: 'completed' },
+      sightings: [],
+      after: { scene: {}, texts: new Map(), lines: fakes.fakeLines(), edits: new Set() },
+    }),
+  ),
+  followChange: vi.fn(),
+}));
+vi.mock('../src/diff', () => ({
+  boundedDiff: vi.fn((...[file, before, after]: [string, string, string]) => ({ diff: `${file}: ${before} -> ${after}` })),
+  lineChanges: vi.fn((...[, changes]: [string, unknown]) => changes),
+}));
+vi.mock('../src/text', () => ({
+  fileLines: vi.fn((text: string) => {
+    if (text === '') {
+      return { lines: [], finalNewline: true };
+    }
+    const lines = text.split('\n');
+    const finalNewline = text.endsWith('\n');
+    if (finalNewline) {
+      lines.pop();
+    }
+    return { lines, finalNewline };
+  }),
+}));
+vi.mock('../src/timing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/timing')>()),
+  glideDuration: vi.fn(() => 42),
+  withOverrides: vi.fn((...[base]: [unknown, unknown]) => base),
+}));
+
+/** A controller on mocks, and the parts a test drives or reads. */
+interface Harness {
+  controller: Controller;
+  editor: ReturnType<typeof mock<EditorPort>>;
+  panel: ReturnType<typeof mock<PanelPort>>;
+  /** The editor's files, by absolute path. */
+  files: Map<string, string>;
+  traced: string[];
+}
+
+/** A fake Player the controller made. */
+type FakePlayer = InstanceType<typeof fakes.FakePlayer>;
+
+/** A fake Timeline the controller made. */
+type FakeTimeline = InstanceType<typeof fakes.FakeTimeline>;
+
+/** Returns a controller on mocks, with `config` over CONFIG and `files` in its editor. */
+function harness(config: Partial<Config> = {}, files: Record<string, string> = {}): Harness {
+  const texts = new Map(Object.entries(files).map(([name, text]) => [path.join(ROOT, name), text]));
+  const editor = mock<EditorPort>();
+  editor.resolvePath.mockImplementation((file) => path.resolve(ROOT, file));
+  editor.displayPath.mockImplementation((file) => path.relative(ROOT, file));
+  editor.getText.mockImplementation((file) => {
+    const text = texts.get(file);
+    return text === undefined ? Promise.reject(new fakes.FakeMissingFile(file)) : Promise.resolve(text);
+  });
+  editor.isDirty.mockResolvedValue(false);
+  const panel = mock<PanelPort>();
+  const controller = new Controller(editor, panel, { ...CONFIG, ...config });
+  const traced: string[] = [];
+  controller.trace = (line) => {
+    traced.push(line);
+  };
+  return { controller, editor, panel, files: texts, traced };
+}
+
+/** Returns a harness with a session started. */
+async function started(config: Partial<Config> = {}, files: Record<string, string> = {}): Promise<Harness> {
+  const h = harness(config, files);
+  await h.controller.start('A task.');
+  return h;
+}
+
+/** Returns the Player the controller made last. */
+function player(): FakePlayer {
+  const made = fakes.players.at(-1);
+  if (made === undefined) {
+    throw new Error('No Player was made.');
+  }
+  return made;
+}
+
+/** Returns the stage the controller gave its last Player. */
+function stage(): Stage {
+  // The fake Player is handed the controller's stage, of this type.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return player().stage as Stage;
+}
+
+/** Returns the scene the controller gave its last Player. */
+function scene(): Scene {
+  // The fake Player is handed the controller's scene, of this type.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return player().scene as Scene;
+}
+
+/** Returns the Timeline the controller made last. */
+function timeline(): FakeTimeline {
+  const made = fakes.timelines.at(-1);
+  if (made === undefined) {
+    throw new Error('No Timeline was made.');
+  }
+  return made;
+}
+
+/** Returns the session's LineIds. */
+function sessionLines(): ReturnType<typeof fakes.fakeLines> {
+  const made = fakes.lines.at(-1);
+  if (made === undefined) {
+    throw new Error('No LineIds was made.');
+  }
+  return made;
+}
+
+/** Returns fake lines as the LineIds they stand in for: the controller calls only the methods they have. */
+function asLines(lines: ReturnType<typeof fakes.fakeLines>): LineIds {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return lines as unknown as LineIds;
+}
+
+/** Returns a rejection the agent was given, at action `index`, as a restored report holds it. */
+function heldRejection(index: number): NonNullable<Report['rejected']> {
+  return { index, action: { say: 'x' }, error: { kind: 'no_line', message: 'No.' } };
+}
+
+/** Lets every timer and promise due run. */
+async function settle(ms = 0): Promise<void> {
+  await vi.advanceTimersByTimeAsync(ms);
+}
+
+/** Returns a promise's report once it settles, parsed by its schema, letting timers run until then. */
+async function report(promise: Promise<Report>): Promise<Report> {
+  const state = { done: false };
+  void promise.finally(() => {
+    state.done = true;
+  });
+  for (let i = 0; i < 100 && !state.done; i++) {
+    await settle(10);
+  }
+  return REPORT_SCHEMA.parse(await promise);
+}
+
+/** Returns whether `promise` is still pending once the due timers and promises ran. */
+async function pending(promise: Promise<unknown>): Promise<boolean> {
+  let done = false;
+  void promise.then(
+    () => {
+      done = true;
+    },
+    () => {
+      done = true;
+    },
+  );
+  await settle();
+  return !done;
+}
+
+/** Returns what the controller posted to the panel. */
+function posted(h: Harness): PanelEvent[] {
+  return h.panel.post.mock.calls.map(([event]) => event);
+}
+
+/** Returns the statuses the panel was told, in order. */
+function statuses(h: Harness): string[] {
+  return posted(h).flatMap((event) => (event.type === 'state' ? [event.state] : []));
+}
+
+/** Makes the next batch the Player plays wait, and returns how to finish it with `result`. */
+function holdPlay(): (result?: Partial<BatchResult>, sightings?: Sighting[]) => void {
+  const { promise, resolve } = Promise.withResolvers<{ result: BatchResult; sightings: Sighting[] }>();
+  let id = 0;
+  player().play.mockImplementationOnce((batch: number) => {
+    id = batch;
+    return promise;
+  });
+  return (result = {}, sightings = []) => {
+    resolve({ result: { id, status: 'completed', ...result }, sightings });
+  };
+}
+
+/** Makes the next rehearsal answer with `result`, leaving `texts` in its files and `edits` as the files it edits. */
+function rehearsed(
+  result: Partial<BatchResult> = {},
+  texts: Record<string, string> = {},
+  edits: string[] = [],
+): ReturnType<typeof fakes.fakeLines> {
+  const lines = fakes.fakeLines();
+  vi.mocked(rehearse).mockResolvedValueOnce({
+    result: { id: 0, status: 'completed', ...result },
+    sightings: [],
+    after: {
+      scene: scene(),
+      texts: new Map(Object.entries(texts).map(([name, text]) => [path.join(ROOT, name), text])),
+      lines: asLines(lines),
+      edits: new Set(edits.map((name) => path.join(ROOT, name))),
+    },
+  });
+  return lines;
+}
+
+/** A selection the programmer shares, in a.ts. */
+function selection(): SharedSelection {
+  return { file: A, from: { line: 1, column: 1 }, to: { line: 2, column: 3 }, text: 'x' };
+}
 
 beforeEach(() => {
   vi.useFakeTimers();
 });
+
 afterEach(() => {
+  fakes.timelines.length = 0;
+  fakes.players.length = 0;
+  fakes.lines.length = 0;
   vi.useRealTimers();
+  // Reset, not cleared: a value a case queued with mockResolvedValueOnce and left unused must not reach the next.
+  vi.resetAllMocks();
 });
 
-// With the test config, a beat is 100 ms and `type` takes 100 ms per character.
-
-describe('timing', () => {
-  it('BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-
-    const first = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]));
-    expect(first.batches).toEqual([]);
-    expect(first.submitted).toEqual({ id: 1, status: 'playing' });
-
-    const secondCall = controller.step([{ type: `d${CURSOR_MARKER}` }]);
-    const second = track(secondCall);
-    await advance(300);
-    expect(second.done).toBe(false);
-    expect(editor.text('a.ts')).toBe('ab');
-
-    const report = await until(secondCall);
-    expect(report.batches).toEqual([
-      {
-        id: 1,
-        status: 'completed',
-        code: { file: 'a.ts', lines: [{ number: 1, text: `abc${CURSOR_MARKER}` }], end: { final_newline: false } },
-      },
-    ]);
-    expect(report.submitted).toEqual({ id: 2, status: 'playing' });
-
-    await advance(200);
-    expect(editor.text('a.ts')).toBe('abcd');
-  });
-
-  it('BlockedIsCurrent: a call waits its turn while another is blocked, and blocks only once that one has returned', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { maxBlockMs: 1000 });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    const listening = track(controller.listen());
-    const steppingCall = controller.step([{ type: `x${CURSOR_MARKER}` }]);
-    const stepping = track(steppingCall);
-    await advance(500);
-    expect(listening.done).toBe(false);
-    expect(stepping.done).toBe(false);
-    expect(editor.text('a.ts')).toBe('');
-
-    await advance(600);
-    ok(listening.value);
-    expect(listening.value.waiting).toBe(true);
-    const report = await until(steppingCall);
-    expect(report.submitted).toEqual({ id: 2, status: 'playing' });
-    await advance(200);
-    expect(editor.text('a.ts')).toBe('x');
-  });
-
-  it('BlockedReturns: returns with `waiting` after MAX_BLOCK', async () => {
-    const { controller } = setup({ 'a.ts': '' }, { maxBlockMs: 1000 });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    const report = await until(controller.listen());
-    expect(report.waiting).toBe(true);
-    expect(report.batches).toMatchObject([{ id: 1, status: 'completed' }]);
-  });
-
-  it('NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    controller.pause();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    await advance(2000);
-    expect(editor.text('a.ts')).toBe('');
-    expect(editor.state).toBe('paused');
-
-    controller.resume();
-    await advance(1000);
-    expect(editor.text('a.ts')).toBe('abc');
-  });
-
-  it('PausedMatchesReasons: holds playback until the last pause reason is gone', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    controller.pause('away');
-    controller.pause('reply');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    await advance(2000);
-    expect(editor.text('a.ts')).toBe('');
-
-    controller.resume('away');
-    await advance(2000);
-    expect(editor.text('a.ts')).toBe('');
-    expect(editor.state).toBe('paused');
-
-    controller.resume('reply');
-    await advance(1000);
-    expect(editor.text('a.ts')).toBe('abc');
-  });
-
-  it('pauses after a move, longer when the move is far', async () => {
-    const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join('\n');
-    const { controller } = setup(
-      { 'a.ts': lines },
-      { timing: { ...testConfig.timing, beforeMoveMs: 0, afterMoveNearMs: 200, afterMoveFarMs: 1000 } },
-    );
-    await controller.start();
-    await controller.read('a.ts');
-    async function elapsed(actions: Action[]): Promise<number> {
-      const before = Date.now();
-      await controller.step(actions);
-      await until(controller.step([]));
-      return Date.now() - before;
-    }
-    expect(await elapsed([{ move: { file: 'a.ts', line: 3, at: `line 2\n${CURSOR_MARKER}` } }])).toBeGreaterThanOrEqual(1000); // another file
-    expect(await elapsed([{ move: { line: 6, at: `line 5\n${CURSOR_MARKER}` } }])).toBeLessThan(1000); // 3 lines down
-    expect(await elapsed([{ move: { line: 36, at: `line 35\n${CURSOR_MARKER}` } }])).toBeGreaterThanOrEqual(1000); // 30 lines down
-  });
-
-  it("times a say's pause by the reading speed, not the playback speed", async () => {
-    const { panel, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    controller.setSpeed(4);
-    controller.setReadingSpeed(2);
-    await controller.step([{ say: 'Hi.' }]);
-    await until(controller.step([]));
-    // The fake timing reads at 20 ms per character with a 500 ms floor: 500 ms, halved by the reading speed.
-    expect(panel.events.find((e) => e.type === 'reading')).toEqual({ type: 'reading', ms: 250 });
-  });
-
-  it("times the follow scroll's glide by the playback speed and the timing setting (#123)", () => {
-    const { controller } = setup({ 'a.ts': '' });
-    const lines = testConfig.timing.nearLines;
-    const speed = 4;
-    const atNormalSpeed = controller.glideMs(lines);
-    controller.setSpeed(speed);
-    expect(controller.glideMs(lines)).toBe(atNormalSpeed / speed);
-    controller.setTiming({ glideMs: 0, glidePerLineMs: 0 });
-    expect(controller.glideMs(lines)).toBe(0);
+describe('isSavedSession', () => {
+  it('takes a value with a scene, finished batches, and events as a saved session, and nothing else', () => {
+    expect(isSavedSession({ scene: {}, finished: [], events: [] })).toBe(true);
+    expect(isSavedSession({ scene: {}, finished: [] })).toBe(false);
+    expect(isSavedSession(JSON.parse('null'))).toBe(false);
+    expect(isSavedSession('a session')).toBe(false);
   });
 });
 
-describe('editing', () => {
-  it('types with one undo stop per action and instant indentation', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `{\n  y\n}${CURSOR_MARKER}` }]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('{\n  y\n}');
-    expect(editor.edits.map((e) => e.text)).toEqual(['{', '\n  ', 'y', '\n', '}']);
-    expect(editor.edits.map((e) => [e.options.undoStopBefore, e.options.undoStopAfter])).toEqual([
-      [true, false],
-      [false, false],
-      [false, false],
-      [false, false],
-      [false, true],
-    ]);
-  });
-
-  it("types the editor's line ending into an empty file, so the editor has nothing to normalize", async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    editor.crlf.add(editor.resolvePath('a.ts'));
-    await controller.start();
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `a\n  b\n${CURSOR_MARKER}` },
-      { type: `c${CURSOR_MARKER}` },
-    ]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\r\n  b\r\nc');
-    expect(editor.edits.map((e) => e.text)).toEqual(['a', '\r\n  ', 'b', '\r\n', 'c']);
-  });
-
-  it('moves to the end of a line, to type into a gap made first', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `\n\n\n${CURSOR_MARKER}` }]);
-    // As the batch will leave it: the gap's lines have numbers.
-    await controller.read('a.ts');
-    await until(
-      controller.step([
-        { move: { line: 3, to: 'line_end' } },
-        { type: `new${CURSOR_MARKER}` },
-        { move: { line: 1, to: 'line_end' } },
-        { type: `!${CURSOR_MARKER}` },
-      ]),
-    );
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a!\n\nnew\n\nb\n');
-  });
-
-  it("moves on the cursor's line without `line`, to step past an end just typed", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `\n\nif (${CURSOR_MARKER})` },
-      { type: `x${CURSOR_MARKER}` },
-      { move: { to: 'line_end' } },
-      { type: ` {\n  ${CURSOR_MARKER}\n}` },
-      { type: `f(${CURSOR_MARKER}, 2)` },
-      { type: `1${CURSOR_MARKER}` },
-      { move: { at: `1, ${CURSOR_MARKER}2` } },
-      { type: `0 + ${CURSOR_MARKER}` },
-    ]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\n\nif (x) {\n  f(1, 0 + 2)\n}\n');
-    // Not in another file, or before the cursor is anywhere.
-    const other = await until(controller.step([{ move: { file: 'b.ts', to: 'line_end' } }]));
-    expect(other.rejected?.error).toMatchObject({ kind: 'invalid_action', message: containing('Give `line`') });
-  });
-
-  it('moves to the end of the last line, before the final newline, and no further', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b', 'c.ts': 'c\r\n', 'd.ts': '' });
-    await controller.start();
-    for (const file of ['a.ts', 'b.ts', 'c.ts', 'd.ts']) {
-      await controller.read(file);
-      await until(controller.step([{ move: { file, line: 1, to: 'line_end' } }, { type: `\n\nx${CURSOR_MARKER}` }]));
-    }
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\n\nx\n');
-    expect(editor.text('b.ts')).toBe('b\n\nx');
-    expect(editor.text('c.ts')).toBe('c\n\nx\r\n');
-    expect(editor.text('d.ts')).toBe('\n\nx');
-    const report = await until(controller.step([{ move: { file: 'a.ts', line: 4, to: 'line_end' } }]));
-    expect(report.rejected?.error).toEqual({ kind: 'no_line', message: "There's no line 4: a.ts has 3 lines." });
-  });
-
-  it('types both parts of a pair, then steps back between them, in one undo stop', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `update(${CURSOR_MARKER})` },
-      { type: `ctx, dt${CURSOR_MARKER}` },
-    ]);
-    const report = await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('update(ctx, dt)');
-    const [batch] = report.batches;
-    ok(batch);
-    expect(batch.code).toEqual({
-      file: 'a.ts',
-      lines: [{ number: 1, text: `update(ctx, dt${CURSOR_MARKER})` }],
-      end: { final_newline: false },
-    });
-    const pair = editor.edits.slice(0, 'update()'.length);
-    expect(pair.map((e) => e.text).join('')).toBe('update()');
-    expect(pair.map((e) => [e.options.undoStopBefore, e.options.undoStopAfter])).toEqual([
-      [true, false],
-      ...Array.from({ length: 6 }, () => [false, false]),
-      [false, true],
-    ]);
-  });
-
-  it('steps back into a pair after the pause of a nearby move, and without one when nothing follows', async () => {
-    const { controller } = setup({ 'a.ts': '' }, { timing: { ...testConfig.timing, beforeMoveMs: 0, afterMoveNearMs: 1000 } });
-    await controller.start();
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    async function elapsed(actions: Action[]): Promise<number> {
-      const before = Date.now();
-      await controller.step(actions);
-      await until(controller.step([]));
-      return Date.now() - before;
-    }
-    expect(await elapsed([{ type: `ab${CURSOR_MARKER}` }])).toBeLessThan(1000);
-    expect(await elapsed([{ type: `a${CURSOR_MARKER}b` }])).toBeGreaterThanOrEqual(1000);
-    // type_fast scales the pause too.
-    const fast = await elapsed([{ type_fast: `a${CURSOR_MARKER}b` }]);
-    expect(fast).toBeGreaterThanOrEqual(100);
-    expect(fast).toBeLessThan(1000);
-  });
-
-  it("steps back into a pair after a move's beat, so the close is seen typed first, and with the cursor marker at the end, doesn't wait", async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { timing: { ...testConfig.timing, beforeMoveMs: 500, afterMoveNearMs: 0 } });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    await until(controller.step([]));
-    await controller.step([{ type: `f(${CURSOR_MARKER})` }]);
-    // 100 ms per character, so all three are typed after 300 ms; the beat follows.
-    await advance(350);
-    expect(editor.text('a.ts')).toBe('f()');
-    expect(editor.cursor?.offset).toBe(3);
-    await advance(500);
-    expect(editor.cursor?.offset).toBe(2);
-    await until(controller.step([]));
-    // Nothing to step back over: done as soon as it's typed.
-    const before = Date.now();
-    await controller.step([{ type: `ab${CURSOR_MARKER}` }]);
-    await until(controller.step([]));
-    expect(Date.now() - before).toBeLessThan(500);
-  });
-
-  it('makes room and steps into it, then moves past a filled pair to the end of the line', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, at: `a${CURSOR_MARKER}\n` } },
-      { type: `\n\n${CURSOR_MARKER}\n` },
-      { type: `f(${CURSOR_MARKER})` },
-      { type: `x${CURSOR_MARKER}` },
-      { move: { to: 'line_end' } },
-      { type: `;${CURSOR_MARKER}` },
-    ]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\n\nf(x);\n\nb\n');
-  });
-
-  it("steps back over the editor's line endings", async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    editor.crlf.add(editor.resolvePath('a.ts'));
-    await controller.start();
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `{\n${CURSOR_MARKER}\n}` },
-      { type: `  y${CURSOR_MARKER}` },
-    ]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('{\r\n  y\r\n}');
-  });
-
-  it('moves to the spot between two texts', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'import { type Context } from "./x"\nimport { a } from "./a"\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, at: `import { ${CURSOR_MARKER}type Context` } },
-      { type: `type Builder, ${CURSOR_MARKER}` },
-    ]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('import { type Builder, type Context } from "./x"\nimport { a } from "./a"\n');
-  });
-
-  it('takes the spot only on the given line, saying what the line reads and where the text is', async () => {
-    const { controller } = setup({ 'a.ts': 'if (a) {\n  b();\n}\nif (c) {\n  d();\n}\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    const off = await controller.step([{ move: { file: 'a.ts', line: 2, at: `}${CURSOR_MARKER}\n` } }]);
-    expect(off.rejected?.error).toEqual({
-      kind: 'not_found',
-      message: 'The spot isn\'t on line 2: line 2 reads "  b();". It\'s on these lines:',
-      candidates: [
-        { line: 3, context: '}' },
-        { line: 6, context: '}' },
-      ],
-    });
-    const missing = await controller.step([{ move: { file: 'a.ts', line: 2, at: `e(${CURSOR_MARKER}` } }]);
-    expect(missing.rejected?.error).toEqual({
-      kind: 'not_found',
-      message: 'Text not found: "e("; line 2 reads "  b();"',
-    });
-    const twice = await controller.step([{ move: { file: 'a.ts', line: 1, at: `${CURSOR_MARKER} ` } }]);
-    expect(twice.rejected?.error).toMatchObject({ kind: 'ambiguous', message: containing('2 times on line 1') });
-    const report = await until(controller.step([{ move: { file: 'a.ts', line: 6, at: `}${CURSOR_MARKER}\n` } }]));
-    expect(report.rejected).toBeUndefined();
-    const [done] = (await until(controller.step([]))).batches;
-    ok(done);
-    expect(done.code?.lines.at(-1)).toEqual({ number: 6, text: `}${CURSOR_MARKER}` });
-  });
-
-  it('rejects a move that gives no single place to go', async () => {
-    const { controller } = setup({ 'a.ts': 'x\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    async function problem(move: object): Promise<string> {
-      const report = await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { move }]);
-      expect(report.rejected).toMatchObject({ index: 2, action: { move }, error: { kind: 'invalid_action' } });
-      ok(report.rejected);
-      return report.rejected.error.message;
-    }
-    expect(await problem({ line: 1, at: 'x' })).toContain(`marks where your cursor goes with ${CURSOR_MARKER}`);
-    expect(await problem({ line: 1, at: `${CURSOR_MARKER}x${CURSOR_MARKER}` })).toContain(`has 2 ${CURSOR_MARKER}`);
-    expect(await problem({ line: 1, at: CURSOR_MARKER })).toContain(`needs text around ${CURSOR_MARKER}`);
-    expect(await problem({ line: 1, at: `x${CURSOR_MARKER}`, to: 'line_end' })).toContain('not both');
-    expect(await problem({ line: 1 })).toContain('Give the place on the line');
-    expect(await problem({ line: 1, before: 'x', after: '' })).toContain('A spot is one text, `at`');
-    expect(await problem({ line: 1, to: 'end' })).toContain('`to` is `"line_end"`');
-  });
-
-  it('DeletesTheSelection: replaces a selection by typing, and deletes a selection', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'const a = 1\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { select: { text: '1' } }, { type: `2${CURSOR_MARKER}` }]);
-    await until(controller.step([{ select: { text: 'const ' } }, { delete: true }]));
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a = 2\n');
-  });
-
-  it('creates a file on move and saves edited files after each batch', async () => {
-    const { editor, controller } = setup();
-    await controller.start();
-    await controller.step([{ move: { file: 'new.ts', line: 1, to: 'line_end' } }, { type_fast: `x${CURSOR_MARKER}` }]);
-    await until(controller.step([]));
-    expect(editor.text('new.ts')).toBe('x');
-    expect(editor.saved).toEqual([editor.resolvePath('new.ts')]);
-  });
-
-  it('rejects an action that combines two, instead of playing only one of them', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'x\n' });
-    await controller.start();
-    const report = await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' }, type: `y${CURSOR_MARKER}` }]);
-    expect(report.rejected).toMatchObject({
-      index: 1,
-      error: { kind: 'invalid_action', message: containing('`move` and `type`') },
-    });
-    expect(editor.text('a.ts')).toBe('x\n');
-  });
-});
-
-describe('rehearsal', () => {
-  it('rejects a batch that would fail at once, with the code as it would read, playing nothing of it', async () => {
-    const { editor, panel, controller } = setup({ 'a.ts': 'x\nx\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    const report = await controller.step([
-      { say: 'Here.' },
-      { move: { file: 'a.ts', line: 2, to: 'line_end' } },
-      { type: `y${CURSOR_MARKER}` },
-      { move: { line: 1, at: `xy${CURSOR_MARKER}` } },
-    ]);
-    expect(report).toEqual({
+describe('start', () => {
+  it('starts a session with its task, rules, and root, and gives the Player its stage', async () => {
+    const h = harness();
+    expect(REPORT_SCHEMA.parse(await h.controller.start('Fix it.', 'sub', ['GUIDE.md']))).toEqual({
       batches: [],
       events: [],
       turn: 'agent',
-      rejected: {
-        index: 4,
-        action: { move: { line: 1, at: `xy${CURSOR_MARKER}` } },
-        error: {
-          kind: 'not_found',
-          message: anyString(),
-          candidates: [{ line: 2, context: 'xy' }],
-        },
-        code: {
-          file: 'a.ts',
-          lines: [
-            { number: 1, text: 'x' },
-            { number: 2, text: `xy${CURSOR_MARKER}` },
-          ],
-          end: { final_newline: true },
-        },
+    });
+    expect(scene()).toMatchObject({ root: path.join(ROOT, 'sub'), turn: 'agent', focus: 'cursor', pointFar: false });
+    expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: 'Fix it.', rules: ['GUIDE.md'] });
+    expect(h.traced).toContain('session started: Fix it.');
+    expect(timeline().paused).toBe(false);
+    const given = stage();
+    expect([given.speed(), given.readingSpeed(), given.config().maxBlockMs]).toEqual([1, 1, CONFIG.maxBlockMs]);
+    given.render();
+    expect(statuses(h)).toEqual(['thinking']);
+    expect(given.lines).toBe(sessionLines());
+    expect(given.pacing).toBe(timeline());
+  });
+
+  it('starts without a task, root, or rules, and gives no rules when the list is empty', async () => {
+    const h = harness();
+    await h.controller.start(undefined, undefined, []);
+    expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: undefined });
+    expect(scene().root).toBeUndefined();
+    expect(h.traced).toContain('session started');
+  });
+
+  it('refuses a start while a session is active, and starts anew once that one ended', async () => {
+    const h = await started();
+    await expect(h.controller.start()).rejects.toMatchObject({ code: 'session_active' });
+    h.controller.endSession();
+    await h.controller.start('Another.');
+    expect(fakes.players).toHaveLength(2);
+  });
+
+  it('starts paused when the programmer paused before it', async () => {
+    const h = harness();
+    h.controller.pause();
+    await h.controller.start();
+    expect(timeline().paused).toBe(true);
+  });
+});
+
+describe('a session the agent leaves, and comes back to', () => {
+  it('ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory', async () => {
+    const h = harness();
+    await h.controller.start('Kept.', ROOT);
+    h.controller.disconnect();
+    expect(h.controller.isSuspended).toBe(true);
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', suspended: true });
+    const resumed = REPORT_SCHEMA.parse(await h.controller.start(undefined, ROOT, ['GUIDE.md']));
+    expect(resumed).toEqual({ batches: [], events: [], turn: 'agent', resumed: true });
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true, rules: ['GUIDE.md'] });
+    expect(fakes.players).toHaveLength(1);
+    h.controller.disconnect();
+    await h.controller.start(undefined, ROOT, []);
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true });
+  });
+
+  it('WaitsProp: starts a new session from another directory, ending the suspended one', async () => {
+    const h = harness();
+    await h.controller.start('Kept.', ROOT);
+    h.controller.disconnect();
+    await h.controller.start('New.', '/other');
+    expect(fakes.players).toHaveLength(2);
+    expect(scene().root).toBe('/other');
+    expect(h.controller.isSuspended).toBe(false);
+  });
+
+  it('WaitsProp: closes a suspended session at once when the programmer ends it', async () => {
+    const h = await started();
+    h.controller.disconnect();
+    h.controller.endSession();
+    expect(h.controller.isActive).toBe(false);
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'user' });
+  });
+
+  it('rejects the open call when the agent disconnects, and closes at once a session the programmer ended', async () => {
+    const h = await started();
+    const listen = h.controller.listen();
+    const refused = expect(listen).rejects.toMatchObject({ code: 'no_session', message: 'Disconnected.' });
+    await settle();
+    h.controller.disconnect();
+    await refused;
+    await h.controller.start(undefined, undefined);
+    h.controller.endSession();
+    h.controller.disconnect();
+    expect([h.controller.isSuspended, h.controller.isActive]).toEqual([false, false]);
+    await expect(h.controller.listen()).rejects.toMatchObject({ code: 'no_session' });
+    harness().controller.disconnect();
+  });
+
+  it('SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended', async () => {
+    const h = harness();
+    expect(h.controller.saved).toBeUndefined();
+    await h.controller.start('Kept.', ROOT);
+    scene().cursor = { file: A, offset: 2 };
+    scene().allowedCommands.add('ls');
+    h.controller.userInterrupt();
+    h.controller.userEdit(A, 'a', 'b', []);
+    expect(h.controller.saved).toEqual({
+      task: 'Kept.',
+      scene: { root: ROOT, turn: 'agent', cursor: { file: A, offset: 2 }, selection: undefined, allowedCommands: ['ls'] },
+      finished: [],
+      events: [{ kind: 'interrupt' }],
+    });
+    h.controller.endSession();
+    expect(h.controller.saved).toBeUndefined();
+  });
+
+  it('SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload', async () => {
+    const h = harness();
+    const saved: SavedSession = {
+      task: 'Kept.',
+      // A session saved by 0.6.10 or earlier holds null where nothing was set.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      scene: {
+        root: ROOT,
+        turn: 'user',
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        cursor: JSON.parse('null') as undefined,
+        selection: { start: 0, end: 1 },
+        allowedCommands: ['ls'],
       },
-    });
-    await advance(5000);
-    expect(editor.text('a.ts')).toBe('x\nx\n');
-    expect(editor.edits).toEqual([]);
-    expect(panel.says()).toEqual([]);
-  });
-
-  it('rehearses from where the queued batches leave off, and leaves them playing when it rejects', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `let a = 1${CURSOR_MARKER}` }]);
-
-    // Anchored on text the playing batch hasn't typed yet.
-    const secondCall = controller.step([{ select: { text: '1' } }, { type: `2${CURSOR_MARKER}` }]);
-    const second = track(secondCall);
-    await advance(10);
-    expect(second.done).toBe(false);
-    expect(editor.text('a.ts')).toBe('');
-    const report = await until(secondCall);
-    expect(report.batches).toMatchObject([{ id: 1, status: 'completed' }]);
-
-    // Still queued behind the second: this one's anchor would fail after the second batch.
-    const rejected = await controller.step([{ select: { text: '= 1' } }]);
-    expect(rejected.rejected).toMatchObject({ index: 1, error: { kind: 'not_found' } });
-
-    const last = await until(controller.step([]));
-    expect(last.batches).toMatchObject([{ id: 2, status: 'completed' }]);
-    expect(editor.text('a.ts')).toBe('let a = 2');
+      finished: [{ id: 3, status: 'completed' }],
+      events: [{ kind: 'interrupt' }],
+    };
+    h.controller.revive(saved);
+    expect(h.controller.isSuspended).toBe(true);
+    expect(scene()).toMatchObject({ cursor: undefined, selection: { start: 0, end: 1 }, turn: 'user', focus: 'cursor' });
+    expect(scene().allowedCommands).toEqual(new Set(['ls']));
+    expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: 'Kept.', suspended: true });
+    expect(h.traced).toContain('session revived after a reload, suspended');
+    h.controller.revive(saved);
+    expect(fakes.players).toHaveLength(1);
+    const resumed = REPORT_SCHEMA.parse(await h.controller.start(undefined, ROOT));
+    expect(resumed).toMatchObject({ batches: [{ id: 3, status: 'completed' }], events: [{ kind: 'interrupt' }], resumed: true });
   });
 });
 
-describe('line numbers', () => {
-  it("rejects a move to a line it hasn't been shown, saying what the line reads and where the spot is, which it's then shown", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\nc\n' });
-    await controller.start();
-    const unseen = await controller.step([{ move: { file: 'a.ts', line: 2, at: `c${CURSOR_MARKER}` } }]);
-    expect(unseen.rejected?.error).toEqual({
-      kind: 'line_not_seen',
-      message:
-        'You haven\'t seen line 2 of a.ts in an up-to-date `read` or report, so its number may be off: take line numbers from them, never work them out. Now, line 2 reads "b", and the spot is on these lines:',
-      candidates: [{ line: 3, context: 'c' }],
+describe('steps and their batches', () => {
+  it('BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    const first = await report(h.controller.step(SAY));
+    expect(first).toMatchObject({ batches: [], submitted: { id: 1, status: 'playing' } });
+    const second = h.controller.step(SAY);
+    expect(await pending(second)).toBe(true);
+    finish();
+    expect(await report(second)).toMatchObject({ batches: [{ id: 1, status: 'completed' }] });
+    expect(h.traced).toContain('batch 1 queued: 1 actions');
+  });
+
+  it('an empty step waits for the queued batches, and returns at once with none', async () => {
+    const h = await started();
+    expect(await report(h.controller.step([]))).toEqual({ batches: [], events: [], turn: 'agent' });
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const waiting = h.controller.step([]);
+    expect(await pending(waiting)).toBe(true);
+    finish();
+    expect((await report(waiting)).batches).toEqual([{ id: 1, status: 'completed' }]);
+  });
+
+  it('rejects a batch whose rehearsal fails, at the action that failed, with the code it shows, queuing nothing', async () => {
+    const h = await started();
+    const code = { file: 'a.ts', lines: [{ number: 1, text: 'x' }] };
+    const lines = fakes.fakeLines();
+    const actions: Action[] = [ANCHORED, { say: 'Hi.' }];
+    vi.mocked(rehearse).mockResolvedValueOnce({
+      result: { id: 0, status: 'failed', error: { kind: 'not_found', message: 'Not there.' }, unplayed: [{ say: 'Hi.' }], code },
+      sightings: [{ file: A, text: 'x\ny', lines: [2] }],
+      after: { scene: scene(), texts: new Map(), lines: asLines(lines), edits: new Set() },
     });
-    const end = await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    expect(end.rejected?.error.message).toMatch(/Now, line 1 reads "a"\.$/);
-    expect((await until(controller.step([{ move: { file: 'a.ts', line: 3, at: `c${CURSOR_MARKER}` } }]))).rejected).toBeUndefined();
-    expect((await until(controller.step([{ move: { line: 1, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]))).rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a!\nb\nc\n');
+    const rejected = await report(h.controller.step(actions));
+    expect(rejected.rejected).toEqual({ index: 2, action: { say: 'Hi.' }, error: { kind: 'not_found', message: 'Not there.' }, code });
+    expect(lines.of).toHaveBeenCalledWith(A, 'x\ny');
+    expect(player().play).not.toHaveBeenCalled();
+    expect(h.traced.at(-1)).toMatch(/^report to step: batches \[\], events \[\], rejected at action 2: not_found, \d+ chars$/);
   });
 
-  it('AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `\nx${CURSOR_MARKER}` }]);
-    // The playing batch moves `b` from line 2 to line 3.
-    const stale = await controller.step([{ move: { line: 2, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
-    expect(stale.rejected?.error).toMatchObject({ kind: 'line_not_seen', message: matching(/line 2 reads "x"\.$/) });
-    expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['a', 'x', 'b']);
-    const next = await until(controller.step([{ move: { line: 3, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]));
-    expect(next.rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\nx\nb!\n');
+  it('rejects a failed rehearsal without code, and stops on one that recorded no error, as a bug', async () => {
+    const h = await started();
+    rehearsed({ status: 'failed', error: { kind: 'no_line', message: 'No line 9.' }, unplayed: SAY });
+    expect((await report(h.controller.step(SAY))).rejected).toEqual({
+      index: 1,
+      action: SAY[0],
+      error: { kind: 'no_line', message: 'No line 9.' },
+    });
+    rehearsed({ status: 'failed' });
+    await expect(h.controller.step(SAY)).rejects.toThrow('The rehearsal failed at action 2 of 1, but recorded no error.');
   });
 
-  it('rejects a move below lines its own batch adds', async () => {
-    const { controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    const report = await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `\n\nx${CURSOR_MARKER}` },
-      { move: { line: 2, at: `b${CURSOR_MARKER}` } },
+  it('PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    const discarded = await report(h.controller.step(SAY));
+    expect(discarded).toMatchObject({ batches: [{ id: 1, status: 'discarded', unplayed: SAY }], events: [{ kind: 'interrupt' }] });
+    expect(rehearse).not.toHaveBeenCalled();
+    expect(h.traced).toContain('batch 1 discarded');
+  });
+
+  it('discards a batch when an interruption arrives during its rehearsal', async () => {
+    const h = await started();
+    const { promise, resolve } = Promise.withResolvers<Awaited<ReturnType<typeof rehearse>>>();
+    vi.mocked(rehearse).mockReturnValueOnce(promise);
+    const step = h.controller.step(SAY);
+    await settle();
+    h.controller.userInterrupt();
+    resolve({
+      result: { id: 0, status: 'completed' },
+      sightings: [],
+      after: { scene: scene(), texts: new Map(), lines: asLines(fakes.fakeLines()), edits: new Set() },
+    });
+    expect((await report(step)).batches).toEqual([{ id: 1, status: 'discarded', unplayed: SAY }]);
+  });
+
+  it('rehearses each batch from where the queued ones leave off, knowing the lines the agent was shown', async () => {
+    const h = await started({}, { 'a.ts': 'x\ny\n' });
+    holdPlay();
+    await h.controller.read('a.ts');
+    const firstLines = rehearsed();
+    await report(h.controller.step(SAY));
+    const [, , from, , knows] = vi.mocked(rehearse).mock.calls[0] ?? [];
+    expect(from?.scene).toBe(scene());
+    expect(knows?.(A, 1, 1)).toBe(true);
+    expect(knows?.(A, 1, 2)).toBe(false);
+    expect(knows?.(B, 1, 1)).toBe(false);
+    void h.controller.step(SAY);
+    await settle();
+    expect(vi.mocked(rehearse).mock.calls[1]?.[2].lines).toBe(firstLines);
+  });
+
+  it('NoMisplacedEdit, AcceptsUnanchored: refuses a batch after a discarded one unless it anchors the cursor with a file and line', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    await report(h.controller.step(SAY));
+    const type: Action = { type: `x${CURSOR_MARKER}` };
+    const refused = await report(h.controller.step([{ say: 'Again.' }, { point: { line: 1, text: 'x' } }, { run: 'ls' }, type]));
+    expect(refused.rejected).toMatchObject({ index: 4, action: type, error: { kind: 'unanchored' } });
+    expect((await report(h.controller.step([{ select: { line: 1, text: 'x' } }]))).rejected?.error.kind).toBe('unanchored');
+    expect((await report(h.controller.step([{ say: 'Only words.' }]))).rejected).toBeUndefined();
+    await report(h.controller.step([ANCHORED]));
+    await report(h.controller.step([]));
+    expect((await report(h.controller.step([type]))).rejected).toBeUndefined();
+  });
+
+  it('CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch', async () => {
+    const h = await started();
+    const listen = h.controller.listen();
+    const abort = new AbortController();
+    const step = h.controller.step(SAY, abort.signal);
+    const refused = expect(step).rejects.toMatchObject({ code: 'cancelled' });
+    abort.abort();
+    h.controller.userInterrupt();
+    await report(listen);
+    await refused;
+    expect(rehearse).not.toHaveBeenCalled();
+  });
+
+  it('CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal', async () => {
+    const h = await started();
+    const abort = new AbortController();
+    const { promise, resolve } = Promise.withResolvers<Awaited<ReturnType<typeof rehearse>>>();
+    vi.mocked(rehearse).mockReturnValueOnce(promise);
+    const step = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    resolve({
+      result: { id: 0, status: 'completed' },
+      sightings: [],
+      after: { scene: scene(), texts: new Map(), lines: asLines(fakes.fakeLines()), edits: new Set() },
+    });
+    await expect(step).rejects.toMatchObject({ code: 'cancelled' });
+    expect(player().play).toHaveBeenCalled();
+  });
+
+  it("CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later", async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const abort = new AbortController();
+    const second = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(second).rejects.toMatchObject({ code: 'cancelled' });
+    finish();
+    await settle();
+    expect((await report(h.controller.listen())).batches.map((b) => b.id)).toEqual([1, 2]);
+  });
+
+  it('BlockedIsCurrent: a call waits its turn while another is blocked, and blocks only once that one has returned', async () => {
+    const h = await started();
+    const listen = h.controller.listen();
+    const end = h.controller.end('Done.');
+    await settle();
+    expect(await pending(end)).toBe(true);
+    h.controller.userInterrupt();
+    await report(listen);
+    expect(await report(end)).toMatchObject({ events: [] });
+    expect(posted(h).at(-1)).toMatchObject({ type: 'session', active: false, reason: 'agent', summary: 'Done.' });
+  });
+
+  it('refuses every call without a session, and a read too', async () => {
+    const { controller } = harness();
+    await expect(controller.step(SAY)).rejects.toMatchObject({ code: 'no_session' });
+    await expect(controller.listen()).rejects.toMatchObject({ code: 'no_session' });
+    await expect(controller.end()).rejects.toMatchObject({ code: 'no_session' });
+    await expect(controller.read('a.ts')).rejects.toMatchObject({ code: 'no_session' });
+    expect(() => controller.resolveFile('a.ts')).toThrow('No pairing session is active.');
+  });
+});
+
+describe('playing the queue', () => {
+  it('plays each batch in order, takes the lines a completed one leaves, and records what it showed', async () => {
+    const h = await started();
+    const after = rehearsed();
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [{ file: A, text: 'x', lines: [1] }] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect(sessionLines().adopt).toHaveBeenCalledWith(after);
+    expect(sessionLines().of).toHaveBeenCalledWith(A, 'x');
+    expect(timeline().reset).toHaveBeenCalled();
+    expect(h.traced).toEqual(expect.arrayContaining(['batch 1 playing', 'batch 1 completed']));
+  });
+
+  it("PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines", async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const second = h.controller.step(SAY);
+    await settle();
+    finish({ status: 'interrupted' });
+    expect((await report(second)).batches.map((b) => b.status)).toEqual(['interrupted', 'discarded']);
+    expect(sessionLines().adopt).not.toHaveBeenCalled();
+    expect(h.traced).toContain('interrupt: discarding [2]');
+  });
+
+  it('stops playing a session that closed while a batch played', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    void h.controller.step(SAY);
+    await settle();
+    h.controller.endSession();
+    await report(h.controller.listen().catch(() => REPORT_SCHEMA.parse({ batches: [], events: [], turn: 'agent' })));
+    finish();
+    await settle();
+    expect(player().play).toHaveBeenCalledOnce();
+  });
+
+  it('waits for an interrupted batch to finish before it reports, so the report says what was typed', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listen = h.controller.listen();
+    h.controller.userInterrupt();
+    expect(await pending(listen)).toBe(true);
+    expect(h.traced).toContain('interrupt: discarding [], batch 1 plays on');
+    finish({ status: 'interrupted' });
+    expect((await report(listen)).batches).toEqual([{ id: 1, status: 'interrupted' }]);
+  });
+});
+
+describe('listen', () => {
+  it('EventsDelivered: returns once something interrupts, and not for a quiet edit by others', async () => {
+    const h = await started();
+    const listen = h.controller.listen();
+    h.controller.otherEdit(B, 'b', 'c', []);
+    expect(await pending(listen)).toBe(true);
+    h.controller.userMessage('Look.');
+    expect((await report(listen)).events).toEqual([
+      { kind: 'edit', file: 'b.ts', diff: 'b.ts: b -> c', by: 'other' },
+      { kind: 'message', text: 'Look.' },
     ]);
-    expect(report.rejected).toMatchObject({ index: 3, error: { kind: 'line_not_seen', candidates: [{ line: 4, context: 'b' }] } });
-    // Shown where `b` is then, the whole batch again goes there.
-    const again = await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `\n\nx${CURSOR_MARKER}` },
-      { move: { line: 4, at: `b${CURSOR_MARKER}` } },
+  });
+
+  it('returns at once for a batch that did not complete, and waits while the queue plays', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listen = h.controller.listen();
+    expect(await pending(listen)).toBe(true);
+    finish({ status: 'failed', error: { kind: 'no_line', message: 'No.' } });
+    expect((await report(listen)).batches[0]?.status).toBe('failed');
+  });
+
+  it('BlockedReturns: returns with `waiting` after MAX_BLOCK', async () => {
+    const h = await started();
+    const listen = h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    expect(await report(listen)).toEqual({ batches: [], events: [], turn: 'agent', waiting: true });
+    expect(h.traced.at(-1)).toMatch(/^report to listen: batches \[\], events \[\], waiting, \d+ chars$/);
+  });
+
+  it("NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back", async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listen = h.controller.listen();
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(CONFIG.navigatorIdleMs - 1);
+    h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+    await settle(CONFIG.navigatorIdleMs - 1);
+    expect(await pending(listen)).toBe(true);
+    await settle(1);
+    expect((await report(listen)).events).toEqual([{ kind: 'edit', file: 'a.ts', diff: 'a.ts: a -> abc', by: 'programmer' }]);
+    const next = h.controller.listen();
+    h.controller.userEdit(A, 'abc', 'abcd', []);
+    h.controller.handBack('Your turn.', selection());
+    expect((await report(next)).events).toEqual([
+      { kind: 'edit', file: 'a.ts', diff: 'a.ts: abc -> abcd', by: 'programmer' },
+      { kind: 'turn', to: 'agent', message: 'Your turn.', selection: { ...selection(), file: 'a.ts' } },
     ]);
-    expect(again.rejected).toBeUndefined();
   });
 
-  it("takes a report's numbers through a queued batch that doesn't add lines above them", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\nc\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 3, to: 'line_end' } }, { type: `\nd${CURSOR_MARKER}` }]);
-    const first = await until(controller.step([{ say: 'Next, the last line.' }]));
-    // The line typed was never read, only shown in the report.
-    const [batch] = first.batches;
-    ok(batch?.code);
-    expect(batch.code.lines.at(-1)).toEqual({ number: 4, text: `d${CURSOR_MARKER}` });
-    const next = await until(controller.step([{ move: { line: 4, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]));
-    expect(next.rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\nb\nc\nd!\n');
-  });
-
-  it("AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved", async () => {
-    const { controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }, { type: `\nc${CURSOR_MARKER}` }]);
-    const first = await until(controller.step([{ move: { line: 1, to: 'line_end' } }, { type: `\nx${CURSOR_MARKER}` }]));
-    const [batch] = first.batches;
-    ok(batch?.code);
-    expect(batch.code.lines.at(-1)).toEqual({ number: 3, text: `c${CURSOR_MARKER}` });
-    // The queued batch moves `c` to line 4.
-    const stale = await controller.step([{ move: { line: 3, to: 'line_end' } }]);
-    expect(stale.rejected?.error).toMatchObject({ kind: 'line_not_seen', message: matching(/line 3 reads "b"\.$/) });
-  });
-
-  it("keeps the numbers above the programmer's edit, and not below it", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\nc\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    editor.userEdit('a.ts', { offset: 3, deleteLength: 0, text: '\n  y' });
-    await until(controller.listen());
-    expect((await controller.step([{ move: { file: 'a.ts', line: 4, to: 'line_end' } }])).rejected?.error.kind).toBe('line_not_seen');
-    expect((await until(controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }]))).rejected).toBeUndefined();
-  });
-
-  it('forgets the lines of a file that changed without it hearing, like a closed file edited on disk', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    editor.files.set(editor.resolvePath('a.ts'), 'x\na\nb\n');
-    const report = await controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }]);
-    expect(report.rejected?.error).toMatchObject({ kind: 'line_not_seen', message: matching(/line 2 reads "a"\.$/) });
+  it("returns in the programmer's turn for something other than an edit", async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listen = h.controller.listen();
+    h.controller.userInterrupt();
+    expect((await report(listen)).events).toEqual([{ kind: 'interrupt' }]);
   });
 });
 
-describe('spans', () => {
-  it("selects text on the cursor's line without `line`, and on a line it was shown with one", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'const a = 1\nconst b = 1\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { select: { text: '1' } },
-      { type: `2${CURSOR_MARKER}` },
-      { select: { line: 2, text: '1' } },
-      { type: `3${CURSOR_MARKER}` },
+describe('cancelled calls', () => {
+  it('CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report', async () => {
+    const h = await started();
+    const abort = new AbortController();
+    const listen = h.controller.listen(abort.signal);
+    await settle();
+    abort.abort();
+    await expect(listen).rejects.toMatchObject({ code: 'cancelled' });
+    h.controller.userMessage('Kept.');
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'Kept.' }]);
+    abort.abort();
+  });
+
+  it('cancels a call aborted before it blocks, and a call already aborted when it is made', async () => {
+    const h = await started();
+    const abort = new AbortController();
+    abort.abort();
+    await expect(h.controller.listen(abort.signal)).rejects.toMatchObject({ code: 'cancelled', message: 'The call was cancelled.' });
+    await expect(h.controller.step([], abort.signal)).rejects.toMatchObject({ code: 'cancelled' });
+  });
+
+  it('lets an aborted listener go once its call is no longer the open one', async () => {
+    const h = await started();
+    const abort = new AbortController();
+    const listen = h.controller.listen(abort.signal);
+    h.controller.userInterrupt();
+    await report(listen);
+    const next = h.controller.listen();
+    abort.abort();
+    expect(await pending(next)).toBe(true);
+    h.controller.userInterrupt();
+    await report(next);
+  });
+
+  it('carries on past a call that failed', async () => {
+    const h = await started();
+    await expect(h.controller.start()).rejects.toMatchObject({ code: 'session_active' });
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'interrupt' }]);
+  });
+});
+
+describe('read', () => {
+  it("reads a file's lines between two, saying whether it ends, and knows them from then", async () => {
+    const h = await started({}, { 'a.ts': 'one\ntwo\nthree\n' });
+    h.editor.isDirty.mockResolvedValueOnce(true);
+    expect(await h.controller.read('a.ts', 2)).toEqual({
+      file: 'a.ts',
+      dirty: true,
+      lines: [
+        { number: 2, text: 'two' },
+        { number: 3, text: 'three' },
+      ],
+      end: { final_newline: true },
+    });
+    expect(await h.controller.read('a.ts', 0, 1)).toEqual({ file: 'a.ts', dirty: false, lines: [{ number: 1, text: 'one' }] });
+    expect(await h.controller.read('a.ts', 5, 9)).toEqual({ file: 'a.ts', dirty: false, lines: [], end: { final_newline: true } });
+  });
+
+  it("Read: reads a file as the queued batches leave it, with their lines, and the editor's once they are stale", async () => {
+    const h = await started({}, { 'a.ts': 'now\n' });
+    holdPlay();
+    const queuedLines = rehearsed({}, { 'a.ts': 'planned\n' });
+    await report(h.controller.step(SAY));
+    expect((await h.controller.read('a.ts')).lines).toEqual([{ number: 1, text: 'planned' }]);
+    expect(queuedLines.of).toHaveBeenCalledWith(A, 'planned\n');
+    expect(await h.controller.read('b.ts').catch((error: unknown) => error)).toMatchObject({ code: 'invalid_arguments' });
+    h.controller.userInterrupt();
+    expect((await h.controller.read('a.ts')).lines).toEqual([{ number: 1, text: 'now' }]);
+  });
+
+  it("refuses a file that doesn't exist, which a move creates, and passes on any other failure", async () => {
+    const h = await started();
+    await expect(h.controller.read('missing.ts')).rejects.toMatchObject({
+      code: 'invalid_arguments',
+      message: "missing.ts doesn't exist. A `move` to it creates it, empty.",
+    });
+    h.editor.getText.mockRejectedValueOnce(new Error('disk unreadable'));
+    await expect(h.controller.read('a.ts')).rejects.toThrow('disk unreadable');
+    expect(h.controller.resolveFile('a.ts')).toBe(A);
+  });
+});
+
+describe('restore', () => {
+  it('HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has', async () => {
+    const h = await started();
+    const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line' as const, message: 'No.' } };
+    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected });
+    const discarded = await report(h.controller.step(SAY));
+    expect(discarded).toMatchObject({ rejected, batches: [{ status: 'discarded' }] });
+    expect(rehearse).not.toHaveBeenCalled();
+  });
+
+  it('NoUnmarkedRepeat: says a returned report may repeat one already seen, and marks each returned rejection the agent may have seen', async () => {
+    const h = await started();
+    const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line' as const, message: 'No.' } };
+    h.controller.restore({ batches: [{ id: 1, status: 'completed' }], events: [], turn: 'agent' }, /* mayRepeat= */ true);
+    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected }, /* mayRepeat= */ true);
+    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected });
+    const first = await report(h.controller.listen());
+    expect(first).toMatchObject({ batches: [{ id: 1 }], repeated: true, rejected });
+    const second = await report(h.controller.listen());
+    expect(second.repeated).toBeUndefined();
+    expect(second.rejected).toEqual(rejected);
+  });
+
+  it("marks the session stale for a returned report's interrupting events or unfinished batches, not for others' quiet edits", async () => {
+    const h = await started();
+    h.controller.restore({ batches: [], events: [{ kind: 'edit', file: 'b.ts', diff: 'x', by: 'other' }], turn: 'agent' });
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'edit', file: 'b.ts', diff: 'x', by: 'other' }]);
+    holdPlay();
+    expect((await report(h.controller.step(SAY))).submitted).toEqual({ id: 1, status: 'playing' });
+    h.controller.restore({ batches: [{ id: 9, status: 'interrupted' }], events: [], turn: 'agent' });
+    expect((await report(h.controller.step(SAY))).batches.map((b) => [b.id, b.status])).toEqual([
+      [2, 'discarded'],
+      [9, 'interrupted'],
     ]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('const a = 2\nconst b = 3\n');
   });
 
-  it('selects a range from one text through the first match of another after it', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'f(1, 2);\ng(3);\nh();\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ select: { file: 'a.ts', line: 1, from: 'f(', through: ');' } }, { delete: true }]);
-    await until(controller.step([{ select: { line: 2, from: 'g', through: '\n' } }, { delete: true }]));
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('\nh();\n');
+  it('EndDelivered, EventsDelivered: reports a returned report again after the programmer ended the session with it (#60)', async () => {
+    const h = await started();
+    h.controller.userMessage('Last words.');
+    h.controller.endSession();
+    const last = await report(h.controller.listen());
+    expect(last.events).toEqual([{ kind: 'message', text: 'Last words.' }, { kind: 'end' }]);
+    h.controller.restore(last);
+    expect(h.controller.isActive).toBe(false);
+    expect((await report(h.controller.listen())).events).toEqual(last.events);
+    await expect(h.controller.listen()).rejects.toMatchObject({ code: 'no_session' });
   });
 
-  it('selects in the file it names, moving the cursor there', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'let b = 1\n' });
-    await controller.start();
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([{ select: { file: 'b.ts', line: 1, text: '1' } }, { type: `2${CURSOR_MARKER}` }]));
-    await until(controller.step([]));
-    expect(editor.text('b.ts')).toBe('let b = 2\n');
-    expect(editor.cursor).toMatchObject({ file: editor.resolvePath('b.ts') });
+  it('BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call', async () => {
+    const h = await started();
+    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected: heldRejection(1) });
+    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected: heldRejection(2) });
+    h.controller.endSession();
+    expect((await report(h.controller.listen())).rejected?.index).toBe(1);
+    expect((await report(h.controller.listen())).rejected?.index).toBe(2);
+    await expect(h.controller.listen()).rejects.toMatchObject({ code: 'no_session' });
   });
 
-  it("takes a span only on its line, saying where its text is, and one without `line` only in the cursor's file", async () => {
-    const { controller } = setup({ 'a.ts': 'a = 1\nb = 1\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    const off = await controller.step([{ point: { line: 1, text: 'b = 1' } }]);
-    expect(off.rejected?.error).toEqual({
-      kind: 'not_found',
-      message: 'The text isn\'t on line 1: line 1 reads "a = 1". It\'s on these lines:',
-      candidates: [{ line: 2, context: 'b = 1' }],
+  it('takes no report back with no session, open or just closed', () => {
+    const { controller } = harness();
+    controller.restore({ batches: [], events: [], turn: 'agent' });
+    expect(controller.isActive).toBe(false);
+  });
+
+  it('revives a session saved by 0.6.10 or earlier, which holds null for a selection never set', () => {
+    const h = harness();
+    // A JSON null, as such a session holds.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const none = JSON.parse('null') as undefined;
+    h.controller.revive({
+      scene: { turn: 'agent', cursor: { file: A, offset: 0 }, selection: none, allowedCommands: [] },
+      finished: [],
+      events: [],
     });
-    const elsewhere = await controller.step([{ point: { file: 'b.ts', text: 'b' } }]);
-    expect(elsewhere.rejected?.error).toMatchObject({ kind: 'invalid_action', message: containing('Give `line`') });
-  });
-
-  it("rejects a span on a line it hasn't been shown", async () => {
-    const { controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    const report = await controller.step([{ point: { file: 'a.ts', line: 1, text: 'b' } }]);
-    expect(report.rejected?.error).toMatchObject({
-      kind: 'line_not_seen',
-      message: matching(/Now, line 1 reads "a", and the text is on these lines:$/),
-      candidates: [{ line: 2, context: 'b' }],
-    });
-    expect((await controller.step([{ point: { file: 'a.ts', line: 2, text: 'b' } }])).rejected).toBeUndefined();
+    expect(scene()).toMatchObject({ cursor: { file: A, offset: 0 }, selection: undefined });
   });
 });
 
-describe('typing with the cursor marker', () => {
-  it('rejects a text without exactly one cursor marker', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const move = { move: { file: 'a.ts', line: 1, to: 'line_end' } } as const;
-    const none = await controller.step([move, { type: 'x' }]);
-    expect(none.rejected).toMatchObject({
-      index: 2,
-      error: { kind: 'invalid_action', message: containing('Mark where your cursor ends') },
+describe("the programmer's input", () => {
+  it('records a message, with the code they had selected, and shows it in the panel', async () => {
+    const h = await started();
+    h.controller.userMessage('This.', selection());
+    expect(posted(h).at(-1)).toEqual({ type: 'user', text: 'This.', ref: { file: 'a.ts', line: 1, endLine: 2 } });
+    expect((await report(h.controller.listen())).events).toEqual([
+      { kind: 'message', text: 'This.', selection: { ...selection(), file: 'a.ts' } },
+    ]);
+  });
+
+  it('records an interrupt, stopping playback', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    expect(posted(h).at(-1)).toEqual({ type: 'interrupt' });
+    expect(timeline().interrupt).toHaveBeenCalled();
+  });
+
+  it('ignores input with no session, or with an ended one', () => {
+    const h = harness();
+    h.controller.userMessage('Hello?');
+    h.controller.userInterrupt();
+    h.controller.userEdit(A, 'a', 'b', []);
+    h.controller.otherEdit(A, 'a', 'b', []);
+    h.controller.takeTurn();
+    h.controller.handBack();
+    h.controller.endSession();
+    expect(posted(h)).toEqual([]);
+    expect(h.controller.turn).toBeUndefined();
+  });
+
+  it('NetReported, EditInterrupts: reports programmer edits as one diff a file, the agent cursor moving with them', async () => {
+    const h = await started();
+    const changes = [
+      { offset: 0, deleteLength: 0, text: 'x' },
+      { offset: 1, deleteLength: 0, text: 'y' },
+    ];
+    h.controller.otherEdit(A, 'a', 'xa', [changes[0] ?? { offset: 0, deleteLength: 0, text: '' }]);
+    h.controller.userEdit(A, 'xa', 'xya', [changes[1] ?? { offset: 0, deleteLength: 0, text: '' }]);
+    h.controller.otherEdit(A, 'xya', 'xyab', []);
+    expect(player().transform.mock.calls).toEqual([
+      [A, changes[0]],
+      [A, changes[1]],
+    ]);
+    expect(sessionLines().apply).toHaveBeenCalledTimes(2);
+    expect((await report(h.controller.listen())).events).toEqual([
+      { kind: 'edit', file: 'a.ts', diff: 'a.ts: a -> xyab', by: 'programmer' },
+    ]);
+    expect(h.traced).toContain(`edit ${A} by other`);
+  });
+
+  it('Explained: reports an interrupting edit the programmer undid, and drops a quiet edit by others that was undone', async () => {
+    const h = await started();
+    h.controller.otherEdit(B, 'b', 'c', []);
+    h.controller.otherEdit(B, 'c', 'b', []);
+    h.controller.userEdit(A, 'a', 'b', []);
+    h.controller.userEdit(A, 'b', 'a', []);
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'edit', file: 'a.ts', diff: '', by: 'programmer' }]);
+  });
+
+  it('reports an edit whose diff a restored report already carries, as it was', async () => {
+    const h = await started();
+    h.controller.restore({
+      batches: [],
+      events: [{ kind: 'edit', file: 'a.ts', diff: '@@', omitted: 900, by: 'programmer' }],
+      turn: 'agent',
     });
-    const two = await controller.step([move, { type_fast: `f(${CURSOR_MARKER})${CURSOR_MARKER}` }]);
-    expect(two.rejected).toMatchObject({
-      index: 2,
-      error: { kind: 'invalid_action', message: containing(`has 2 ${CURSOR_MARKER}`) },
-    });
+    h.controller.restore({ batches: [], events: [{ kind: 'edit', file: 'b.ts', diff: '@@', by: 'other' }], turn: 'agent' });
+    expect((await report(h.controller.listen())).events).toEqual([
+      { kind: 'edit', file: 'b.ts', diff: '@@', by: 'other' },
+      { kind: 'edit', file: 'a.ts', diff: '@@', omitted: 900, by: 'programmer' },
+    ]);
+  });
+
+  it("ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it", async () => {
+    const h = await started();
+    holdPlay();
+    rehearsed({}, {}, ['a.ts']);
+    await report(h.controller.step(SAY));
+    const changes = [{ offset: 0, deleteLength: 0, text: 'x' }];
+    h.controller.otherEdit(B, 'b', 'xb', changes);
+    expect(lineChanges).toHaveBeenCalledWith('b', changes);
+    expect(followChange).toHaveBeenCalledWith(expect.objectContaining({ edits: new Set([A]) }), B, 'xb', changes);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    h.controller.otherEdit(A, 'a', 'xa', changes);
+    expect(timeline().interrupt).toHaveBeenCalled();
+    h.controller.otherEdit(A, 'xa', 'xya', []);
+    expect(vi.mocked(followChange).mock.calls).toHaveLength(1);
+  });
+
+  it('OnlyTalkInTheirTurn: takes the turn, interrupting playback, and hands it back with no message or selection', async () => {
+    const h = await started();
+    scene().focus = 'point';
+    h.controller.takeTurn();
+    expect(h.controller.turn).toBe('user');
+    expect(scene().focus).toBe('cursor');
+    expect(timeline().interrupt).toHaveBeenCalled();
+    h.controller.takeTurn();
+    h.controller.handBack();
+    h.controller.handBack();
+    expect(posted(h).filter((event) => event.type === 'turn')).toEqual([
+      { type: 'turn', to: 'user' },
+      { type: 'turn', to: 'agent', message: undefined, ref: undefined },
+    ]);
+    expect((await report(h.controller.listen())).events).toEqual([
+      { kind: 'turn', to: 'user' },
+      { kind: 'turn', to: 'agent' },
+    ]);
+  });
+
+  it('EndDelivered: ends when the programmer ends it, delivering a final report', async () => {
+    const h = await started();
+    h.controller.endSession();
+    expect(h.controller.isActive).toBe(false);
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'user' });
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'end' }]);
+    expect(h.traced).toContain('session closed');
+    expect(h.editor.renderPoint.mock.calls).toContainEqual([undefined]);
+  });
+
+  it("ends with the agent's end once its batches have played, and closes the session", async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const end = h.controller.end();
+    expect(await pending(end)).toBe(true);
+    finish();
+    expect((await report(end)).batches).toEqual([{ id: 1, status: 'completed' }]);
+    expect(h.controller.isActive).toBe(false);
+    await expect(h.controller.listen()).rejects.toMatchObject({ code: 'no_session' });
+  });
+
+  it('rejects a call left open in a suspended session the programmer then ended, once it times out', async () => {
+    const h = await started();
+    h.controller.disconnect();
+    const listen = h.controller.listen();
+    const refused = expect(listen).rejects.toMatchObject({ code: 'no_session', message: 'The session has ended.' });
+    await settle();
+    h.controller.endSession();
+    await settle(CONFIG.maxBlockMs);
+    await refused;
   });
 });
 
-describe('pointing', () => {
-  const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join('\n');
-
-  it('follows the pointed code while the agent talks about it, then goes back to the cursor', async () => {
-    const { editor, controller } = setup({ 'a.ts': lines });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 2, at: `line 2${CURSOR_MARKER}\n` } }]));
-    await until(controller.step([{ point: { line: 35, text: 'line 35' } }, { say: 'This one.' }]));
-    expect(editor.focus).toBe('point');
-    expect(editor.point).toBeDefined();
-    await until(controller.step([{ type: `!${CURSOR_MARKER}` }]));
-    await until(controller.step([]));
-    expect(editor.focus).toBe('cursor');
-    expect(editor.text('a.ts')).toContain('line 2!');
+describe('the cursor in a report', () => {
+  it("adds the cursor's line to a report when it moved since the agent last saw it, and knows its line from then", async () => {
+    const h = await started();
+    const shown = {
+      code: { file: 'a.ts', lines: [{ number: 2, text: `x${CURSOR_MARKER}` }] },
+      sighting: { file: A, text: 'a\nx', lines: [2] },
+    };
+    scene().cursor = { file: A, offset: 3 };
+    player().code.mockResolvedValue(shown);
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).cursor).toEqual(shown.code);
+    expect(sessionLines().of).toHaveBeenCalledWith(A, 'a\nx');
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).cursor).toBeUndefined();
   });
 
-  it('pauses like a far move when going back from far away, and not from nearby', async () => {
-    const { controller } = setup(
-      { 'a.ts': lines },
-      { timing: { ...testConfig.timing, beforeMoveMs: 0, afterMoveFarMs: 1000, afterMoveNearMs: 0 } },
-    );
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 2, at: `line 2${CURSOR_MARKER}\n` } }]));
-    await until(controller.step([]));
-    async function elapsed(actions: Action[]): Promise<number> {
-      const before = Date.now();
-      await controller.step(actions);
-      await until(controller.step([]));
-      return Date.now() - before;
-    }
-    expect(await elapsed([{ point: { line: 35, text: 'line 35' } }, { type: `x${CURSOR_MARKER}` }])).toBeGreaterThanOrEqual(1000);
-    expect(await elapsed([{ point: { line: 4, text: 'line 4\n' } }, { type: `y${CURSOR_MARKER}` }])).toBeLessThan(1000);
+  it("leaves it out when a batch's code showed it, when no line is marked, and when the code can't be read", async () => {
+    const h = await started();
+    scene().cursor = { file: A, offset: 1 };
+    const code = { file: 'a.ts', lines: [{ number: 1, text: `x${CURSOR_MARKER}` }] };
+    player().code.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] } });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).cursor).toBeUndefined();
+    player().code.mockResolvedValueOnce({
+      code: { file: 'a.ts', lines: [{ number: 1, text: 'x' }] },
+      sighting: { file: A, text: 'x', lines: [1] },
+    });
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).cursor).toBeUndefined();
+    player().code.mockRejectedValueOnce(new Error('gone'));
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'interrupt' }]);
+    player().code.mockResolvedValueOnce(undefined);
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).cursor).toBeUndefined();
+  });
+});
+
+describe('pause and resume', () => {
+  it('PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone', async () => {
+    const h = await started();
+    h.controller.pause('user');
+    h.controller.pause('reply');
+    h.controller.pause('reply');
+    expect(timeline().pause).toHaveBeenCalledTimes(3);
+    expect(h.traced.filter((line) => line.startsWith('pause'))).toEqual(['pause user', 'pause reply']);
+    h.controller.resume('reply');
+    expect(timeline().resume).not.toHaveBeenCalled();
+    expect(h.controller.isPaused).toBe(true);
+    h.controller.resume('calibrate');
+    h.controller.resume('user');
+    expect(timeline().resume).toHaveBeenCalledOnce();
+    expect(h.traced).toEqual(expect.arrayContaining(['resume reply', 'resume user']));
+    expect(h.traced).not.toContain('resume calibrate');
+    h.controller.resume();
+    expect(timeline().resume).toHaveBeenCalledOnce();
   });
 
-  it("shows another file for a point, and the cursor's file again with the next edit", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, { say: 'Over there.' }]));
-    await until(controller.step([{ type: `x${CURSOR_MARKER}` }]));
-    await until(controller.step([]));
-    expect(editor.shown).toEqual([editor.resolvePath('a.ts'), editor.resolvePath('b.ts'), editor.resolvePath('a.ts')]);
-    expect(editor.text('a.ts')).toBe('ax\n');
+  it('says the batches are paused, and why, in a report', async () => {
+    const h = await started();
+    h.controller.pause('reply');
+    h.controller.userInterrupt();
+    expect((await report(h.controller.listen())).paused).toEqual(['reply']);
+    expect(h.traced.at(-1)).toMatch(/^report to listen: batches \[\], events \[interrupt\], paused \(reply\), \d+ chars$/);
   });
 
-  it('NoStaleReveal: Resume after a look-away reveals the cursor, not a point the programmer looked away from (#109)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, { say: 'Over there.' }]));
-    await until(controller.step([]));
-    expect(editor.focus).toBe('point');
-    controller.pause('away');
-    controller.resume();
-    expect(editor.revealedFocus).toBe('cursor');
-    expect(editor.focus).toBe('cursor');
+  it('NoStaleReveal, ReplyKeepsView: a resume after a look-away reveals the cursor, not the point, and a reply reveals nothing', async () => {
+    const h = await started();
+    scene().point = { file: A, start: 0, end: 1 };
+    scene().focus = 'point';
+    h.controller.pause('away');
+    h.controller.resume();
+    expect(scene().focus).toBe('cursor');
+    expect(h.editor.reveal.mock.calls).toHaveLength(1);
+    h.controller.pause('reply');
+    h.controller.resume('reply', { reveal: false });
+    expect(h.editor.reveal.mock.calls).toHaveLength(1);
+    scene().point = undefined;
+    h.controller.pause();
+    h.controller.resume();
+    expect(h.editor.reveal.mock.calls).toHaveLength(1);
+    scene().cursor = { file: A, offset: 0 };
+    scene().turn = 'user';
+    h.controller.pause();
+    h.controller.resume();
+    expect(h.editor.reveal.mock.calls).toHaveLength(1);
+    scene().turn = 'agent';
+    scene().focus = 'cursor';
+    h.controller.pause('away');
+    h.controller.resume();
+    expect(h.editor.reveal.mock.calls).toHaveLength(2);
   });
 
-  it('ReplyKeepsView: a reply resumes playback without revealing, after a look-away or with every tab closed (#125)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([]));
-    controller.pause('away');
-    controller.pause('reply');
-    controller.resume(undefined, { reveal: false });
-    expect(controller.isPaused).toBe(false);
-    controller.pause('reply');
-    controller.resume(undefined, { reveal: false });
-    expect(controller.isPaused).toBe(false);
-    expect(editor.reveals).toBe(0);
+  it('pauses and resumes with no session', () => {
+    const h = harness();
+    h.controller.pause();
+    h.controller.resume();
+    expect(h.controller.isPaused).toBe(false);
+  });
+});
+
+describe('commands to confirm', () => {
+  it('decides a run: yes once, yes for the session, no, an answer to another run, and nothing with no session', async () => {
+    const h = await started();
+    const once = stage().confirm(1, 'ls');
+    h.controller.decideRun(2, true);
+    expect(await pending(once)).toBe(true);
+    h.controller.decideRun(1, true);
+    expect(await once).toBe(true);
+    expect(scene().allowedCommands.size).toBe(0);
+    const remembered = stage().confirm(2, 'npm test');
+    h.controller.decideRun(2, true, /* remember= */ true);
+    expect(await remembered).toBe(true);
+    expect(scene().allowedCommands).toEqual(new Set(['npm test']));
+    const declined = stage().confirm(3, 'rm -rf .');
+    h.controller.decideRun(3, false, /* remember= */ true);
+    expect(await declined).toBe(false);
+    expect(scene().allowedCommands.has('rm -rf .')).toBe(false);
+    harness().controller.decideRun(1, true);
   });
 
-  it("CursorShown: the agent's next edit after a reply shows its file again (#125)", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([]));
-    // The programmer switches to b.ts: the fake's last shown file is the active editor.
-    editor.shown.push(editor.resolvePath('b.ts'));
-    controller.pause('reply');
-    controller.resume(undefined, { reveal: false });
-    expect(editor.shown.at(-1)).toBe(editor.resolvePath('b.ts'));
-    await until(controller.step([{ type: `!${CURSOR_MARKER}` }]));
-    await until(controller.step([]));
-    expect(editor.reveals).toBe(0);
-    expect(editor.shown.at(-1)).toBe(editor.resolvePath('a.ts'));
+  it('answers no for an interrupt while it waits, and at once when one came before it asked', async () => {
+    const h = await started();
+    const waiting = stage().confirm(1, 'ls');
+    h.controller.userInterrupt();
+    expect(await waiting).toBe(false);
+    expect(await stage().confirm(2, 'ls')).toBe(false);
+  });
+});
+
+describe('settings', () => {
+  it('takes the speeds, the timing, and whether commands are confirmed, for the stage', async () => {
+    const h = await started();
+    h.controller.setSpeed(2);
+    h.controller.setReadingSpeed(3);
+    h.controller.setConfirmCommands(false);
+    h.controller.setTiming({ glideMs: 1 });
+    expect([stage().speed(), stage().readingSpeed(), stage().config().confirmCommands]).toEqual([2, 3, false]);
+    expect(withOverrides).toHaveBeenCalledWith(defaultConfig.timing, { glideMs: 1 });
+    expect(h.controller.glideMs(10)).toBe(42);
+    expect(glideDuration).toHaveBeenCalledWith(defaultConfig.timing, 10, 2);
   });
 
-  it("leaves the view alone during the programmer's turn", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([]));
-    controller.takeTurn();
-    await until(controller.listen());
-    const pointed = await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }]));
-    expect(pointed.rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.point).toMatchObject({ file: editor.resolvePath('b.ts') });
-    expect(editor.focus).toBe('cursor');
-    expect(editor.shown).toEqual([editor.resolvePath('a.ts')]);
-    expect(editor.follows).toBe(1);
+  it('hands a passage to the calibration, refusing with none, and while one is under way', async () => {
+    const h = await started();
+    const passage = { title: 'Words', text: 'Some words.' };
+    expect(() => h.controller.calibrate(passage)).toThrow('This editor has no reading speed calibration.');
+    h.controller.onCalibrate = vi.fn(() => false);
+    expect(() => h.controller.calibrate(passage)).toThrow('A calibration is already under way in the Pair panel.');
+    h.controller.onCalibrate = vi.fn(() => true);
+    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage))).toEqual({ batches: [], events: [], turn: 'agent' });
+    expect(() => harness().controller.calibrate(passage)).toThrow('No pairing session is active.');
+  });
+});
+
+describe('the status in the panel', () => {
+  it("shows typing, reading, running, and paused while batches play, and navigator in the programmer's turn", async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    stage().render();
+    player().reading = true;
+    stage().render();
+    player().reading = false;
+    player().commandRunning = true;
+    stage().render();
+    h.controller.pause();
+    h.controller.resume();
+    player().commandRunning = false;
+    finish();
+    await settle();
+    h.controller.takeTurn();
+    expect(statuses(h)).toEqual(['thinking', 'typing', 'read', 'running', 'paused', 'running', 'thinking', 'navigator']);
+    expect(h.traced).toContain("status navigator, user's turn");
   });
 
-  it("follows the agent's keystrokes, moves, selections and points, not what it says", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\nb\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    await until(controller.step([]));
-    expect(editor.follows).toBe(1);
-    await until(controller.step([{ say: 'Now the rest.' }]));
-    await until(controller.step([]));
-    expect(editor.follows).toBe(1);
-    await until(controller.step([{ type: `xy${CURSOR_MARKER}` }, { select: { line: 2, text: 'b' } }, { point: { line: 1, text: 'axy' } }]));
-    await until(controller.step([]));
-    expect(editor.follows).toBe(5);
+  it('shows the cursor and its selection in the editor, and no cursor once the session closed', async () => {
+    const h = await started();
+    scene().cursor = { file: A, offset: 2 };
+    stage().render();
+    scene().selection = { start: 1, end: 2 };
+    stage().render();
+    expect(h.editor.renderCursor.mock.calls.slice(-2).map(([cursor]) => cursor)).toEqual([
+      { file: A, offset: 2 },
+      { file: A, offset: 2, selection: { start: 1, end: 2 } },
+    ]);
+    h.controller.endSession();
+    await report(h.controller.listen());
+    expect(h.editor.renderCursor.mock.calls.at(-1)?.[0]).toBeUndefined();
   });
 
-  it('brings back what the view follows on resume', async () => {
-    const { editor, controller } = setup({ 'a.ts': lines });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { point: { line: 35, text: 'line 35' } }]));
-    await until(controller.step([]));
-    controller.pause();
-    controller.resume();
-    expect(editor.reveals).toBe(1);
-    expect(editor.focus).toBe('point');
+  it('NoFlicker, GraceEnds: keeps listening after a listen times out with nothing to report, until the grace runs out', async () => {
+    const h = await started();
+    void h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    expect(statuses(h).at(-1)).toBe('listening');
+    await settle(CONFIG.listenGraceMs);
+    expect(statuses(h).at(-1)).toBe('thinking');
+  });
+
+  it('NoFalseYourMove: shows thinking when a listen times out with a batch to report', async () => {
+    const h = await started();
+    await report(h.controller.step(SAY));
+    await settle();
+    const listen = h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    await report(listen);
+    expect(statuses(h).at(-1)).toBe('thinking');
+  });
+
+  it('NoYourMoveAfterAct, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace', async () => {
+    const h = await started();
+    void h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    h.controller.userMessage('Wait.');
+    expect(statuses(h).at(-1)).toBe('thinking');
+    await report(h.controller.listen());
+    void h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    await report(h.controller.step([]));
+    expect(statuses(h).at(-1)).toBe('thinking');
+  });
+
+  it('AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls', async () => {
+    const h = await started();
+    await settle(CONFIG.absentMs);
+    expect(statuses(h).at(-1)).toBe('absent');
+    void h.controller.listen();
+    await settle();
+    expect(statuses(h).at(-1)).toBe('listening');
+    h.controller.userInterrupt();
+    await settle();
+    await h.controller.read('a.ts').catch(() => undefined);
+    void h.controller.listen();
+    await settle();
+    await h.controller.read('a.ts').catch(() => undefined);
+    h.controller.endSession();
+    await settle(CONFIG.absentMs);
+    expect(statuses(h).at(-1)).toBe('listening');
+  });
+
+  it('tells the panel and the window about each change, posting a status only when it changes', async () => {
+    const h = await started();
+    const changed = vi.fn<() => void>();
+    h.controller.onChange = changed;
+    stage().render();
+    stage().render();
+    expect(changed).toHaveBeenCalledTimes(2);
+    expect(statuses(h)).toEqual(['thinking']);
   });
 });
 
 describe('reports', () => {
-  it('shows the lines a batch changed, extended to the cursor, as they read when it ended, with context', async () => {
-    const { controller } = setup({ 'a.ts': '1\n2\n3\n4\na\nb\nc\n5\n6\n7\n8\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([
-      { move: { file: 'a.ts', line: 7, at: `c${CURSOR_MARKER}\n` } },
-      { type: `\n  x${CURSOR_MARKER}` },
-      { move: { line: 5, at: `a${CURSOR_MARKER}\n` } },
-    ]);
-    const report = await until(controller.step([]));
-    const [batch] = report.batches;
-    ok(batch);
-    expect(batch.code).toEqual({
-      file: 'a.ts',
-      lines: [
-        { number: 2, text: '2' },
-        { number: 3, text: '3' },
-        { number: 4, text: '4' },
-        { number: 5, text: `a${CURSOR_MARKER}` },
-        { number: 6, text: 'b' },
-        { number: 7, text: 'c' },
-        { number: 8, text: '  x' },
-        { number: 9, text: '5' },
-        { number: 10, text: '6' },
-        { number: 11, text: '7' },
-      ],
-    });
-    // The code shows the cursor, so the report doesn't repeat it.
-    expect(report.cursor).toBeUndefined();
-  });
-
-  it('says where the code reaches the end of the file, and whether a newline ends it', async () => {
-    const { controller } = setup({ 'a.ts': 'a\n\n', 'b.ts': 'a\nb' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, at: `a${CURSOR_MARKER}` } }]));
-    const blank = await until(controller.step([{ move: { file: 'b.ts', line: 1, at: `a${CURSOR_MARKER}` } }]));
-    // The blank line at the end is a line; the final newline isn't another one.
-    const [blankBatch] = blank.batches;
-    ok(blankBatch);
-    expect(blankBatch.code).toEqual({
-      file: 'a.ts',
-      lines: [
-        { number: 1, text: `a${CURSOR_MARKER}` },
-        { number: 2, text: '' },
-      ],
-      end: { final_newline: true },
-    });
-    // Typing a newline at the end of a file without one leaves the cursor after it.
-    const missing = await until(controller.step([{ move: { file: 'b.ts', line: 2, to: 'line_end' } }, { type: `\n${CURSOR_MARKER}` }]));
-    const [missingBatch] = missing.batches;
-    ok(missingBatch);
-    expect(missingBatch.code).toEqual({
-      file: 'b.ts',
-      lines: [
-        { number: 1, text: `a${CURSOR_MARKER}` },
-        { number: 2, text: 'b' },
-      ],
-      end: { final_newline: false },
-    });
-    // With the cursor after the final newline, its empty line is shown.
-    const after = await until(controller.step([]));
-    const [afterBatch] = after.batches;
-    ok(afterBatch);
-    expect(afterBatch.code).toEqual({
-      file: 'b.ts',
-      lines: [
-        { number: 1, text: 'a' },
-        { number: 2, text: 'b' },
-        { number: 3, text: CURSOR_MARKER },
-      ],
-      end: { final_newline: true },
-    });
-  });
-
-  it("skips the middle of long code, keeping the cursor's line", async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const body = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type_fast: `${body}${CURSOR_MARKER}` }]);
-    const report = await until(controller.step([]));
-    const [batch] = report.batches;
-    ok(batch?.code);
-    const numbers = batch.code.lines.map((l) => l.number);
-    expect(numbers.length).toBeLessThanOrEqual(41);
-    expect(numbers[0]).toBe(1);
-    expect(batch.code.lines.at(-1)).toEqual({ number: 60, text: `line 60${CURSOR_MARKER}` });
-  });
-
-  it("shows the cursor only when it isn't where the agent last saw it", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'abc\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, at: `ab${CURSOR_MARKER}c` } }]));
-    const report = await until(controller.step([{ say: 'Hm.' }]));
-    const [batch] = report.batches;
-    ok(batch);
-    expect(batch.code).toEqual({
-      file: 'a.ts',
-      lines: [{ number: 1, text: `ab${CURSOR_MARKER}c` }],
-      end: { final_newline: true },
-    });
-    expect(report.cursor).toBeUndefined();
-    const next = await until(controller.step([]));
-    expect(next.cursor).toBeUndefined();
-
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '\n' });
-    const moved = await until(controller.listen());
-    expect(moved.cursor).toEqual({
-      file: 'a.ts',
-      lines: [
-        { number: 1, text: '' },
-        { number: 2, text: `ab${CURSOR_MARKER}c` },
-      ],
-      end: { final_newline: true },
-    });
-  });
-
-  it("PlaysNothingTwice: returns what's left of a type cut inside its second part", async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `f(${CURSOR_MARKER}) {}` }]);
-    // 100 ms before the move, then 100 ms per character: into the second part, after ") ".
-    await advance(100 + 4 * 100 + 50);
-    expect(editor.text('a.ts')).toBe('f() ');
-    controller.userInterrupt();
-    const report = await until(controller.listen());
-    expect(report.batches[0]).toMatchObject({ status: 'interrupted', unplayed: [{ type: `${CURSOR_MARKER}{}` }] });
-  });
-
-  it('rejects a batch that works in more than one file at the action that switches, queueing nothing of it', async () => {
-    const { controller } = setup({ 'a.ts': '', 'b.ts': 'x' });
-    await controller.start();
-    await controller.read('b.ts');
-    const two = await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { point: { file: 'b.ts', line: 1, text: 'x' } },
-    ]);
-    expect(two.rejected).toMatchObject({ index: 2, error: { kind: 'invalid_action', message: containing('a.ts and b.ts') } });
-    // Naming its file again is fine.
-    const same = await controller.step([
-      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
-      { type: `x${CURSOR_MARKER}` },
-      { move: { file: 'a.ts', to: 'line_end' } },
-    ]);
-    expect(same.rejected).toBeUndefined();
-    const late = await controller.step([{ type: `y${CURSOR_MARKER}` }, { select: { file: 'b.ts', line: 1, text: 'x' } }]);
-    expect(late.rejected).toMatchObject({
-      index: 2,
-      error: { kind: 'invalid_action', message: containing("before the batch's first edit") },
-      code: { file: 'a.ts', lines: [{ number: 1, text: `xy${CURSOR_MARKER}` }] },
-    });
-  });
-
-  it("EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'ab\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    const named = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `c${CURSOR_MARKER}` }]));
-    expect(named.rejected).toBeUndefined();
-    const unnamed = await until(controller.step([{ type: `d${CURSOR_MARKER}` }]));
-    expect(unnamed.rejected).toBeUndefined();
-    const deleted = await until(controller.step([{ select: { line: 1, text: 'b' } }, { delete: true }]));
-    expect(deleted.rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('acd\n');
-  });
-
-  it("ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\nsecond\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    const pointed = await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, { point: { line: 2, text: 'second' } }]));
-    expect(pointed.rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.point).toMatchObject({ file: editor.resolvePath('b.ts') });
-    const selected = await until(
-      controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, { select: { line: 2, text: 'second' } }]),
-    );
-    expect(selected.rejected).toBeUndefined();
-  });
-
-  it("ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file", async () => {
-    const { controller } = setup({ 'b.ts': 'b\nsecond\n' });
-    await controller.start();
-    await controller.read('b.ts');
-    const report = await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, { point: { line: 2, text: 'second' } }]));
-    expect(report.rejected).toBeUndefined();
-  });
-
-  it('ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await until(controller.step([{ select: { file: 'a.ts', line: 1, text: 'a' } }]));
-    const edits: Action[] = [{ type: `y${CURSOR_MARKER}` }, { delete: true }];
-    for (const edit of edits) {
-      const report = await until(controller.step([{ point: { file: 'b.ts', line: 1, text: 'b' } }, edit]));
-      expect(report.rejected).toMatchObject({ index: 2, error: { kind: 'invalid_action', message: containing('b.ts') } });
-    }
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('a\n');
-    expect(editor.text('b.ts')).toBe('b\n');
-  });
-});
-
-describe('interruptions', () => {
-  it('DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'x\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    await until(controller.step([]));
-    // The programmer interrupts while the type reads the file's line ending: the second time, as
-    // the rehearsal reads it first.
-    const eol = editor.eol.bind(editor);
-    let calls = 0;
-    editor.eol = async (file) => {
-      if (++calls === 2) controller.userInterrupt();
-      return eol(file);
-    };
-    await controller.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
-    const report = await until(controller.listen());
-    expect(report.batches).toMatchObject([{ status: 'discarded', unplayed: [{ say: 'Typed.' }] }]);
-  });
-
-  it('NoMisplacedEdit, AcceptsUnanchored: refuses a batch after a discarded one unless it anchors the cursor with a file and line (specs/Anchor.tla)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'x\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    await until(controller.step([]));
-    const eol = editor.eol.bind(editor);
-    let calls = 0;
-    editor.eol = async (file) => {
-      if (++calls === 2) controller.userInterrupt();
-      return eol(file);
-    };
-    await controller.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
-    const report = await until(controller.listen());
-    expect(report.batches).toMatchObject([{ status: 'discarded' }]);
-    // Typing first, even after a say: refused at the type. A say alone passes.
-    const refused = await controller.step([{ say: 'Next.' }, { type: `y${CURSOR_MARKER}` }]);
-    expect(refused.rejected).toMatchObject({ index: 2, error: { kind: 'unanchored' } });
-    const talk = await until(controller.step([{ say: 'Still here.' }]));
-    expect(talk.rejected).toBeUndefined();
-    // A move with file and line anchors the cursor, and ends the requirement.
-    const anchored = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `y${CURSOR_MARKER}` }]));
-    expect(anchored.rejected).toBeUndefined();
-    await until(controller.step([]));
-    const free = await until(controller.step([{ type: `z${CURSOR_MARKER}` }]));
-    expect(free.rejected).toBeUndefined();
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('xyz\n');
-  });
-
-  it('OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'keep DELETE keep\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    // Holds the delete at its show(), as in the test below.
-    const show = editor.show.bind(editor);
-    const gate = Promise.withResolvers<void>();
-    const atGate = Promise.withResolvers<void>();
-    let calls = 0;
-    editor.show = async (file) => {
-      if (++calls === 2) {
-        atGate.resolve();
-        await gate.promise;
-      }
-      return show(file);
-    };
-    void controller.step([{ select: { file: 'a.ts', line: 1, text: 'DELETE' } }, { delete: true }]);
-    await until(atGate.promise);
-    controller.takeTurn();
-    editor.show = show;
-    gate.resolve();
-    const report = await until(controller.listen());
-    expect(editor.text('a.ts')).toBe('keep DELETE keep\n');
-    expect(report.batches).toMatchObject([{ id: 1, status: 'interrupted', unplayed: [{ delete: true }] }]);
-  });
-
-  it('DeleteEnds: a delete held at its awaits ends once they return, removing the selected text', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'keep DELETE keep\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    // Holds the delete at its show(), as in the test below.
-    const show = editor.show.bind(editor);
-    const gate = Promise.withResolvers<void>();
-    const atGate = Promise.withResolvers<void>();
-    let calls = 0;
-    editor.show = async (file) => {
-      if (++calls === 2) {
-        atGate.resolve();
-        await gate.promise;
-      }
-      return show(file);
-    };
-    void controller.step([{ select: { file: 'a.ts', line: 1, text: 'DELETE' } }, { delete: true }]);
-    await until(atGate.promise);
-    editor.show = show;
-    gate.resolve();
-    const report = await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('keep  keep\n');
-    expect(report.batches).toMatchObject([{ id: 1, status: 'completed' }]);
-  });
-
-  it('EditInterrupts: stops a delete when the programmer edits while it starts, and deletes nothing', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'keep DELETE keep\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    // Holds the delete at its show(): during play, the select's show is the first call and the delete's the second.
-    const show = editor.show.bind(editor);
-    const gate = Promise.withResolvers<void>();
-    const atGate = Promise.withResolvers<void>();
-    let calls = 0;
-    editor.show = async (file) => {
-      if (++calls === 2) {
-        atGate.resolve();
-        await gate.promise;
-      }
-      return show(file);
-    };
-    void controller.step([{ select: { file: 'a.ts', line: 1, text: 'DELETE' } }, { delete: true }]);
-    await until(atGate.promise);
-    // The programmer types in front of the selection while the delete waits.
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '>>>' });
-    editor.show = show;
-    gate.resolve();
-    const report = await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('>>>keep DELETE keep\n');
-    expect(report.batches).toMatchObject([{ id: 1, status: 'interrupted', unplayed: [{ delete: true }] }]);
-  });
-
-  it('PlaysAfterCompleted: shows the code as far as it got, returns the rest of the cut action, and discards the queued batch', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `hello world${CURSOR_MARKER}` }]);
-    const second = controller.step([{ type: `!${CURSOR_MARKER}` }]);
-
-    await advance(450);
-    expect(editor.text('a.ts')).toBe('hel');
-    controller.userMessage('use zod');
-
-    const report = await until(second);
-    expect(report).toEqual({
-      batches: [
-        {
-          id: 1,
-          status: 'interrupted',
-          code: { file: 'a.ts', lines: [{ number: 1, text: `hel${CURSOR_MARKER}` }], end: { final_newline: false } },
-          unplayed: [{ type: `lo world${CURSOR_MARKER}` }],
-        },
-        { id: 2, status: 'discarded', unplayed: [{ type: `!${CURSOR_MARKER}` }] },
-      ],
-      events: [{ kind: 'message', text: 'use zod' }],
-      turn: 'agent',
-    });
-    await advance(1000);
-    expect(editor.text('a.ts')).toBe('hel');
-  });
-
-  it("PlaysKnowingEvents: discards a batch planned before an interruption the agent hasn't seen", async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `ab${CURSOR_MARKER}` }]);
-    await advance(1000);
-    controller.userInterrupt();
-
-    const stale = await controller.step([{ type: `c${CURSOR_MARKER}` }]);
-    expect(stale.batches.map((b) => [b.id, b.status])).toEqual([
-      [1, 'completed'],
-      [2, 'discarded'],
-    ]);
-    expect(stale.events).toEqual([{ kind: 'interrupt' }]);
-
-    const fresh = await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `c${CURSOR_MARKER}` }]);
-    expect(fresh.submitted).toEqual({ id: 3, status: 'playing' });
-    await advance(500);
-    expect(editor.text('a.ts')).toBe('abc');
-  });
-
-  it('NetReported: reports programmer edits as diffs and moves the agent cursor with them', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, at: `hello${CURSOR_MARKER}` } }]);
-    const listen = controller.listen();
-    const listening = track(listen);
-    await advance(500);
-    expect(listening.done).toBe(false);
-
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'XX' });
-    const report = await until(listen);
-    expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+XXhello'), by: 'programmer' }]);
-    // The batch's code showed the cursor before the edit, so the report shows where it is now.
-    expect(report.cursor).toEqual({ file: 'a.ts', lines: [{ number: 1, text: `XXhello${CURSOR_MARKER}` }], end: { final_newline: true } });
-  });
-
-  it("reports changes the programmer didn't make to other files without interrupting, or waking `listen`", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\n', 'package.json': '{}\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    await advance(200);
-    editor.otherEdit('package.json', { offset: 1, deleteLength: 0, text: '"x": 1' });
-
-    const report = await until(controller.step([{ type: `d${CURSOR_MARKER}` }]));
-    expect(report.batches).toMatchObject([{ id: 1, status: 'completed' }]);
-    expect(report.events).toEqual([{ kind: 'edit', file: 'package.json', diff: containing('+{"x": 1}'), by: 'other' }]);
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('helloabcd\n');
-
-    const listening = track(controller.listen());
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// formatted\n' });
-    await advance(5000);
-    expect(listening.done).toBe(false);
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '!' });
-    await advance(10);
-    ok(listening.value);
-    expect(listening.value.events).toMatchObject([{ kind: 'edit', file: 'a.ts', by: 'programmer' }]);
-  });
-
-  it("interrupts on a change the programmer didn't make to a file the batches edit, planned against the text before it", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    const queued = track(controller.step([{ type: `d${CURSOR_MARKER}` }]));
-    await advance(200);
-    // A formatter, say.
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// formatted\n' });
-    await advance(10);
-    expect(queued.done).toBe(true);
-    ok(queued.value);
-    expect(queued.value.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+// formatted'), by: 'other' }]);
-    expect(queued.value.batches).toMatchObject([
-      { id: 1, status: 'interrupted' },
-      { id: 2, status: 'discarded', unplayed: [{ type: `d${CURSOR_MARKER}` }] },
-    ]);
-    // As far as the interrupted batch got, and nothing of the discarded one.
-    expect(editor.text('a.ts')).toMatch(/^\/\/ formatted\nhello(a|ab|abc)?\n$/);
-  });
-
-  it('discards the batch queued behind one whose save a formatter changed, which completes', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\n' });
-    const save = editor.save.bind(editor);
-    let formatted = false;
-    editor.save = async (file) => {
-      await save(file);
-      if (formatted) return;
-      formatted = true;
-      editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// formatted\n' });
-    };
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    const report = await until(controller.step([{ type: `d${CURSOR_MARKER}` }]));
-    expect(report.batches).toMatchObject([
-      { id: 1, status: 'completed' },
-      { id: 2, status: 'discarded' },
-    ]);
-    expect(report.events).toMatchObject([{ kind: 'edit', file: 'a.ts', by: 'other' }]);
-    expect(editor.text('a.ts')).toBe('// formatted\nhelloabc\n');
-  });
-
-  it("reports a file's edits as the programmer's if any of them was", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\n' });
-    await controller.start();
-    const listen = controller.listen();
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: 'A' });
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'B' });
-    const report = await until(listen);
-    expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+BAhello'), by: 'programmer' }]);
-  });
-});
-
-describe('edits with no net change', () => {
-  it('Explained: reports an interrupting edit the programmer undid, so the agent knows why its batches were discarded (specs/EditEvents.tla)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'abc\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
-    const queued = controller.step([{ type: `y${CURSOR_MARKER}` }]);
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '#' });
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 1, text: '' });
-    const report = await until(queued);
-    expect(report.batches.map((b) => b.status)).toContain('discarded');
-    expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: '', by: 'programmer' }]);
-  });
-
-  it("leaves out a tool's edit with no net change that interrupted nothing", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'abc\n', 'b.ts': 'b\n' });
-    await controller.start();
-    editor.otherEdit('b.ts', { offset: 0, deleteLength: 0, text: '#' });
-    editor.otherEdit('b.ts', { offset: 0, deleteLength: 1, text: '' });
-    controller.userMessage('hi');
-    const report = await until(controller.listen());
-    expect(report.events.map((e) => e.kind)).toEqual(['message']);
-  });
-});
-
-describe('turns', () => {
-  it('NotWhileTyping, EditsReported: waits for the programmer to pause again when they resume typing before the agent listens (specs/Navigator.tla)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'abc\n' });
-    await controller.start();
-    controller.takeTurn();
-    await until(controller.listen());
-    editor.userEdit('a.ts', { offset: 3, deleteLength: 0, text: 'd' });
-    // A pause, with no listen waiting: the timer fires.
-    await advance(1100);
-    // Typing again, then the agent listens: not mid-word.
-    editor.userEdit('a.ts', { offset: 4, deleteLength: 0, text: 'e' });
-    const following = track(controller.listen());
-    await advance(500);
-    expect(following.done).toBe(false);
-    await advance(600);
-    expect(following.done).toBe(true);
-    ok(following.value);
-    expect(following.value.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+abcde'), by: 'programmer' }]);
-  });
-
-  it("OnlyTalkInTheirTurn: lets the agent only comment during the programmer's turn", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'for (i <= n)\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    await advance(500);
-
-    controller.takeTurn();
-    const taken = await until(controller.listen());
-    expect(taken.turn).toBe('user');
-    expect(taken.events).toEqual([{ kind: 'turn', to: 'user' }]);
-
-    const refused = await controller.step([{ type: `x${CURSOR_MARKER}` }]);
-    expect(refused.rejected).toMatchObject({ error: { kind: 'not_your_turn' } });
-
-    await controller.step([{ point: { text: '<=' } }, { say: 'Careful, this goes one past the end.' }]);
-    await advance(3000);
-    expect(editor.point).toEqual({ file: editor.resolvePath('a.ts'), start: 7, end: 9 });
-
-    // Edits are reported once the programmer pauses typing.
-    const following = track(controller.listen());
-    editor.userEdit('a.ts', { offset: 7, deleteLength: 2, text: '<' });
-    await advance(500);
-    expect(following.done).toBe(false);
-    await advance(600);
-    expect(following.done).toBe(true);
-    ok(following.value);
-    expect(following.value.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: containing('+for (i < n)'), by: 'programmer' }]);
-
-    const handedBack = track(controller.listen());
-    controller.handBack('finish it');
-    await advance(10);
-    ok(handedBack.value);
-    expect(handedBack.value.events).toEqual([{ kind: 'turn', to: 'agent', message: 'finish it' }]);
-    expect(handedBack.value.turn).toBe('agent');
-  });
-
-  it('QuietDelivered: reports an edit the programmer made in their turn, which interrupted nothing, when they hand the turn back', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'abc\n' });
-    await controller.start();
-    controller.takeTurn();
-    await until(controller.listen());
-    editor.userEdit('a.ts', { offset: 3, deleteLength: 0, text: 'd' });
-    const handedBack = track(controller.listen());
-    controller.handBack();
-    await advance(10);
-    ok(handedBack.value);
-    expect(handedBack.value.events).toEqual([
-      { kind: 'edit', file: 'a.ts', diff: containing('+abcd'), by: 'programmer' },
-      { kind: 'turn', to: 'agent' },
-    ]);
-  });
-});
-
-describe('cancellation', () => {
-  it('CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    await advance(500);
-    const abort = new AbortController();
-    const cancelled = track(controller.listen(abort.signal));
-    await advance(10);
-    abort.abort();
-    await advance(10);
-    expect(cancelled.error).toMatchObject({ code: 'cancelled' });
-
-    // The next call isn't stuck behind the cancelled one, and gets the report.
-    controller.userMessage('hello');
-    const report = await until(controller.listen());
-    expect(report.batches).toMatchObject([{ id: 1, status: 'completed' }]);
-    expect(report.events).toEqual([{ kind: 'message', text: 'hello' }]);
-  });
-
-  it("CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later", async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `ab${CURSOR_MARKER}` }]);
-    const abort = new AbortController();
-    const second = track(controller.step([{ type: `c${CURSOR_MARKER}` }], abort.signal));
-    await advance(10);
-    expect(second.done).toBe(false);
-    abort.abort();
-    await advance(10);
-    expect(second.error).toMatchObject({ code: 'cancelled' });
-
-    await advance(1000);
-    expect(editor.text('a.ts')).toBe('abc');
-    const report = await until(controller.step([]));
-    expect(report.batches.map((b) => [b.id, b.status])).toEqual([
-      [1, 'completed'],
-      [2, 'completed'],
-    ]);
-  });
-
-  it('CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `ab${CURSOR_MARKER}` }]);
-    const abort = new AbortController();
-    const second = track(controller.step([{ type: `c${CURSOR_MARKER}` }], abort.signal));
-    await Promise.resolve();
-    abort.abort();
-    await advance(10);
-    expect(second.error).toMatchObject({ code: 'cancelled' });
-
-    // Canceled during the rehearsal, not before it: the batch was queued, and still plays.
-    await advance(1000);
-    expect(editor.text('a.ts')).toBe('abc');
-    const report = await until(controller.step([]));
-    expect(report.batches.map((b) => [b.id, b.status])).toEqual([
-      [1, 'completed'],
-      [2, 'completed'],
-    ]);
-  });
-
-  it('CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { maxBlockMs: 1000 });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    const listening = track(controller.listen());
-    const abort = new AbortController();
-    const waiting = track(controller.step([{ type: `x${CURSOR_MARKER}` }], abort.signal));
-    await advance(10);
-    abort.abort();
-    await advance(10);
-    // It settles when its turn comes, once the listen before it has returned.
-    expect(waiting.done).toBe(false);
-
-    await advance(1000);
-    expect(listening.done).toBe(true);
-    expect(waiting.error).toMatchObject({ code: 'cancelled' });
-    await advance(500);
-    expect(editor.text('a.ts')).toBe('');
-    const report = await until(controller.step([]));
-    expect(report.batches).toEqual([]);
-  });
-
-  it('HeldMeansStale: reports a returned rejection again, discarding steps until it has', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const rejected = await controller.step([{ move: { file: 'a.ts', line: 5, to: 'line_end' } }]);
-    expect(rejected.rejected).toBeDefined();
-
-    // The agent cancelled the step as it returned, so the relay hands the report back.
-    controller.restore(rejected);
-
-    // A step sent meanwhile is discarded, and its report carries the rejection.
-    const write: Action[] = [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }];
-    const next = await until(controller.step(write));
-    expect(next.rejected).toEqual(rejected.rejected);
-    expect(next.batches).toMatchObject([{ status: 'discarded', unplayed: write }]);
-
-    // Once it has been reported, steps play again.
-    const after = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    expect(after.rejected).toBeUndefined();
-    expect(after.submitted).toMatchObject({ status: 'playing' });
-  });
-
-  it("NoUnmarkedRepeat: says a returned report may repeat one already seen, when the relay can't tell (#67)", async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const listening = controller.listen();
-    controller.userMessage('hello');
-    const seen = await until(listening);
-    controller.restore(seen, /* mayRepeat= */ true);
-    const again = await until(controller.listen());
-    expect(again).toMatchObject({ events: seen.events, repeated: true });
-    controller.userMessage('next');
-    expect((await until(controller.listen())).repeated).toBeUndefined();
-    // A report the agent surely never saw comes back unmarked.
-    controller.userMessage('unseen');
-    const unseen = await until(controller.listen());
-    controller.restore(unseen);
-    expect((await until(controller.listen())).repeated).toBeUndefined();
-  });
-
-  it('NoUnmarkedRepeat: marks each report that carries a returned rejection the agent may have seen (specs/Controller.tla)', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const seen = await controller.step([{ move: { file: 'a.ts', line: 5, to: 'line_end' } }]);
-    const unseen = await controller.step([{ move: { file: 'a.ts', line: 6, to: 'line_end' } }]);
-    // A cancel before the second step's answer, then one after the first's, which the agent took.
-    controller.restore(unseen);
-    controller.restore(seen, /* mayRepeat= */ true);
-    const first = await until(controller.listen());
-    const second = await until(controller.listen());
-    expect([first.rejected, second.rejected]).toEqual([unseen.rejected, seen.rejected]);
-    expect(second.repeated).toBe(true);
-  });
-
-  it('BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call (specs/Controller.tla)', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const seen = await controller.step([{ move: { file: 'a.ts', line: 5, to: 'line_end' } }]);
-    const unseen = await controller.step([{ move: { file: 'a.ts', line: 6, to: 'line_end' } }]);
-    controller.restore(unseen);
-    controller.restore(seen, /* mayRepeat= */ true);
-    controller.endSession();
-    const ending = await until(controller.listen());
-    expect([ending.events.map((e) => e.kind), ending.rejected]).toEqual([['end'], unseen.rejected]);
-    expect((await until(controller.listen())).rejected).toEqual(seen.rejected);
-    await expect(controller.listen()).rejects.toMatchObject({ code: 'no_session' });
-  });
-
-  it("says a file to read doesn't exist, and that a move creates it (#89)", async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    await expect(controller.read('new.ts')).rejects.toMatchObject({
-      code: 'invalid_arguments',
-      message: matching(/new\.ts doesn't exist.*`move`/),
-    });
-  });
-
-  it('EventsDelivered, EndDelivered: reports a returned report again after the programmer ended the session with it (#60)', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const listening = controller.listen();
-    controller.userMessage('one more thing');
-    controller.endSession();
-    const ending = await until(listening);
-    expect(ending.events.map((e) => e.kind)).toEqual(['message', 'end']);
-
-    // The agent cancelled the listen as it returned, so the relay hands the report back.
-    controller.restore(ending);
-    const again = await until(controller.listen());
-    expect(again.events).toEqual(ending.events);
-    await expect(controller.listen()).rejects.toMatchObject({ code: 'no_session' });
-  });
-
-  it('EndDelivered: reports a returned report again when the programmer ends the session before it comes back (#60)', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const listening = controller.listen();
-    controller.userMessage('stop');
-    const stopped = await until(listening);
-    controller.endSession();
-    controller.restore(stopped);
-    const again = await until(controller.listen());
-    expect(again.events.map((e) => e.kind)).toEqual(['message', 'end']);
-  });
-});
-
-describe('sessions', () => {
-  it('rejects tools outside a session and a second start', async () => {
-    const { controller } = setup();
-    await expect(controller.step([])).rejects.toMatchObject({ code: 'no_session' });
-    // `read` too rejects, rather than throwing before it returns (#12).
-    let reading: Promise<unknown> | undefined;
-    expect(() => {
-      reading = controller.read('a.ts');
-    }).not.toThrow();
-    await expect(reading).rejects.toMatchObject({ code: 'no_session' });
-    await controller.start();
-    await expect(controller.start()).rejects.toMatchObject({ code: 'session_active' });
-  });
-
-  it('EndDelivered: ends when the programmer ends it, delivering a final report', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const listening = track(controller.listen());
-    controller.endSession();
-    await advance(10);
-    ok(listening.value);
-    expect(listening.value.events).toEqual([{ kind: 'end' }]);
-    await expect(controller.listen()).rejects.toMatchObject({ code: 'no_session' });
-  });
-
-  it('plays out the queue when the agent ends, then allows a new session', async () => {
-    const { editor, panel, controller } = setup({ 'a.ts': '' });
-    await controller.start('first');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    const final = await until(controller.end('Done.'));
-    expect(final.batches).toMatchObject([{ id: 1, status: 'completed' }]);
-    expect(editor.text('a.ts')).toBe('abc');
-    expect(panel.events).toContainEqual({ type: 'session', active: false, reason: 'agent', summary: 'Done.' });
-    await expect(controller.listen()).rejects.toMatchObject({ code: 'no_session' });
-
-    await controller.start('second');
-    expect(controller.isActive).toBe(true);
-  });
-
-  it("reads a file's lines as reports show them, saying where it ends", async () => {
-    const { controller } = setup({ 'a.ts': 'a\n\n', 'b.ts': 'a\nb', 'c.ts': '' });
-    await controller.start();
-    expect(await controller.read('a.ts')).toEqual({
-      file: 'a.ts',
-      dirty: false,
-      lines: [
-        { number: 1, text: 'a' },
-        { number: 2, text: '' },
-      ],
-      end: { final_newline: true },
-    });
-    expect(await controller.read('b.ts', /* fromLine= */ 1, /* toLine= */ 1)).toEqual({
-      file: 'b.ts',
-      dirty: false,
-      lines: [{ number: 1, text: 'a' }],
-    });
-    expect((await controller.read('b.ts', /* fromLine= */ 2)).end).toEqual({ final_newline: false });
-    expect(await controller.read('c.ts')).toEqual({ file: 'c.ts', dirty: false, lines: [], end: { final_newline: true } });
-  });
-
-  it('reads a file as the queued batches will leave it, while they still play, but not after an interruption', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    async function lines(file: string): Promise<string[]> {
-      return (await controller.read(file)).lines.map((l) => l.text);
-    }
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `\nbc${CURSOR_MARKER}` }]);
-    const queued = controller.step([{ type: `\nd${CURSOR_MARKER}` }]);
-    await advance(10);
-    expect(editor.text('a.ts')).toBe('a\n');
-    expect(await lines('a.ts')).toEqual(['a', 'bc', 'd']);
-    // Files the batches don't edit read as they are.
-    expect(await lines('b.ts')).toEqual(['b']);
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: '!' });
-    expect(`${(await lines('a.ts')).join('\n')}\n`).toBe(editor.text('a.ts'));
-    await until(queued);
-    expect(`${(await lines('a.ts')).join('\n')}\n`).toBe(editor.text('a.ts'));
-  });
-
-  it("resolves paths under the agent's root into the editor's canonical form", async () => {
-    const { editor, controller } = setup();
-    editor.resolvePath = (file) => nodePath.resolve('/project', file).toLowerCase();
-    await controller.start(undefined, '/Project');
-    const file = nodePath.resolve('/Project', 'A.ts').toLowerCase();
-    await controller.step([{ move: { file: 'A.ts', line: 1, to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
-    const listening = controller.listen();
-    await advance(1000);
-    editor.files.set(file, 'XXabc');
-    editor.controller?.userEdit(file, 'abc', 'XXabc', [{ offset: 0, deleteLength: 0, text: 'XX' }]);
-    const report = await until(listening);
-    expect(editor.shown).toEqual([file]);
-    expect(editor.cursor).toMatchObject({ file, offset: 5 });
-    expect(report.cursor?.file).toBe('a.ts');
-  });
-
-  it('ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory (specs/Resume.tla)', async () => {
-    const { controller } = setup({ 'a.ts': 'a\n' });
-    await controller.start('the task');
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    await until(controller.step([]));
-    controller.disconnect();
-    expect(controller.isActive).toBe(true);
-    controller.userMessage('still there?');
-    const resumed = await until(controller.start('the task'));
-    expect(resumed).toMatchObject({ resumed: true, events: [{ kind: 'message', text: 'still there?' }], turn: 'agent' });
-    expect(resumed.cursor?.file).toBe('a.ts');
-  });
-
-  it('WaitsProp: starts a new session from another directory, ending the suspended one (specs/Resume.tla)', async () => {
-    const { controller } = setup();
-    await controller.start('one', '/a');
-    controller.disconnect();
-    controller.userMessage('for the first');
-    const other = await until(controller.start('two', '/b'));
-    expect(other).toEqual({ batches: [], events: [], turn: 'agent' });
-  });
-
-  it('WaitsProp: closes a suspended session at once when the programmer ends it (specs/Resume.tla)', async () => {
-    const { controller } = setup();
-    await controller.start();
-    controller.disconnect();
-    controller.endSession();
-    expect(controller.isActive).toBe(false);
-    expect((await until(controller.start())).resumed).toBeUndefined();
-  });
-
-  it('SavedIsCurrent, NotLostProp: brings back a session the window saved, suspended, after a reload (specs/Resume.tla)', async () => {
-    const before = setup({ 'a.ts': 'one\ntwo\n' });
-    await before.controller.start('the task');
-    await before.controller.read('a.ts');
-    await before.controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }]);
-    await until(before.controller.step([]));
-    before.controller.userMessage('still there?');
-    const saved = throughStorage(before.controller.saved);
-    const after = setup({ 'a.ts': 'one\ntwo\n' });
-    after.controller.revive(saved);
-    expect(after.controller.isSuspended).toBe(true);
-    const resumed = await until(after.controller.start('the task'));
-    expect(resumed).toMatchObject({ resumed: true, events: [{ kind: 'message', text: 'still there?' }] });
-    expect(resumed.cursor?.lines.find((l) => l.text.includes(CURSOR_MARKER))?.number).toBe(2);
-  });
-
-  it('ShownIsState: a revived session tells the panel it is suspended (#138)', async () => {
-    const before = setup();
-    await before.controller.start('the task');
-    const saved = throughStorage(before.controller.saved);
-    const after = setup();
-    after.controller.revive(saved);
-    expect(after.panel.events).toContainEqual({ type: 'session', active: true, task: 'the task', suspended: true });
-  });
-});
-
-describe('shared selections', () => {
-  const selection = {
-    file: '/project/a.ts',
-    from: { line: 2, column: 1 },
-    to: { line: 2, column: 6 },
-    text: 'hello',
-  };
-
-  it("sends the programmer's selection along with a message", async () => {
-    const { panel, controller } = setup({ 'a.ts': 'x\nhello\n' });
-    await controller.start();
-    const listen = controller.listen();
-    controller.userMessage('what does this do?', selection);
-    const report = await until(listen);
-    expect(report.events).toEqual([{ kind: 'message', text: 'what does this do?', selection: { ...selection, file: 'a.ts' } }]);
-    expect(panel.events).toContainEqual({
-      type: 'user',
-      text: 'what does this do?',
-      ref: { file: 'a.ts', line: 2, endLine: 2 },
-    });
-  });
-
-  it('sends it along when the turn is handed back', async () => {
-    const { controller } = setup({ 'a.ts': 'x\nhello\n' });
-    await controller.start();
-    controller.takeTurn();
-    await until(controller.listen());
-    const listen = controller.listen();
-    controller.handBack('finish this', selection);
-    const report = await until(listen);
-    expect(report.events).toEqual([{ kind: 'turn', to: 'agent', message: 'finish this', selection: { ...selection, file: 'a.ts' } }]);
-  });
-});
-
-describe('run', () => {
-  it('EventuallyReported: runs a command, reporting its output and exit code with the batch', async () => {
-    const { editor, panel, controller } = setup({}, { confirmCommands: false });
-    editor.commandScript.set('npm test', { ms: 3000, exitCode: 0, output: '4 passed' });
-    await controller.start(undefined, '/project/sub');
-    await controller.step([{ say: "Let's run the tests." }, { run: 'npm test' }]);
-    await advance(1000);
-    expect(editor.state).toBe('running');
-
-    const report = await until(controller.step([]));
-    expect(report.batches).toEqual([
-      {
-        id: 1,
-        status: 'completed',
-        runs: [{ command: 'npm test', exit_code: 0, output: '4 passed', shell: 'bash' }],
-      },
-    ]);
-    const [command] = editor.commands;
-    ok(command);
-    expect(command.options).toMatchObject({ cwd: editor.resolvePath('sub'), waitMs: 120_000 });
-    expect(panel.events.filter((e) => e.type === 'run').map((e) => e.type === 'run' && e.phase)).toEqual(['running', 'done']);
-  });
-
-  it('fails the batch on a nonzero exit, without returning the command as unplayed', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { confirmCommands: false });
-    editor.commandScript.set('npm test', { ms: 100, exitCode: 1, output: '1 failed' });
-    await controller.start();
-    await controller.step([{ run: 'npm test' }, { say: 'All green.' }]);
-    const next = controller.step([{ say: 'Next.' }]);
-    const report = await until(next);
-    expect(report.batches).toMatchObject([
-      {
-        id: 1,
-        status: 'failed',
-        unplayed: [{ say: 'All green.' }],
-        error: { kind: 'command_failed' },
-        runs: [{ command: 'npm test', exit_code: 1, output: '1 failed' }],
-      },
-      { id: 2, status: 'discarded' },
-    ]);
-  });
-
-  it('saves what the batch has typed before running a command, so the command reads it from disk', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { confirmCommands: false });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }, { run: 'tsc' }]);
-    await until(controller.step([]));
-    expect(editor.commands).toMatchObject([{ command: 'tsc', unsaved: [] }]);
-    expect(editor.saved).toContain(editor.resolvePath('a.ts'));
-  });
-
-  it('leaves a long-running command running after `wait`', async () => {
-    const { editor, controller } = setup({}, { confirmCommands: false });
-    editor.commandScript.set('npm start', { ms: 1_000_000, output: 'listening on 3000' });
-    await controller.start();
-    await controller.step([{ run: 'npm start', wait: 2 }]);
-    const report = await until(controller.step([]));
-    expect(report.batches).toEqual([
-      {
-        id: 1,
-        status: 'completed',
-        runs: [{ command: 'npm start', output: 'listening on 3000', running: true }],
-      },
-    ]);
-  });
-
-  it('tells the panel when a command left running ends later', async () => {
-    const { editor, panel, controller } = setup({}, { confirmCommands: false });
-    editor.commandScript.set('npm start', { ms: 10_000, exitCode: 1 });
-    await controller.start();
-    await controller.step([{ run: 'npm start', wait: 2 }]);
-    await until(controller.step([]));
-    function phases(): Array<[string, number | undefined]> {
-      return panel.events.flatMap((e): Array<[string, number | undefined]> => (e.type === 'run' ? [[e.phase, e.exitCode]] : []));
-    }
-    expect(phases()).toEqual([
-      ['running', undefined],
-      ['background', undefined],
-    ]);
-    await advance(8000);
-    expect(phases().at(-1)).toEqual(['exited', 1]);
-  });
-
-  it('PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running', async () => {
-    const { editor, controller } = setup({}, { confirmCommands: false });
-    editor.commandScript.set('npm test', { ms: 60_000, exitCode: 0 });
-    await controller.start();
-    await controller.step([{ run: 'npm test' }, { say: 'Done.' }]);
-    await advance(500);
-    controller.userInterrupt();
-    const report = await until(controller.listen());
-    expect(report.batches).toMatchObject([{ id: 1, status: 'interrupted', unplayed: [{ say: 'Done.' }], runs: [{ running: true }] }]);
-  });
-
-  it("doesn't run a command interrupted before its terminal was ready", async () => {
-    const { editor, controller } = setup({}, { confirmCommands: false });
-    editor.commandScript.set('npm test', { startMs: 3000, ms: 100, exitCode: 0 });
-    await controller.start();
-    await controller.step([{ run: 'npm test' }]);
-    await advance(1000);
-    controller.userInterrupt();
-    const report = await until(controller.listen());
-    expect(report.batches).toEqual([{ id: 1, status: 'discarded', unplayed: [{ run: 'npm test' }] }]);
-    expect(editor.commands).toEqual([]);
-  });
-
-  it('asks the programmer first, and fails the batch when they decline', async () => {
-    const { editor, panel, controller } = setup();
-    await controller.start();
-    await controller.step([{ run: 'rm -rf build' }]);
-    await advance(5000);
-    expect(editor.commands).toEqual([]);
-    expect(editor.state).toBe('read');
-    const confirm = panel.events.find((e) => e.type === 'run' && e.phase === 'confirm');
-    ok(confirm);
-
-    controller.decideRun(confirm.type === 'run' ? confirm.id : -1, /* run= */ false);
-    const report = await until(controller.listen());
-    expect(report.batches).toMatchObject([
-      { id: 1, status: 'failed', error: { kind: 'command_declined' }, unplayed: [{ run: 'rm -rf build' }] },
-    ]);
-    expect(editor.commands).toEqual([]);
-  });
-
-  it('runs a command allowed for the session without asking again, until the session ends', async () => {
-    const { editor, panel, controller } = setup();
-    function confirms(): PanelEvent[] {
-      return panel.events.filter((e) => e.type === 'run' && e.phase === 'confirm');
-    }
-    function allow(remember: boolean): void {
-      const last = confirms().at(-1);
-      ok(last);
-      controller.decideRun(last.type === 'run' ? last.id : -1, /* run= */ true, remember);
-    }
-    await controller.start();
-    await controller.step([{ run: 'npm test' }]);
-    await advance(10);
-    allow(/* remember= */ true);
-    await until(controller.step([{ run: 'npm test' }]));
-    await until(controller.step([{ run: 'npm run build' }]));
-    expect(confirms()).toHaveLength(2);
-    allow(/* remember= */ false);
-    await until(controller.step([]));
-    expect(editor.commands.map((c) => c.command)).toEqual(['npm test', 'npm test', 'npm run build']);
-
-    await until(controller.end());
-    await controller.start();
-    await controller.step([{ run: 'npm test' }]);
-    await advance(10);
-    expect(confirms()).toHaveLength(3);
-  });
-
-  it('runs once the programmer allows it', async () => {
-    const { editor, panel, controller } = setup();
-    await controller.start();
-    await controller.step([{ run: 'npm test' }]);
-    await advance(10);
-    const confirm = panel.events.find((e) => e.type === 'run' && e.phase === 'confirm');
-    ok(confirm);
-    controller.decideRun(confirm.type === 'run' ? confirm.id : -1, /* run= */ true);
-    const report = await until(controller.step([]));
-    expect(report.batches[0]).toMatchObject({ status: 'completed', runs: [{ command: 'npm test', exit_code: 0 }] });
-    expect(editor.commands.map((c) => c.command)).toEqual(['npm test']);
-  });
-
-  it('stops at once when the programmer interrupts while it saves, before it asks', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'x\n' });
-    const save = editor.save.bind(editor);
-    editor.save = async (file) => {
-      await save(file);
-      controller.userInterrupt();
-    };
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `y${CURSOR_MARKER}` }, { run: 'npm test' }]);
-    const report = await until(controller.listen(), /* maxMs= */ 1000);
-    expect(report.batches).toMatchObject([{ id: 1, status: 'interrupted' }]);
-    expect(editor.commands).toEqual([]);
-  });
-
-  it("is not allowed during the programmer's turn", async () => {
-    const { editor, controller } = setup({}, { confirmCommands: false });
-    await controller.start();
-    controller.takeTurn();
-    await until(controller.listen());
-    const report = await controller.step([{ run: 'npm test' }]);
-    expect(report.rejected).toMatchObject({ error: { kind: 'not_your_turn' } });
-    expect(editor.commands).toEqual([]);
-  });
-});
-
-describe('saving', () => {
-  it("says which files a batch couldn't save", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'x\n' });
-    editor.save = () => Promise.reject(new Error('the file on disk is newer'));
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: ` // a${CURSOR_MARKER}` }]);
-    const report = await until(controller.step([]));
-    expect(report.batches[0]).toMatchObject({ status: 'completed', unsaved: [{ file: 'a.ts', error: 'the file on disk is newer' }] });
-  });
-
-  it("doesn't run a command after a save that failed, since it would read the old file", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'x\n' }, { confirmCommands: false });
-    editor.save = () => Promise.reject(new Error('the file on disk is newer'));
-    editor.commandScript.set('node a.ts', { ms: 100, exitCode: 0 });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: ` // a${CURSOR_MARKER}` }, { run: 'node a.ts' }]);
-    const report = await until(controller.step([]));
-    const [batch] = report.batches;
-    ok(batch?.error);
-    expect(batch).toMatchObject({ status: 'failed', error: { kind: 'save_failed' }, unplayed: [{ run: 'node a.ts' }] });
-    expect(batch.error.message).toMatch(/a\.ts \(the file on disk is newer\)/);
-    expect(batch.error.message).toMatch(/Ask the programmer/);
-    // The error names the file, so the batch doesn't list it again.
-    expect(batch.unsaved).toBeUndefined();
-    expect(editor.commands).toEqual([]);
-  });
-});
-
-// VS Code reloads a file changed on disk with one change from the first line that differs to the
-// last (#65): here lines 2 and 5 of 6 changed, reported as one change replacing lines 2 to 5.
-function reload(editor: ReturnType<typeof setup>['editor']): void {
-  editor.otherEdit('a.ts', { offset: 2, deleteLength: 8, text: 'X\n3\n4\nY\n' });
-}
-
-describe('a file changed on disk', () => {
-  it("SelectionStays: keeps the agent's selection on a line between the changed ones", async () => {
-    const { editor, controller } = setup({ 'a.ts': '1\n2\n3\n4\n5\n6\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await until(controller.step([{ select: { file: 'a.ts', line: 3, text: '3' } }]));
-    await until(controller.step([]));
-    reload(editor);
-    await until(controller.step([{ delete: true }]));
-    await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('1\nX\n\n4\nY\n6\n');
-  });
-
-  it('UnchangedKeepIds: keeps the numbers of the lines between the changed ones known', async () => {
-    const { editor, controller } = setup({ 'a.ts': '1\n2\n3\n4\n5\n6\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    reload(editor);
-    const report = await until(controller.step([{ point: { file: 'a.ts', line: 4, text: '4' } }]));
-    expect(report.rejected).toBeUndefined();
-  });
-
-  it('ChangedGetNewIds: forgets the number of a changed line, so a batch has to read it again', async () => {
-    const { editor, controller } = setup({ 'a.ts': '1\n2\n3\n4\n5\n6\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    reload(editor);
-    const report = await controller.step([{ point: { file: 'a.ts', line: 2, text: 'X' } }]);
-    expect(report.rejected?.error.kind).toBe('line_not_seen');
-  });
-});
-
-describe('changes by others, while batches are queued', () => {
-  it("rehearses the queued batches from a change that didn't interrupt them", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\nworld\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([
-      { move: { file: 'a.ts', line: 2, at: `${CURSOR_MARKER}world` } },
-      { say: 'one two three four five six seven eight nine ten' },
-    ]);
-    await advance(300);
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: 'XX\n' });
-    const typed = await until(controller.step([{ type: `!${CURSOR_MARKER}` }]));
-    expect(typed.rejected).toBeUndefined();
-    expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['XX', 'hello', '!world']);
-    const done = await until(controller.step([]));
-    expect([...typed.batches, ...done.batches].map((b) => b.status)).toEqual(['completed', 'completed']);
-    expect(editor.text('a.ts')).toBe('XX\nhello\n!world\n');
-  });
-
-  it('ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla)', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'hello\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.step([{ say: 'one two three four five six seven eight nine ten' }]);
-    await advance(300);
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: 'XX\n' });
-    expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['XX', 'hello']);
-    const moved = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]));
-    expect(moved.rejected).toBeUndefined();
-  });
-
-  it("doesn't interrupt for a change to a file only a finished batch edited", async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `1${CURSOR_MARKER}` }]);
-    await until(controller.step([{ move: { file: 'b.ts', line: 1, to: 'line_end' } }, { type: ` long text here${CURSOR_MARKER}` }]));
-    await advance(300);
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// tool\n' });
-    const report = await until(controller.step([]));
-    expect(report.batches.map((b) => [b.id, b.status])).toEqual([[2, 'completed']]);
-    expect(report.events).toMatchObject([{ kind: 'edit', file: 'a.ts', by: 'other' }]);
-    expect(editor.text('b.ts')).toBe('b long text here\n');
-    expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['// tool', 'a1']);
-  });
-
-  it('ReadIsStart: still interrupts for a change to a file a queued batch edits', async () => {
-    const { editor, controller } = setup({ 'a.ts': 'a\n', 'b.ts': 'b\n' });
-    await controller.start();
-    await controller.read('a.ts');
-    await controller.read('b.ts');
-    await controller.step([{ move: { file: 'b.ts', line: 1, to: 'line_end' } }, { type: ` long text here${CURSOR_MARKER}` }]);
-    const queued = controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `1${CURSOR_MARKER}` }]);
-    await advance(300);
-    editor.otherEdit('a.ts', { offset: 0, deleteLength: 0, text: '// tool\n' });
-    const first = await until(queued);
-    const rest = await until(controller.step([]));
-    expect([...first.batches, ...rest.batches].map((b) => b.status)).toEqual(['interrupted', 'discarded']);
-  });
-});
-
-describe('listen grace (specs/ListenGrace.tla)', () => {
-  const maxBlockMs = 1000;
-  const graceMs = 5000;
-  const absentMs = 20_000;
-
-  async function timedOut() {
-    const { editor, controller } = setup({}, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs });
-    await controller.start();
-    const report = await until(controller.listen());
-    expect(report).toMatchObject({ waiting: true, batches: [], events: [] });
-    return { editor, controller };
-  }
-
-  it('NoFlicker: keeps listening after a listen times out with nothing to report', async () => {
-    const { editor } = await timedOut();
-    expect(editor.state).toBe('listening');
-    await advance(graceMs / 2);
-    expect(editor.state).toBe('listening');
-  });
-
-  it('GraceEnds: shows thinking once the grace runs out without a call', async () => {
-    const { editor } = await timedOut();
-    await advance(graceMs);
-    expect(editor.state).toBe('thinking');
-  });
-
-  it('NoFalseYourMove: shows thinking when a listen times out with a batch to report', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' }, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs });
-    await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
-    const report = await until(controller.listen());
-    expect(report).toMatchObject({ waiting: true, batches: [{ id: 1, status: 'completed' }] });
-    expect(editor.state).toBe('thinking');
-  });
-
-  it('NoYourMoveAfterAct: shows thinking when the programmer sends a message during the grace', async () => {
-    const { editor, controller } = await timedOut();
-    controller.userMessage('hi');
-    expect(editor.state).toBe('thinking');
-  });
-
-  it('NoYourMoveInOtherCall: shows thinking after a step during the grace', async () => {
-    const { editor, controller } = await timedOut();
-    await until(controller.step([]));
-    expect(editor.state).toBe('thinking');
-  });
-
-  it("AbsentShows: says the agent isn't listening once no call has been open for absentMs (#149)", async () => {
-    const { editor, controller } = setup({}, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs, absentMs: absentMs });
-    await controller.start();
-    await advance(absentMs - 1);
-    expect(editor.state).toBe('thinking');
-    await advance(1);
-    expect(editor.state).toBe('absent');
-  });
-
-  it("AbsentWithoutCall: stops saying the agent isn't listening as soon as it calls (#149)", async () => {
-    const { editor, controller } = setup({}, { maxBlockMs: maxBlockMs, listenGraceMs: graceMs, absentMs: absentMs });
-    await controller.start();
-    await advance(absentMs);
-    expect(editor.state).toBe('absent');
-    const listening = controller.listen();
-    expect(editor.state).toBe('thinking');
-    await until(listening);
-    await until(controller.step([]));
-    expect(editor.state).toBe('thinking');
-  });
-});
-
-describe('pauses and the log (#149)', () => {
-  it('tells the agent playback is paused, and why, until the programmer resumes', async () => {
-    const { controller } = setup({ 'a.ts': '' }, { maxBlockMs: 1000 });
-    await controller.start();
-    controller.pause('away');
-    const held = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]));
-    expect(held.paused).toEqual(['away']);
-    controller.resume('away');
-    const report = await until(controller.listen());
-    expect(report.paused).toBeUndefined();
-  });
-
-  it('logs the session, each pause and resume once, each batch, and each report with its size', async () => {
-    const { controller } = setup({ 'a.ts': '' });
-    const lines: string[] = [];
-    controller.trace = (line) => {
-      lines.push(line);
-    };
-    await controller.start();
-    controller.pause('reply');
-    controller.pause('reply');
-    controller.resume();
-    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]));
-    await until(controller.step([]));
-    expect(lines).toEqual(
-      expect.arrayContaining([
-        'session started',
-        'pause reply',
-        'resume all',
-        'batch 1 queued: 2 actions',
-        'batch 1 playing',
-        'batch 1 completed',
-      ]),
-    );
-    expect(lines.filter((line) => line === 'pause reply')).toHaveLength(1);
-    expect(lines).toContainEqual(matching(/^report to step: batches \[1 completed\], events \[\], \d+ chars$/));
-  });
-
-  it('reports a long edit by its line ranges, not the whole diff', async () => {
-    const { editor, controller } = setup({ 'a.ts': '' });
-    await controller.start();
-    const listening = controller.listen();
-    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'x\n'.repeat(300) });
-    const report = await until(listening);
-    expect(report.events).toEqual([{ kind: 'edit', file: 'a.ts', diff: '@@ -0,0 +1,300 @@', by: 'programmer', omitted: 300 }]);
+  it('sorts the batches by id, says which batch the step submitted, and anchors after one that stopped short', async () => {
+    const h = await started();
+    h.controller.restore({ batches: [{ id: 5, status: 'completed' }], events: [], turn: 'agent' });
+    h.controller.restore({ batches: [{ id: 2, status: 'discarded' }], events: [], turn: 'agent' });
+    const listened = await report(h.controller.listen());
+    expect(listened.batches.map((b) => b.id)).toEqual([2, 5]);
+    expect((await report(h.controller.step([{ type: `x${CURSOR_MARKER}` }]))).rejected?.error.kind).toBe('unanchored');
+  });
+
+  it('passes each edit to boundedDiff by the name the agent knows', async () => {
+    const h = harness();
+    await h.controller.start(undefined, '/work');
+    h.controller.userEdit('/work/src/a.ts', 'a', 'b', []);
+    await report(h.controller.listen());
+    expect(boundedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
   });
 });

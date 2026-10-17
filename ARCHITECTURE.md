@@ -168,10 +168,8 @@ configuration, so it works in every project. It edits only the `pair` entry,
 keeping the rest of the file as it was: JSON and JSONC with `jsonc-parser`,
 Codex's TOML as text, table by table (a TOML round trip would drop comments).
 For Claude Code it runs `claude mcp add --scope user` when the `claude` command
-is there, since Claude Code rewrites `~/.claude.json` constantly. Harnesses in
-VS Code itself (Copilot) need no setup: the extension provides the server to
-them through VS Code's MCP API, running the relay directly in the workspace. For
-any other harness it copies the config snippet to the clipboard. The extension
+is there, since Claude Code rewrites `~/.claude.json` constantly. For any other
+harness it copies the config snippet to the clipboard. The extension
 offers this once, the first time it starts. The harnesses and their files are in
 [`agents.ts`](packages/vscode/src/agents.ts).
 

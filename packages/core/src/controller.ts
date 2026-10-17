@@ -48,17 +48,24 @@ interface QueuedBatch extends Batch {
   after: Rehearsal;
 }
 
-/** Like `Event`, but edits usually get their diff when the report is taken. */
-type PendingEvent = Exclude<Event, { kind: 'edit' }> | EditEvent;
+/** Like `Event`, but an edit since the last report gets its diff when the report is taken; a restored one has it. */
+type PendingEvent = Exclude<Event, { kind: 'edit' }> | ReportedEdit | RecordedEdit;
 
-/** `interrupted`: a change the programmer didn't make, to a file the playing or queued batches edit. */
-interface EditEvent {
+/** An edit a restored report carries, with its diff. */
+type ReportedEdit = Extract<Event, { kind: 'edit' }> & { interrupted?: true };
+
+/**
+ * An edit since the last report, which the report diffs (specs/EditEvents.tla, `Record`): the file's text at the
+ * first edit since then, and now. `interrupted`: a change the programmer didn't make, to a file the playing or queued
+ * batches edit.
+ */
+interface RecordedEdit {
   kind: 'edit';
   file: string;
   by: 'programmer' | 'other';
-  diff?: string;
-  omitted?: number;
   interrupted?: true;
+  before: string;
+  after: string;
 }
 
 /** The first action at the cursor, and whether it anchors the cursor: a `move` or `select` giving both `file` and `line` (#112). */
@@ -99,9 +106,6 @@ interface Session {
   held: Array<{ rejected: NonNullable<Report['rejected']>; mayRepeat: boolean }>;
   /** A report restored may have reached the agent already: the next report says so (#67). */
   mayRepeat: boolean;
-  /** Text of each file edited by the programmer, as of the last report. */
-  baselines: Map<string, string>;
-  latest: Map<string, string>;
   timeline: Timeline;
   running: boolean;
   /** A `run` waiting for the programmer's go-ahead. */
@@ -137,9 +141,14 @@ function interrupting(e: PendingEvent): boolean {
   return e.kind !== 'edit' || e.by === 'programmer' || e.interrupted === true;
 }
 
-/** Returns the edits to `file` that await their diff: one at most, since a file's edits are one event until a report takes them. */
-function pendingEdits(session: Session, file: string): EditEvent[] {
-  return session.events.filter((e): e is EditEvent => e.kind === 'edit' && e.file === file && e.diff === undefined);
+/** Returns whether an event is an edit since the last report, which awaits its diff. */
+function isRecorded(e: PendingEvent): e is RecordedEdit {
+  return e.kind === 'edit' && 'before' in e;
+}
+
+/** Returns the edit to `file` that awaits its diff, if any: one at most, since a file's edits are one event until a report takes them. */
+function pendingEdit(session: Session, file: string): RecordedEdit | undefined {
+  return session.events.find((e): e is RecordedEdit => isRecorded(e) && e.file === file);
 }
 
 /** Returns whether a call can return its report now: specs/Serialize.tla, `Finish`. */
@@ -301,8 +310,6 @@ export class Controller {
       anchorNeeded: false,
       held: [],
       mayRepeat: false,
-      baselines: new Map(),
-      latest: new Map(),
       timeline,
       running: false,
       ended: false,
@@ -541,34 +548,41 @@ export class Controller {
         followChange(b.after, file, after, changes);
       }
     }
-    this.recordEdit(session, file, before, after, changes, 'other');
+    const recorded = this.recordEdit(session, file, before, after, changes, 'other');
     if (planned) {
-      for (const e of pendingEdits(session, file)) {
-        e.interrupted = true;
-      }
+      recorded.interrupted = true;
       this.interrupt(session);
     }
     this.update();
   }
 
-  /** Records an edit. Edits to a file are reported as one diff, as the programmer's if any of them was
-   * (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`). */
-  private recordEdit(session: Session, file: string, before: string, after: string, changes: Change[], by: EditEvent['by']): void {
+  /**
+   * Records an edit, and returns its event. Edits to a file are reported as one diff, as the programmer's if any of
+   * them was (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`).
+   */
+  private recordEdit(
+    session: Session,
+    file: string,
+    before: string,
+    after: string,
+    changes: Change[],
+    by: RecordedEdit['by'],
+  ): RecordedEdit {
     session.lines.of(file, before);
     for (const change of changes) {
       session.player.transform(file, change);
       session.lines.apply(file, change);
     }
-    if (!session.baselines.has(file)) {
-      session.baselines.set(file, before);
-      session.events.push({ kind: 'edit', file, by });
-      this.trace?.(`edit ${file} by ${by}`);
-    } else if (by === 'programmer') {
-      for (const e of pendingEdits(session, file)) {
-        e.by = 'programmer';
-      }
+    const pending = pendingEdit(session, file);
+    if (pending) {
+      pending.after = after;
+      if (by === 'programmer') pending.by = 'programmer';
+      return pending;
     }
-    session.latest.set(file, after);
+    const event: RecordedEdit = { kind: 'edit', file, by, before, after };
+    session.events.push(event);
+    this.trace?.(`edit ${file} by ${by}`);
+    return event;
   }
 
   takeTurn(): void {
@@ -976,15 +990,14 @@ export class Controller {
    * `lines`: of the version shown, which may be a batch's, as it will play or would have.
    */
   private saw(session: Session, lines: LineIds, { file, text, lines: numbers }: Sighting): void {
-    const ids = lines.of(file, text);
+    const shown = new Set(numbers);
     let seen = session.seen.get(file);
     if (!seen) {
       seen = new Map<number, number>();
       session.seen.set(file, seen);
     }
-    for (const n of numbers) {
-      const id = ids[n - 1];
-      if (id !== undefined) seen.set(n, id);
+    for (const [i, id] of lines.of(file, text).entries()) {
+      if (shown.has(i + 1)) seen.set(i + 1, id);
     }
   }
 
@@ -1000,12 +1013,12 @@ export class Controller {
         events.push(e);
         continue;
       }
-      if (e.diff !== undefined) {
+      if (!isRecorded(e)) {
+        // Restored from a report, with its diff (`restore`).
         events.push({ kind: 'edit', file: e.file, diff: e.diff, by: e.by, ...(e.omitted === undefined ? {} : { omitted: e.omitted }) });
         continue;
       }
-      const before = session.baselines.get(e.file) ?? '';
-      const after = session.latest.get(e.file) ?? before;
+      const { before, after } = e;
       // An edit that interrupted stays, with no diff, though it was undone: the agent has to know
       // why its batches were discarded, and a `listen` woke for it (specs/EditEvents.tla, `Report`).
       if (before === after && !interrupting(e)) continue;
@@ -1018,8 +1031,6 @@ export class Controller {
     }
     session.finished = [];
     session.events = [];
-    session.baselines = new Map();
-    session.latest = new Map();
     // specs/Rehearsal.tla, `Report`: the agent now knows of the interrupt.
     session.stale = false;
     session.navigatorReady = false;
