@@ -129,6 +129,13 @@ Set by Justine on 2026-10-07.
     one takes the collaborator as a parameter instead.
 -   **A unit test found that is not solitary is transformed** into the
     solitary style, wherever it is found, without being asked.
+-   **A test is a unit test only when it relies on its own source file
+    alone** (set by Justine on 2026-10-17, #176). The panel's page tests
+    run `webview/panel.ts` in happy-dom: as unit tests, they take the page
+    as a fixed fixture, with `panel_html.ts` mocked, not the page that
+    `panelHtml()` renders. A test that needs several real files at once,
+    such as the stylesheet's rule-usage test against the real page, is an
+    end-to-end test, its own kind, named as one (`*.e2e.test.ts`).
 
 ## Problems found along the way
 
