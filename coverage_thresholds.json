@@ -201,6 +201,11 @@
       "lines": 100,
       "branches": 100,
       "functions": 100
+    },
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/protocol/src/wire.ts": {
@@ -303,20 +308,20 @@
   },
   "packages/vscode/src/agents.ts": {
     "unit": {
-      "lines": 93,
-      "branches": 81,
-      "functions": 87
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
-      "lines": 41,
-      "branches": 55,
-      "functions": 12
+      "lines": 62,
+      "branches": 63,
+      "functions": 64
     }
   },
   "packages/vscode/src/calibration.ts": {
     "unit": {
-      "lines": 97,
-      "branches": 86,
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -356,15 +361,15 @@
       "functions": 0
     },
     "integration": {
-      "lines": 82,
-      "branches": 66,
-      "functions": 75
+      "lines": 83,
+      "branches": 67,
+      "functions": 78
     }
   },
   "packages/vscode/src/output.ts": {
     "unit": {
       "lines": 100,
-      "branches": 92,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -376,7 +381,7 @@
   "packages/vscode/src/outside.ts": {
     "unit": {
       "lines": 100,
-      "branches": 92,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -387,9 +392,9 @@
   },
   "packages/vscode/src/outside_watch.ts": {
     "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 100,
@@ -430,9 +435,9 @@
   },
   "packages/vscode/src/passage.ts": {
     "unit": {
-      "lines": 0,
+      "lines": 100,
       "branches": 100,
-      "functions": 0
+      "functions": 100
     },
     "integration": {
       "lines": 100,
@@ -442,32 +447,32 @@
   },
   "packages/vscode/src/setup.ts": {
     "unit": {
-      "lines": 50,
-      "branches": 26,
-      "functions": 41
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
-      "lines": 66,
-      "branches": 55,
-      "functions": 60
+      "lines": 81,
+      "branches": 75,
+      "functions": 66
     }
   },
   "packages/vscode/src/terminal.ts": {
     "unit": {
-      "lines": 65,
-      "branches": 59,
-      "functions": 53
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
-      "lines": 89,
-      "branches": 81,
+      "lines": 90,
+      "branches": 83,
       "functions": 92
     }
   },
   "packages/vscode/src/view.ts": {
     "unit": {
       "lines": 100,
-      "branches": 96,
+      "branches": 100,
       "functions": 100
     },
     "integration": {

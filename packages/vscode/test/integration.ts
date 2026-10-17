@@ -935,7 +935,7 @@ export async function run(): Promise<void> {
 
   const report = await pending;
   const [typing, next] = report.batches;
-  assert.equal(typing?.status, 'interrupted');
+  assert.equal(typing?.status, 'interrupted', JSON.stringify(report));
   // What's left of the cut `type` comes back first, ready to resubmit.
   const rest = typing.unplayed?.[0];
   const left = rest && 'type' in rest ? rest.type.replace(CURSOR_MARKER, '') : '';
