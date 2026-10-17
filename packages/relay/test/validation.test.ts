@@ -22,6 +22,7 @@ const places = {
     { before: 'x' },
     { to: 'line_end', extra: 1 },
     { line: '1', to: 'line_end' },
+    { line: 1, at: 5 },
     5,
     'x',
     true,

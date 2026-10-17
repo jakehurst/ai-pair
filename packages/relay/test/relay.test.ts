@@ -230,6 +230,8 @@ describe('relay', () => {
     expect(nothing.text).toMatch(/Give the code: `text`, or `from` and `through`/);
     const said = await call(client, 'step', { actions: [{ say: 3 }] });
     expect(said.error).toBe(true);
+    const spot = await call(client, 'step', { actions: [{ move: { line: 1, at: 5 } }] });
+    expect(spot.text).toMatch(/`at` is a text/);
   });
 
   it('OwnedByOpenSocket: lets only one agent pair in a window at a time', async () => {

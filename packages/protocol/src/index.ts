@@ -242,6 +242,7 @@ export function moveProblem(target: MoveTarget): string | undefined {
   if (target.to !== undefined && target.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
   if (target.at !== undefined && target.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
   if (target.at === undefined && target.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
+  if (target.at !== undefined && typeof target.at !== 'string') return `\`at\` is a text, with ${CURSOR_MARKER} where your cursor goes.`;
   if (target.at !== undefined) return spotProblem(target.at);
   return undefined;
 }
