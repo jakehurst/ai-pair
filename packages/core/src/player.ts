@@ -208,11 +208,22 @@ export class Player {
     return { result, sightings: playing.sightings, failed: playing.failed };
   }
 
-  /** Returns the lines changed in `span`, extended to the cursor's line, with context around, and the cursor marked. */
+  /** Returns the code a batch's report shows: what it changed in `span`, or where it moved; nothing for neither. */
   async code({ span, moved }: { span?: Range; moved: boolean }): Promise<{ code: Code; sighting: Sighting } | undefined> {
     const cursor = this.scene.cursor;
     // A batch edits at the cursor, in the one file it works in, so what it changed is in the cursor's file.
     if (cursor === undefined || (span === undefined && !moved)) return undefined;
+    return this.codeAt(cursor, span);
+  }
+
+  /**
+   * Returns the lines around `cursor`, extended over `span` in its file, with context around, and the cursor
+   * marked; `cursorLine` is the cursor's line as the code shows it.
+   */
+  async codeAt(
+    cursor: NonNullable<Scene['cursor']>,
+    span?: Range,
+  ): Promise<{ code: Code; sighting: Sighting; cursorLine: Code['lines'][number] }> {
     const { file } = cursor;
     const text = await this.stage.editor.getText(file);
     const { lines, finalNewline } = fileLines(text);
@@ -234,16 +245,19 @@ export class Player {
       const long = to - from + 1 > MAX_CODE_LINES;
       if (!long || n < from + MAX_CODE_LINES / 2 || n > to - MAX_CODE_LINES / 2 || n === at.line) numbers.push(n);
     }
+    // The cursor's line is always among `numbers`: the map below sets it.
+    let cursorLine = { number: at.line, text: CURSOR_MARKER };
     const code: Code = {
       file: this.displayPath(file),
       lines: numbers.map((n) => {
         const line = lines[n - 1] ?? '';
         if (n !== at.line) return { number: n, text: line };
-        return { number: n, text: line.slice(0, at.column - 1) + CURSOR_MARKER + line.slice(at.column - 1) };
+        cursorLine = { number: n, text: line.slice(0, at.column - 1) + CURSOR_MARKER + line.slice(at.column - 1) };
+        return cursorLine;
       }),
     };
     if (to >= last) code.end = { final_newline: finalNewline };
-    return { code, sighting: { file, text, lines: numbers } };
+    return { code, sighting: { file, text, lines: numbers }, cursorLine };
   }
 
   /**

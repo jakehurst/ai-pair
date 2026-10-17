@@ -962,11 +962,10 @@ export class Controller {
       const line = b.code?.lines.find((l) => l.text.includes(CURSOR_MARKER));
       if (b.code && line) session.seenCursor = `${b.code.file}:${line.number}:${line.text}`;
     }
-    if (!session.scene.cursor) return report;
-    const shown = await session.player.code({ moved: true });
-    const line = shown?.code.lines.find((l) => l.text.includes(CURSOR_MARKER));
-    if (!shown || !line) return report;
-    const key = `${shown.code.file}:${line.number}:${line.text}`;
+    const cursor = session.scene.cursor;
+    if (!cursor) return report;
+    const shown = await session.player.codeAt(cursor);
+    const key = `${shown.code.file}:${shown.cursorLine.number}:${shown.cursorLine.text}`;
     if (key === session.seenCursor) return report;
     session.seenCursor = key;
     this.saw(session, session.lines, shown.sighting);

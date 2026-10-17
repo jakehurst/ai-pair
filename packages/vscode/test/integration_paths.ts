@@ -6,8 +6,9 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { CURSOR_MARKER, type Action, type BatchStatus, type ErrorKind, type Report } from '@ai-pair/protocol';
+import { CURSOR_MARKER, discoveryDir, type Action, type BatchStatus, type ErrorKind, type Report } from '@ai-pair/protocol';
 import { isSavedSession } from '@ai-pair/core';
+import { EditorLink } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 
 /** The text of the file most cases act in. */
@@ -18,6 +19,19 @@ const LONG_PAUSE_MS = 3000;
 
 /** When the interrupt is sent, into a pause of LONG_PAUSE_MS. */
 const INTO_PAUSE_MS = 800;
+
+/** Past the extension's saving of the session, which waits 200 ms after a change. */
+const SAVE_SETTLE_MS = 400;
+
+/** The demo's speed, played from its command. */
+const SPEED_DEMO = 20;
+
+/** How often, and how many times, to look whether the demo has started or ended. */
+const POLL_MS = 100;
+const DEMO_POLLS = 600;
+
+/** Lines enough to be far from line 1, and more than a report shows. */
+const FAR_LINES = 60;
 
 /** How long each key of a slow type takes. */
 const MS_PER_KEY = 1000;
@@ -109,6 +123,10 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   await refused([{ select: { file: 'paths.txt', line: 1, from: 'beta', through: 'zeta' } }], 'not_found', /after `from`: "zeta"/);
   await refused([{ select: { file: 'paths.txt', line: 1, from: 'beta', through: CURSOR_MARKER } }], 'not_found', /after `from`: ""/);
   await refused([{ move: { file: 'paths.txt', line: 2, at: `x${CURSOR_MARKER}` } }], 'not_found');
+  await refused([{ move: { file: 'paths.txt', line: 1, at: `alpha${CURSOR_MARKER}` } }], 'ambiguous');
+  await refused([{ point: { file: 'paths.txt', line: 2, text: 'zeta' } }], 'not_found');
+  // A span that is only the marker looks for no text.
+  await refused([{ select: { file: 'paths.txt', line: 1, text: CURSOR_MARKER } }], 'not_found', /^Text not found: ""/);
   await refused([{ select: { file: 'one.txt', line: 2, text: 'a' } }], 'no_line', /has 1 line\./);
   await refused([{ select: { file: 'paths.txt', line: 9, text: 'a' } }], 'no_line', /has 3 lines\./);
   // A line the agent hasn't been shown is refused, with where what it looks for is (specs/Rehearsal.tla, `Accept`);
@@ -120,6 +138,12 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
     [2],
   );
   await refused([{ select: { file: 'unread.txt', line: 3, text: 'q' } }], 'line_not_seen', /isn't anywhere in the file\.$/);
+  fs.writeFileSync(file('unread-spot.txt'), 'x\ny b\n');
+  const spot = await refused([{ move: { file: 'unread-spot.txt', line: 1, at: `b${CURSOR_MARKER}` } }], 'line_not_seen');
+  assert.deepEqual(
+    spot.rejected?.error.candidates?.map((c) => c.line),
+    [2],
+  );
   // An empty file's one line needs no showing.
   assert.deepEqual(statuses(await played([{ move: { file: 'empty.txt', line: 1, to: 'line_end' } }])), ['completed']);
   await refused([{ select: { file: 'paths.txt', text: 'gamma' } }], 'invalid_action', /^Give `line`/);
@@ -251,6 +275,23 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   fs.mkdirSync(file('fresh'), { recursive: true });
   await controller.end();
   await controller.start('another folder', file('fresh'));
+  // A terminal closed as it opens fails the run, by the error VS Code gives (specs/Terminals.tla, `RejectClosed`).
+  // In a folder of its own, so the run opens a new terminal.
+  for (const terminal of vscode.window.terminals) {
+    terminal.dispose();
+  }
+  fs.mkdirSync(file('closing'), { recursive: true });
+  await controller.end();
+  await controller.start('a terminal closed', file('closing'));
+  const closing = vscode.window.onDidOpenTerminal((terminal) => {
+    terminal.dispose();
+  });
+  const closed = await played([{ run: 'echo closed' }]);
+  closing.dispose();
+  assert.match(closed.batches[0]?.error?.message ?? '', /disposed/, JSON.stringify(closed));
+  await runShown('echo closed', 'declined');
+  await controller.end();
+  await controller.start('another folder', file('fresh'));
   // A file outside the session's folder is named by its absolute path.
   await controller.read(file('one.txt'));
   const outside = await played([{ move: { file: file('one.txt'), line: 1, to: 'line_end' } }]);
@@ -316,6 +357,50 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
     }
   }
 
+  // Back at the cursor from code pointed at far off, the far move's pause comes first; an interrupt there stops
+  // the batch (specs/PointFocus.tla, `ActAtCursor`).
+  fs.writeFileSync(file('far.txt'), Array.from({ length: FAR_LINES }, (_, i) => `x${i + 1}\n`).join(''));
+  await controller.read('far.txt');
+  await played([{ move: { file: 'far.txt', line: 1, to: 'line_end' } }]);
+  await played([{ point: { file: 'far.txt', line: FAR_LINES, text: `x${FAR_LINES}` } }]);
+  controller.setTiming({ afterMoveFarMs: LONG_PAUSE_MS });
+  await controller.step([{ type: `y${CURSOR_MARKER}` }]);
+  await sleep(INTO_PAUSE_MS);
+  controller.userInterrupt();
+  const farBack = await controller.listen();
+  controller.setTiming({});
+  assert.notEqual(farBack.batches[0]?.status, 'completed', JSON.stringify(farBack));
+
+  // Code longer than a report shows skips its middle, and keeps the cursor's line.
+  controller.setSpeed(20);
+  fs.writeFileSync(file('long.txt'), '');
+  const longText = Array.from({ length: FAR_LINES }, (_, i) => `line ${i + 1}`).join('\n');
+  const longReport = await played([{ move: { file: 'long.txt', line: 1, to: 'line_end' } }, { type_fast: `${longText}${CURSOR_MARKER}` }]);
+  const shownLines = longReport.batches[0]?.code?.lines ?? [];
+  assert.ok(shownLines.length < FAR_LINES && shownLines.at(-1)?.text.includes(CURSOR_MARKER) === true, JSON.stringify(shownLines));
+
+  // A batch queued behind another, which created a file a document was kept for after it was deleted, follows
+  // the file being written again by someone else (specs/Rehearsal.tla, `EditAsOther`).
+  fs.writeFileSync(file('recreated.txt'), 'a\n');
+  await reads(file('recreated.txt'), 'a\n');
+  fs.rmSync(file('recreated.txt'));
+  controller.setReadingSpeed(1);
+  await controller.step([{ say: Array.from({ length: 10 }, (_, i) => `word${i}`).join(' ') }]);
+  const queued = controller.step([{ move: { file: 'recreated.txt', line: 1, to: 'line_end' } }]);
+  await sleep(INTO_PAUSE_MS);
+  fs.writeFileSync(file('recreated.txt'), 'b\n');
+  await reads(file('recreated.txt'), 'b\n');
+  const queuedReport = await queued;
+  controller.setReadingSpeed(10);
+  const followed = await controller.step([]);
+  const events = [...queuedReport.events, ...followed.events];
+  assert.ok(
+    events.some((e) => e.kind === 'edit' && e.file === 'recreated.txt'),
+    JSON.stringify(events),
+  );
+  // It played on the text written again.
+  assert.equal(followed.batches.at(-1)?.code?.lines[0]?.text, `b${CURSOR_MARKER}`, JSON.stringify(followed));
+
   // A delete interrupted while its file comes into view stops before it deletes (specs/Player.tla, `Begin`).
   controller.setSpeed(20);
   await controller.read('pauses.txt');
@@ -368,7 +453,16 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   controller.endSession();
   assert.equal(controller.isActive, false);
 
+  // The programmer typing outside a session: nothing is recorded.
+  const outsideDoc = await vscode.workspace.openTextDocument(file('paths.txt'));
+  const typed = new vscode.WorkspaceEdit();
+  typed.insert(outsideDoc.uri, new vscode.Position(0, 0), '#');
+  await vscode.workspace.applyEdit(typed);
+  await vscode.commands.executeCommand('workbench.action.files.revert', outsideDoc.uri);
+
   await controller.start('controller paths');
+  // An answer for a run no one is asked about changes nothing.
+  controller.decideRun(-1, /* run= */ true);
   await assert.rejects(controller.start('again'), /already active in this window/);
   await assert.rejects(controller.read('folder'));
   // The turn's toggle, as the command and the panel's button give it (specs/Turns.tla, `ChangeTurn`).
@@ -422,11 +516,14 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   await first;
   const rehearsing = new AbortController();
   const getText = api.editor.getText.bind(api.editor);
+  // Whatever is still unreported goes first, or the batch would be discarded unrehearsed.
+  await controller.step([]);
+  await controller.read('paths.txt');
+  // The rehearsal reads the file: the cancel comes then.
   api.editor.getText = async (f) => {
     rehearsing.abort();
     return getText(f);
   };
-  await controller.read('paths.txt');
   const cut = controller.step([{ point: { file: 'paths.txt', line: 1, text: 'beta' } }], rehearsing.signal);
   await assert.rejects(cut, /cancel/i);
   api.editor.getText = getText;
@@ -450,12 +547,18 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   await controller.start('restored');
   controller.restore({
     batches: [],
-    events: [{ kind: 'edit', file: 'paths.txt', diff: '@@ -1 +1 @@', by: 'other', omitted: 2 }],
+    events: [
+      { kind: 'edit', file: 'paths.txt', diff: '@@ -1 +1 @@', by: 'other', omitted: 2 },
+      { kind: 'edit', file: 'one.txt', diff: '@@ -1 +1 @@', by: 'programmer' },
+    ],
     turn: 'agent',
     rejected: { index: 1, action: { say: 'x' }, error: { kind: 'invalid_action', message: 'No.' } },
   });
   const again = await controller.listen();
-  assert.deepEqual(again.events, [{ kind: 'edit', file: 'paths.txt', diff: '@@ -1 +1 @@', by: 'other', omitted: 2 }]);
+  assert.deepEqual(again.events, [
+    { kind: 'edit', file: 'paths.txt', diff: '@@ -1 +1 @@', by: 'other', omitted: 2 },
+    { kind: 'edit', file: 'one.txt', diff: '@@ -1 +1 @@', by: 'programmer' },
+  ]);
   assert.equal(again.rejected?.error.message, 'No.');
   // A change someone else made and undid, to a file no batch edits, isn't reported.
   fs.writeFileSync(file('undone-other.txt'), 'a\n');
@@ -484,4 +587,79 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   controller.disconnect();
   assert.equal(controller.isActive, false);
   console.log('the controller: input without a session, the turn, pauses, canceled calls, restored reports');
+}
+
+/**
+ * Plays what the extension wires up that the test can drive: its commands, its settings, and the passage the
+ * calibration takes. Last, since it leaves a calibration armed.
+ */
+export async function extensionPaths(api: Api, root: string): Promise<void> {
+  const { controller } = api;
+  const settings = vscode.workspace.getConfiguration('aiPair');
+  const global = vscode.ConfigurationTarget.Global;
+  fs.writeFileSync(path.join(root, 'paths.txt'), PATHS);
+
+  // With no session, nothing is saved.
+  await sleep(SAVE_SETTLE_MS);
+  assert.equal(api.saved(), undefined);
+
+  // The playback's settings, changed, reach the controller and the editor.
+  await settings.update('speed', 2, global);
+  await settings.update('readingSpeed', 2, global);
+  await settings.update('agentName', 'Pal', global);
+  await settings.update('agentName', undefined, global);
+
+  // The programmer selecting code: the panel offers to send it with a reply.
+  const selecting = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(path.join(root, 'paths.txt')));
+  selecting.selection = new vscode.Selection(0, 0, 0, 'alpha'.length);
+  await sleep(POLL_MS);
+  selecting.selection = new vscode.Selection(0, 0, 0, 0);
+
+  // The commands, with a session.
+  await controller.start('commands');
+  await vscode.commands.executeCommand('aiPair.togglePause');
+  assert.equal(controller.isPaused, true);
+  await vscode.commands.executeCommand('aiPair.togglePause');
+  assert.equal(controller.isPaused, false);
+  await vscode.commands.executeCommand('aiPair.interrupt');
+  assert.equal((await controller.listen()).events.at(-1)?.kind, 'interrupt');
+  await vscode.commands.executeCommand('aiPair.focusReply');
+  await vscode.commands.executeCommand('aiPair.askAboutSelection');
+  await vscode.commands.executeCommand('aiPair.endSession');
+  assert.equal(controller.isActive, false);
+
+  // The demo, from its command, at speed.
+  // The setting goes up to 4; the controller takes any speed.
+  controller.setSpeed(SPEED_DEMO);
+  await vscode.commands.executeCommand('aiPair.playDemo');
+  for (let i = 0; i < DEMO_POLLS && !controller.isActive; i++) {
+    await sleep(POLL_MS);
+  }
+  for (let i = 0; i < DEMO_POLLS && controller.isActive; i++) {
+    await sleep(POLL_MS);
+  }
+  assert.equal(controller.isActive, false, 'the demo is still playing');
+  await settings.update('speed', undefined, global);
+  await settings.update('readingSpeed', undefined, global);
+
+  // The calibration's passage, from the setting (#109): none set, then each form it may take. The first arms the
+  // calibration; the rest find it under way, and an agent's passage does too.
+  const passages: unknown[] = [
+    undefined,
+    'not an object',
+    { text: '  ' },
+    { title: 5, text: 'Some words to read.' },
+    { title: 'Mine', text: 'Some words to read.', notice: 'From me.' },
+  ];
+  for (const passage of passages) {
+    await settings.update('calibrationPassage', passage, global);
+    await vscode.commands.executeCommand('aiPair.calibrate');
+  }
+  await settings.update('calibrationPassage', undefined, global);
+  const link = new EditorLink(root, discoveryDir());
+  await link.call('start', { task: 'calibrate while one runs', cwd: root });
+  await assert.rejects(link.call('calibrate', { title: 'Agent', file: 'paths.txt' }), /already under way/);
+  await link.call('end', {});
+  link.close();
+  console.log('the extension: its commands, its settings, and the passage a calibration takes');
 }

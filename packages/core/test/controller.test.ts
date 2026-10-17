@@ -54,7 +54,7 @@ const fakes = vi.hoisted(() => {
     }
   }
 
-  /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no code. */
+  /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no cursor. */
   class FakePlayer {
     reading = false;
     commandRunning = false;
@@ -62,7 +62,8 @@ const fakes = vi.hoisted(() => {
       Promise.resolve({ result: { id, status: 'completed' }, sightings: [] }),
     );
     readonly transform = vi.fn();
-    readonly code = vi.fn((): Promise<unknown> => Promise.resolve(undefined));
+    /** By default, the cursor's file can't be read, so a report adds no cursor. */
+    readonly codeAt = vi.fn((): Promise<unknown> => Promise.reject(new Error('unread')));
     readonly scene: unknown;
     readonly stage: unknown;
 
@@ -1107,40 +1108,31 @@ describe("the programmer's input", () => {
 describe('the cursor in a report', () => {
   it("adds the cursor's line to a report when it moved since the agent last saw it, and knows its line from then", async () => {
     const h = await started();
-    const shown = {
-      code: { file: 'a.ts', lines: [{ number: 2, text: `x${CURSOR_MARKER}` }] },
-      sighting: { file: A, text: 'a\nx', lines: [2] },
-    };
+    const cursorLine = { number: 2, text: `x${CURSOR_MARKER}` };
+    const shown = { code: { file: 'a.ts', lines: [cursorLine] }, sighting: { file: A, text: 'a\nx', lines: [2] }, cursorLine };
     scene().cursor = { file: A, offset: 3 };
-    player().code.mockResolvedValue(shown);
+    player().codeAt.mockResolvedValue(shown);
     h.controller.userInterrupt();
     expect((await report(h.controller.listen())).cursor).toEqual(shown.code);
+    expect(player().codeAt).toHaveBeenCalledWith({ file: A, offset: 3 });
     expect(sessionLines().of).toHaveBeenCalledWith(A, 'a\nx');
     h.controller.userInterrupt();
     expect((await report(h.controller.listen())).cursor).toBeUndefined();
   });
 
-  it("leaves it out when a batch's code showed it, when no line is marked, and when the code can't be read", async () => {
+  it("leaves it out when a batch's code showed it, and when the code can't be read", async () => {
     const h = await started();
     scene().cursor = { file: A, offset: 1 };
-    const code = { file: 'a.ts', lines: [{ number: 1, text: `x${CURSOR_MARKER}` }] };
-    player().code.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] } });
+    const cursorLine = { number: 1, text: `x${CURSOR_MARKER}` };
+    const code = { file: 'a.ts', lines: [cursorLine] };
+    player().codeAt.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] }, cursorLine });
     player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [] });
     await report(h.controller.step(SAY));
     await settle();
     expect((await report(h.controller.listen())).cursor).toBeUndefined();
-    player().code.mockResolvedValueOnce({
-      code: { file: 'a.ts', lines: [{ number: 1, text: 'x' }] },
-      sighting: { file: A, text: 'x', lines: [1] },
-    });
-    h.controller.userInterrupt();
-    expect((await report(h.controller.listen())).cursor).toBeUndefined();
-    player().code.mockRejectedValueOnce(new Error('gone'));
+    player().codeAt.mockRejectedValueOnce(new Error('gone'));
     h.controller.userInterrupt();
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'interrupt' }]);
-    player().code.mockResolvedValueOnce(undefined);
-    h.controller.userInterrupt();
-    expect((await report(h.controller.listen())).cursor).toBeUndefined();
   });
 });
 
