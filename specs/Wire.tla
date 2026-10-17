@@ -15,7 +15,7 @@ CONSTANTS
     PerSocket,        \* TRUE: a close rejects only its own socket's calls (the
                       \* fix for #3)
     GuardedParse,     \* TRUE: a frame that is not a message (not JSON, or no
-                      \* string `type`) is dropped (#4)
+                      \* message schema fits it, #163) is dropped (#4)
     CheckAbort,       \* TRUE: call() checks signal.aborted after connect(),
                       \* before sending (#29)
     WaitCancelled,    \* TRUE: call() sends only once the socket's canceled
@@ -277,7 +277,8 @@ Reply(c) ==
         /\ UNCHANGED <<sock, cur, on, rejectedBy, garbage, relayUp>>
         /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
-\* The other side sends a frame that is not a message (parseEditorMessage).
+\* The other side sends a frame that is not a message: parseEditorMessage
+\* finds no message schema in @ai-pair/protocol that it fits (#163).
 \* With GuardedParse it is dropped, and before the welcome the socket is
 \* closed, as whatever is on the port is not the editor; without it, the
 \* uncaught exception ends the relay (#4).

@@ -16,7 +16,7 @@ CONSTANTS
     Junk,       \* TRUE: a file with a live pid but no workspaceFolders is in
                 \* the folder
     CheckFiles, \* TRUE: findWindows skips a file whose fields are not a
-                \* Discovery (the fix for #31)
+                \* Discovery, by its schema (the fix for #31; #163)
     AtomicWrite \* TRUE: writeDiscovery replaces the file in one rename, so it
                 \* is never half written (the fix for #72)
 
