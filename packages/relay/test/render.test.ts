@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { CURSOR_MARKER, type Report } from '@ai-pair/protocol';
-import { ELLIPSIS } from '@ai-pair/core/constants';
+import { ELLIPSIS, RANGE_DASH } from '@ai-pair/core/constants';
 import { renderFile, renderReport } from '../src/render';
 
 function report(r: Partial<Report>): Report {
@@ -219,5 +219,38 @@ describe('edits with no net change', () => {
     );
     expect(text).toMatch(/a\.ts in these places, too much to show \(300 lines of diff left out\)\. `read` the file/);
     expect(text).toMatch(/@@ -1,0 \+1,300 @@/);
+  });
+});
+
+describe('the variants each part can take', () => {
+  it('renders a selection over several lines, and one that was not cut off', () => {
+    const selection = { file: 'a.ts', from: { line: 3, column: 1 }, to: { line: 4, column: 2 }, text: 'one\ntwo' };
+    const text = renderReport(report({ events: [{ kind: 'message', text: 'hi', selection }] }), 'listen');
+    expect(text).toContain(`a.ts lines 3${RANGE_DASH}4`);
+    expect(text).not.toMatch(/cut off/);
+  });
+
+  it('says a run is still running, or that its exit code is unknown, and fences output that has backticks', () => {
+    const run = { command: 'npm test', output: 'a ``` b' };
+    const running = renderReport(report({ batches: [{ id: 1, status: 'completed', runs: [{ ...run, running: true }] }] }), 'step');
+    expect(running).toMatch(/still running in its terminal/);
+    expect(running).toContain('````\na ``` b\n````');
+    const unknown = renderReport(report({ batches: [{ id: 1, status: 'completed', runs: [run] }] }), 'step');
+    expect(unknown).toMatch(/exit code unknown/);
+  });
+
+  it("names a tool for another's long edit, and shows a turn handed back without a message, with a selection", () => {
+    const selection = { file: 'a.ts', from: { line: 1, column: 1 }, to: { line: 1, column: 2 }, text: 'x' };
+    const events: Report['events'] = [
+      { kind: 'edit', file: 'a.ts', diff: '@@ -1 +1 @@', by: 'other', omitted: 5 },
+      { kind: 'turn', to: 'agent', selection },
+    ];
+    const text = renderReport(report({ events }), 'listen');
+    expect(text).toMatch(/A tool, a formatter, or something on disk changed a\.ts in these places/);
+    expect(text).toContain('handed the turn back to you.\nAbout the code they had selected, a.ts line 1:');
+  });
+
+  it('says there is nothing to report when nothing happened', () => {
+    expect(renderReport(report({}), 'step')).toBe('Nothing to report.');
   });
 });
