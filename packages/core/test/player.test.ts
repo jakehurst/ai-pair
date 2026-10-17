@@ -650,7 +650,7 @@ describe('type', () => {
     ]);
   });
 
-  it('types over the selection, and deletes it when there is nothing to type; with neither, changes nothing', async () => {
+  it('types over the selection, deletes it when there is nothing to type, and with neither changes nothing', async () => {
     const h = harness({
       files: { 'a.ts': 'keep DELETE keep\n' },
       scene: { cursor: { file: A, offset: 11 }, selection: { start: 5, end: 12 } },
@@ -764,7 +764,7 @@ describe('point', () => {
 });
 
 describe('looking back at the cursor', () => {
-  it('ActAtCursor: brings the view back from far-pointed code with a far pause, and from near code with none', async () => {
+  it('CursorShown, ActAtCursor: brings the view back from far-pointed code with a far pause, and from near code with none', async () => {
     const far = harness({ files: { 'a.ts': 'x' }, scene: { cursor: { file: A, offset: 1 }, focus: 'point', pointFar: true } });
     await played(far, [{ type: `y${CURSOR_MARKER}` }]);
     expect(far.scene.focus).toBe('cursor');

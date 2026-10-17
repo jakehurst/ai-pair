@@ -1044,7 +1044,7 @@ describe("the programmer's input", () => {
     ]);
   });
 
-  it("ReadIsStart: an edit by others to a file a queued batch edits interrupts it; to another file, the queue's rehearsals follow it", async () => {
+  it("ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it", async () => {
     const h = await started();
     holdPlay();
     rehearsed({}, {}, ['a.ts']);
@@ -1115,7 +1115,7 @@ describe("the programmer's input", () => {
 });
 
 describe('the cursor in a report', () => {
-  it("CursorShown: adds the cursor's line when it moved since the agent last saw it, and knows its line from then", async () => {
+  it("adds the cursor's line to a report when it moved since the agent last saw it, and knows its line from then", async () => {
     const h = await started();
     const shown = {
       code: { file: 'a.ts', lines: [{ number: 2, text: `x${CURSOR_MARKER}` }] },
@@ -1182,7 +1182,7 @@ describe('pause and resume', () => {
     expect(h.traced.at(-1)).toMatch(/^report to listen: batches \[\], events \[interrupt\], paused \(reply\), \d+ chars$/);
   });
 
-  it('NoStaleReveal, ReplyKeepsView: a resume after a look-away reveals the cursor, not the point; a reply reveals nothing', async () => {
+  it('NoStaleReveal, ReplyKeepsView: a resume after a look-away reveals the cursor, not the point, and a reply reveals nothing', async () => {
     const h = await started();
     scene().point = { file: A, start: 0, end: 1 };
     scene().focus = 'point';
