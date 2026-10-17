@@ -560,7 +560,14 @@ export class Controller {
    * Records an edit, and returns its event. Edits to a file are reported as one diff, as the programmer's if any of
    * them was (specs/EditEvents.tla: `Record`, for `EditAsProgrammer` and `EditAsOther`).
    */
-  private recordEdit(session: Session, file: string, before: string, after: string, changes: Change[], by: RecordedEdit['by']): RecordedEdit {
+  private recordEdit(
+    session: Session,
+    file: string,
+    before: string,
+    after: string,
+    changes: Change[],
+    by: RecordedEdit['by'],
+  ): RecordedEdit {
     session.lines.of(file, before);
     for (const change of changes) {
       session.player.transform(file, change);
