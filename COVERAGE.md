@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-10-12.
+Last updated: tla, 2026-10-17.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -38,23 +38,23 @@ Last updated: css, 2026-10-12.
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/test/bridge.discovery.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/bridge.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/core/test/controller.edges.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/core/test/bridge.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/core/test/controller.edges.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/core/test/controller.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/diff.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/places.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/places.scale.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/player.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/core/test/rehearsal.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/core/test/player.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/core/test/rehearsal.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/units.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.1% B 54.0% F 90.9% | - | - | - | - |
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.6% B 50.0% F 100.0% | - | - | - | - |
-| `packages/protocol/test/wire.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/wire.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 97.7% B 85.7% F 92.5% | - | - | - | - | - |
 | `packages/relay/src/main.ts` | TypeScript | L 0.0% B 100.0% F 0.0% | - | - | - | - | - |
