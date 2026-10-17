@@ -102,6 +102,9 @@ Set by Justine on 2026-10-07.
     nothing on disk; a temporary folder it makes is removed in its
     `afterEach` (set by Justine on 2026-10-16; the tests that do not yet
     are listed on #176).
+-   **A test file covers its source file 100 percent by itself:** lines,
+    branches, and functions, counting only its own tests (set by Justine on
+    2026-10-16).
 -   **Each source file's unit tests live in its own test file,** named for
     it: `server.ts` in `server.test.ts`, never one file for several
     sources. An end-to-end test that runs several files at once, like
