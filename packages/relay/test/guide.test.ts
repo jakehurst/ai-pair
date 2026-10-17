@@ -1,64 +1,92 @@
 // The guides `start` reads (#23, specs/ProjectGuide.tla): the user's, then every project guide from
 // the workspace folder down to the working directory, outer first, never one above the folder.
+// Solitary: the disk and git are mocks, so each test says which files exist, what they hold, and
+// what git answers.
 
-import { ok } from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
+import * as childProcess from 'node:child_process';
 import * as path from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
-import { GUIDE_FILE, MAX_GUIDE, projectGuides, readGuides, renderGuides } from '../src/guide';
+import { afterEach, expect, it, vi } from 'vitest';
+import { gitIgnores, GUIDE_FILE, MAX_GUIDE, projectGuides, readGuides, renderGuides } from '../src/guide';
 
-let top: string;
-beforeEach(() => {
-  top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-guide-')));
-});
-afterEach(() => {
-  fs.rmSync(top, { recursive: true, force: true });
-});
+/** The mocked disk: each file's text by its path, and the exit status `git check-ignore` answers with. */
+const disk = vi.hoisted(() => ({ files: new Map<string, string>(), gitStatus: 1 }));
 
-/** Writes a guide in `dir`, under the test's folder, and returns its path. */
-function guide(dir: string, text: string): string {
-  const file = path.join(top, dir, GUIDE_FILE);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, text);
+vi.mock('node:fs', () => ({
+  existsSync: (file: string) => disk.files.has(file),
+  readFileSync: (file: string) => {
+    const text = disk.files.get(file);
+    if (text === undefined) throw new Error(`ENOENT: no such file, open '${file}'`);
+    return text;
+  },
+}));
+
+vi.mock('node:child_process', () => ({ spawnSync: vi.fn(() => ({ status: disk.gitStatus })) }));
+
+/** Returns the guide's path in `dir`, after putting it on the mocked disk with `text`. */
+function guide(dir: string, text = 'rules'): string {
+  const file = path.join(dir, GUIDE_FILE);
+  disk.files.set(file, text);
   return file;
 }
 
-it('Exactly, OuterFirst, Contained: reads the guides from the workspace folder down to the working directory, outer first', () => {
-  guide('', 'above the folder');
-  const outer = guide('ws', 'outer');
-  guide('ws/other', 'off the path');
-  const inner = guide('ws/app/src', 'inner');
-  fs.mkdirSync(path.join(top, 'ws/app/src/deep'), { recursive: true });
-  expect(projectGuides(path.join(top, 'ws/app/src/deep'), path.join(top, 'ws'))).toEqual([outer, inner]);
-  expect(projectGuides(path.join(top, 'ws'), path.join(top, 'ws'))).toEqual([outer]);
+/** A fake `ignored` check: git ignores nothing. */
+function ignoresNone(): boolean {
+  return false;
+}
+
+afterEach(() => {
+  disk.files.clear();
+  disk.gitStatus = 1;
+  vi.clearAllMocks();
 });
 
-it('Exactly, Contained: leaves out a guide git ignores, and keeps one checked in though .gitignore names it', () => {
-  function git(...args: string[]): void {
-    execFileSync('git', args, { cwd: path.join(top, 'ws'), stdio: 'ignore' });
+it('Exactly, OuterFirst, Contained: reads the guides from the workspace folder down to the working directory, outer first', () => {
+  guide('/top');
+  const outer = guide('/top/ws');
+  guide('/top/ws/other');
+  const inner = guide('/top/ws/app/src');
+  expect(projectGuides('/top/ws/app/src/deep', '/top/ws', ignoresNone)).toEqual([outer, inner]);
+  expect(projectGuides('/top/ws', '/top/ws', ignoresNone)).toEqual([outer]);
+});
+
+it('Exactly, Contained: leaves out a guide git ignores', () => {
+  const outer = guide('/top/ws');
+  const ignored = guide('/top/ws/app');
+  const inner = guide('/top/ws/app/src');
+  expect(projectGuides('/top/ws/app/src', '/top/ws', (file) => file === ignored)).toEqual([outer, inner]);
+});
+
+it("stops at the file system's root when `root` doesn't contain `cwd`", () => {
+  const top = guide('/');
+  const inner = guide('/top/app');
+  expect(projectGuides('/top/app', '/elsewhere', ignoresNone)).toEqual([top, inner]);
+});
+
+it('asks git whether it ignores a file: exit 0 is ignored; 1, not; 128, outside a repository', () => {
+  const file = path.join('/top/ws', GUIDE_FILE);
+  for (const [status, ignored] of [
+    [0, true],
+    [1, false],
+    [128, false],
+  ] as const) {
+    disk.gitStatus = status;
+    expect(gitIgnores(file)).toBe(ignored);
   }
-  const outer = guide('ws', 'outer');
-  guide('ws/app', 'ignored');
-  const tracked = guide('ws/app/src', 'checked in');
-  fs.writeFileSync(path.join(top, 'ws/.gitignore'), 'app/.ai-pair/\napp/src/.ai-pair/\n');
-  git('init', '-q');
-  git('add', '-f', path.join('app/src', GUIDE_FILE));
-  expect(projectGuides(path.join(top, 'ws/app/src'), path.join(top, 'ws'))).toEqual([outer, tracked]);
+  expect(childProcess.spawnSync).toHaveBeenCalledWith('git', ['check-ignore', '-q', file], { cwd: '/top/ws/.ai-pair', stdio: 'ignore' });
 });
 
 it("puts the user's guide first, skips empty ones, and cuts a long one with a note", () => {
-  const home = path.join(top, 'home');
-  fs.mkdirSync(home);
-  fs.writeFileSync(path.join(home, 'GUIDE.md'), 'everywhere');
-  guide('ws', '   \n');
-  guide('ws/app', 'x'.repeat(MAX_GUIDE + 5));
-  const guides = readGuides(home, path.join(top, 'ws/app'), path.join(top, 'ws'));
-  expect(guides.map((g) => path.relative(top, g.file))).toEqual(['home/GUIDE.md', path.join('ws/app', GUIDE_FILE)]);
-  const cut = guides[1];
-  ok(cut);
-  expect(cut.text).toMatch(/\[Cut: the file goes on for 5 more characters\.\]$/);
+  disk.files.set('/home/GUIDE.md', 'everywhere');
+  guide('/top/ws', '   \n');
+  const long = guide('/top/ws/app', 'x'.repeat(MAX_GUIDE + 5));
+  const guides = readGuides('/home', '/top/ws/app', '/top/ws');
+  expect(guides.map((g) => g.file)).toEqual(['/home/GUIDE.md', long]);
+  expect(guides[1]?.text).toMatch(/\[Cut: the file goes on for 5 more characters\.\]$/);
+});
+
+it('leaves out a guide it cannot read', () => {
+  const project = guide('/top/ws');
+  expect(readGuides('/home', '/top/ws', '/top/ws').map((g) => g.file)).toEqual([project]);
 });
 
 it('renders them after an introduction that says which takes precedence', () => {
