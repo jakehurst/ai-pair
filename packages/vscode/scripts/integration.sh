@@ -26,6 +26,8 @@ readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
+# The run's workspace, user data, extensions, and home go when it ends (#176).
+trap 'rm -rf "${TMP}"' EXIT
 mkdir -p "${TMP}/workspace"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
 export AI_PAIR_HOME="${TMP}/home"

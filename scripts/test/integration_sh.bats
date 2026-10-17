@@ -39,6 +39,15 @@ CODE
   ! grep -q '^ELECTRON_RUN_AS_NODE=' "${ENV_RECORD}"
 }
 
+@test "removes its temporary folder when it ends" {
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
+  [[ "${status}" -eq 0 ]]
+  local user
+  user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}")"
+  [[ -n "${user}" ]]
+  [[ ! -e "$(dirname "${user}")" ]]
+}
+
 @test "passes VSCODE_ARGS through, split on spaces" {
   VSCODE_ARGS='--no-sandbox --disable-gpu' run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
   [[ "${status}" -eq 0 ]]
