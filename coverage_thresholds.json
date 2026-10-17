@@ -11,8 +11,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 88,
-      "branches": 64,
+      "lines": 89,
+      "branches": 68,
       "functions": 94
     }
   },
@@ -47,8 +47,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 90,
-      "branches": 84,
+      "lines": 91,
+      "branches": 85,
       "functions": 86
     }
   },
@@ -96,7 +96,7 @@
     },
     "integration": {
       "lines": 91,
-      "branches": 69,
+      "branches": 71,
       "functions": 93
     }
   },
@@ -119,9 +119,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 98,
+      "lines": 100,
       "branches": 93,
-      "functions": 86
+      "functions": 100
     }
   },
   "packages/core/src/text.ts": {
@@ -132,7 +132,7 @@
     },
     "integration": {
       "lines": 98,
-      "branches": 75,
+      "branches": 77,
       "functions": 87
     }
   },
@@ -143,9 +143,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 85,
-      "branches": 85,
-      "functions": 80
+      "lines": 100,
+      "branches": 89,
+      "functions": 100
     }
   },
   "packages/core/src/timing.ts": {
@@ -179,9 +179,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 93,
-      "branches": 54,
-      "functions": 90
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/protocol/src/paths.ts": {
@@ -192,7 +192,14 @@
     },
     "integration": {
       "lines": 93,
-      "branches": 70,
+      "branches": 75,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/schemas.ts": {
+    "integration": {
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     }
   },
@@ -203,8 +210,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 97,
-      "branches": 50,
+      "lines": 100,
+      "branches": 84,
       "functions": 100
     }
   },
@@ -213,41 +220,66 @@
       "lines": 100,
       "branches": 100,
       "functions": 100
+    },
+    "integration": {
+      "lines": 98,
+      "branches": 81,
+      "functions": 100
     }
   },
   "packages/relay/src/link.ts": {
     "unit": {
-      "lines": 97,
-      "branches": 85,
-      "functions": 92
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    },
+    "integration": {
+      "lines": 87,
+      "branches": 71,
+      "functions": 94
     }
   },
   "packages/relay/src/main.ts": {
-    "unit": {
-      "lines": 0,
+    "integration": {
+      "lines": 83,
       "branches": 100,
-      "functions": 0
+      "functions": 100
     }
   },
   "packages/relay/src/render.ts": {
     "unit": {
-      "lines": 98,
-      "branches": 91,
+      "lines": 100,
+      "branches": 100,
       "functions": 100
+    },
+    "integration": {
+      "lines": 66,
+      "branches": 50,
+      "functions": 69
     }
   },
   "packages/relay/src/server.ts": {
     "unit": {
-      "lines": 98,
-      "branches": 84,
+      "lines": 100,
+      "branches": 100,
       "functions": 100
+    },
+    "integration": {
+      "lines": 93,
+      "branches": 79,
+      "functions": 88
     }
   },
   "packages/relay/src/tools.ts": {
     "unit": {
-      "lines": 96,
-      "branches": 82,
+      "lines": 100,
+      "branches": 100,
       "functions": 100
+    },
+    "integration": {
+      "lines": 89,
+      "branches": 60,
+      "functions": 14
     }
   },
   "packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift": {
@@ -313,7 +345,7 @@
     },
     "integration": {
       "lines": 94,
-      "branches": 82,
+      "branches": 83,
       "functions": 95
     }
   },

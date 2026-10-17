@@ -16,64 +16,73 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-10-17.
+Last updated: unit, 2026-10-17.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
-| `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | L 100.0% (16 of 16) | - |
-| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.4% B 64.0% F 94.1% | - | - | - | - |
+| `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | L 0.0% (0 of 16) | - |
+| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.1% B 68.5% F 94.1% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/constants.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.4% B 84.5% F 86.6% | - | - | - | - |
+| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.1% B 85.9% F 86.9% | - | - | - | - |
 | `packages/core/src/diff.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.7% B 80.0% F 100.0% | - | - | - | - |
 | `packages/core/src/index.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 93.3% F 100.0% | - | - | - | - |
 | `packages/core/src/paths.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/places.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 75.2% B 47.6% F 66.7% | - | - | - | - |
-| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.5% B 69.0% F 93.1% | - | - | - | - |
+| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.8% B 71.6% F 93.3% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.5% B 93.3% F 86.4% | - | - | - | - |
-| `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.0% B 75.0% F 87.5% | - | - | - | - |
-| `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.5% B 85.7% F 80.0% | - | - | - | - |
+| `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 93.3% F 100.0% | - | - | - | - |
+| `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.0% B 77.8% F 87.5% | - | - | - | - |
+| `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 89.5% F 100.0% | - | - | - | - |
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/test/bridge.discovery.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/bridge.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/core/test/controller.edges.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/core/test/bridge.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/controller.edges.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/controller.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/diff.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/lines.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/places.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/places.scale.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/player.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/core/test/rehearsal.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/core/test/places.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.exhaustive.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/units.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.1% B 54.0% F 90.9% | - | - | - | - |
-| `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.6% B 50.0% F 100.0% | - | - | - | - |
-| `packages/protocol/test/wire.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/relay/src/link.ts` | TypeScript | L 97.7% B 85.7% F 92.5% | - | - | - | - | - |
-| `packages/relay/src/main.ts` | TypeScript | L 0.0% B 100.0% F 0.0% | - | - | - | - | - |
+| `packages/core/test/typing.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 83.3% F 100.0% | - | - | - | - |
+| `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 84.6% F 100.0% | - | - | - | - |
+| `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 81.3% F 100.0% | - | - | - | - |
+| `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.0% B 71.8% F 94.1% | - | - | - | - |
+| `packages/relay/src/main.ts` | TypeScript | - | L 83.3% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
-| `packages/relay/src/render.ts` | TypeScript | L 98.9% B 91.7% F 100.0% | - | - | - | - | - |
-| `packages/relay/src/server.ts` | TypeScript | L 98.3% B 84.4% F 100.0% | - | - | - | - | - |
-| `packages/relay/src/tools.ts` | TypeScript | L 96.9% B 82.2% F 100.0% | - | - | - | - | - |
+| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.8% B 50.0% F 69.2% | - | - | - | - |
+| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.1% B 79.5% F 88.9% | - | - | - | - |
+| `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.8% B 60.0% F 14.3% | - | - | - | - |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/test/render.fields.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/render.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/relay/test/server.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Package.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 99.3% R 93.3% F 100.0% | - | - |
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.1% R 98.2% F 97.9% | - | - |
-| `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | L 86.7% (26 of 30) | - |
+| `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/vscode/src/agents.ts` | TypeScript | L 93.8% B 81.6% F 87.2% | L 42.8% B 66.7% F 12.8% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 97.4% B 86.4% F 100.0% | L 58.6% B 66.7% F 33.3% | - | - | - | - |
@@ -119,7 +128,7 @@ Last updated: tla, 2026-10-17.
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
 | `scripts/check_ascii.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
-| `scripts/coverage_report.test.ts` | TypeScript | test | test | test | test | - | test |
+| `scripts/coverage_report.test.ts` | TypeScript | test | test | test | test | test | test |
 | `scripts/coverage_report.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/coverage_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/coverage_swift.sh` | Shell | - | - | - | - | - | - |
@@ -129,6 +138,8 @@ Last updated: tla, 2026-10-17.
 | `scripts/lint_web.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/release.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
+| `specs/ActionValidation.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ActionValidation.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Actions.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Actions.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/Anchor.cfg` | TLC config | - | - | - | - | - | - |
@@ -199,6 +210,6 @@ Last updated: tla, 2026-10-17.
 | `specs/Typing.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Typing.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Wire.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
-| `specs/check.sh` | Shell | - | - | - | - | L 97.7% (43 of 44) | - |
+| `specs/Wire.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
+| `specs/check.sh` | Shell | - | - | - | - | - | - |
 | `vitest.config.ts` | TypeScript | - | - | - | - | - | - |

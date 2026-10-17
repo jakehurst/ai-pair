@@ -13,7 +13,6 @@ import {
   type Discovery,
   type EditorMessage,
   type RelayMessage,
-  type ToolName,
 } from '@ai-pair/protocol';
 import type { Controller } from './controller';
 import { LEFT_ARROW, RIGHT_ARROW } from './constants';
@@ -187,7 +186,7 @@ export class Bridge {
         } else if (message.protocolVersion !== PROTOCOL_VERSION) {
           send({
             type: 'rejected',
-            reason: `Protocol version mismatch (editor ${PROTOCOL_VERSION}, relay ${message.protocolVersion}). The extension was updated: reload the VS Code window and restart the agent.`,
+            reason: `Protocol version mismatch (editor ${PROTOCOL_VERSION}, relay ${String(message.protocolVersion)}). The extension was updated: reload the VS Code window and restart the agent.`,
           });
           ws.close();
         } else {
@@ -237,7 +236,7 @@ export class Bridge {
     });
   }
 
-  private async dispatch(ws: WebSocket, tool: ToolName, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+  private async dispatch(ws: WebSocket, tool: string, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
     const controller = this.controller;
     if (tool === 'start') {
       // specs/Bridge.tla, `BeginStart`: refused while another socket's session is active.
@@ -281,7 +280,7 @@ export class Bridge {
         return controller.calibrate({ title: args.title, text, ...(notice === undefined ? {} : { notice }) });
       }
       default:
-        throw new ToolError('invalid_arguments', `Unknown tool: ${String(tool)}`);
+        throw new ToolError('invalid_arguments', `Unknown tool: ${tool}`);
     }
   }
 

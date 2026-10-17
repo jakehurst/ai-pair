@@ -8,7 +8,7 @@
     "@ai-pair/protocol": "*",
     "@modelcontextprotocol/sdk": "^1.30.1",
     "ws": "^8.21.3",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1"

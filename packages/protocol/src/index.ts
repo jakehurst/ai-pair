@@ -1,5 +1,7 @@
 // Types of the agent-facing protocol. See PROTOCOL.md.
 
+import type { MoveTarget, SpanTarget, ToolErrorCode } from './schemas';
+
 /**
  * Marks the agent cursor: in a report's code, where a spot puts it, and where a `type` leaves it.
  * Spans ignore it, so code can be copied from a report as is.
@@ -15,193 +17,8 @@ const MOVE_FIELDS = ['file', 'line', 'at', 'to'];
 /** The fields a `select` or `point` takes. */
 const SPAN_FIELDS = ['file', 'line', 'text', 'from', 'through'];
 
-/**
- * Where a `move` goes: on `line`, exactly, a spot, `at`, or the end of the line. Without `line`,
- * on the cursor's line.
- */
-export interface MoveTarget {
-  file?: string;
-  /** The line the cursor lands on, from 1. Omitted: the cursor's line. */
-  line?: number;
-  /** A spot on the line: the text around it, with `CURSOR_MARKER` where the cursor goes. */
-  at?: string;
-  /** `line_end`: the end of the line. */
-  to?: 'line_end';
-}
-
-/**
- * The code a `select` or `point` takes: `text`, starting on `line`, exactly, or from `from`,
- * starting on it, through the first `through` after it. Without `line`, on the cursor's line.
- */
-export interface SpanTarget {
-  file?: string;
-  /** The line the code starts on, from 1. Omitted: the cursor's line. */
-  line?: number;
-  text?: string;
-  from?: string;
-  through?: string;
-}
-
-/** One thing the agent does in a batch: a word to the programmer, a cursor move, a selection, typing, a command. */
-export type Action =
-  | { say: string }
-  | { move: MoveTarget }
-  | { select: SpanTarget }
-  | { type: string }
-  | { type_fast: string }
-  | { delete: true }
-  | { point: SpanTarget }
-  | { run: string; wait?: number };
-
-/** Whose turn it is: the agent plays batches, or the programmer has the keyboard. */
-export type Turn = 'agent' | 'user';
-
-/** Why playback is paused: the Pause button, a reply being typed, the programmer looking away, a calibration. */
-export type PauseReason = 'user' | 'reply' | 'away' | 'calibrate';
-
-/** How a batch ended: played to the end, cut by the programmer, stopped by an error, or never played. */
-export type BatchStatus = 'completed' | 'interrupted' | 'failed' | 'discarded';
-
-/** Why an action failed, as a code the agent can act on. */
-export type ErrorKind =
-  | 'no_line'
-  | 'not_found'
-  | 'ambiguous'
-  | 'line_not_seen'
-  | 'no_selection'
-  | 'no_cursor'
-  | 'not_your_turn'
-  | 'invalid_action'
-  | 'command_failed'
-  | 'command_declined'
-  | 'save_failed'
-  /** After a discarded or interrupted batch, the next one did not anchor the cursor with a file and line (#112). */
-  | 'unanchored';
-
-/** A line that might have been the one meant, offered after text was not found where the agent said. */
-export interface Candidate {
-  line: number;
-  context: string;
-}
-
-/** What a `run` action produced: the command, its output, and how it ended. */
-export interface RunResult {
-  command: string;
-  /** Absent when the command is still running, or its exit code couldn't be observed. */
-  exit_code?: number;
-  output: string;
-  truncated?: true;
-  /** Still running: `wait` elapsed, or playback was interrupted. It keeps running in the terminal. */
-  running?: true;
-  /** The terminal's shell, e.g. `pwsh` or `zsh`, when it's known. */
-  shell?: string;
-}
-
-/**
- * Lines of a file as they read, with the agent cursor marked. Long code skips lines in the middle. A
- * newline at the end of the file ends its last line: there's no empty line after it, unless the
- * cursor is there.
- */
-export interface Code {
-  file: string;
-  lines: Array<{ number: number; text: string }>;
-  /** Present when the lines reach the end of the file: whether a newline ends its last line. */
-  end?: { final_newline: boolean };
-}
-
-/** The error that stopped a batch, with the lines that might have been meant. */
-export interface BatchError {
-  kind: ErrorKind;
-  message: string;
-  candidates?: Candidate[];
-}
-
-/** A finished batch as a report describes it: its status, its code, and what was left unplayed. */
-export interface BatchResult {
-  id: number;
-  status: BatchStatus;
-  /** The code the batch produced, as it read when the batch ended; also just the cursor's line after a move. */
-  code?: Code;
-  /** The error of a failed batch, about the first action in `unplayed`. */
-  error?: BatchError;
-  /**
-   * The actions that didn't play, verbatim, ready to resubmit. An interrupted `type` comes first, reduced to
-   * what it didn't type; a failed batch's failing action comes first.
-   */
-  unplayed?: Action[];
-  runs?: RunResult[];
-  /** Files the batch edited that couldn't be saved: the buffer has the edits, the file on disk doesn't. */
-  unsaved?: Array<{ file: string; error: string }>;
-}
-
-/** A position in a file, by line and column, both from 1. */
-export interface LineColumn {
-  line: number;
-  column: number;
-}
-
-/** Code the programmer had selected when they wrote a message. */
-export interface Excerpt {
-  file: string;
-  from: LineColumn;
-  to: LineColumn;
-  text: string;
-  truncated?: true;
-}
-
-/** A passage for the reading speed calibration (#109): the agent's `calibrate` tool, the extension's setting. */
-export interface Passage {
-  title: string;
-  text: string;
-  /** Shown with the passage, outside the timed text: a license notice, or where it is from. */
-  notice?: string;
-}
-
-/** Something that happened in the editor since the last report: a message, an edit, an interrupt, a turn, the end. */
-export type Event =
-  | { kind: 'message'; text: string; selection?: Excerpt }
-  /** `other`: not by the programmer, but by a tool, a formatter, or on disk. Only the programmer's interrupt.
-   * `omitted`: the diff was too long, so `diff` has only its hunks' headers, and this many lines were left out (#149). */
-  | { kind: 'edit'; file: string; diff: string; by: 'programmer' | 'other'; omitted?: number }
-  | { kind: 'interrupt' }
-  | { kind: 'turn'; to: Turn; message?: string; selection?: Excerpt }
-  | { kind: 'end' };
-
-/** The editor's answer to a tool call: the batches that finished, the events since the last report, and where the cursor is. */
-export interface Report {
-  batches: BatchResult[];
-  /** The batch this `step` submitted, unless it's already finished and in `batches`. */
-  submitted?: { id: number; status: 'queued' | 'playing' };
-  /**
-   * The batch this `step` was given, if it wasn't queued: played in memory, from where the queued
-   * batches leave off, its action `index` (from 1) would fail. `code` is how the code would read then.
-   */
-  rejected?: { index: number; action: Action; error: BatchError; code?: Code };
-  events: Event[];
-  turn: Turn;
-  /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
-  cursor?: Code;
-  waiting?: true;
-  /** Some of it may repeat a report the agent already saw: a call it canceled came back after its answer (#67). */
-  repeated?: true;
-  /** `start` resumed a session its agent had disconnected from, or the window had reloaded with (#25). */
-  resumed?: true;
-  /** Playback is paused, for these reasons: the agent's batches wait until the programmer resumes (#149). */
-  paused?: PauseReason[];
-}
-
-/** A file as `read` returns it: its lines, whether it has unsaved changes, and how it ends. */
-export interface FileContent {
-  file: string;
-  dirty: boolean;
-  /** As in `Code`: a newline at the end of the file ends its last line. An empty file has none. */
-  lines: Array<{ number: number; text: string }>;
-  /** Present when the lines reach the end of the file: whether a newline ends its last line. */
-  end?: { final_newline: boolean };
-}
-
-/** Why a tool call was refused, as a code the agent can act on. */
-export type ToolErrorCode = 'no_session' | 'session_active' | 'no_editor' | 'cancelled' | 'invalid_arguments' | 'calibration_busy';
+/** An object as it arrived, before its schema checked it: each field of `T` may be there, with any value. */
+export type Unchecked<T> = { [K in keyof T]?: unknown };
 
 /** Returns the fields as a comma-separated list of code spans. */
 function fieldList(fields: string[]): string {
@@ -233,7 +50,7 @@ function spotProblem(at: string): string | undefined {
 }
 
 /** Returns what's wrong with a `move`'s combination of fields, if anything. */
-export function moveProblem(target: MoveTarget): string | undefined {
+export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
   if ('before' in target || 'after' in target) {
     return `A spot is one text, \`at\`: the text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`at: "import { ${CURSOR_MARKER}type Context"\`.`;
   }
@@ -242,12 +59,15 @@ export function moveProblem(target: MoveTarget): string | undefined {
   if (target.to !== undefined && target.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
   if (target.at !== undefined && target.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
   if (target.at === undefined && target.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
-  if (target.at !== undefined) return spotProblem(target.at);
+  // specs/ActionValidation.tla, `CheckAtText`: an `at` that isn't a text gets a message; `spotProblem` would throw on it.
+  if (target.at !== undefined) {
+    return typeof target.at === 'string' ? spotProblem(target.at) : `\`at\` is a text, with ${CURSOR_MARKER} where your cursor goes.`;
+  }
   return undefined;
 }
 
 /** Returns what's wrong with a `select`'s or `point`'s combination of fields, if anything. */
-export function spanProblem(span: SpanTarget): string | undefined {
+export function spanProblem(span: Unchecked<SpanTarget>): string | undefined {
   if ('near_line' in span) return 'Give `line`: the line the code starts on, exactly as your latest `read` or report shows it.';
   if ('to' in span) return 'The end of a range is `through`: `from` and `through` are both texts.';
   const line = lineProblem(span.line);
@@ -322,3 +142,4 @@ export class ToolError extends Error {
 
 export * from './wire';
 export * from './paths';
+export * from './schemas';

@@ -185,14 +185,14 @@ describe('calls it cannot take', () => {
     expect(controller.onCalibrate).toHaveBeenCalledWith({ title: 'Words', text: 'Some words.', notice: 'From nowhere.' });
   });
 
-  it('ignores a return from a socket that does not own the session', async () => {
+  it('ignores a return from a socket that does not own the session, and a hello once welcomed', async () => {
     await paired();
     const stranger = await connect();
     send(stranger, { type: 'hello', token: discovery().token, protocolVersion: PROTOCOL_VERSION });
     await stranger.next();
     const restore = vi.spyOn(controller, 'restore');
     send(stranger, { type: 'return', report: { batches: [], events: [], turn: 'agent' } });
-    send(stranger, { type: 'bogus' });
+    send(stranger, { type: 'hello', token: discovery().token, protocolVersion: PROTOCOL_VERSION });
     send(stranger, { type: 'call', id: 9, tool: 'listen', args: {} });
     expect(await stranger.next()).toMatchObject({ type: 'error', id: 9, code: 'no_session' });
     expect(restore).not.toHaveBeenCalled();

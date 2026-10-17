@@ -4,6 +4,7 @@ import { ok } from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -14,7 +15,7 @@ import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
 import { CURSOR_MARKER, PROTOCOL_VERSION } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
-import { agentGuide, createServer } from '../src/server';
+import { createServer, serve } from '../src/server';
 
 const fast = {
   ...testConfig,
@@ -69,8 +70,8 @@ async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> 
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const server = createServer(new EditorLink(cwd, dir), 'THE GUIDE', cwd);
   await server.connect(serverSide);
-  const client = new Client({ name: 'test', version: '0' }, { capabilities: roots ? { roots: {} } : {} });
-  if (roots) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
+  const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
+  if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
   await client.connect(clientSide);
   clients.push(client);
   return client;
@@ -221,6 +222,8 @@ describe('relay', () => {
     expect(range.text).toMatch(/The end of a range is `through`/);
     const nothing = await call(client, 'step', { actions: [{ select: { line: 1 } }] });
     expect(nothing.text).toMatch(/Give the code: `text`, or `from` and `through`/);
+    const spot = await call(client, 'step', { actions: [{ move: { line: 1, at: 5 } }] });
+    expect(spot.text).toMatch(/`at` is a text/);
   });
 
   it('OwnedByOpenSocket: lets only one agent pair in a window at a time', async () => {
@@ -375,9 +378,7 @@ describe('relay', () => {
   });
 
   it("keeps serving after frames that aren't messages", async () => {
-    const window = findWindows(['/project'], dir).windows[0];
-    ok(window);
-    const { port } = window;
+    const { port } = findWindows(['/project'], dir).windows[0];
     const raw = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise((r) => {
       raw.once('open', r);
@@ -392,9 +393,7 @@ describe('relay', () => {
 
   it("OwnedByOpenSocket: doesn't leave a session to a socket that closed while it started", async () => {
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
-    const window = findWindows(['/project'], dir).windows[0];
-    ok(window);
-    const { port, token } = window;
+    const { port, token } = findWindows(['/project'], dir).windows[0];
     const start = controller.start.bind(controller);
     const gate = deferred();
     const atGate = deferred();
@@ -455,9 +454,7 @@ describe('relay', () => {
     await call(one, 'start', { task: 'one' });
     controller.endSession();
     // A raw relay socket starts a session, and closes while controller.start() is held at a gate.
-    const window = findWindows(['/project'], dir).windows[0];
-    ok(window);
-    const { port, token } = window;
+    const { port, token } = findWindows(['/project'], dir).windows[0];
     const start = controller.start.bind(controller);
     const gate = deferred();
     const atGate = deferred();
@@ -517,39 +514,30 @@ describe('relay', () => {
     expect((await call(client, 'start', { cwd: '/elsewhere' })).error).toBe(false);
     expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(false);
   });
+
+  it('ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163)', async () => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    // The stdio transport reads stdin, so it flows, and its end is seen.
+    const stdin = new PassThrough().resume();
+    const served = serve({ transport: serverSide, guide: 'THE GUIDE', cwd: '/project/src', dir, stdin });
+    const client = new Client({ name: 'test', version: '0' });
+    let closed = false;
+    // A Client has only this one close handler.
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener
+    client.onclose = () => {
+      closed = true;
+    };
+    await client.connect(clientSide);
+    expect((await call(client, 'start')).error).toBe(false);
+    expect(bridge.connections().size).toBe(1);
+    stdin.end();
+    await served;
+    expect(closed).toBe(true);
+    await until(() => bridge.connections().size === 0);
+  });
 });
 
 describe('discovery', () => {
-  it('picks the most specific workspace folder, then the most recently focused window', () => {
-    function write(name: string, folders: string[], lastFocused: number): void {
-      fs.writeFileSync(
-        path.join(dir, name),
-        JSON.stringify({ pid: process.pid, workspaceFolders: folders, port: 1, token: name, protocolVersion: 1, lastFocused }),
-      );
-    }
-    write('outer.json', ['/work'], 3);
-    write('inner-old.json', ['/work/app'], 1);
-    write('inner-new.json', ['/work/app'], 2);
-    write('dead.json', ['/work/app/src'], 9);
-    const dead: unknown = JSON.parse(fs.readFileSync(path.join(dir, 'dead.json'), 'utf8'));
-    ok(typeof dead === 'object' && dead !== null);
-    fs.writeFileSync(path.join(dir, 'dead.json'), JSON.stringify({ ...dead, pid: 999_999_999 }));
-    function tokens(folders: string[]): string[] {
-      return findWindows(folders, dir).windows.map((w) => w.token);
-    }
-    expect(tokens(['/work/app/src'])).toEqual(['inner-new.json', 'inner-old.json', 'outer.json']);
-    expect(tokens(['/work/lib'])).toEqual(['outer.json']);
-    expect(findWindows(['/', '/work/lib', '/work/app'], dir).folder).toBe('/work/lib');
-  });
-
-  it('finds a window for a folder inside it whose name starts with two dots (#5)', () => {
-    fs.writeFileSync(
-      path.join(dir, 'w.json'),
-      JSON.stringify({ pid: process.pid, workspaceFolders: ['/work'], port: 1, token: 'w', protocolVersion: 1, lastFocused: 1 }),
-    );
-    expect(findWindows(['/work/..cache'], dir).windows.map((w) => w.token)).toEqual(['w']);
-  });
-
   it('ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process', async () => {
     fs.writeFileSync(
       path.join(dir, 'stale.json'),
@@ -587,13 +575,5 @@ describe('discovery', () => {
     expect(bridge.connections().size).toBe(0);
     expect((await call(client, 'start')).error).toBe(false);
     expect(bridge.connections().size).toBe(1);
-  });
-});
-
-describe('agent guide', () => {
-  it('is everything after the first horizontal rule, whatever the line endings', () => {
-    const lf = '# Agent Guide\n\nFor maintainers.\n\n---\n\n## You are pair programming\n\nDrive.\n';
-    expect(agentGuide(lf)).toBe('## You are pair programming\n\nDrive.');
-    expect(agentGuide(lf.replaceAll('\n', '\r\n'))).toBe('## You are pair programming\r\n\r\nDrive.');
   });
 });

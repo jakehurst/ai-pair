@@ -62,7 +62,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not | holds | 709 |
-| `Wire.cfg` | `MaxSockets = 2` sockets, `MaxCalls = 2` calls | holds | 24,714 |
+| `Wire.cfg` | `MaxSockets = 2` sockets, `MaxCalls = 2` calls | holds | 43,426 |
 | `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
 | `PanelScroll.cfg` | `MaxEntries = 5`, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxPosts = 6` | holds | 127 |
@@ -91,6 +91,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
+| `ActionValidation.cfg` | every move and span place by the kind of value in each field (180 moves, 960 spans), `CheckAtText = TRUE` | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE` | holds | 46 |
 | `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
@@ -152,7 +153,8 @@ test's title carries its name:
 `packages/relay/src/link.ts`, with the editor's replies from
 `packages/core/src/bridge.ts`. Constants: `PerSocket` (#3), `GuardedParse`
 (#4, #30), `CheckAbort` (#29), `WaitCancelled` (#59; what it is for is checked
-in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67). The agent's MCP
+in `Controller`), `HandBackAnswered` and `MarkRepeats` (#67),
+`CloseAfterShutdown` (#163). The agent's MCP
 client is modeled too: it drops an answer once it has canceled, and it sends a
 cancel even after it took the answer, since the SDK never removes its abort
 listener. So the relay can't tell whether the agent saw a report whose cancel
@@ -162,15 +164,17 @@ earlier one (`RepeatsMarked`).
 
 | Spec | Code |
 |---|---|
-| `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.ws` |
+| `Open`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
 | `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
 | `Send` | `call()` registering the call in its socket's map and sending it, once no cancelled call on the socket waits for its answer |
-| `Close`, `HandleClose` | `locate()` closing `this.ws`, or the editor's end closing; the `close` handler rejecting `Victims` |
+| `Close`, `HandleClose` | `locate()` closing `this.connection`, or the editor's end closing; the `close` handler rejecting `Victims` |
 | `Reply` | a `result` frame: `result`, or `return` for a call the relay marked cancelled |
 | `SendGarbage` | a frame that isn't a message (`parseEditorMessage`) |
-| `Finished` | nothing: the model's sockets are used up, or the relay crashed, and the run ends |
+| `Reject` | a `rejected` answer to the hello, after which the bridge closes its end: `openWindow()` rejects, and the `close` handler runs with no welcome |
+| `Shutdown` | `serve()` in `server.ts`: the harness ends stdin, and it closes the server and `link.close()`, which closes `this.connection` and marks the link closed |
+| `Finished` | nothing: the model's sockets are used up, the relay crashed, or it shut down and closed the sockets it opened, and the run ends |
 
 Each invariant and property was proved to bite with a mutation of a copy of
 the model, run in TLC and then reverted:
@@ -185,7 +189,8 @@ the model, run in TLC and then reverted:
 | `HandBackAnswered = FALSE`, the code before #67 | `DroppedHandedBack` |
 | no fairness on `Reply` | `CallsAnswered` |
 | `Finished` left out of `Next` | the deadlock check |
-| `WaitCancelled = FALSE`, the code before #59 | nothing here, with the same 24,714 states: what it is for is checked in `Controller` |
+| `CloseAfterShutdown = FALSE`, the code before #163 | `ExitsAfterShutdown`: the harness ends stdin while socket 1 connects, socket 1 fails, `open()` goes on to socket 2, and its welcome leaves it open with nothing to close it (49,428 states) |
+| `WaitCancelled = FALSE`, the code before #59 | nothing here, with the same 43,426 states: what it is for is checked in `Controller` |
 
 Every invariant and property names the test that proves the code obeys it;
 the test's title carries its name:
@@ -194,11 +199,12 @@ the test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `OwnCloseOnly` | `link.test.ts`: OwnCloseOnly: rejects a call only when the socket it was sent on closes |
-| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a frame that is not JSON; RelayStaysUp: fails to connect, without crashing, when a window answers with JSON that isn't a message; RelayStaysUp: drops a frame that is not JSON after the welcome |
+| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a string, a number, an array, an object with no type, or a rejection whose reason isn't a text; RelayStaysUp: drops a frame that is not a message after the welcome, and an answer to no call; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped a window that answered with something not a message, and started without AI_PAIR_HOME |
 | `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
 | `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
-| `DroppedHandedBack` | `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67) |
+| `DroppedHandedBack` | `link.test.ts`: DroppedHandedBack: hands a report back on the socket it came over, marked as maybe seen, and nothing it cannot; `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); `server.test.ts`: DroppedHandedBack: hands back an answered report once, and passes every message on to the SDK (#67) |
+| `ExitsAfterShutdown` | `link.test.ts`: ExitsAfterShutdown: closes a socket the editor welcomes after the link closed, and opens none after it; `server.test.ts`: ExitsAfterShutdown: connects, and once stdin ends, closes the server and then the link (#163); `relay.test.ts`, end to end: ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163) |
 
 ### `Panel`: the history
 
@@ -401,10 +407,10 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NoInternal` | `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
+| `NoInternal` | `link.test.ts`: NoInternal: skips a file that isn't JSON, JSON that isn't a window's, and a file not named as JSON; `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
 | `FindsRunningProp` | `bridge.discovery.test.ts`: FindsRunningProp: rewrites the discovery file on focus without a reader ever seeing it half written |
-| `ConnectedToOpen` | `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process |
-| `FindsOpen` | `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
+| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped a window that answered with something not a message, and started without AI_PAIR_HOME |
+| `FindsOpen` | `link.test.ts`: FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed; `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
 
 ### `EditorAdapter`: who made a change
 
@@ -545,14 +551,14 @@ carries the invariant's name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons: holds playback until the last pause reason is gone |
-| `NoTimerWhilePaused` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `units.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that |
-| `ResolvedOnce` | `units.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset` |
-| `ResumeContinues` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `units.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time |
+| `NoTimerWhilePaused` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
+| `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset`; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
+| `ResumeContinues` | `controller.test.ts`: NoTimerWhilePaused, ResumeContinues: holds playback while paused and continues on resume; `timeline.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 
 Two sleeps at once are outside the model: `Sleep` needs none pending, and the
 player awaits its sleeps one at a time. `sleep` does accept a second one, and
 the first's timer, running out, must leave the second pending, so an interrupt
-still cuts it short; `units.test.ts` checks that: an earlier sleep that runs
+still cuts it short; `timeline.test.ts` checks that: an earlier sleep that runs
 out leaves the later sleep that replaced it pending, for an interrupt to cut
 short.
 
@@ -1357,7 +1363,7 @@ Every invariant names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `AcceptedOnlyForThatLine` | `controller.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
 | `IdsDistinct` | `lines.exhaustive.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
-| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `units.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
+| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
 | `ReadIsStart` | `controller.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits |
 
 ### `Terminals`: running commands
@@ -1393,7 +1399,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd: reuses a terminal once its command ends |
 | `RunReturns` | `terminal.test.ts`: RunReturns: doesn't wait for shell integration once playback is interrupted |
 
-### Pure functions: `LineIdentity`, `Places`, `Typing`
+### Pure functions: `LineIdentity`, `Places`, `Typing`, `ActionValidation`
 
 These have no state or concurrency, so each spec is a model of the function and
 `ASSUME`s that TLC checks over every small input. Each also has an exhaustive
@@ -1405,6 +1411,7 @@ code are held to one contract.
 | `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.exhaustive.test.ts` |
 | `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts`, with `through` up to 2 characters (the spec: 3) |
 | `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts`, texts up to 5 characters (the spec: 7) |
+| `ActionValidation` | `moveProblem`, `spanProblem` in `protocol/src/index.ts` | a place gets no problem exactly when it is valid, and no place makes either check throw | `protocol/test/index.test.ts`, with the same kinds of value as the spec |
 
 Each is a module of `ASSUME`s alone, with a config that only gives the
 constants (the guide's 8.7, item 6): TLC checks the `ASSUME`s and explores no
@@ -1465,15 +1472,38 @@ Each names the test that proves the code obeys it:
 | `ConcatenatesToText` | `typing.exhaustive.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
 | `ChunksAreUnits` | the same test |
 
+#### `ActionValidation`
+
+The checks both the relay's schema and the player ask (#45), over every
+`move` and every `select` or `point`, by the kind of value in each field: 180
+moves and 960 spans. Each `ASSUME` was proved to bite with a mutation, run in
+TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `CheckAtText = FALSE`, the code before #163, where `{ at: 5 }` threw in `spotProblem` | `NeverThrows` |
+| `MoveProblem` without its check for neither `at` nor `to` | `MoveExactly` |
+| `SpanProblem` without its check for empty code | `SpanExactly` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
+| `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
+| `NeverThrows` | both tests |
+
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
 These three contracts from #19 are about what the code accepts or writes, not
-about states, so they are tests on the code, not TLA+.
+about states, so they are tests on the code, not TLA+. `ActionValidation`'s
+two checks, `moveProblem` and `spanProblem`, also have a spec of their own,
+above (#163); this contract holds the relay's schema and the player to them.
 
 | Contract | Test |
 |---|---|
-| The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: 68 actions through both |
-| Every field of a `Report` appears in its rendered text | `relay/test/render.fields.test.ts` |
+| The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: every action in its table through both, malformed ones above all |
+| Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report |
 | Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/setup.properties.test.ts`: TOML and JSON configs |
 
 ## Keeping specs and code in step

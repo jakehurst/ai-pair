@@ -130,10 +130,10 @@ function renderEvent(event: Event): string {
     case 'turn':
       if (event.to === 'user') return 'The programmer took the turn.';
       return `The programmer handed the turn back to you${event.message === undefined ? '.' : `:\n${quote(event.message)}`}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
-    case 'end':
-      return 'The programmer ended the session. This is the final report: stop using the pair tools.';
     default:
-      throw new Error(`Unknown event: ${JSON.stringify(event satisfies never)}`);
+      // The last kind, `end`: a new kind would widen `event.kind` here and fail the `satisfies`.
+      event.kind satisfies 'end';
+      return 'The programmer ended the session. This is the final report: stop using the pair tools.';
   }
 }
 

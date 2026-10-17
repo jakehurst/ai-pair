@@ -64,6 +64,61 @@ Set by Justine on 2026-10-07.
 -   **Spec first.** For a new feature, write its TLA+ spec first, so the
     mechanics are right, and check it with TLC; then write the code that follows
     the spec (set by Justine on 2026-10-07).
+-   **Every code change goes through its spec first,** not only a new feature.
+    When a change to code that a spec models looks needed, change the spec
+    first, check that TLC passes it, then write the code that follows the
+    passing model; never the code first and the spec after. A change that
+    leaves behavior alone still gets its spec's table in `specs/README.md`
+    updated (set by Justine on 2026-10-16).
+
+## Edits in a pairing session
+
+-   **Every edit is done in the foreground,** through the pair tools, where
+    Justine sees it. An edit is done in the background only with her explicit
+    permission for that edit; the agent never decides it on its own. That
+    covers mechanical edits too, and formatting, which runs as a visible
+    `run`, never from the agent's own shell (set by Justine on 2026-10-16).
+
+## Tests
+
+-   **A unit test is solitary,** in Martin Fowler's terms (Justine says
+    soloist): it tests one source file, and every collaborator that file
+    uses is replaced by a mock. When Justine says unit test, she means this
+    style, never the sociable style, which runs real collaborators (#176;
+    set by Justine on 2026-10-16). Mocked: the
+    file's other source files, in this package or another, anything that
+    does I/O (`fs`, `child_process`, `os`, `ws`), and a framework object the
+    file builds on, such as the MCP SDK's `McpServer`. Real: constants
+    ("constants are constants"), types, pure computation such as
+    `node:path`, and `zod`.
+-   **`zod` schemas are a shared library, like the constants,** in
+    `@ai-pair/protocol`: production code parses what crosses a boundary
+    with them and takes its types from them with `z.infer`; unit tests
+    parse each mock's inputs and outputs with the same schemas, so a mock
+    cannot drift from the API it stands in for (set by Justine on
+    2026-10-16).
+-   **Every test is idempotent and cleans up after itself:** it starts
+    from a known state, gives the same result run after run, and leaves
+    nothing on disk; a temporary folder it makes is removed in its
+    `afterEach` (set by Justine on 2026-10-16; the tests that do not yet
+    are listed on #176).
+-   **A test file covers its source file 100 percent by itself:** lines,
+    branches, and functions, counting only its own tests (set by Justine on
+    2026-10-16).
+-   **Each source file's unit tests live in its own test file,** named for
+    it: `server.ts` in `server.test.ts`, never one file for several
+    sources. An end-to-end test that runs several files at once, like
+    `relay.test.ts`, is its own kind and keeps its own file.
+-   **Mock the way the Vitest community does now** (checked on 2026-10-16,
+    sources on #176): a collaborator passed in gets a typed fake, `vi.fn()`
+    per method or `mock<T>()` from `vitest-mock-extended`; `vi.mock` is for
+    an import that cannot be passed in, such as `fs`, `ws`, or `vscode`.
+    Type a mocked import with `vi.mocked()`, never `as`; give a `vi.mock`
+    factory its variables through `vi.hoisted`; restore mocks between
+    tests. A call within the same file cannot be mocked, so code that needs
+    one takes the collaborator as a parameter instead.
+-   **A unit test found that is not solitary is transformed** into the
+    solitary style, wherever it is found, without being asked.
 
 ## Problems found along the way
 

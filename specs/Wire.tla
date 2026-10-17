@@ -15,15 +15,17 @@ CONSTANTS
     PerSocket,        \* TRUE: a close rejects only its own socket's calls (the
                       \* fix for #3)
     GuardedParse,     \* TRUE: a frame that is not a message (not JSON, or no
-                      \* string `type`) is dropped (#4)
+                      \* message schema fits it, #163) is dropped (#4)
     CheckAbort,       \* TRUE: call() checks signal.aborted after connect(),
                       \* before sending (#29)
     WaitCancelled,    \* TRUE: call() sends only once the socket's canceled
                       \* calls are answered (#59)
     HandBackAnswered, \* TRUE: a cancel that reaches the relay after it
                       \* answered hands the report back (#67)
-    MarkRepeats       \* TRUE: the report handed back is marked as possibly
+    MarkRepeats,      \* TRUE: the report handed back is marked as possibly
                       \* seen, so its next delivery says it may repeat (#67)
+    CloseAfterShutdown \* TRUE: after the shutdown, the link opens no socket,
+                       \* and closes one the editor welcomes then (#163)
 
 ASSUME AssumeMaxSockets == MaxSockets \in Nat \ {0}
 ASSUME AssumeMaxCalls == MaxCalls \in Nat \ {0}
@@ -33,6 +35,7 @@ ASSUME AssumeCheckAbort == CheckAbort \in BOOLEAN
 ASSUME AssumeWaitCancelled == WaitCancelled \in BOOLEAN
 ASSUME AssumeHandBackAnswered == HandBackAnswered \in BOOLEAN
 ASSUME AssumeMarkRepeats == MarkRepeats \in BOOLEAN
+ASSUME AssumeCloseAfterShutdown == CloseAfterShutdown \in BOOLEAN
 
 \* The sockets the relay may open, in the order it opens them.
 Sockets == 1..MaxSockets
@@ -80,14 +83,16 @@ VARIABLES
                 \* `notifications/cancelled` for it
     answered,   \* the relay's answer reached the client: "no", "taken", or
                 \* "dropped"
-    marked      \* the report was handed back as possibly seen (`mayRepeat`)
+    marked,     \* the report was handed back as possibly seen (`mayRepeat`)
+    serving     \* TRUE until the harness ends the relay's stdin (#163)
 
 vars ==
     <<sock, cur, call, on, pending, rejectedBy, garbage, relayUp, aborted,
-      noticed, answered, marked>>
+      noticed, answered, marked, serving>>
 
 \* The relay's variables, which the client's own steps leave alone.
-relayVars == <<sock, cur, call, on, pending, rejectedBy, garbage, relayUp>>
+relayVars ==
+    <<sock, cur, call, on, pending, rejectedBy, garbage, relayUp, serving>>
 
 --------------------------------------------------------------------------------
 
@@ -105,6 +110,7 @@ TypeOK ==
     /\ noticed \in [Calls -> BOOLEAN]
     /\ answered \in [Calls -> {"no", "taken", "dropped"}]
     /\ marked \in [Calls -> BOOLEAN]
+    /\ serving \in BOOLEAN
 
 \* A call sent on socket s was canceled, the relay sent its cancel, and its
 \* answer has not come: a `return` for it may be on its way.
@@ -129,36 +135,41 @@ Init ==
     /\ noticed = [c \in Calls |-> FALSE]
     /\ answered = [c \in Calls |-> "no"]
     /\ marked = [c \in Calls |-> FALSE]
+    /\ serving = TRUE
 
 \* connect() opens a socket when none is open, one attempt at a time. The
 \* sockets are alike, so they open in order, which drops only copies of the
 \* same runs.
 Open(s) ==
     /\ relayUp
+    /\ CloseAfterShutdown => serving
     /\ cur = NoSocket
     /\ \A t \in Sockets : sock[t] # "connecting"
     /\ sock[s] = "unused"
     /\ \A t \in 1..(s - 1) : sock[t] # "unused"
     /\ sock' = [sock EXCEPT ![s] = "connecting"]
     /\ UNCHANGED <<cur, call, on, pending, rejectedBy, garbage, relayUp>>
-    /\ UNCHANGED <<aborted, noticed, answered, marked>>
+    /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
-\* The editor's `welcome`: the socket is open, and calls go out on it.
+\* The editor's `welcome`: the socket is open, and calls go out on it. After
+\* the shutdown, with CloseAfterShutdown, the link closes it instead.
 Welcome(s) ==
-    /\ relayUp
-    /\ sock[s] = "connecting"
-    /\ sock' = [sock EXCEPT ![s] = "open"]
-    /\ cur' = s
-    /\ UNCHANGED <<call, on, pending, rejectedBy, garbage, relayUp>>
-    /\ UNCHANGED <<aborted, noticed, answered, marked>>
+    LET closes == ~serving /\ CloseAfterShutdown
+    IN  /\ relayUp
+        /\ sock[s] = "connecting"
+        /\ sock' = [sock EXCEPT ![s] = IF closes THEN "closing" ELSE "open"]
+        /\ cur' = IF closes THEN cur ELSE s
+        /\ UNCHANGED <<call, on, pending, rejectedBy, garbage, relayUp>>
+        /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
 \* The agent calls a tool: call() starts, and awaits connect().
 Request(c) ==
     /\ relayUp
+    /\ serving
     /\ call[c] = "idle"
     /\ call' = [call EXCEPT ![c] = "requested"]
     /\ UNCHANGED <<sock, cur, on, pending, rejectedBy, garbage, relayUp>>
-    /\ UNCHANGED <<aborted, noticed, answered, marked>>
+    /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
 \* The agent's client cancels: from now on it drops any answer to the call
 \* (the SDK deletes its response handler), and it sends
@@ -194,7 +205,7 @@ Abort(c) ==
         /\ noticed' = [noticed EXCEPT ![c] = TRUE]
         /\ marked' = [marked EXCEPT ![c] = handBack /\ MarkRepeats]
         /\ UNCHANGED <<sock, cur, on, pending, rejectedBy, garbage, relayUp>>
-        /\ UNCHANGED <<aborted, answered>>
+        /\ UNCHANGED <<aborted, answered, serving>>
 
 \* The relay's answer reaches the client, which takes it unless it canceled
 \* the call.
@@ -224,7 +235,7 @@ Send(c) ==
                 /\ on' = [on EXCEPT ![c] = cur]
                 /\ pending' = pending \cup {c}
         /\ UNCHANGED <<sock, cur, rejectedBy, garbage, relayUp>>
-        /\ UNCHANGED <<aborted, noticed, answered, marked>>
+        /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
 \* locate() closes this.ws to switch windows, or the editor's end closes the
 \* socket: calls no longer go out on it.
@@ -234,7 +245,7 @@ Close(s) ==
     /\ sock' = [sock EXCEPT ![s] = "closing"]
     /\ cur' = IF cur = s THEN NoSocket ELSE cur
     /\ UNCHANGED <<call, on, pending, rejectedBy, garbage, relayUp>>
-    /\ UNCHANGED <<aborted, noticed, answered, marked>>
+    /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
 \* The socket's `close` handler rejects its Victims.
 HandleClose(s) ==
@@ -248,7 +259,7 @@ HandleClose(s) ==
         /\ rejectedBy' =
                [c \in Calls |-> IF c \in victims THEN s ELSE rejectedBy[c]]
         /\ UNCHANGED <<cur, on, garbage, relayUp>>
-        /\ UNCHANGED <<aborted, noticed, answered, marked>>
+        /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
 \* A `result` frame for a call on an open socket: the result, or for a call
 \* the relay marked canceled, a `return` that hands the report back. A call
@@ -264,9 +275,10 @@ Reply(c) ==
         /\ call' = [call EXCEPT ![c] = answer]
         /\ pending' = pending \ {c}
         /\ UNCHANGED <<sock, cur, on, rejectedBy, garbage, relayUp>>
-        /\ UNCHANGED <<aborted, noticed, answered, marked>>
+        /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
 
-\* The other side sends a frame that is not a message (parseEditorMessage).
+\* The other side sends a frame that is not a message: parseEditorMessage
+\* finds no message schema in @ai-pair/protocol that it fits (#163).
 \* With GuardedParse it is dropped, and before the welcome the socket is
 \* closed, as whatever is on the port is not the editor; without it, the
 \* uncaught exception ends the relay (#4).
@@ -280,13 +292,37 @@ SendGarbage(s) ==
     /\ garbage' = TRUE
     /\ relayUp' = GuardedParse
     /\ UNCHANGED <<cur, call, on, pending, rejectedBy>>
+    /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
+
+\* The editor answers the hello with `rejected` (a wrong token, or another
+\* protocol version) and closes its end (bridge.ts): the connect fails, and
+\* the socket closes without a welcome.
+Reject(s) ==
+    /\ relayUp
+    /\ sock[s] = "connecting"
+    /\ sock' = [sock EXCEPT ![s] = "closing"]
+    /\ UNCHANGED <<cur, call, on, pending, rejectedBy, garbage, relayUp>>
+    /\ UNCHANGED <<aborted, noticed, answered, marked, serving>>
+
+\* The harness ends the relay's stdin, which is how it closes the relay:
+\* serve() closes the server, so no call comes in, and closes the link, so
+\* the open socket closes and no call goes out.
+Shutdown ==
+    /\ relayUp
+    /\ serving
+    /\ serving' = FALSE
+    /\ sock' =
+           [s \in Sockets |-> IF sock[s] = "open" THEN "closing" ELSE sock[s]]
+    /\ cur' = NoSocket
+    /\ UNCHANGED <<call, on, pending, rejectedBy, garbage, relayUp>>
     /\ UNCHANGED <<aborted, noticed, answered, marked>>
 
 \* The run ends once the model's sockets are used up, or the relay has
-\* crashed, by design (6.13).
+\* crashed, or it shut down and closed the sockets it opened, by design (6.13).
 Finished ==
     /\ \/ ~relayUp
-       \/ \A s \in Sockets : sock[s] = "closed"
+       \/ \A s \in Sockets :
+              sock[s] = "closed" \/ (~serving /\ sock[s] = "unused")
     /\ UNCHANGED vars
 
 Next ==
@@ -301,6 +337,8 @@ Next ==
     \/ \E s \in Sockets : HandleClose(s)
     \/ \E c \in Calls : Reply(c)
     \/ \E s \in Sockets : SendGarbage(s)
+    \/ \E s \in Sockets : Reject(s)
+    \/ Shutdown
     \/ Finished
 
 \* The editor welcomes, a closing socket's handler runs, the editor answers,
@@ -352,5 +390,11 @@ DroppedHandedBack ==
     \A c \in Calls :
         (answered[c] = "dropped" /\ call[c] # "rejected")
             ~> HandedBackOrEnded(c)
+
+\* After the harness ends the relay's stdin, every socket the relay opened
+\* closes, so nothing keeps the process alive and it exits (#163). A relay
+\* that left a socket open would fail it, so it says something must happen.
+ExitsAfterShutdown ==
+    ~serving ~> \A s \in Sockets : sock[s] \in {"unused", "closed"}
 
 ================================================================================

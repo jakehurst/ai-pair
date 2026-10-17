@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { CURSOR_MARKER, fieldsProblem, type Action } from '@ai-pair/protocol';
+import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
 import { setup, until } from '../../core/test/fake';
 import { TOOLS } from '../src/tools';
 
@@ -22,6 +22,7 @@ const places = {
     { before: 'x' },
     { to: 'line_end', extra: 1 },
     { line: '1', to: 'line_end' },
+    { line: 1, at: 5 },
     5,
     'x',
     true,
@@ -112,10 +113,4 @@ describe('action validation', () => {
       expect({ relayAccepts: relay, playerRejects: player !== undefined, player }).toMatchObject({ relayAccepts: player === undefined });
     });
   }
-});
-
-describe('fieldsProblem', () => {
-  it('refuses an array place by name', () => {
-    expect(fieldsProblem({ move: [] })).toBe('`move` is an object: it takes `file`, `line`, `at`, `to`.');
-  });
 });

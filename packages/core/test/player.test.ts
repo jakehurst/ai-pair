@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
 import { LineIds } from '../src/lines';
-import { Player, spanText, transformScene, type Scene } from '../src/player';
+import { displayPath, Player, spanText, transformScene, type Scene } from '../src/player';
 import { instant } from '../src/timeline';
 import { advance, containing, FakeEditor, FakePanel, MOVE_TO_A, setup, testConfig, until } from './fake';
 
@@ -291,5 +291,13 @@ describe('typing', () => {
     await controller.step([MOVE_TO_A, { select: { line: 1, text: 'DELETE ' } }, { type: CURSOR_MARKER }]);
     await until(controller.listen());
     expect(editor.text('a.ts')).toBe('keep keep\n');
+  });
+});
+
+describe('displayPath', () => {
+  it('shows a file in a folder whose name starts with two dots by its path in the root (#5)', () => {
+    const editor = new FakeEditor();
+    expect(displayPath(editor, '/proj/..cache/a.ts', '/proj')).toBe('..cache/a.ts');
+    expect(displayPath(editor, '/other/a.ts', '/proj')).toBe('/other/a.ts');
   });
 });

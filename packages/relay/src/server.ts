@@ -3,10 +3,11 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isJSONRPCNotification, type CallToolResult, type RequestId } from '@modelcontextprotocol/sdk/types.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import { aiPairHome, type FileContent, type Report, type ToolName } from '@ai-pair/protocol';
+import { aiPairHome, FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type ToolName } from '@ai-pair/protocol';
 import { readGuides, renderGuides, type Guide } from './guide';
-import { RelayError, type EditorLink } from './link';
+import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
 import { TOOLS } from './tools';
 
@@ -15,13 +16,22 @@ declare const AI_PAIR_VERSION: string | undefined;
 const VERSION = typeof AI_PAIR_VERSION === 'string' ? AI_PAIR_VERSION : 'dev';
 
 /** How many answered reports the relay keeps, for a cancel that arrives after its answer (#67). */
-const MAX_ANSWERED = 16;
+export const MAX_ANSWERED = 16;
 
 /** How long to wait for the harness to list its roots: one that claims to but never answers mustn't block `start`. */
 const ROOTS_MS = 2000;
 
 /** Always loaded by the harness, so kept short; the full guide comes with `start`. */
 export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Never end your turn during a session; call \`listen\` instead.`;
+
+/** What `serve` runs with: the transport to the harness, the pairing guide, the relay's folder, the discovery folder, and the stream whose end closes the relay. */
+export interface ServeOptions {
+  transport: Transport;
+  guide: string;
+  cwd: string;
+  dir: string;
+  stdin: NodeJS.ReadableStream;
+}
 
 /** Returns the agent-facing part of AGENT_GUIDE.md: everything after the first horizontal rule. */
 export function agentGuide(markdown: string): string {
@@ -83,9 +93,9 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
           if (answered.size > MAX_ANSWERED) answered.delete(id);
         }
       }
-      // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts).
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const text = tool === 'read' ? renderFile(result as FileContent) : renderReport(result as Report, tool);
+      // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts); an answer
+      // that doesn't fit its schema throws, and reaches the agent as an internal error.
+      const text = tool === 'read' ? renderFile(FILE_CONTENT_SCHEMA.parse(result)) : renderReport(REPORT_SCHEMA.parse(result), tool);
       const content: CallToolResult['content'] = [{ type: 'text', text }];
       if (tool === 'start') content.push({ type: 'text', text: `# Pairing guide\n\n${guide}` });
       if (tool === 'start' && guides.length > 0) content.push({ type: 'text', text: renderGuides(guides, shownPath) });
@@ -144,4 +154,21 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   );
 
   return server;
+}
+
+/**
+ * Runs the relay on `transport` until `stdin` ends, which is how the harness closes it (the SDK's client ends stdin, then
+ * signals two seconds later), and closes the server and the link. The process then exits normally, so V8 writes its
+ * coverage in the integration run (#163).
+ */
+export async function serve({ transport, guide, cwd, dir, stdin }: ServeOptions): Promise<void> {
+  const link = new EditorLink(cwd, dir);
+  const server = createServer(link, guide, cwd);
+  await server.connect(transport);
+  await new Promise<void>((resolve) => {
+    stdin.once('end', resolve);
+  });
+  // specs/Wire.tla, `Shutdown`: no call comes in, and none goes out.
+  await server.close();
+  link.close();
 }

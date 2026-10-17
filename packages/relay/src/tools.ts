@@ -6,10 +6,11 @@ import {
   actionKinds,
   CURSOR_MARKER,
   moveProblem,
+  MOVE_TARGET_SCHEMA,
   spanProblem,
+  SPAN_TARGET_SCHEMA,
   typeProblem,
-  type MoveTarget,
-  type SpanTarget,
+  type Action,
 } from '@ai-pair/protocol';
 import { ELLIPSIS } from '@ai-pair/core/constants';
 
@@ -27,6 +28,7 @@ const inFile = file.optional().describe("Switch to this file, only before your b
 const spanSchema = z
   .strictObject(
     {
+      ...SPAN_TARGET_SCHEMA.shape,
       file: inFile,
       line,
       text: z
@@ -38,7 +40,7 @@ const spanSchema = z
     },
     // zod reports unrecognized keys only on an object it matched to this schema.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    { error: (issue) => (issue.code === 'unrecognized_keys' ? spanProblem(issue.input as SpanTarget) : undefined) },
+    { error: (issue) => (issue.code === 'unrecognized_keys' ? spanProblem(issue.input as object) : undefined) },
   )
   .superRefine((span, ctx) => {
     const problem = spanProblem(span);
@@ -51,8 +53,8 @@ const typeText = z.string({ error: (issue) => typeProblem(issue.input) }).superR
   if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
 });
 
-function combined(input: unknown): string | undefined {
-  if (typeof input !== 'object' || input === null) return undefined;
+/** Returns what to say about an object that holds several actions, or `undefined` for one with fewer than two. */
+function combined(input: object): string | undefined {
   const kinds = actionKinds(input);
   if (kinds.length < 2) return undefined;
   return `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order`;
@@ -77,7 +79,11 @@ function actionError(issue: { input?: unknown }): string | undefined {
 
 /** Builds an action's schema: no unknown fields, and a clear message when two actions were put in one. */
 function action<T extends z.ZodRawShape>(shape: T) {
-  return z.strictObject(shape, { error: (issue) => (issue.code === 'unrecognized_keys' ? combined(issue.input) : undefined) });
+  return z.strictObject(shape, {
+    // zod reports unrecognized keys only on an object it matched to this schema.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    error: (issue) => (issue.code === 'unrecognized_keys' ? combined(issue.input as object) : undefined),
+  });
 }
 
 const actionSchema = z.union(
@@ -93,6 +99,7 @@ const actionSchema = z.union(
       move: z
         .strictObject(
           {
+            ...MOVE_TARGET_SCHEMA.shape,
             file: file
               .optional()
               .describe(
@@ -114,7 +121,7 @@ const actionSchema = z.union(
           },
           // zod reports unrecognized keys only on an object it matched to this schema.
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          { error: (issue) => (issue.code === 'unrecognized_keys' ? moveProblem(issue.input as MoveTarget) : undefined) },
+          { error: (issue) => (issue.code === 'unrecognized_keys' ? moveProblem(issue.input as object) : undefined) },
         )
         .superRefine((m, ctx) => {
           const problem = moveProblem(m);
@@ -155,7 +162,7 @@ const actionSchema = z.union(
     }),
   ],
   { error: actionError },
-);
+) satisfies z.ZodType<Action>;
 
 /** The MCP tools the relay offers an agent: each one's description and input schema. */
 export const TOOLS = {
