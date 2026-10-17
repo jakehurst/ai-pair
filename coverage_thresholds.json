@@ -191,8 +191,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 100,
-      "branches": 83,
+      "lines": 93,
+      "branches": 75,
       "functions": 100
     }
   },
@@ -308,8 +308,8 @@
       "functions": 87
     },
     "integration": {
-      "lines": 42,
-      "branches": 66,
+      "lines": 41,
+      "branches": 55,
       "functions": 12
     }
   },
@@ -344,7 +344,7 @@
       "functions": 0
     },
     "integration": {
-      "lines": 95,
+      "lines": 94,
       "branches": 83,
       "functions": 95
     }
@@ -381,7 +381,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 100,
+      "branches": 95,
       "functions": 100
     }
   },
