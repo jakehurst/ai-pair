@@ -1176,7 +1176,7 @@ left out.
 
 | Spec | Code |
 |---|---|
-| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: the baseline, `by`, `interrupted` |
+| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: the event's `before` (the baseline) and `after`, `by`, `interrupted`; the event holds both texts, so a pending edit always has them (#176) |
 | `Report` | `snapshot`: the event, unless the file is unchanged and the edit didn't interrupt |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
