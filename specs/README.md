@@ -1362,8 +1362,8 @@ Every invariant names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `AcceptedOnlyForThatLine` | `controller.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
-| `IdsDistinct` | `lines.exhaustive.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
-| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
+| `IdsDistinct` | `lines.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
+| `OnePerLine` | `lines.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
 | `ReadIsStart` | `controller.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits |
 
 ### `Terminals`: running commands
@@ -1408,9 +1408,9 @@ code are held to one contract.
 
 | Spec | Code | Contract | Test |
 |---|---|---|---|
-| `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.exhaustive.test.ts` |
-| `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.exhaustive.test.ts`, with `through` up to 2 characters (the spec: 3) |
-| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.exhaustive.test.ts`, texts up to 5 characters (the spec: 7) |
+| `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.test.ts` |
+| `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.test.ts`, with `through` up to 2 characters (the spec: 3) |
+| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.test.ts`, texts up to 5 characters (the spec: 7) |
 | `ActionValidation` | `moveProblem`, `spanProblem` in `protocol/src/index.ts` | a place gets no problem exactly when it is valid, and no place makes either check throw | `protocol/test/index.test.ts`, with the same kinds of value as the spec |
 
 Each is a module of `ASSUME`s alone, with a config that only gives the
@@ -1435,7 +1435,7 @@ Each names the test that proves the code obeys it:
 
 | Assumption | Proved by |
 |---|---|
-| `OnePerLine` | `lines.exhaustive.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines' |
+| `OnePerLine` | `lines.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines' |
 | `Distinct`, `Untouched`, `WithinALine`, `BreakAtEnd`, `BreakAtStart` | the same test |
 
 #### `Places`
@@ -1453,8 +1453,8 @@ Each names the test that proves the code obeys it:
 
 | Assumption | Proved by |
 |---|---|
-| `SpotOK`, `SpotOnlyWhenUnique` | `places.exhaustive.test.ts`: SpotOK, SpotOnlyWhenUnique: resolves a spot only when one match has its marker on the line, and puts it there |
-| `SpanOK`, `RangeOK` | `places.exhaustive.test.ts`: SpanOK, RangeOK: resolves a span only when its text starts once on the line, and a range to the first `through` after it |
+| `SpotOK`, `SpotOnlyWhenUnique` | `places.test.ts`: SpotOK, SpotOnlyWhenUnique: resolves a spot only when one match has its marker on the line, and puts it there |
+| `SpanOK`, `RangeOK` | `places.test.ts`: SpanOK, RangeOK: resolves a span only when its text starts once on the line, and a range to the first `through` after it |
 
 #### `Typing`
 
@@ -1469,7 +1469,7 @@ Each names the test that proves the code obeys it:
 
 | Assumption | Proved by |
 |---|---|
-| `ConcatenatesToText` | `typing.exhaustive.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
+| `ConcatenatesToText` | `typing.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
 | `ChunksAreUnits` | the same test |
 
 #### `ActionValidation`
