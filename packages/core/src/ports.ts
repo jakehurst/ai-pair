@@ -91,6 +91,9 @@ export interface EditorPort {
   runCommand(command: string, options: RunOptions): Promise<CommandOutcome>;
 }
 
+/** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
+export type PlayerEditor = Omit<EditorPort, 'isDirty' | 'renderCursor' | 'reveal'>;
+
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =
   /** `rules`: the project guides the agent was given (#23). */

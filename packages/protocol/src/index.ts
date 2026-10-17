@@ -281,13 +281,15 @@ export function fieldsProblem(action: object): string | undefined {
   if ('delete' in action && action.delete !== true) return '`delete` is `true`: it deletes the current selection.';
   if ('wait' in action && action.wait !== undefined && typeof action.wait !== 'number') return '`wait` is a number: the seconds to wait.';
   const place: unknown = 'move' in action ? action.move : 'select' in action ? action.select : 'point' in action ? action.point : undefined;
-  if (typeof place === 'object' && place !== null) {
+  const fields = kind === 'move' ? MOVE_FIELDS : SPAN_FIELDS;
+  if (typeof place === 'object' && place !== null && !Array.isArray(place)) {
     // The place's own check first: it knows what a mistaken field was meant to be.
     const problem = kind === 'move' ? moveProblem(place) : spanProblem(place);
     if (problem !== undefined) return problem;
-    const fields = kind === 'move' ? MOVE_FIELDS : SPAN_FIELDS;
     const unknown = Object.keys(place).filter((k) => !fields.includes(k));
     if (unknown.length > 0) return `Unknown field ${fieldList(unknown)} in \`${kind}\`: it takes ${fieldList(fields)}.`;
+  } else if (kind === 'move' || kind === 'select' || kind === 'point') {
+    return `\`${kind}\` is an object: it takes ${fieldList(fields)}.`;
   }
   return undefined;
 }

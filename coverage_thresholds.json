@@ -6,8 +6,8 @@
   },
   "packages/core/src/bridge.ts": {
     "unit": {
-      "lines": 94,
-      "branches": 78,
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -42,9 +42,9 @@
   },
   "packages/core/src/controller.ts": {
     "unit": {
-      "lines": 96,
-      "branches": 88,
-      "functions": 94
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 90,
@@ -55,7 +55,7 @@
   "packages/core/src/diff.ts": {
     "unit": {
       "lines": 100,
-      "branches": 92,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -64,17 +64,10 @@
       "functions": 100
     }
   },
-  "packages/core/src/index.ts": {
-    "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
-    }
-  },
   "packages/core/src/lines.ts": {
     "unit": {
       "lines": 100,
-      "branches": 95,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -83,17 +76,10 @@
       "functions": 100
     }
   },
-  "packages/core/src/paths.ts": {
-    "unit": {
-      "lines": 0,
-      "branches": 0,
-      "functions": 0
-    }
-  },
   "packages/core/src/places.ts": {
     "unit": {
       "lines": 100,
-      "branches": 93,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -104,9 +90,9 @@
   },
   "packages/core/src/player.ts": {
     "unit": {
-      "lines": 99,
-      "branches": 92,
-      "functions": 97
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 91,
@@ -128,9 +114,9 @@
   },
   "packages/core/src/rehearsal.ts": {
     "unit": {
-      "lines": 94,
-      "branches": 92,
-      "functions": 86
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 98,
@@ -141,7 +127,7 @@
   "packages/core/src/text.ts": {
     "unit": {
       "lines": 100,
-      "branches": 89,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -152,8 +138,8 @@
   },
   "packages/core/src/timeline.ts": {
     "unit": {
-      "lines": 91,
-      "branches": 85,
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     },
     "integration": {
@@ -193,7 +179,7 @@
       "functions": 100
     },
     "integration": {
-      "lines": 94,
+      "lines": 93,
       "branches": 54,
       "functions": 90
     }
@@ -212,9 +198,9 @@
   },
   "packages/protocol/src/wire.ts": {
     "unit": {
-      "lines": 91,
-      "branches": 83,
-      "functions": 83
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     },
     "integration": {
       "lines": 97,

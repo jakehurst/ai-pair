@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
+import { CURSOR_MARKER, fieldsProblem, type Action } from '@ai-pair/protocol';
 import { setup, until } from '../../core/test/fake';
 import { TOOLS } from '../src/tools';
 
@@ -22,6 +22,13 @@ const places = {
     { before: 'x' },
     { to: 'line_end', extra: 1 },
     { line: '1', to: 'line_end' },
+    5,
+    'x',
+    true,
+    [],
+    // A JSON `null`, as an agent could send.
+    // oxlint-disable-next-line unicorn/no-null
+    null,
   ],
   span: [
     { text: 'x' },
@@ -36,6 +43,13 @@ const places = {
     { text: 5 },
     { text: 'x', extra: 1 },
     { line: -1, text: 'x' },
+    5,
+    'x',
+    true,
+    [],
+    // A JSON `null`, as an agent could send.
+    // oxlint-disable-next-line unicorn/no-null
+    null,
   ],
   type: [`x${CURSOR_MARKER}`, 'x', `${CURSOR_MARKER}${CURSOR_MARKER}`, 5, [`x${CURSOR_MARKER}`], ''],
 };
@@ -98,4 +112,10 @@ describe('action validation', () => {
       expect({ relayAccepts: relay, playerRejects: player !== undefined, player }).toMatchObject({ relayAccepts: player === undefined });
     });
   }
+});
+
+describe('fieldsProblem', () => {
+  it('refuses an array place by name', () => {
+    expect(fieldsProblem({ move: [] })).toBe('`move` is an object: it takes `file`, `line`, `at`, `to`.');
+  });
 });

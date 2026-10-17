@@ -6,8 +6,6 @@ import {
   actionKinds,
   CURSOR_MARKER,
   fieldsProblem,
-  moveProblem,
-  spanProblem,
   typeProblem,
   withinFolder,
   type Action,
@@ -24,7 +22,7 @@ import { MS_PER_SECOND } from './constants';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from './places';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
-import type { Change, EditorPort, Focus, PanelPort } from './ports';
+import type { Change, Focus, PanelPort, PlayerEditor } from './ports';
 import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
 import { planTyping, readingTime } from './typing';
@@ -59,7 +57,7 @@ export interface Scene {
 
 /** Where actions take effect: the programmer's editor, or a copy of it in memory. */
 export interface Stage {
-  editor: EditorPort;
+  editor: PlayerEditor;
   panel: PanelPort;
   pacing: Pacing;
   config(): Config;
@@ -122,16 +120,23 @@ function failed(r: Resolution & { ok: false }, file: string, text: string, shown
 }
 
 /** Returns the absolute path for a path from the agent: relative to its working directory, if it gave one. */
-export function agentPath(editor: EditorPort, file: string, root?: string): string {
+export function agentPath(editor: PlayerEditor, file: string, root?: string): string {
   return editor.resolvePath(root === undefined ? file : nodePath.resolve(root, file));
 }
 
 /** Returns how to name a file to the agent. */
-export function displayPath(editor: EditorPort, file: string, root?: string): string {
+export function displayPath(editor: PlayerEditor, file: string, root?: string): string {
   if (root === undefined) return editor.displayPath(file);
   // Not by `relative` starting with "..": a folder in the root may be named `..cache` (#5).
   const inside = withinFolder(root, file);
   return inside === undefined ? file : nodePath.relative(root, inside);
+}
+
+/** Returns the text a span looks for: its `text`, or its `from`. `spanProblem` has checked that it has one. */
+export function spanText(target: SpanTarget): string {
+  const find = target.text ?? target.from;
+  if (find === undefined) throw new Error('A span has `text` or `from`: spanProblem checks it before the span is played.');
+  return find;
 }
 
 /** Returns a function mapping a position in the text before `change` to the same place after it. */
@@ -358,8 +363,6 @@ export class Player {
 
     if ('move' in action) {
       const move = action.move;
-      const problem = moveProblem(move);
-      if (problem !== undefined) return fail('invalid_action', problem);
       const file = this.fileOf(move, playing);
       if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: 'interrupted' };
@@ -394,8 +397,6 @@ export class Player {
 
     if ('select' in action) {
       const target = action.select;
-      const problem = spanProblem(target);
-      if (problem !== undefined) return fail('invalid_action', problem);
       const file = this.fileOf(target, playing);
       if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeSelectMs))) return { kind: 'interrupted' };
@@ -414,10 +415,11 @@ export class Player {
       const fast = 'type_fast' in action;
       const text: unknown = fast ? action.type_fast : action.type;
       const problem = typeProblem(text);
-      if (problem !== undefined || typeof text !== 'string') return fail('invalid_action', problem ?? 'Give the text to type.');
-      // typeProblem passed: exactly one marker.
-      const marker = text.indexOf(CURSOR_MARKER);
-      return this.type(text.slice(0, marker), text.slice(marker + CURSOR_MARKER.length), fast, playing);
+      if (problem !== undefined) return fail('invalid_action', problem);
+      // typeProblem passed: a string with exactly one marker.
+      const marked = String(text);
+      const marker = marked.indexOf(CURSOR_MARKER);
+      return this.type(marked.slice(0, marker), marked.slice(marker + CURSOR_MARKER.length), fast, playing);
     }
 
     if ('delete' in action) {
@@ -429,7 +431,6 @@ export class Player {
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and
       // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: 'interrupted' };
-      if (scene.selection === undefined) return fail('no_selection', 'Nothing is selected; `select` first.');
       const { start, end } = scene.selection;
       playing.edited = true;
       this.clearPoint();
@@ -445,8 +446,6 @@ export class Player {
 
     if ('point' in action) {
       const target = action.point;
-      const problem = spanProblem(target);
-      if (problem !== undefined) return fail('invalid_action', problem);
       const file = this.fileOf(target, playing);
       if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (scene.turn === 'agent') await editor.show(file);
@@ -686,8 +685,7 @@ export class Player {
 
   /** Returns the code a `select` or `point` takes, in `file`. */
   private async span(file: string, target: SpanTarget, action: string): Promise<{ text: string; start: number; end: number } | Outcome> {
-    const find = target.text ?? target.from;
-    if (find === undefined) throw new Error('A span has `text` or `from`: spanProblem checks it before the span is played.');
+    const find = spanText(target);
     const where = await this.locate(file, action, target.line, (text) => spanCandidates(text, find));
     if ('kind' in where) return where;
     const { text, line } = where;
