@@ -728,7 +728,7 @@ export async function run(): Promise<void> {
   assert.ok(reads > 0);
   assert.equal(broken, 0, `${broken} of ${reads} reads didn't parse`);
   assert.ok(findWindows([root], discoveryDir()).windows.some((w) => w.pid === process.pid));
-  console.log(`the discovery file is never half written (${reads} reads)`);
+  console.log(`FindsRunningProp: the discovery file is never half written (${reads} reads)`);
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = 'abcdefghijklmnopqrstuvwxyz';

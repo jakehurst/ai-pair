@@ -3,11 +3,13 @@
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import * as fs from 'node:fs';
+import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   parseRelayMessage,
   PROTOCOL_VERSION,
+  REPORT_SCHEMA,
   ToolError,
   type Action,
   type Discovery,
@@ -28,19 +30,21 @@ export interface BridgeOptions {
   failed?: (error: unknown) => void;
 }
 
-/** Returns what a report says, for `trace`: its batches, events, and flags. */
-function reported(report: unknown): string {
-  if (typeof report !== 'object' || report === null || !('batches' in report) || !('events' in report)) return '';
-  const { batches, events } = report;
-  const parts = [
-    Array.isArray(batches)
-      ? `batches [${batches.map((b: { id?: unknown; status?: unknown }) => `${String(b.id)} ${String(b.status)}`).join(', ')}]`
-      : '',
-    Array.isArray(events) ? `events [${events.map((e: { kind?: unknown }) => String(e.kind)).join(', ')}]` : '',
-  ];
-  if ('rejected' in report && report.rejected !== undefined) parts.push('rejected');
-  if ('waiting' in report && report.waiting === true) parts.push('waiting');
-  return parts.filter(Boolean).join(' ');
+/** What a bridge calls on the controller: the pair tools, and whether a session runs. */
+export type BridgeController = Pick<
+  Controller,
+  'isActive' | 'isSuspended' | 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'resolveFile' | 'restore' | 'disconnect'
+>;
+
+/** Returns what a report says, for `trace`: its batches, events, and flags; nothing for a result that is no report. */
+function reported(result: unknown): string {
+  const parsed = REPORT_SCHEMA.safeParse(result);
+  if (!parsed.success) return '';
+  const { batches, events, rejected, waiting } = parsed.data;
+  const parts = [`batches [${batches.map((b) => `${b.id} ${b.status}`).join(', ')}]`, `events [${events.map((e) => e.kind).join(', ')}]`];
+  if (rejected !== undefined) parts.push('rejected');
+  if (waiting === true) parts.push('waiting');
+  return parts.join(' ');
 }
 
 /** Returns what a frame says, for `trace`: its type and id, and for a report, what it reports. */
@@ -78,7 +82,12 @@ function optionalNumber(v: unknown): number | undefined {
 
 /** The editor's end of the relay connection: a WebSocket server on localhost that forwards tool calls to the controller, found by relays through a discovery file. */
 export class Bridge {
-  private server?: WebSocketServer;
+  private readonly server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  /** Settles once the server listens, or fails to. */
+  private readonly listening = new Promise<void>((resolve, reject) => {
+    this.server.once('listening', resolve);
+    this.server.once('error', reject);
+  });
   private readonly token = randomBytes(TOKEN_BYTES).toString('hex');
   private port = 0;
   private lastFocused = Date.now();
@@ -88,7 +97,7 @@ export class Bridge {
   private accepted = 0;
 
   constructor(
-    private readonly controller: Controller,
+    private readonly controller: BridgeController,
     private readonly options: BridgeOptions,
   ) {}
 
@@ -97,16 +106,12 @@ export class Bridge {
   }
 
   async start(): Promise<void> {
-    const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
-    this.server = server;
-    await new Promise<void>((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
-    });
-    const address = server.address();
-    this.port = typeof address === 'object' && address ? address.port : 0;
+    await this.listening;
+    // Listening on a TCP port, the server's address is an AddressInfo: a string is a pipe's, and null comes before it listens.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    this.port = (this.server.address() as AddressInfo).port;
     // A relay connects (specs/Resume.tla, `Connect`).
-    server.on('connection', (ws) => {
+    this.server.on('connection', (ws) => {
       this.accept(ws);
     });
     // specs/Discovery.tla, `OpenWindow`: if the write fails, the window runs, and no relay finds it.
@@ -122,7 +127,6 @@ export class Bridge {
 
   /** Writes the discovery file: on start, on focus, and when the workspace folders change. */
   writeDiscovery(): void {
-    if (!this.server) return;
     const discovery: Discovery = {
       pid: process.pid,
       workspaceFolders: this.options.workspaceFolders(),
@@ -146,7 +150,7 @@ export class Bridge {
 
   /** Returns the relay connections open now. */
   connections(): ReadonlySet<WebSocket> {
-    return this.server?.clients ?? new Set();
+    return this.server.clients;
   }
 
   dispose(): void {
@@ -156,11 +160,10 @@ export class Bridge {
     } catch {
       // Already gone.
     }
-    for (const client of this.server?.clients ?? []) {
+    for (const client of this.server.clients) {
       client.terminate();
     }
-    this.server?.close();
-    this.server = undefined;
+    this.server.close();
   }
 
   private accept(ws: WebSocket): void {
@@ -174,7 +177,8 @@ export class Bridge {
       if (open) ws.send(JSON.stringify(m));
     }
 
-    ws.on('message', (data) => {
+    // ws hands over each frame as one Buffer, as no binaryType is set (#180).
+    ws.on('message', (data: Buffer) => {
       // A frame that isn't a message is dropped (#30).
       const message = parseRelayMessage(data);
       if (!message) return;
@@ -213,7 +217,9 @@ export class Bridge {
                 type: 'error',
                 id: message.id,
                 code: error instanceof ToolError ? error.code : 'internal',
-                message: error instanceof Error ? error.message : String(error),
+                // Everything dispatch calls throws an Error: a ToolError, or the controller's or fs's own.
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                message: (error as Error).message,
               });
             },
           )

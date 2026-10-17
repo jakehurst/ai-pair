@@ -8,8 +8,8 @@ import { EDITOR_MESSAGE_SCHEMA, RELAY_MESSAGE_SCHEMA, type EditorMessage, type R
 /** The wire protocol's version; a relay and an editor must agree on it. */
 export const PROTOCOL_VERSION = 3;
 
-/** The raw data of a WebSocket frame, as `ws` hands it over. */
-export type Frame = Buffer | ArrayBuffer | Buffer[];
+/** A WebSocket frame's data, as `ws` hands it over with no `binaryType` set: one Buffer (#180). */
+export type Frame = Buffer;
 
 /** Returns the directory of the user's AI Pair files: `AI_PAIR_HOME`, or `~/.ai-pair`. */
 export function aiPairHome(): string {
@@ -23,9 +23,8 @@ export function discoveryDir(): string {
 
 /** Returns a frame's text as JSON, or `undefined` if it isn't JSON. */
 function frameJson(data: Frame): unknown {
-  const bytes = Array.isArray(data) ? Buffer.concat(data) : data instanceof ArrayBuffer ? Buffer.from(data) : data;
   try {
-    const json: unknown = JSON.parse(bytes.toString('utf8'));
+    const json: unknown = JSON.parse(data.toString('utf8'));
     return json;
   } catch {
     return undefined;

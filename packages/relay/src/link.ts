@@ -67,8 +67,9 @@ function alive(pid: number): boolean {
 /**
  * Finds the first of `folders` inside a live window's workspace folder, and the windows it's in,
  * best first: the most closely containing workspace folder, then the most recently focused window.
+ * `root` is the best window's workspace folder that holds it, as a real path.
  */
-export function findWindows(folders: string[], dir: string): { folder: string; windows: [Discovery, ...Discovery[]] } {
+export function findWindows(folders: string[], dir: string): { folder: string; root: string; windows: [Discovery, ...Discovery[]] } {
   const windows: Discovery[] = [];
   let files: string[] = [];
   try {
@@ -89,17 +90,17 @@ export function findWindows(folders: string[], dir: string): { folder: string; w
 
   for (const folder of folders) {
     const here = realpath(folder);
-    const matches: Array<{ window: Discovery; length: number }> = [];
+    const matches: Array<{ window: Discovery; root: string }> = [];
     for (const window of windows) {
-      const lengths = window.workspaceFolders
+      const [root] = window.workspaceFolders
         .map((f) => realpath(f))
         .filter((f) => contains(f, here))
-        .map((f) => f.length);
-      if (lengths.length > 0) matches.push({ window, length: Math.max(...lengths) });
+        .toSorted((a, b) => b.length - a.length);
+      if (root !== undefined) matches.push({ window, root });
     }
-    matches.sort((a, b) => b.length - a.length || b.window.lastFocused - a.window.lastFocused);
-    const [best, ...rest] = matches.map((m) => m.window);
-    if (best) return { folder, windows: [best, ...rest] };
+    matches.sort((a, b) => b.root.length - a.root.length || b.window.lastFocused - a.window.lastFocused);
+    const [best, ...rest] = matches;
+    if (best) return { folder, root: best.root, windows: [best.window, ...rest.map((m) => m.window)] };
   }
   throw new RelayError(
     'no_editor',
@@ -143,11 +144,8 @@ export class EditorLink {
    * where a project's guides are looked for, and where that stops (#23).
    */
   workspace(folder: string): { folder: string; root: string } {
-    const here = realpath(folder);
-    const [best] = findWindows([folder], this.dir).windows;
-    const roots = best.workspaceFolders.map((f) => realpath(f)).filter((f) => contains(f, here));
-    // A folder's real path can change between the two reads (a symlink moved), and then none holds it.
-    return { folder: here, root: roots.toSorted((a, b) => b.length - a.length)[0] ?? here };
+    // specs/Discovery.tla, `Start`: the root is the workspace folder the best window was found by.
+    return { folder: realpath(folder), root: findWindows([folder], this.dir).root };
   }
 
   /** Sends the agent's tool call (specs/Wire.tla, `Request`) on the open socket (`Send`). */
@@ -170,18 +168,14 @@ export class EditorLink {
     const { promise: answer, resolve, reject } = Promise.withResolvers<unknown>();
     const pending: Pending = { tool, cancelled: false, resolve, reject };
     calls.set(id, pending);
-    try {
-      ws.send(JSON.stringify({ type: 'call', id, tool, args }));
-    } catch (error) {
-      calls.delete(id);
-      reject(new RelayError('no_editor', `Couldn't send to the editor: ${error instanceof Error ? error.message : String(error)}`));
-    }
-    // specs/Wire.tla, `Abort`: the relay handles the client's cancel of a call it sent.
+    // The socket is open, and nothing awaited since connect() said so; the arguments are the agent's JSON.
+    ws.send(JSON.stringify({ type: 'call', id, tool, args }));
+    // specs/Wire.tla, `Abort`: the relay handles the client's cancel of a call it sent. The SDK aborts a call only
+    // while it is unanswered, so the call is still in `calls`.
     signal?.addEventListener(
       'abort',
       () => {
         pending.cancelled = true;
-        if (!calls.has(id)) return;
         // Only its settling matters here; its outcome is the caller's.
         const settled = answer.then(
           () => {},
@@ -204,8 +198,9 @@ export class EditorLink {
    * specs/Wire.tla, `Abort` with HandBackAnswered and MarkRepeats; specs/Controller.tla, `BounceLate`).
    */
   handBack(report: unknown): void {
-    if (typeof report !== 'object' || report === null) return;
-    const ws = this.answeredOn.get(report);
+    // A WeakMap answers undefined for a key that isn't an object, as for a report this link never answered.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const ws = this.answeredOn.get(report as object);
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'return', report, mayRepeat: true }));
   }
 
@@ -257,7 +252,8 @@ export class EditorLink {
       ws.on('open', () => {
         ws.send(JSON.stringify({ type: 'hello', token: window.token, protocolVersion: PROTOCOL_VERSION }));
       });
-      ws.on('message', (data) => {
+      // ws hands over each frame as one Buffer, as no binaryType is set (#180).
+      ws.on('message', (data: Buffer) => {
         const message = parseEditorMessage(data);
         if (!message) {
           // Before the welcome, whatever is on this port isn't our editor. After it, drop the frame
