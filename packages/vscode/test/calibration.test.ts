@@ -1,7 +1,15 @@
-// The reading speed calibration (#109, specs/Calibration.tla): the flow against a fake host.
+// The reading speed calibration (#109, specs/Calibration.tla): the flow against a fake host. Solitary: core's
+// readingChars is a mock that counts the text's characters, its edges trimmed; core's constants are real.
 
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { readingChars } from '@ai-pair/core';
 import { Calibration, wordsPerMinute, type CalibrationView } from '../src/calibration';
+
+vi.mock('@ai-pair/core', () => ({ readingChars: vi.fn((text: string) => text.trim().length) }));
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 function noop(): void {}
 
@@ -86,4 +94,24 @@ it('PauseMatchesPhase: cancels on any other reply, with nothing stored', () => {
 
 it('rounds words per minute', () => {
   expect(wordsPerMinute('a b c d', 1000)).toBe(240);
+});
+
+it("Supply: arms with the agent's own passage, and times it", () => {
+  const { calibration, views } = setup();
+  expect(calibration.arm({ title: 'Mine', text: 'a b' })).toBe(true);
+  expect(views).toEqual([{ phase: 'armed', title: 'Mine' }]);
+  calibration.reply('go');
+  expect(views[1]).toEqual({ phase: 'reading', title: 'Mine', text: 'a b' });
+  expect(readingChars).toHaveBeenCalledWith('a b');
+});
+
+it('Cancel: does nothing when no calibration is under way, and cancels one that is reading', () => {
+  const { calibration, views, calls } = setup();
+  calibration.cancel();
+  expect([views, calls]).toEqual([[], []]);
+  calibration.arm();
+  calibration.reply('go');
+  calibration.cancel();
+  expect(calls).toEqual(['pause', 'resume']);
+  expect(views.at(-1)).toEqual({ phase: 'idle' });
 });
