@@ -90,9 +90,8 @@ const fakes = vi.hoisted(() => {
     }
   }
 
-  /** The editor, faked: what activate sets on it. */
+  /** The editor, faked: what activate gives and sets it. */
   class FakeEditor {
-    controller?: unknown;
     onSelection?: (ref: unknown) => void;
     readonly setAgentName = vi.fn();
     readonly programmerSelection = vi.fn(() => 'selection');
@@ -103,17 +102,15 @@ const fakes = vi.hoisted(() => {
     constructor(
       readonly root: string,
       readonly agentName: string,
+      readonly controller: () => unknown,
     ) {
       made.editors.push(this);
     }
   }
 
-  /** The panel, faked: what activate sets on it, and what it shows. */
+  /** The panel, faked: what activate gives and sets it, and what it shows. */
   class FakePanel {
     static readonly viewId = 'aiPair.panel';
-    controller?: unknown;
-    calibration?: unknown;
-    starter?: unknown;
     onPost?: () => void;
     readonly history = ['history'];
     readonly showSelection = vi.fn();
@@ -130,6 +127,8 @@ const fakes = vi.hoisted(() => {
       readonly readingSpeed: { get: () => number; set: (value: number) => void },
       readonly selection: { current: () => unknown; ref: () => unknown },
       readonly trace: (line: string) => void,
+      readonly extensionUri: unknown,
+      readonly wiring: { controller: () => unknown; calibration: () => unknown; starter: unknown },
     ) {
       made.panels.push(this);
     }
@@ -330,8 +329,11 @@ describe('activate', () => {
     const h = activated();
     expect(h.editor.root).toBe('/project');
     expect(h.editor.agentName).toBe('Agent');
-    expect(h.editor.controller).toBe(h.controller);
-    expect(h.panel.controller).toBe(h.controller);
+    expect(h.editor.controller()).toBe(h.controller);
+    expect(h.panel.extensionUri).toEqual({ fsPath: '/ext' });
+    expect(h.panel.wiring.controller()).toBe(h.controller);
+    expect(h.panel.wiring.calibration()).toBe(h.calibration);
+    expect(h.panel.wiring.starter).toBe(vi.mocked(claudeStarter).mock.results[0]?.value);
     expect(h.api).toMatchObject({
       controller: h.controller,
       editor: h.editor,

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.7
+
+-   The editor and the panel take the controller, the calibration, and the
+    starter when they are made, instead of as members activation sets later,
+    so nothing checks for a member that is always there (#176). Guards no run
+    could reach are gone with them: a line past a file's end spans its end; a
+    change to a document outside the workspace is left alone where it is seen;
+    a scroll starts from the view's top line it was measured at; a run's row
+    writes its outcome into the span it was made with; and the tooltip is
+    placed on the element it is shown for.
+
 ## 0.7.6
 
 -   A tooltip no longer shows after the pointer has left its button: moving

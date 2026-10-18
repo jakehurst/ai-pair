@@ -93,7 +93,6 @@ const READ_TEXT = 'var(--vscode-aiPair-cursorReadForeground)';
 
 /** The controller's editor, over VS Code's API: documents, cursors, decorations, scrolling, and saves. */
 export class VsCodeEditor implements EditorPort, vscode.Disposable {
-  controller?: Controller;
   /** The programmer's selection changed: what the panel offers to send along with a reply. */
   onSelection?: (ref: Ref | undefined) => void;
   private lastEditor?: vscode.TextEditor;
@@ -141,6 +140,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   constructor(
     private readonly root: string,
     agentName: string,
+    /** The controller, made after the editor: read once the programmer edits or looks away, or the view scrolls. */
+    private readonly controller: () => Controller,
   ) {
     this.cursorTypes = new Map([
       ['typing', cursorDecoration(CURSOR, 'solid', /* opacity= */ 1)],
@@ -388,15 +389,18 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   // ---- Programmer activity -------------------------------------------------
 
+  /** Mirrors the text of a workspace file's document: what a change to it is a change from. */
   private track(doc: vscode.TextDocument): void {
-    if (doc.uri.scheme === 'file') this.mirror.set(doc.uri.fsPath, doc.getText());
+    if (doc.uri.scheme === 'file' && this.inWorkspace(doc.uri.fsPath)) this.mirror.set(doc.uri.fsPath, doc.getText());
   }
 
   private onChange(event: vscode.TextDocumentChangeEvent): void {
     const doc = event.document;
     if (doc.uri.scheme !== 'file' || event.contentChanges.length === 0) return;
     const file = doc.uri.fsPath;
+    // Only the workspace's files are mirrored: a change elsewhere is none of the agent's business.
     const before = this.mirror.get(file);
+    if (before === undefined) return;
     const after = doc.getText();
     this.mirror.set(file, after);
 
@@ -412,11 +416,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       return;
     }
 
-    if (before === undefined || !this.inWorkspace(file)) return;
     if (this.byProgrammer(event, after)) {
-      this.controller?.userEdit(file, before, after, changes);
+      this.controller().userEdit(file, before, after, changes);
     } else {
-      this.controller?.otherEdit(file, before, after, changes);
+      this.controller().otherEdit(file, before, after, changes);
     }
   }
 
@@ -447,7 +450,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (editor?.document.uri.scheme === 'file') this.onSelectionChange(editor);
     const target = this.target();
     if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return;
-    if (editor.document.uri.fsPath !== target.file) this.controller?.pause('away');
+    if (editor.document.uri.fsPath !== target.file) this.controller().pause('away');
   }
 
   private onScroll(e: vscode.TextEditorVisibleRangesChangeEvent): void {
@@ -457,7 +460,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (e.textEditor.document.uri.fsPath !== target.file) return;
     const line = e.textEditor.document.positionAt(target.offset).line;
     const visible = e.visibleRanges.some((r) => r.start.line <= line && line <= r.end.line);
-    if (!visible) this.controller?.pause('away');
+    if (!visible) this.controller().pause('away');
   }
 
   // ---- Rendering -----------------------------------------------------------
@@ -485,7 +488,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (height !== undefined && this.landing(editor, line, height) === view.top) return;
     // At a document's end, the height may be out of date, so measure it on the way.
     const measure = view.atEnd && this.scrollsBeyondEnd(editor);
-    void this.scroll(editor, line, measure ? undefined : (height ?? view.rows));
+    void this.scroll(editor, line, view.top, measure ? undefined : (height ?? view.rows));
   }
 
   /**
@@ -493,13 +496,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * Code can do knowing its viewport, so the lines above it are half of the viewport's; then on, from
    * where the target is by then. Afterwards, catches up with the target if it moved to another line
    * meanwhile. Only then: a landing the editor can't reach would otherwise be tried again and again.
-   * specs/Scroll.tla, `Glide`.
+   * specs/Scroll.tla, `Glide`. `from` is the view's top line as it starts.
    */
-  private async scroll(editor: vscode.TextEditor, line: number, height?: number): Promise<void> {
-    const first = editor.visibleRanges[0];
-    if (first === undefined) return;
+  private async scroll(editor: vscode.TextEditor, line: number, from: number, height?: number): Promise<void> {
     this.scrolling = true;
-    const from = first.start.line;
     try {
       if (height === undefined) {
         await this.revealLine(editor, line, vscode.TextEditorRevealType.InCenter);
@@ -528,8 +528,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    */
   private async glide(editor: vscode.TextEditor, from: number, to: number, height: number): Promise<void> {
     const smooth = vscode.workspace.getConfiguration('editor', editor.document).get('smoothScrolling', false);
-    const duration = this.controller?.glideMs(Math.abs(to - from));
-    if (smooth || duration === undefined) return this.revealTop(editor, to, height);
+    const duration = this.controller().glideMs(Math.abs(to - from));
+    if (smooth) return this.revealTop(editor, to, height);
     // Back from the middle, if measuring went there, before anyone sees it.
     if (editor.visibleRanges[0]?.start.line !== from) await this.revealTop(editor, from, height);
     const started = Date.now();

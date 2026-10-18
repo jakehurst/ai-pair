@@ -995,17 +995,6 @@ describe('guards', () => {
     expect(text('now-text')).toBe('Before');
   });
 
-  it('leaves a run row with no outcome to show as it is', () => {
-    start();
-    const row = document.createElement('div');
-    row.className = 'run';
-    row.dataset.run = '7';
-    element('history').append(row);
-    send({ type: 'run', id: 7, command: 'npm test', phase: 'exited', exitCode: 0 });
-    expect(row.className).toBe('run');
-    expect(row.childNodes).toHaveLength(0);
-  });
-
   it('ignores pointer and focus events on the document itself, and takes a click on no node as one outside the menu', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     start();
@@ -1035,29 +1024,4 @@ describe('guards', () => {
     expect(text('tip')).toBe('');
   });
 
-  it('places no tooltip whose element went away while it was being shown', () => {
-    const end = element('end');
-    vi.spyOn(end, 'setAttribute').mockImplementation(() => {
-      window.dispatchEvent(new window.Event('blur'));
-    });
-    end.focus();
-    expect(element('tip').style.top).toBe('');
-  });
-
-  it('keeps a character it has no escape for as it is', () => {
-    start();
-    vi.spyOn(Map.prototype, 'get').mockImplementation(function (this: Map<unknown, unknown>, key: unknown): unknown {
-      if (key === '<') {
-        return undefined;
-      }
-      for (const [k, v] of this.entries()) {
-        if (k === key) {
-          return v;
-        }
-      }
-      return undefined;
-    });
-    send({ type: 'say', text: 'a<b' });
-    expect(text('now-text')).toBe('a');
-  });
 });

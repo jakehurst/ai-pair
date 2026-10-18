@@ -129,6 +129,12 @@ function harness(turn: Turn = 'agent'): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
   const readingSpeed = { get: vi.fn(() => SPEEDS[2] ?? 0), set: vi.fn<(value: number) => void>() };
+  const controller = mock<Controller>({ turn });
+  const calibration = mock<Calibration>();
+  calibration.reply.mockReturnValue(false);
+  const starter = mock<Starter>();
+  starter.available.mockResolvedValue(true);
+  starter.start.mockResolvedValue();
   const panel = new NarrationPanel(
     (file) => `${ROOT}/${file}`,
     speed,
@@ -138,29 +144,11 @@ function harness(turn: Turn = 'agent'): Harness {
       traced.push(line);
     },
     vscode.Uri.file(EXTENSION),
+    { controller: () => controller, calibration: () => calibration, starter },
   );
-  const controller = mock<Controller>({ turn });
-  const calibration = mock<Calibration>();
-  calibration.reply.mockReturnValue(false);
-  const starter = mock<Starter>();
-  starter.available.mockResolvedValue(true);
-  starter.start.mockResolvedValue();
   const onPost = vi.fn<() => void>();
-  panel.controller = controller;
-  panel.calibration = calibration;
-  panel.starter = starter;
   panel.onPost = onPost;
   return { panel, controller, calibration, starter, speed, readingSpeed, onPost, traced };
-}
-
-/** Returns a panel with no controller, calibration, starter, trace, extension folder, or onPost. */
-function bare(): NarrationPanel {
-  return new NarrationPanel(
-    (file) => `${ROOT}/${file}`,
-    { get: () => 1, set: () => {} },
-    { get: () => 1, set: () => {} },
-    { current: () => undefined, ref: () => undefined },
-  );
 }
 
 /** Resolves a fake view into `panel`, and returns it. */
@@ -236,12 +224,6 @@ describe('resolveWebviewView', () => {
     expect(view.webview.html).toBe('<html>');
   });
 
-  it('gives the page no resource folder, style, or script without an extension folder', () => {
-    const view = open(bare());
-    expect(view.webview.options).toEqual({ enableScripts: true, localResourceRoots: [] });
-    expect(vi.mocked(panelHtml).mock.calls).toEqual([[CSP, '', '']]);
-  });
-
   it('Dispose: forgets a disposed view, but not a newer one an older disposal follows', () => {
     const { panel } = harness();
     const older = open(panel);
@@ -282,24 +264,17 @@ describe('resolveWebviewView', () => {
     expect(controller.pause.mock.calls).toEqual([['reply'], [], ['reply']]);
     expect(controller.resume.mock.calls).toEqual([['reply'], ['reply']]);
   });
-
-  it('disposes of a view with no controller or calibration', () => {
-    const view = open(bare());
-    expect(() => {
-      view.dispose();
-    }).not.toThrow();
-  });
 });
 
 describe('post', () => {
   it('LogsPosts: a posted event is on the log a new view replays', () => {
-    const panel = bare();
+    const panel = harness().panel;
     panel.post({ type: 'say', text: 'hello' });
     expect(replayed(panel)).toEqual([{ type: 'say', text: 'hello' }]);
   });
 
   it("ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it", () => {
-    const panel = bare();
+    const panel = harness().panel;
     panel.post({ type: 'session', active: true, task: 'long' });
     for (let i = 0; i < 1000; i++) {
       panel.post({ type: 'say', text: `message ${i}` });
@@ -311,7 +286,7 @@ describe('post', () => {
   });
 
   it("ReplayShowsSession: replays the session's end when that is the last session event", () => {
-    const panel = bare();
+    const panel = harness().panel;
     panel.post({ type: 'session', active: true });
     panel.post({ type: 'session', active: false, reason: 'user' });
     for (let i = 0; i < 1000; i++) {
@@ -321,13 +296,13 @@ describe('post', () => {
   });
 
   it('cuts the oldest events beyond MAX_LOG, putting back no session when none was cut or one is still on the log', () => {
-    const panel = bare();
+    const panel = harness().panel;
     for (let i = 0; i <= MAX_LOG; i++) {
       panel.post({ type: 'say', text: `message ${i}` });
     }
     expect(panel.history).toHaveLength(MAX_LOG);
     expect(panel.history[0]).toEqual({ type: 'say', text: 'message 1' });
-    const kept = bare();
+    const kept = harness().panel;
     kept.post({ type: 'session', active: true, task: 'first' });
     for (let i = 1; i < MAX_LOG; i++) {
       kept.post({ type: 'say', text: `message ${i}` });
@@ -369,15 +344,12 @@ describe('post', () => {
     expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([['setContext', 'aiPair.active', false]]);
     expect(view.view.show.mock.calls).toEqual([]);
     expect(calibration.cancel.mock.calls).toHaveLength(1);
-    expect(() => {
-      bare().post({ type: 'session', active: false, reason: 'user' });
-    }).not.toThrow();
   });
 });
 
 describe('restoreHistory', () => {
   it('puts the saved history on the log for the view to replay, and sets aiPair.active', () => {
-    const panel = bare();
+    const panel = harness().panel;
     panel.post({ type: 'say', text: 'gone' });
     panel.restoreHistory([{ type: 'say', text: 'saved' }]);
     expect(panel.history).toEqual([{ type: 'say', text: 'saved' }]);
@@ -404,7 +376,7 @@ describe('show', () => {
 
   it('sends nothing with no view', () => {
     expect(() => {
-      bare().showSpeed(1);
+      harness().panel.showSpeed(1);
     }).not.toThrow();
   });
 });
@@ -419,7 +391,7 @@ describe('focusReply', () => {
   });
 
   it('focuses the view by command with no view', () => {
-    bare().focusReply();
+    harness().panel.focusReply();
     expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([['aiPair.narration.focus']]);
   });
 });
@@ -431,13 +403,6 @@ describe('askStart', () => {
     view.send({ type: 'ready' });
     await flush();
     expect(view.posted).toContainEqual({ type: 'canStart', value: true });
-  });
-
-  it('ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden', async () => {
-    const view = open(bare());
-    view.send({ type: 'ready' });
-    await flush();
-    expect(postedOf(view, 'canStart')).toEqual([]);
   });
 
   it('ReaskedProp: asks again after Set Up Agent, so the button appears without a reload', async () => {
@@ -614,27 +579,6 @@ describe('receive', () => {
     view.receive({ type: 'unknown' });
     expect(view.posted).toEqual([]);
     expect(controller.resume.mock.calls).toEqual([]);
-  });
-
-  it('does nothing for a controller message with no controller, calibration, or trace', async () => {
-    const view = open(bare());
-    const messages: FromPanel[] = [
-      { type: 'reply', text: 'hi' },
-      { type: 'draft', empty: true },
-      { type: 'draft', empty: false },
-      { type: 'pause' },
-      { type: 'resume' },
-      { type: 'interrupt' },
-      { type: 'turn' },
-      { type: 'end' },
-      { type: 'runDecision', id: 1, run: false },
-      { type: 'start' },
-    ];
-    for (const message of messages) {
-      view.send(message);
-    }
-    await flush();
-    expect(view.posted).toEqual([]);
   });
 });
 

@@ -64,7 +64,7 @@ export function spanCandidates(text: string, find: string): Candidate[] {
 function onLine(text: string, line: number, needle: string, found: number[], what: string): (Resolution & { ok: false }) | number {
   // The line's offsets once, not a scan from the start of the text for each match (#2).
   const span = lineSpan(text, line);
-  const here = span ? found.filter((at) => at >= span.start && at <= span.end) : [];
+  const here = found.filter((at) => at >= span.start && at <= span.end);
   const [only, second] = here;
   if (only !== undefined && second === undefined) return only;
   if (second !== undefined) {

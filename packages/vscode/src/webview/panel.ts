@@ -10,13 +10,6 @@ declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void };
 
 const vscode = acquireVsCodeApi();
 
-const ESCAPES = new Map([
-  ['&', '&amp;'],
-  ['<', '&lt;'],
-  ['>', '&gt;'],
-  ['"', '&quot;'],
-  ["'", '&#39;'],
-]);
 // A code span that names a file, like `game.ts` or `src/game.ts`, becomes a link that opens it.
 const FILE =
   /^[\w@.~-]*(\/[\w@.~-]+)*\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|css|scss|less|html|vue|svelte|py|rs|go|java|kt|swift|c|h|cc|cpp|hpp|cs|rb|php|lua|sh|zsh|toml|yaml|yml|xml|sql|txt|lock|env)$/;
@@ -134,7 +127,7 @@ let tipWarmUntil = 0;
 // ---- Messages as HTML ------------------------------------------------------
 
 function esc(s: string): string {
-  return s.replaceAll(/[&<>"']/g, (c) => ESCAPES.get(c) ?? c);
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 function codeSpan(code: string): string {
@@ -223,9 +216,8 @@ function addYou(text: string | undefined, ref: Ref | undefined): void {
   ui.history.scrollTop = 0;
 }
 
-function setOutcome(el: Element, phase: RunPhase, exitCode: number | undefined): void {
-  const outcome = el.querySelector('.outcome') ?? el.lastElementChild;
-  if (!outcome) return;
+/** Writes how a run went into `outcome`, the span of its row `el`. */
+function setOutcome(el: Element, outcome: Element, phase: RunPhase, exitCode: number | undefined): void {
   outcome.className = 'outcome';
   el.classList.toggle('skipped', phase === 'declined');
   if (phase === 'declined') {
@@ -255,7 +247,7 @@ function addRun(id: number, command: string, phase: RunPhase, exitCode: number |
   cmd.dataset.tip = command;
   const outcome = document.createElement('span');
   el.append(cmd, outcome);
-  setOutcome(el, phase, exitCode);
+  setOutcome(el, outcome, phase, exitCode);
   add(el);
 }
 
@@ -367,9 +359,8 @@ function syncStatus(): void {
 // ---- Tooltips --------------------------------------------------------------
 
 // Under the element, centered on it, inside the panel; above it if there's no room below.
-function placeTip(): void {
-  if (!tipTarget) return;
-  const r = tipTarget.getBoundingClientRect();
+function placeTip(target: HTMLElement): void {
+  const r = target.getBoundingClientRect();
   const w = ui.tip.offsetWidth;
   const h = ui.tip.offsetHeight;
   const left = Math.max(TIP_MARGIN, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - TIP_MARGIN));
@@ -382,7 +373,7 @@ function setTip(el: HTMLElement, text: string): void {
   el.dataset.tip = text;
   if (el === tipTarget) {
     ui.tip.textContent = text;
-    placeTip();
+    placeTip(el);
   }
 }
 
@@ -394,7 +385,7 @@ function showTip(el: HTMLElement): void {
   ui.tip.textContent = el.dataset.tip ?? '';
   ui.tip.hidden = false;
   el.setAttribute('aria-describedby', 'tip');
-  placeTip();
+  placeTip(el);
 }
 
 function hideTip(): void {
@@ -429,7 +420,7 @@ function syncTip(): void {
   if (tipTarget.getClientRects().length === 0) {
     hideTip();
   } else {
-    placeTip();
+    placeTip(tipTarget);
   }
 }
 
@@ -635,7 +626,8 @@ function handle(message: ToPanel): void {
       if (message.phase === 'exited') {
         // A command left running has ended: its row says how.
         const row = ui.history.querySelector(`.run[data-run="${message.id}"]`);
-        if (row) setOutcome(row, message.phase, message.exitCode);
+        const outcome = row?.querySelector('.outcome');
+        if (row && outcome) setOutcome(row, outcome, message.phase, message.exitCode);
         return;
       }
       if (runId === message.id) {
@@ -646,7 +638,7 @@ function handle(message: ToPanel): void {
       return;
     }
     case 'selection':
-      selection = message.ref ?? undefined;
+      selection = message.ref;
       selectionDismissed = false;
       syncAttach();
       return;

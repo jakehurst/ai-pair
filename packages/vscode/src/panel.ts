@@ -18,17 +18,24 @@ export interface Starter {
   start(): Promise<void>;
 }
 
+/**
+ * What the panel drives: the controller and the calibration, made after the panel and read once a
+ * page or the programmer acts, and the starter.
+ */
+export interface PanelWiring {
+  controller: () => Controller;
+  /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
+  calibration: () => Calibration;
+  /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
+  starter: Starter;
+}
+
 /** How many files of a name to look for before asking which was meant. */
 const MAX_FOUND = 20;
 
 /** The AI Pair view: shows the agent's narration and status, and takes the programmer's replies and controls. */
 export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   static readonly viewId = 'aiPair.narration';
-  controller?: Controller;
-  /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
-  calibration?: Calibration;
-  /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
-  starter?: Starter;
   /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
   private asked = 0;
   private view?: vscode.WebviewView;
@@ -50,7 +57,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
    */
   askStart(): void {
     const asked = ++this.asked;
-    void this.starter?.available().then((value) => {
+    void this.wiring.starter.available().then((value) => {
       if (asked === this.asked) this.send({ type: 'canStart', value });
     });
   }
@@ -61,9 +68,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly readingSpeed: { get: () => number; set: (value: number) => void },
     private readonly selection: { current: () => SharedSelection | undefined; ref: () => Ref | undefined },
     /** Called with a line for each message from the page, for diagnosing deliveries (#27). */
-    private readonly trace?: (line: string) => void,
+    private readonly trace: (line: string) => void,
     /** The extension's folder, which holds the page's dist/panel.css and dist/panel.js. */
-    private readonly extensionUri?: vscode.Uri,
+    private readonly extensionUri: vscode.Uri,
+    private readonly wiring: PanelWiring,
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -103,7 +111,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     if (event.type === 'session') {
       void vscode.commands.executeCommand('setContext', 'aiPair.active', event.active);
       if (event.active) this.reveal();
-      if (!event.active) this.calibration?.cancel();
+      if (!event.active) this.wiring.calibration().cancel();
     }
     this.onPost?.();
   }
@@ -121,10 +129,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    const dist = this.extensionUri && vscode.Uri.joinPath(this.extensionUri, 'dist');
-    view.webview.options = { enableScripts: true, localResourceRoots: dist ? [dist] : [] };
-    const style = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString() : '';
-    const script = dist ? view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString() : '';
+    const dist = vscode.Uri.joinPath(this.extensionUri, 'dist');
+    view.webview.options = { enableScripts: true, localResourceRoots: [dist] };
+    const style = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString();
+    const script = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString();
     view.webview.html = panelHtml(view.webview.cspSource, style, script);
     // The page posts only FromPanel messages; VS Code types them `any`.
     view.webview.onDidReceiveMessage((m: FromPanel) => {
@@ -134,8 +142,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) this.view = undefined;
       // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
-      this.controller?.resume('reply');
-      this.calibration?.cancel();
+      this.wiring.controller().resume('reply');
+      this.wiring.calibration().cancel();
     });
   }
 
@@ -148,14 +156,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   }
 
   private receive(message: FromPanel): void {
-    const controller = this.controller;
-    this.trace?.(
+    const controller = this.wiring.controller();
+    this.trace(
       `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
     );
     switch (message.type) {
       case 'ready':
         // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
-        controller?.resume('reply');
+        controller.resume('reply');
         this.send({ type: 'replay', events: this.log });
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
@@ -174,41 +182,41 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
-        if (this.calibration?.reply(message.text) === true) return;
-        controller?.resume(undefined, { reveal: false });
-        controller?.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
+        if (this.wiring.calibration().reply(message.text)) return;
+        controller.resume(undefined, { reveal: false });
+        controller.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
         if (message.empty) {
-          controller?.resume('reply');
+          controller.resume('reply');
         } else {
-          controller?.pause('reply');
+          controller.pause('reply');
         }
         return;
       case 'pause':
-        controller?.pause();
+        controller.pause();
         return;
       case 'resume':
         // specs/Draft.tla, `ResumeAll`: resume() with no reason ends every pause.
-        controller?.resume();
+        controller.resume();
         return;
       case 'interrupt':
-        controller?.userInterrupt();
+        controller.userInterrupt();
         return;
       case 'turn':
-        controller?.resume();
-        if (controller?.turn === 'user') {
+        controller.resume();
+        if (controller.turn === 'user') {
           controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
         } else {
-          controller?.takeTurn();
+          controller.takeTurn();
         }
         return;
       case 'end':
-        controller?.endSession();
+        controller.endSession();
         return;
       case 'runDecision':
-        controller?.decideRun(message.id, message.run, message.remember);
+        controller.decideRun(message.id, message.run, message.remember);
         return;
       case 'open': {
         const uri = vscode.Uri.file(this.resolvePath(message.file));
@@ -225,7 +233,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'start':
         // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
         // note (Settles).
-        void this.starter?.start().then(() => {
+        void this.wiring.starter.start().then(() => {
           this.send({ type: 'startEnded' });
         });
         return;

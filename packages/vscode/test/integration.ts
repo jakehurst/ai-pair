@@ -975,6 +975,27 @@ export async function run(): Promise<void> {
   await controller.end();
   console.log(`interrupted after typing ${JSON.stringify(typed)}`);
 
+  // A programmer edit outside the workspace is none of the session's business: it interrupts nothing.
+  const away = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-away-'));
+  const awayFile = path.join(away, 'notes.txt');
+  fs.writeFileSync(awayFile, 'theirs\n');
+  const awayDoc = await vscode.workspace.openTextDocument(awayFile);
+  await controller.start('edit elsewhere');
+  const unbothered = controller.step([{ move: { file: 'scratch.ts', line: 2, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
+  await sleep(1500);
+  await insertAsProgrammer(awayDoc.uri, new vscode.Position(0, 0), '// theirs\n');
+  const unbotheredReport = await unbothered;
+  assert.deepEqual(
+    unbotheredReport.batches.map((b) => b.status),
+    ['completed'],
+    JSON.stringify(unbotheredReport),
+  );
+  assert.equal(awayDoc.getText(), '// theirs\ntheirs\n');
+  assert.equal(doc.getText(), `// mine\n${typed}${alphabet}`);
+  await controller.end();
+  fs.rmSync(away, { recursive: true });
+  console.log('an edit outside the workspace interrupts nothing');
+
   // An agent connecting the way a harness does: the launcher, over stdio, from the project folder.
   await api.ready;
   // Its frames at Info, with `aiPair.trace` (#27): checked in the log once it's done.

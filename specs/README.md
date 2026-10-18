@@ -743,7 +743,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `OwnAnswer` | `panel.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
 | `GroundedProp` | `start.setup.test.ts`: GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
 | `RunsAreClicks` | `panel.test.ts`: RunsAreClicks: runs the starter once per start from the page; `webview/panel.test.ts`: RunsAreClicks: posts start when the button is clicked; `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |
-| `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one; `panel.test.ts`: ClicksNeedButtonProp: tells the page nothing without a starter, so the button stays hidden |
+| `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one |
 | `Offered` | `panel.test.ts`: Offered: tells a new page whether it can start a session |
 | `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
 | `KeepsLocation`, `StaysOnPair`, `StartsProp` | `start.setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start, without Claude Code's open command |

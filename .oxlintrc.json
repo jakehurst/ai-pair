@@ -23,7 +23,8 @@
           }
         ],
         "eslint/no-var": "error",
-        "eslint/prefer-const": "error",
+        // A callback may read a `let` assigned after the callback is made: activation's cycle in extension.ts.
+        "eslint/prefer-const": ["error", { "ignoreReadBeforeAssign": true }],
         "eslint/no-use-before-define": "error",
         "eslint/one-var": ["error", "never"],
         "eslint/no-array-constructor": "error",

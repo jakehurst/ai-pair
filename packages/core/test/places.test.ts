@@ -70,8 +70,8 @@ function starts(text: string, needle: string): number[] {
 
 beforeEach(() => {
   vi.mocked(lineSpan).mockImplementation((text, line) => {
-    const found = line >= 1 ? linesOf(text)[line - 1] : undefined;
-    return found && { start: found.start, end: found.end };
+    const found = linesOf(text)[line - 1];
+    return found === undefined ? { start: text.length, end: text.length } : { start: found.start, end: found.end };
   });
   vi.mocked(lineText).mockImplementation((text, line) => linesOf(text)[line - 1]?.text ?? '');
   vi.mocked(position).mockImplementation(fakePosition);
@@ -233,7 +233,7 @@ describe('at scale', () => {
   it('resolves a span and a spot on the last line of a long file at once, though every line matches (#2)', () => {
     // The fake reads the text plainly; this test measures places.ts's own work, so text.ts answers from a table.
     const lines = linesOf(LONG_TEXT);
-    vi.mocked(lineSpan).mockImplementation((_, line) => lines[line - 1]);
+    vi.mocked(lineSpan).mockImplementation((_, line) => lines[line - 1] ?? { start: LONG_TEXT.length, end: LONG_TEXT.length });
     vi.mocked(lineText).mockImplementation((_, line) => lines[line - 1]?.text ?? '');
     const lineLength = (lines[0]?.text.length ?? 0) + 1;
     vi.mocked(position).mockImplementation((_, offset) => ({

@@ -298,11 +298,10 @@ function listening(name: string): number {
   return fakes.listeners.get(name)?.size ?? 0;
 }
 
-/** Makes the editor in ROOT for AGENT, with a controller unless told not to, and returns both. */
-function made(withController = true) {
-  const editor = new VsCodeEditor(ROOT, AGENT);
+/** Makes the editor in ROOT for AGENT, over a mock controller, and returns both. */
+function made() {
   const controller = mock<Controller>();
-  if (withController) editor.controller = controller;
+  const editor = new VsCodeEditor(ROOT, AGENT, () => controller);
   return { editor, controller };
 }
 
@@ -676,7 +675,7 @@ describe('follow mode: looking away', () => {
     expect(controller.pause.mock.calls).toEqual([['away'], ['away']]);
   });
 
-  it("CloseTab: pauses nothing with no editor active, no target, a state that doesn't follow, or no controller", () => {
+  it("CloseTab: pauses nothing with no editor active, no target, or a state that doesn't follow", () => {
     const { editor, controller } = made();
     const there = new fakes.FakeEditor(new fakes.FakeDocument(OTHER, '', 'output'));
     fire('active', there);
@@ -687,12 +686,6 @@ describe('follow mode: looking away', () => {
     expect(controller.pause.mock.calls).toEqual([]);
     fire('active', there);
     expect(controller.pause.mock.calls).toEqual([['away']]);
-
-    const alone = made(/* withController= */ false).editor;
-    alone.renderCursor({ file: FILE, offset: 0 }, 'typing', 'cursor');
-    expect(() => {
-      fire('active', there);
-    }).not.toThrow();
   });
 
   it('pauses as away when the programmer scrolls the target out of view, measuring the view each time', () => {
@@ -888,50 +881,43 @@ describe('who made a change', () => {
     await expect(editor.save(FILE)).rejects.toThrow("the editor didn't save it; the file on disk may have changed");
   });
 
-  it("ignores other schemes, no changes, files outside the workspace, and a document it hasn't seen until it has", () => {
+  it("ignores other schemes, no changes, files outside the workspace, and a document it hasn't opened until it has", () => {
     const untitled = new fakes.FakeDocument('Untitled-1', 'a', 'untitled');
     const outside = new fakes.FakeDocument(OUTSIDE, 'a');
     fakes.documents.push(untitled, outside);
     const { controller } = made();
-    const unseen = new fakes.FakeDocument(FILE, 'a');
-    unseen.isDirty = true;
+    const unopened = new fakes.FakeDocument(FILE, 'a');
+    unopened.isDirty = true;
     outside.isDirty = true;
     untitled.isDirty = true;
     const keystroke = [{ rangeOffset: 0, rangeLength: 0, text: 'x' }];
     changeOf(untitled, keystroke);
     changeOf(outside, keystroke);
-    changeOf(unseen, []);
-    changeOf(unseen, keystroke);
+    changeOf(unopened, []);
+    changeOf(unopened, keystroke);
+    changeOf(unopened, keystroke);
     expect(controller.userEdit.mock.calls).toEqual([]);
-    changeOf(unseen, keystroke);
-    expect(controller.userEdit.mock.calls).toHaveLength(1);
-
-    fire('close', unseen);
-    changeOf(unseen, keystroke);
-    expect(controller.userEdit.mock.calls).toHaveLength(1);
-    fire('open', unseen);
+    fire('open', unopened);
     fire('open', untitled);
-    changeOf(unseen, keystroke);
-    expect(controller.userEdit.mock.calls).toHaveLength(2);
-  });
+    fire('open', outside);
+    changeOf(unopened, keystroke);
+    expect(controller.userEdit.mock.calls).toHaveLength(1);
 
-  it('reports to no one with no controller', () => {
-    const doc = new fakes.FakeDocument(FILE, 'a');
-    fakes.documents.push(doc);
-    made(/* withController= */ false);
-    vi.mocked(fs.readFileSync).mockReturnValue('a');
-    expect(() => {
-      changeOf(doc, [{ rangeOffset: 0, rangeLength: 0, text: '' }]);
-      doc.isDirty = true;
-      changeOf(doc, [{ rangeOffset: 0, rangeLength: 0, text: '' }]);
-    }).not.toThrow();
+    fire('close', unopened);
+    changeOf(unopened, keystroke);
+    expect(controller.userEdit.mock.calls).toHaveLength(1);
+    fire('open', unopened);
+    changeOf(unopened, keystroke);
+    changeOf(outside, keystroke);
+    changeOf(untitled, keystroke);
+    expect(controller.userEdit.mock.calls).toHaveLength(2);
   });
 });
 
 describe('edit', () => {
   it('RightAuthor: edits a file in view through its editor, with its undo stops, and takes its change event for its own', async () => {
-    const { editor, controller } = made();
     const view = inView(FILE);
+    const { editor, controller } = made();
     view.document.isDirty = true;
     const options = { undoStopBefore: false, undoStopAfter: true };
     view.edit.mockImplementation((build) => {
@@ -1071,8 +1057,9 @@ describe('follow mode: scrolling', () => {
     expect(listening('visibleRanges')).toBe(1);
   });
 
-  it("jumps at once with no controller to time the glide, and waits SCROLL_QUIET_MS for a scroll VS Code doesn't report", async () => {
-    const { editor, controller } = made(/* withController= */ false);
+  it("ignores another editor's scroll while waiting for its own, and waits SCROLL_QUIET_MS for one VS Code doesn't report", async () => {
+    const { editor, controller } = made();
+    fakes.settings.set('smoothScrolling', true);
     const view = inView(FILE);
     const other = inView(OTHER);
     outOfView(controller, 87, 4 * FRAME_MS);
@@ -1186,16 +1173,6 @@ describe('follow mode: scrolling', () => {
       [20, fakes.reveal.InCenter],
       [20, fakes.reveal.InCenter],
     ]);
-  });
-
-  it('does nothing with a view that has no lines', () => {
-    const { editor, controller } = made();
-    const view = inView(FILE);
-    view.visibleRanges = [];
-    outOfView(controller, 87, FRAME_MS);
-    editor.renderCursor({ file: FILE, offset: 100 }, 'typing', 'cursor');
-    editor.follow();
-    expect(revealed(view)).toEqual([]);
   });
 
   it('Settles: a measure that a command cuts short goes on once the command is done', async () => {
