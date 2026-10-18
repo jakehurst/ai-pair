@@ -981,10 +981,15 @@ export async function run(): Promise<void> {
   fs.writeFileSync(awayFile, 'theirs\n');
   const awayDoc = await vscode.workspace.openTextDocument(awayFile);
   await controller.start('edit elsewhere');
+  await controller.read('scratch.ts');
   const unbothered = controller.step([{ move: { file: 'scratch.ts', line: 2, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
   await sleep(1500);
   await insertAsProgrammer(awayDoc.uri, new vscode.Position(0, 0), '// theirs\n');
-  const unbotheredReport = await unbothered;
+  // A step comes back while its batch plays on; the next steps wait for the end.
+  let unbotheredReport = await unbothered;
+  while (unbotheredReport.batches.length === 0) {
+    unbotheredReport = await controller.step([]);
+  }
   assert.deepEqual(
     unbotheredReport.batches.map((b) => b.status),
     ['completed'],
