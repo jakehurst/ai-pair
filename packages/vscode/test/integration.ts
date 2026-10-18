@@ -17,6 +17,9 @@ import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { pagePaths } from './integration_page';
+import { relayPaths } from './integration_relay';
+import { setUpAgent } from '../src/setup';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -70,6 +73,9 @@ const ABSENT_MS = 45_000;
 
 /** Past a timer, so it has fired. */
 const GRACE_SLACK_MS = 1000;
+
+/** Past the extension's saving of the session, which waits 200 ms after a change. */
+const SAVE_SETTLE_MS = 400;
 
 /** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
 interface RawSocket {
@@ -168,14 +174,16 @@ async function called(
 }
 
 /** Starts a WebSocket server standing in for an editor window, which runs `answer` on each frame it gets. */
-async function fakeEditor(answer: (socket: WebSocket) => void): Promise<{ server: WebSocketServer; port: number }> {
+async function fakeEditor(answer: (socket: WebSocket, frame: string) => void): Promise<{ server: WebSocketServer; port: number }> {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await new Promise((resolve) => {
     server.once('listening', resolve);
   });
   server.on('connection', (socket) => {
-    socket.on('message', () => {
-      answer(socket);
+    socket.on('message', (data) => {
+      // ws hands a text frame over as a Buffer, a list of them, or an ArrayBuffer.
+      const text = Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data);
+      answer(socket, text.toString('utf8'));
     });
   });
   const address = server.address();
@@ -222,6 +230,13 @@ export async function run(): Promise<void> {
     return new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file(name))));
   }
 
+  // The install notification's button runs Set Up Agent (extension.ts): taken with VS Code's notification commands,
+  // and the picker it opens is closed with nothing picked.
+  await vscode.commands.executeCommand('notifications.focusToasts');
+  await vscode.commands.executeCommand('notification.acceptPrimaryAction');
+  await sleep(1000);
+  await vscode.commands.executeCommand('quickInput.hide');
+
   // The demo, sped up. If our own edits were mistaken for the programmer's, it would stop early.
   api.controller.setSpeed(20);
   api.controller.setReadingSpeed(10);
@@ -231,6 +246,35 @@ export async function run(): Promise<void> {
   assert.equal(await buffer('ai-pair-demo/src/todos.ts'), EXPECTED_TODOS);
   assert.equal(await buffer('ai-pair-demo/src/server.ts'), EXPECTED_SERVER);
   assert.equal(await disk('ai-pair-demo/src/server.ts'), EXPECTED_SERVER, 'saved after each batch');
+  // The demo is refused during a session; ended by the programmer early on, its next step finds no session; ended
+  // or derailed by an edit during its last batch, it stops there (demo.ts, `playDemo`).
+  await api.controller.start('busy');
+  await vscode.commands.executeCommand('aiPair.playDemo');
+  assert.equal(api.controller.isActive, true, 'the demo ended the session');
+  await api.controller.end();
+  const early = api.playDemo();
+  await sleep(1500);
+  api.controller.endSession();
+  await early;
+  /** Waits for the demo's last batch to be playing: its message is on the panel. */
+  async function lastBatch(): Promise<void> {
+    for (let i = 0; i < 600 && !api.history().some((e) => e.type === 'say' && e.text === 'It needs the import too.'); i++) {
+      await sleep(100);
+    }
+    assert.ok(api.controller.isActive, 'the demo ended before its last batch');
+  }
+  const endedLate = api.playDemo();
+  await lastBatch();
+  api.controller.endSession();
+  await endedLate;
+  const derailed = api.playDemo();
+  await lastBatch();
+  await insertAsProgrammer(vscode.Uri.file(file('ai-pair-demo/src/server.ts')), new vscode.Position(0, 0), '// mine\n');
+  await derailed;
+  assert.ok(
+    api.history().some((e) => e.type === 'say' && e.text.startsWith("I'm a scripted demo")),
+    'the derailed demo did not say it was stopping',
+  );
 
   // Changes the programmer didn't make are reported, without interrupting: a tool writing to another file...
   const controller = api.controller;
@@ -1001,6 +1045,25 @@ export async function run(): Promise<void> {
   fs.rmSync(away, { recursive: true });
   console.log('an edit outside the workspace interrupts nothing');
 
+  // A `type` that starts a line with its indentation types the indentation as one chunk (typing.ts, `Plan`), and a
+  // speed setting that is no number plays at 1 (panel_html.ts, `settingSpeed`).
+  await vscode.workspace.getConfiguration('aiPair').update('speed', 'fast', vscode.ConfigurationTarget.Global);
+  await controller.start('indent');
+  await controller.read('scratch.ts');
+  await controller.step([{ move: { file: 'scratch.ts', line: 2, to: 'line_end' } }, { type: `\n    indented${CURSOR_MARKER}` }]);
+  let indented = await controller.step([]);
+  while (indented.batches.length === 0) {
+    indented = await controller.step([]);
+  }
+  assert.deepEqual(
+    indented.batches.map((b) => b.status),
+    ['completed'],
+    JSON.stringify(indented),
+  );
+  assert.equal(doc.getText(), `// mine\n${typed}${alphabet}\n    indented`);
+  await controller.end();
+  await vscode.workspace.getConfiguration('aiPair').update('speed', undefined, vscode.ConfigurationTarget.Global);
+
   // An agent connecting the way a harness does: the launcher, over stdio, from the project folder.
   await api.ready;
   // Its frames at Info, with `aiPair.trace` (#27): checked in the log once it's done.
@@ -1136,6 +1199,15 @@ export async function run(): Promise<void> {
   const garbled = await fakeEditor((socket) => {
     socket.send('not a message');
   });
+  // A window that welcomes the relay and then answers a call with something that is no report: the relay reports an
+  // internal error (server.ts, `run`).
+  const bogus = await fakeEditor((socket, frame) => {
+    const parsed: unknown = JSON.parse(frame);
+    if (typeof parsed !== 'object' || parsed === null || !('type' in parsed)) return;
+    if (parsed.type === 'hello') socket.send(JSON.stringify({ type: 'welcome' }));
+    if (parsed.type === 'call' && 'id' in parsed) socket.send(JSON.stringify({ type: 'result', id: parsed.id, result: { nope: true } }));
+  });
+  const bogusFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-bogus-'));
   const later = Date.now() + 60_000;
   const gone = spawnSync('true').pid;
   fs.writeFileSync(path.join(discoveryDir(), 'junk.json'), '{');
@@ -1155,6 +1227,9 @@ export async function run(): Promise<void> {
   const fooled = await relayAgent(relayEnv());
   const fooledStart = await called(fooled, 'start', { task: 'fakes', cwd: '/no/such/folder' });
   assert.equal(fooledStart.failed, false, fooledStart.text);
+  fakes.push(fakeWindow('bogus', [bogusFolder], bogus.port));
+  const bogusStart = await called(fooled, 'start', { task: 'bogus', cwd: bogusFolder });
+  assert.ok(bogusStart.failed && bogusStart.text.startsWith('internal: '), bogusStart.text);
   // Another folder of the window: the relay closes its socket and finds the window again (specs/Wire.tla, `Close`).
   fs.mkdirSync(file('sub'), { recursive: true });
   const relocated = await called(fooled, 'start', { task: 'moved', cwd: file('sub') });
@@ -1249,6 +1324,8 @@ export async function run(): Promise<void> {
   await closing;
   fs.rmSync(slowFile);
   slowEditor.server.close();
+  bogus.server.close();
+  fs.rmSync(bogusFolder, { recursive: true });
   fs.rmSync(outsider, { recursive: true });
   fs.rmSync(slowFolder, { recursive: true });
   fs.rmSync(empty, { recursive: true });
@@ -1266,11 +1343,10 @@ export async function run(): Promise<void> {
   // OpenCode, Gemini CLI, Cursor, and Another agent, in that order, none ticked. Gemini CLI and Cursor write under the
   // real home, so they are never picked here.
   const agents = path.join(root, '..', 'agents');
-  /** Runs Set Up Agent, ticks the items at `indexes` in its picker with VS Code's quick input commands, and accepts, or hides it with none. */
-  async function setUpAgents(indexes: number[]): Promise<void> {
-    const running = vscode.commands.executeCommand('aiPair.setUpAgent');
+  /** Ticks the items at `indexes` in the open picker with VS Code's quick input commands and accepts, or hides it with none; then awaits `running`. */
+  async function pickAgents(running: Thenable<unknown>, indexes: number[], accept = indexes.length > 0): Promise<void> {
     await sleep(1000);
-    if (indexes.length === 0) {
+    if (!accept) {
       await vscode.commands.executeCommand('quickInput.hide');
     } else {
       await vscode.commands.executeCommand('quickInput.first');
@@ -1284,6 +1360,10 @@ export async function run(): Promise<void> {
       await vscode.commands.executeCommand('quickInput.accept');
     }
     await running;
+  }
+  /** Runs Set Up Agent and drives its picker. */
+  function setUpAgents(indexes: number[]): Promise<void> {
+    return pickAgents(vscode.commands.executeCommand('aiPair.setUpAgent'), indexes);
   }
   await vscode.env.clipboard.writeText('');
   await setUpAgents([]);
@@ -1299,11 +1379,62 @@ export async function run(): Promise<void> {
   // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
   await setUpAgents([]);
   console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+  // On a home of its own, the agents that write under the home: OpenCode, Gemini CLI, and Cursor are set up, and
+  // Claude Code through its CLI, found in ~/.local/bin, and reported when the CLI fails (agents.ts, `AGENTS`).
+  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-fakehome-'));
+  fs.mkdirSync(path.join(fakeHome, '.local', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(fakeHome, '.local', 'bin', 'claude'), '#!/bin/sh\n');
+  const cliRuns: string[][] = [];
+  let cliFails = false;
+  const fakeHost = {
+    home: fakeHome,
+    env: { PATH: '' },
+    platform: process.platform,
+    exec: (cli: string, args: string[]) => {
+      cliRuns.push([cli, ...args]);
+      return cliFails && args[1] === 'add' ? Promise.reject(new Error('claude said no')) : Promise.resolve();
+    },
+  };
+  // Claude Code is detected there, so its item comes ticked; the three others are ticked here.
+  await pickAgents(setUpAgent(api.launcher, fakeHost), [2, 3, 4]);
+  assert.deepEqual(cliRuns, [
+    [path.join(fakeHome, '.local', 'bin', 'claude'), 'mcp', 'remove', '--scope', 'user', 'pair'],
+    [path.join(fakeHome, '.local', 'bin', 'claude'), 'mcp', 'add', '--scope', 'user', 'pair', '--', api.launcher],
+  ]);
+  for (const config of ['.config/opencode/opencode.json', '.gemini/settings.json', '.cursor/mcp.json']) {
+    assert.ok(fs.readFileSync(path.join(fakeHome, config), 'utf8').includes(api.launcher), config);
+  }
+  cliFails = true;
+  await pickAgents(setUpAgent(api.launcher, fakeHost), [], /* accept= */ true);
+  assert.equal(cliRuns.length, 4);
+  fs.rmSync(fakeHome, { recursive: true });
+  console.log("Set Up Agent: the agents under a home of its own, and Claude Code's CLI");
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
   await playerPaths(api, root);
   await controllerPaths(api, root);
   await extensionPaths(api, root);
+  await relayPaths(api, root, relayEnv());
+  await pagePaths(api, root);
+
+  // The discovery file can't be written: reported once, not on every focus; written again once it can be
+  // (extension.ts, `once`; specs/Discovery.tla, `ListWindow`).
+  const discovery = discoveryDir();
+  fs.rmSync(discovery, { recursive: true });
+  fs.writeFileSync(discovery, '');
+  api.bridge.focused();
+  api.bridge.focused();
+  assert.equal(fs.existsSync(api.bridge.file), false, 'the discovery file was written under a file');
+  fs.rmSync(discovery);
+  api.bridge.focused();
+  assert.equal(fs.existsSync(api.bridge.file), true, 'the discovery file was not written again');
+
+  // A session left for the next launch to revive (test/integration_reload.ts), saved 200 ms after its last change.
+  await controller.start('kept');
+  await controller.step([{ say: 'Kept across the reload.' }]);
+  await controller.step([]);
+  await sleep(SAVE_SETTLE_MS);
+  assert.ok(api.saved(), 'the session was not saved');
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
   // (specs/Discovery.tla, `CloseWindow`).

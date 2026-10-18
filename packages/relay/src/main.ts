@@ -6,13 +6,11 @@ import guideMarkdown from '../../../AGENT_GUIDE.md';
 import { agentGuide, serve } from './server';
 
 const cwd = process.cwd();
-serve({
+// A failure to serve is unhandled on purpose: Node prints it and exits with 1, as a catch here would.
+void serve({
   transport: new StdioServerTransport(),
   guide: agentGuide(guideMarkdown),
   cwd,
   dir: discoveryDir(),
   stdin: process.stdin,
-}).catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
 });

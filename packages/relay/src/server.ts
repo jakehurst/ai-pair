@@ -11,9 +11,8 @@ import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
 import { TOOLS } from './tools';
 
-/** The extension's version, which the build defines; unbuilt, as in tests, there's none. */
-declare const AI_PAIR_VERSION: string | undefined;
-const VERSION = typeof AI_PAIR_VERSION === 'string' ? AI_PAIR_VERSION : 'dev';
+/** The extension's version: the build defines it, and vitest.config.ts defines one for the unit tests. */
+declare const AI_PAIR_VERSION: string;
 
 /** How many answered reports the relay keeps, for a cancel that arrives after its answer (#67). */
 export const MAX_ANSWERED = 16;
@@ -60,7 +59,7 @@ function shownPath(file: string): string {
  * roots, and `cwd`. Some harnesses start MCP servers in `/` or in their own install folder.
  */
 export function createServer(link: EditorLink, guide: string, cwd: string): McpServer {
-  const server = new McpServer({ name: 'ai-pair', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'ai-pair', version: AI_PAIR_VERSION }, { instructions: INSTRUCTIONS });
 
   async function roots(): Promise<string[]> {
     if (!server.server.getClientCapabilities()?.roots) return [];

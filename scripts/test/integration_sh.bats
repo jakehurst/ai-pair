@@ -12,8 +12,9 @@ setup() {
   export ENV_RECORD="${BATS_TEST_TMPDIR}/code.env"
   cat >"${FAKE}/code" <<'CODE'
 #!/bin/bash
-printf '%s\n' "$@" >"${RECORD}"
-env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME)=' >"${ENV_RECORD}" || true
+# Appended: the script runs Code once per test bundle.
+printf '%s\n' "$@" >>"${RECORD}"
+env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME)=' >>"${ENV_RECORD}" || true
 CODE
   chmod +x "${FAKE}/code"
   export VSCODE_BIN="${FAKE}/code"
@@ -34,8 +35,12 @@ CODE
   grep -q '^--disable-workspace-trust$' "${RECORD}"
   grep -q "^--extensionDevelopmentPath=${EXTENSION_PATH}\$" "${RECORD}"
   grep -q '^--extensionTestsPath=.*/dist-test/integration.js$' "${RECORD}"
-  grep -q '/workspace$' "${RECORD}"
-  grep -q '^AI_PAIR_HOME=' "${ENV_RECORD}"
+  grep -q '^--extensionTestsPath=.*/dist-test/integration_reload.js$' "${RECORD}"
+  grep -q '^--extensionTestsPath=.*/dist-test/integration_nofolder.js$' "${RECORD}"
+  [[ "$(grep -c '/workspace$' "${RECORD}")" -eq 2 ]]
+  grep -q '^--remote-debugging-port=[0-9]' "${RECORD}"
+  grep -q "^AI_PAIR_HOME=${HOME}/.ai-pair-integration-" "${ENV_RECORD}"
+  grep -q '^AI_PAIR_HOME=.*/not-a-folder$' "${ENV_RECORD}"
   ! grep -q '^ELECTRON_RUN_AS_NODE=' "${ENV_RECORD}"
 }
 
@@ -52,7 +57,7 @@ CODE
   run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
   [[ "${status}" -eq 0 ]]
   local user
-  user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}")"
+  user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}" | head -1)"
   [[ -n "${user}" ]]
   [[ ! -e "$(dirname "${user}")" ]]
 }

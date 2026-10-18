@@ -52,20 +52,15 @@ export function lineSpan(text: string, line: number): { start: number; end: numb
 
 /** Returns the text of `line` (from 1), or an empty string past the end. */
 export function lineText(text: string, line: number): string {
-  return splitLines(text)[line - 1] ?? '';
+  return splitLines(text)
+    .slice(line - 1, line)
+    .join('');
 }
 
 /** Returns the offset of the end of a line (before its newline), clamped to the document. */
 export function lineEnd(text: string, line: number): number {
-  let offset = 0;
-  for (let l = 1; l < line; l++) {
-    const next = text.indexOf('\n', offset);
-    if (next === -1) break;
-    offset = next + 1;
-  }
-  const end = text.indexOf('\n', offset);
-  const stop = end === -1 ? text.length : end;
-  return stop > offset && text[stop - 1] === '\r' ? stop - 1 : stop;
+  const { start, end } = lineSpan(text, line);
+  return end > start && text[end - 1] === '\r' ? end - 1 : end;
 }
 
 /** Returns whether `offset` is the start of a line. */
