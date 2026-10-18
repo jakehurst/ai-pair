@@ -3,7 +3,8 @@
 // withinFolder is a mock that takes a path under a folder, by its text, as inside it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GROUP_MS, OutsideChanges, watched } from '../src/outside';
+import { OutsideChanges, watched } from '../src/outside';
+import { timings } from '../src/timings';
 
 vi.mock('@ai-pair/protocol', () => ({
   withinFolder: vi.fn((folder: string, file: string) => (file.startsWith(`${folder}/`) ? file : undefined)),
@@ -40,7 +41,7 @@ function written(file: string, text: string): void {
 }
 
 async function settle(): Promise<void> {
-  vi.advanceTimersByTime(GROUP_MS);
+  vi.advanceTimersByTime(timings.groupMs);
   await outside.settled;
 }
 
@@ -96,7 +97,7 @@ describe('OutsideChanges', () => {
 
   it('groups files written close together into one entry, and skips one gone again', async () => {
     written('/p/a.ts', '1');
-    vi.advanceTimersByTime(GROUP_MS - 1);
+    vi.advanceTimersByTime(timings.groupMs - 1);
     written('/p/b.ts', '2');
     outside.reported('/p/gone.ts');
     written('/p/a.ts', '3');

@@ -768,6 +768,20 @@ describe('the tooltips', () => {
     start();
   });
 
+  it('takes its delays from the extension: a shorter one shows the tooltip sooner', () => {
+    send({ type: 'timings', tipDelayMs: 50, tipWarmMs: 10 });
+    hover(element('interrupt'));
+    vi.advanceTimersByTime(50);
+    expect(tip()).toBe('Interrupt');
+    hover(document);
+    vi.advanceTimersByTime(10);
+    hover(element('end'));
+    expect(tip()).toBeUndefined();
+    vi.advanceTimersByTime(50);
+    expect(tip()).toBe('End the session');
+    send({ type: 'timings', tipDelayMs: TIP_DELAY_MS, tipWarmMs: TIP_WARM_MS });
+  });
+
   it('shows after a moment over an element, under it, and at once over the next while one shows', () => {
     hover(element('interrupt'));
     expect(tip()).toBeUndefined();
@@ -1023,5 +1037,4 @@ describe('guards', () => {
     expect(element('tip').hidden).toBe(false);
     expect(text('tip')).toBe('');
   });
-
 });

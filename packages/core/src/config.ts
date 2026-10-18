@@ -21,6 +21,19 @@ export interface Config {
   maxRunWaitMs: number;
 }
 
+/** The controller's timeouts alone: what `Controller.setTimeouts` sets. */
+export type Timeouts = Pick<Config, 'maxBlockMs' | 'navigatorIdleMs' | 'listenGraceMs' | 'absentMs' | 'runWaitMs' | 'maxRunWaitMs'>;
+
+/** The timeouts for a test, which cannot wait the real ones out: seconds where the real ones are minutes. */
+export const TEST_TIMEOUTS: Timeouts = {
+  maxBlockMs: 5000,
+  navigatorIdleMs: 1000,
+  listenGraceMs: 2000,
+  absentMs: 5000,
+  runWaitMs: 10_000,
+  maxRunWaitMs: 60_000,
+};
+
 /** The settings in force when the editor gives none. */
 export const defaultConfig: Config = {
   maxBlockMs: 45_000,

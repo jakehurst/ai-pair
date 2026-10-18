@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import { panelHtml, SPEEDS } from './panel_html';
+import { timings } from './timings';
 import type { FromPanel, ToPanel } from './panel_messages';
 import type { Calibration, CalibrationView } from './calibration';
 
@@ -97,6 +98,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: 'calibration', view });
   }
 
+  /** Tells the page its delays: with each new page, and when a test changes them. */
+  showTimings(): void {
+    this.send({ type: 'timings', tipDelayMs: timings.tipDelayMs, tipWarmMs: timings.tipWarmMs });
+  }
+
   // specs/PanelReplay.tla, `Post`: the event onto the log, the oldest cut beyond MAX_LOG.
   post(event: PanelEvent): void {
     this.log.push(event);
@@ -168,6 +174,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
         this.showSelection(this.selection.ref());
+        this.showTimings();
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart();
         return;

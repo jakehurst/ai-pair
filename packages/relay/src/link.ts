@@ -4,15 +4,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import WebSocket from 'ws';
 import { DISCOVERY_SCHEMA, parseEditorMessage, PROTOCOL_VERSION, withinFolder, type Discovery, type ToolName } from '@ai-pair/protocol';
+import { RELAY_TIMINGS } from './timings';
 
 /** A call's error when its window's socket closes: a reloaded window keeps the session for a `start` (#25, #138). */
 export const EDITOR_DISCONNECTED = 'The editor disconnected. If its window was reloaded, call `start` again to resume the session.';
 
 /** A call's error once the link is closed: the harness ended the relay's stdin (#163). */
 export const LINK_CLOSED = 'The relay is shutting down.';
-
-/** A port a stale window file points at may now belong to something that never answers. */
-const HANDSHAKE_MS = 5000;
 
 /** Tools whose results are reports, which must be delivered at least once (#67). */
 const REPORTING: ReadonlySet<ToolName> = new Set(['step', 'listen', 'end']);
@@ -240,7 +238,7 @@ export class EditorLink {
 
   private openWindow(window: Discovery): Promise<Connection> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: HANDSHAKE_MS });
+      const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: RELAY_TIMINGS.handshakeMs });
       let welcomed = false;
       const calls = new Map<number, Pending>();
       const connection: Connection = { ws, calls, cancelled: new Set() };

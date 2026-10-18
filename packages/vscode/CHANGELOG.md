@@ -10,6 +10,16 @@
     a scroll starts from the view's top line it was measured at; a run's row
     writes its outcome into the span it was made with; and the tooltip is
     placed on the element it is shown for.
+-   The integration run now reaches what it could not drive before (#176):
+    the relay's rendering of every part of a report, through an MCP client;
+    the Pair panel's page, driven over the Chrome DevTools Protocol, so each
+    button and the reply box are the real page's; the install notification's
+    button; Set Up Agent for the agents that write under the home, on a home
+    of its own; the demo refused, ended, and derailed; a second launch that
+    revives the saved session, and a third with no folder. Gone with that:
+    the relay's own catch around serving (Node exits the same way), a dev
+    version for an unbuilt relay, the demo's unused `select` target, and two
+    fallbacks for a line past the end of a file.
 
 ## 0.7.6
 

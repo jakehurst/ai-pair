@@ -32,6 +32,9 @@ const ENDED = { agent: 'The agent ended the session', user: 'You ended the sessi
 // showing or just was, the way VS Code's own hovers do; and on keyboard focus. A click hides it.
 const TIP_DELAY_MS = 500;
 const TIP_WARM_MS = 300;
+/** The delays in force: the shipped ones until the extension says otherwise (`timings`). */
+let tipDelayMs = TIP_DELAY_MS;
+let tipWarmMs = TIP_WARM_MS;
 const TIP_GAP = 4;
 const TIP_MARGIN = 6;
 
@@ -395,7 +398,7 @@ function hideTip(): void {
   tipTarget.removeAttribute('aria-describedby');
   tipTarget = undefined;
   ui.tip.hidden = true;
-  tipWarmUntil = performance.now() + TIP_WARM_MS;
+  tipWarmUntil = performance.now() + tipWarmMs;
 }
 
 function hoverTip(el: HTMLElement | undefined): void {
@@ -410,7 +413,7 @@ function hoverTip(el: HTMLElement | undefined): void {
     tipPending = el;
     tipTimer = setTimeout(() => {
       showTip(el);
-    }, TIP_DELAY_MS);
+    }, tipDelayMs);
   }
 }
 
@@ -653,6 +656,10 @@ function handle(message: ToPanel): void {
       return;
     case 'calibration':
       showCalibration(message.view);
+      return;
+    case 'timings':
+      tipDelayMs = message.tipDelayMs;
+      tipWarmMs = message.tipWarmMs;
       return;
     default:
       throw new Error(`Unknown panel message: ${JSON.stringify(message satisfies never)}`);

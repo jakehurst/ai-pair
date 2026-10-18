@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { WebSocket } from 'ws';
 import { CURSOR_MARKER, type Report } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
+import { mark } from './integration_clock';
 
 /** How long to look for the page once the view is shown, and how often. */
 const FIND_MS = 15_000;
@@ -386,5 +387,5 @@ export async function pagePaths(api: Api, root: string): Promise<void> {
 
   page.close();
   fs.rmSync(file('a'), { recursive: true });
-  console.log("the page's clicks and keys reached the extension, and the calibration ran in the panel");
+  mark("the page's clicks and keys reached the extension, and the calibration ran in the panel");
 }

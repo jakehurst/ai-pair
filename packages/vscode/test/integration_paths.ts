@@ -10,6 +10,7 @@ import { CURSOR_MARKER, discoveryDir, type Action, type BatchStatus, type ErrorK
 import { isSavedSession } from '@ai-pair/core';
 import { EditorLink } from '../../relay/src/link';
 import type { Api } from '../src/extension';
+import { mark } from './integration_clock';
 
 /** The text of the file most cases act in. */
 const PATHS = 'alpha beta alpha\ngamma\ndelta beta\n';
@@ -418,7 +419,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   await controller.end();
   controller.setSpeed(10);
   controller.setTiming(vscode.workspace.getConfiguration('aiPair').get('timing'));
-  console.log('the player: every refusal, every way a run ends, a failed save, and an interrupt in each pause');
+  mark('the player: every refusal, every way a run ends, a failed save, and an interrupt in each pause');
 }
 
 /** Plays the controller's paths: the programmer's input with and without a session, and calls cut short. */
@@ -586,7 +587,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   controller.endSession();
   controller.disconnect();
   assert.equal(controller.isActive, false);
-  console.log('the controller: input without a session, the turn, pauses, canceled calls, restored reports');
+  mark('the controller: input without a session, the turn, pauses, canceled calls, restored reports');
 }
 
 /**
@@ -661,5 +662,5 @@ export async function extensionPaths(api: Api, root: string): Promise<void> {
   await assert.rejects(link.call('calibrate', { title: 'Agent', file: 'paths.txt' }), /already under way/);
   await link.call('end', {});
   link.close();
-  console.log('the extension: its commands, its settings, and the passage a calibration takes');
+  mark('the extension: its commands, its settings, and the passage a calibration takes');
 }

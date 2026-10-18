@@ -13,11 +13,15 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as vscode from 'vscode';
 import { WebSocket, WebSocketServer } from 'ws';
 import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProblem, type Report, type ToolName } from '@ai-pair/protocol';
+import { TEST_TIMEOUTS } from '@ai-pair/core';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { TEST_TIMINGS_VALUE, TIMINGS_VARIABLE } from '../../relay/src/timings';
 import { pagePaths } from './integration_page';
+import { mark } from './integration_clock';
+import { TEST_TIMINGS } from '../src/timings';
 import { relayPaths } from './integration_relay';
 import { setUpAgent } from '../src/setup';
 
@@ -68,14 +72,15 @@ function sleep(ms: number): Promise<void> {
 /** A glide long enough to catch mid-way, set as both `glideMs` and `glideMaxMs`: 500 ms at speed 20. */
 const LONG_GLIDE_MS = 10_000;
 
-/** With no call open this long, the panel says the agent isn't listening: the controller's `absentMs`. */
-const ABSENT_MS = 45_000;
-
 /** Past a timer, so it has fired. */
 const GRACE_SLACK_MS = 1000;
+const SLACK_MS = 300;
 
-/** Past the extension's saving of the session, which waits 200 ms after a change. */
-const SAVE_SETTLE_MS = 400;
+/** Past the extension's saving of the session, which waits `saveMs` after a change. */
+const SAVE_SETTLE_MS = TEST_TIMINGS.saveMs + SLACK_MS;
+
+/** How many times, 100 ms apart, to look for a slowed demo's last batch: longer than the demo takes. */
+const DEMO_POLLS = 3000;
 
 /** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
 interface RawSocket {
@@ -112,7 +117,10 @@ function isApi(v: unknown): v is Api {
 
 /** Returns the extension host's environment without `leftOut`, for a relay the test starts. */
 function relayEnv(leftOut = ''): Record<string, string> {
-  return Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== leftOut));
+  const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== leftOut));
+  // The relay's delays for a test (packages/relay/src/timings.ts).
+  env[TIMINGS_VARIABLE] = TEST_TIMINGS_VALUE;
+  return env;
 }
 
 /** Opens a socket to the bridge on `port`, as a relay or any other process on the machine can. */
@@ -217,6 +225,9 @@ export async function run(): Promise<void> {
   const exported: unknown = await ext.activate();
   assert.ok(isApi(exported), 'the extension exported something other than its Api');
   const api = exported;
+  // The test's delays: seconds where the real ones are minutes (core's config.ts, timings.ts).
+  api.controller.setTimeouts(TEST_TIMEOUTS);
+  api.setTimings(TEST_TIMINGS);
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'no workspace folder is open');
   const root = folder.uri.fsPath;
@@ -242,35 +253,40 @@ export async function run(): Promise<void> {
   api.controller.setReadingSpeed(10);
   const started = Date.now();
   await api.playDemo();
-  console.log(`demo played in ${Date.now() - started} ms`);
+  mark(`demo played in ${Date.now() - started} ms`);
   assert.equal(await buffer('ai-pair-demo/src/todos.ts'), EXPECTED_TODOS);
   assert.equal(await buffer('ai-pair-demo/src/server.ts'), EXPECTED_SERVER);
   assert.equal(await disk('ai-pair-demo/src/server.ts'), EXPECTED_SERVER, 'saved after each batch');
-  // The demo is refused during a session; ended by the programmer early on, its next step finds no session; ended
-  // or derailed by an edit during its last batch, it stops there (demo.ts, `playDemo`).
+  // The demo is refused during a session; ended by the programmer, it stops; derailed by an edit, it says it is
+  // stopping and ends (demo.ts, `playDemo` and `stopEarly`).
   await api.controller.start('busy');
   await vscode.commands.executeCommand('aiPair.playDemo');
   assert.equal(api.controller.isActive, true, 'the demo ended the session');
   await api.controller.end();
-  const early = api.playDemo();
-  await sleep(1500);
-  api.controller.endSession();
-  await early;
-  /** Waits for the demo's last batch to be playing: its message is on the panel. */
-  async function lastBatch(): Promise<void> {
-    for (let i = 0; i < 600 && !api.history().some((e) => e.type === 'say' && e.text === 'It needs the import too.'); i++) {
+  const FIRST_SAY = 'Let me look at how the app is set up first.';
+  /** Returns how many times the demo's first message is on the panel. */
+  function firstSaid(): number {
+    return api.history().filter((e) => e.type === 'say' && e.text === FIRST_SAY).length;
+  }
+  /** Starts the demo, slow to read, and resolves once its first batch is playing, with the demo's own promise (wrapped:
+   * an async function's returned promise would be awaited with it). */
+  async function demoPlaying(): Promise<{ done: Promise<void> }> {
+    const before = firstSaid();
+    api.controller.setReadingSpeed(1);
+    const playing = api.playDemo();
+    for (let i = 0; i < DEMO_POLLS && firstSaid() === before; i++) {
       await sleep(100);
     }
-    assert.ok(api.controller.isActive, 'the demo ended before its last batch');
+    assert.ok(firstSaid() > before && api.controller.isActive, "the demo's first batch never played");
+    return { done: playing };
   }
-  const endedLate = api.playDemo();
-  await lastBatch();
+  const endedDemo = await demoPlaying();
   api.controller.endSession();
-  await endedLate;
-  const derailed = api.playDemo();
-  await lastBatch();
+  await endedDemo.done;
+  const derailed = await demoPlaying();
   await insertAsProgrammer(vscode.Uri.file(file('ai-pair-demo/src/server.ts')), new vscode.Position(0, 0), '// mine\n');
-  await derailed;
+  await derailed.done;
+  api.controller.setReadingSpeed(10);
   assert.ok(
     api.history().some((e) => e.type === 'say' && e.text.startsWith("I'm a scripted demo")),
     'the derailed demo did not say it was stopping',
@@ -322,7 +338,7 @@ export async function run(): Promise<void> {
   );
   assert.ok((await buffer('tool.txt')).endsWith('abc\nend'));
   await controller.end();
-  console.log('RightAuthor, ChangesHandled: changes by others are reported as theirs');
+  mark('RightAuthor, ChangesHandled: changes by others are reported as theirs');
   // From here, nothing is timed against the playback until the glide tests: play fast.
   controller.setSpeed(10);
 
@@ -346,7 +362,7 @@ export async function run(): Promise<void> {
     ['race.txt programmer'],
   );
   await controller.end();
-  console.log("RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's");
+  mark("RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's");
 
   // Our own move to another file doesn't pause playback, however long VS Code takes to show it (#56).
   // With no window after our navigation, only the hold while show() awaits covers it.
@@ -361,11 +377,10 @@ export async function run(): Promise<void> {
     ['completed'],
   );
   await controller.read('follow-b.txt');
-  const selfNavMs = api.editor.selfNavMs;
-  api.editor.selfNavMs = 0;
+  api.setTimings({ selfNavMs: 0 });
   await controller.step([{ move: { file: 'follow-b.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
   const moved = await controller.step([]);
-  api.editor.selfNavMs = selfNavMs;
+  api.setTimings({ selfNavMs: TEST_TIMINGS.selfNavMs });
   assert.equal(controller.isPaused, false, 'paused by our own move');
   assert.deepEqual(
     moved.batches.map((b) => b.status),
@@ -373,7 +388,7 @@ export async function run(): Promise<void> {
   );
   assert.equal(await buffer('follow-b.txt'), 'bx\n');
   await controller.end();
-  console.log("NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause");
+  mark("NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause");
 
   // An action without `file` acts in the file its batch named, not the cursor's (#58).
   fs.writeFileSync(file('named-a.txt'), 'a\n');
@@ -396,7 +411,7 @@ export async function run(): Promise<void> {
   assert.equal(await buffer('named-a.txt'), 'a\n');
   assert.equal(await buffer('named-b.txt'), 'b\nsecond\n');
   await controller.end();
-  console.log('an action without file acts in the file its batch named');
+  mark('an action without file acts in the file its batch named');
 
   // A report the agent cancelled as it returned is handed back before the agent's next call goes out,
   // so the editor restores it first: the next batch isn't played without it (#59), and once the
@@ -442,7 +457,7 @@ export async function run(): Promise<void> {
   link.close();
   // The bridge disconnects the socket's session when it sees the close; let that happen before the next start.
   await sleep(300);
-  console.log('a cancelled report is restored before the next call');
+  mark('a cancelled report is restored before the next call');
 
   // Every check of an action refuses it by name in the editor, when the relay's own schema is skipped, as a link
   // can (specs/ActionValidation.tla); and a frame that isn't JSON, or isn't a message, is dropped (specs/Wire.tla,
@@ -511,7 +526,7 @@ export async function run(): Promise<void> {
   await refusing.call('end', {});
   refusing.close();
   await sleep(300);
-  console.log(
+  mark(
     `MoveExactly, SpanExactly, NeverThrows: ${refusals.length} malformed actions refused by name in the editor; frames that aren't messages dropped`,
   );
 
@@ -590,7 +605,7 @@ export async function run(): Promise<void> {
   assert.match(JSON.stringify(await ask(waiter, 2, 'listen', {})), /"waiting":true/);
   // "Your move" stays for the grace, then, with no call open for longer, the panel says the agent isn't
   // listening, until its next call (#126, #149, specs/ListenGrace.tla: `Expire`, `GoQuiet`, `Call`).
-  await sleep(ABSENT_MS + GRACE_SLACK_MS);
+  await sleep(TEST_TIMEOUTS.absentMs + GRACE_SLACK_MS);
   assert.ok(
     api.history().some((e) => e.type === 'state' && e.state === 'absent'),
     'the panel never said the agent was absent',
@@ -615,7 +630,7 @@ export async function run(): Promise<void> {
   fs.renameSync(`${windows}.kept`, windows);
   api.bridge.focused();
   assert.ok(fs.existsSync(api.bridge.file), 'the discovery file was not written again');
-  console.log('a socket driven by hand: turned away without the token, each call answered, a close leaves the session to no one');
+  mark('a socket driven by hand: turned away without the token, each call answered, a close leaves the session to no one');
 
   // A file changed on disk, as a git checkout does, comes from VS Code as one change spanning the
   // lines between the changed ones; the agent's selection there stays on its text (#65).
@@ -633,7 +648,7 @@ export async function run(): Promise<void> {
   await controller.step([]);
   assert.equal(await buffer('reload.txt'), '1\nX\n\n4\nY\n6\n');
   await controller.end();
-  console.log('a file changed on disk keeps the selection on its text');
+  mark('a file changed on disk keeps the selection on its text');
 
   // A file that doesn't exist is reported as missing, and a move creates it (#89). One deleted on
   // disk while VS Code holds a document for it, as Claude Code's file tools leave one, isn't read with
@@ -662,9 +677,7 @@ export async function run(): Promise<void> {
   assert.deepEqual((await controller.read('unsaved-88.txt')).lines, [{ number: 1, text: 'ab' }]);
   await unsaved.save();
   await controller.end();
-  console.log(
-    'NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty',
-  );
+  mark('NotStale, MissingIsReported, CreatedIsEmpty, KeepsUnsavedProp: missing and deleted files read as missing, and are created empty');
 
   // A file written on disk outside the protocol is marked, during a session, until it's opened; a
   // save and a file the agent created aren't (#15, specs/Outside.tla).
@@ -691,10 +704,10 @@ export async function run(): Promise<void> {
   await sleep(2000);
   assert.equal(api.outside.isMarked(file('outside-opened.txt')), false, 'a file seen as soon as it was written was marked');
   await controller.end();
-  console.log("a file written outside is marked until it's opened; saves and new files aren't");
+  mark("a file written outside is marked until it's opened; saves and new files aren't");
 
   // During the programmer's turn, a listen made after they resume typing waits for their next pause
-  // (specs/Navigator.tla). The idle time is the default, 3 s.
+  // (specs/Navigator.tla). The idle time is the run's `navigatorIdleMs`.
   fs.writeFileSync(file('navigator.txt'), 'abc\n');
   const navigator = await vscode.workspace.openTextDocument(file('navigator.txt'));
   await vscode.window.showTextDocument(navigator);
@@ -702,18 +715,18 @@ export async function run(): Promise<void> {
   controller.takeTurn();
   await controller.listen();
   await insertAsProgrammer(navigator.uri, new vscode.Position(0, 3), 'd');
-  await sleep(3500);
+  await sleep(TEST_TIMEOUTS.navigatorIdleMs + SLACK_MS);
   await insertAsProgrammer(navigator.uri, new vscode.Position(0, 4), 'e');
   const listenedAt = Date.now();
   const afterPause = await controller.listen();
   const waited = Date.now() - listenedAt;
-  assert.ok(waited > 2000, `listen returned ${waited} ms after the programmer typed`);
+  assert.ok(waited > TEST_TIMEOUTS.navigatorIdleMs - SLACK_MS, `listen returned ${waited} ms after the programmer typed`);
   assert.deepEqual(
     afterPause.events.map((e) => e.kind === 'edit' && e.diff.includes('+abcde')),
     [true],
   );
   await controller.end();
-  console.log(`a listen during the programmer's typing waited ${waited} ms for their pause`);
+  mark(`a listen during the programmer's typing waited ${waited} ms for their pause`);
 
   // An edit the programmer undid still comes with the batches it discarded (specs/EditEvents.tla).
   // The programmer's edit must land while the agent is still typing: real speed.
@@ -737,7 +750,7 @@ export async function run(): Promise<void> {
   );
   assert.deepEqual(discardedReport.events, [{ kind: 'edit', file: 'undone.txt', diff: '', by: 'programmer' }]);
   await controller.end();
-  console.log('an edit the programmer undid is reported with the batches it discarded');
+  mark('an edit the programmer undid is reported with the batches it discarded');
 
   // A scroll a command cut short goes on once the command is done (specs/Scroll.tla). The moves
   // there and back first measure the view, so the last one glides from the top: the timing makes a
@@ -771,7 +784,7 @@ export async function run(): Promise<void> {
   controller.setSpeed(1);
   await controller.end();
   await ai.update('confirmCommands', undefined, vscode.ConfigurationTarget.Global);
-  console.log(`Settles: a scroll a command cut short went on to line 250: ${shown.join(', ')}`);
+  mark(`Settles: a scroll a command cut short went on to line 250: ${shown.join(', ')}`);
 
   // The follow scroll's glide takes its time from the playback speed (#123): at `slow`, a glide of
   // LONG_GLIDE_MS takes a second, part way at `sampleMs`; at `fast` it takes 100 ms, done by then.
@@ -800,7 +813,7 @@ export async function run(): Promise<void> {
   controller.setSpeed(1);
   await controller.end();
   await ai.update('timing', undefined, vscode.ConfigurationTarget.Global);
-  console.log(`a glide took its time from the speed: part way at line ${midway + 1} of ${landed + 1}`);
+  mark(`a glide took its time from the speed: part way at line ${midway + 1} of ${landed + 1}`);
 
   // An interrupt while a `run` saves its files stops it, without waiting to ask the programmer.
   fs.writeFileSync(file('asked.txt'), 'a\n');
@@ -820,7 +833,7 @@ export async function run(): Promise<void> {
   );
   controller.setSpeed(10);
   await controller.end();
-  console.log('an interrupt while a run saves stops it, without asking');
+  mark('an interrupt while a run saves stops it, without asking');
 
   // A batch interrupted after a type with nothing to type changed nothing, so it's discarded (specs/Actions.tla).
   fs.writeFileSync(file('nothing.txt'), 'a\n');
@@ -842,7 +855,7 @@ export async function run(): Promise<void> {
     ['discarded'],
   );
   await controller.end();
-  console.log('a batch interrupted after a type with nothing to type is discarded');
+  mark('a batch interrupted after a type with nothing to type is discarded');
 
   // A pause holds a sleep with what is left of it, and the resume plays the rest (specs/Timeline.tla, `Pause`,
   // `Resume`). An interrupt while a move waits for its file to show cuts the move's next pause at once, and the
@@ -879,7 +892,7 @@ export async function run(): Promise<void> {
     ['completed'],
   );
   await controller.end();
-  console.log(
+  mark(
     'NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played',
   );
 
@@ -902,7 +915,7 @@ export async function run(): Promise<void> {
   await controller.step([]);
   controller.setReadingSpeed(10);
   await controller.end();
-  console.log('a line a tool inserted, read while a queued batch edits other files, is accepted');
+  mark('a line a tool inserted, read while a queued batch edits other files, is accepted');
 
   // A session the agent disconnects from waits, suspended, saved in the workspace's storage; one
   // brought back from it, as after a reload, resumes on a start from its folder (#25, specs/Resume.tla).
@@ -922,7 +935,7 @@ export async function run(): Promise<void> {
   assert.equal(revived.resumed, true);
   assert.match(revived.cursor?.lines.find((l) => l.text.includes(CURSOR_MARKER))?.text ?? '', /two/);
   await controller.end();
-  console.log('a session saved while suspended resumes, with its cursor');
+  mark('a session saved while suspended resumes, with its cursor');
 
   // A folder in the workspace whose name starts with two dots is in the workspace (#5).
   fs.mkdirSync(file('..cache'), { recursive: true });
@@ -938,7 +951,7 @@ export async function run(): Promise<void> {
     ['..cache/x.txt'],
   );
   await controller.end();
-  console.log('a change in ..cache/ is reported, by its path in the workspace');
+  mark('a change in ..cache/ is reported, by its path in the workspace');
 
   // Finding short text on a line of a long file, where it matches on every line, takes no time (#2).
   fs.writeFileSync(file('long.ts'), '  foo(bar(baz(1), 2), 3);\n'.repeat(40_000));
@@ -950,7 +963,7 @@ export async function run(): Promise<void> {
   assert.equal(found.rejected, undefined);
   assert.ok(findMs < 2000, `the step took ${findMs} ms`);
   await controller.end();
-  console.log(`a point on line 40,000 was rehearsed in ${findMs} ms`);
+  mark(`a point on line 40,000 was rehearsed in ${findMs} ms`);
 
   // The panel's page reloading takes its draft with it, and the draft's pause (#69). The test can't
   // type into the page, so it adds the pause the page's `draft` message adds.
@@ -959,7 +972,7 @@ export async function run(): Promise<void> {
   controller.pause('reply');
   await vscode.commands.executeCommand('workbench.action.webview.reloadWebviewAction');
   await until(() => !controller.isPaused);
-  console.log("a reloaded panel ends its draft's pause");
+  mark("a reloaded panel ends its draft's pause");
 
   // The window's discovery file, rewritten on focus, is never half written for a relay reading it (#72).
   await api.ready;
@@ -984,7 +997,7 @@ export async function run(): Promise<void> {
   assert.ok(reads > 0);
   assert.equal(broken, 0, `${broken} of ${reads} reads didn't parse`);
   assert.ok(findWindows([root], discoveryDir()).windows.some((w) => w.pid === process.pid));
-  console.log(`FindsRunningProp: the discovery file is never half written (${reads} reads)`);
+  mark(`FindsRunningProp: the discovery file is never half written (${reads} reads)`);
 
   // A programmer edit mid-typing interrupts, and the report shows exactly what was typed.
   const alphabet = 'abcdefghijklmnopqrstuvwxyz';
@@ -1017,7 +1030,7 @@ export async function run(): Promise<void> {
     end: { final_newline: false },
   });
   await controller.end();
-  console.log(`interrupted after typing ${JSON.stringify(typed)}`);
+  mark(`interrupted after typing ${JSON.stringify(typed)}`);
 
   // A programmer edit outside the workspace is none of the session's business: it interrupts nothing.
   const away = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-away-'));
@@ -1043,7 +1056,7 @@ export async function run(): Promise<void> {
   assert.equal(doc.getText(), `// mine\n${typed}${alphabet}`);
   await controller.end();
   fs.rmSync(away, { recursive: true });
-  console.log('an edit outside the workspace interrupts nothing');
+  mark('an edit outside the workspace interrupts nothing');
 
   // A `type` that starts a line with its indentation types the indentation as one chunk (typing.ts, `Plan`), and a
   // speed setting that is no number plays at 1 (panel_html.ts, `settingSpeed`).
@@ -1125,7 +1138,7 @@ export async function run(): Promise<void> {
   const repeated = await tool('listen');
   assert.match(repeated, /seen once/);
   assert.match(repeated, /may repeat/);
-  console.log('a report canceled after it was taken comes again, marked');
+  mark('a report canceled after it was taken comes again, marked');
   await tool('end', { summary: 'Bye.' });
   // Two rejections cancelled after the agent took them come back, each in a report marked as one
   // that may repeat, and a session the programmer ends stays until both are out (specs/Controller.tla).
@@ -1154,7 +1167,7 @@ export async function run(): Promise<void> {
     assert.match(back, new RegExp(`"line":${i + 5}`));
   }
   assert.ok((await agent.callTool({ name: 'listen', arguments: {} })).isError === true, 'the ended session is still open');
-  console.log('rejections handed back after their answers each come again, marked, before an ended session closes');
+  mark('rejections handed back after their answers each come again, marked, before an ended session closes');
   // The relay's own schema refuses each malformed action before it reaches the editor, saying what is wrong
   // (specs/ActionValidation.tla): the ones the editor refused above, and a few more only the schema sees.
   const schemaRefusals: unknown[] = [
@@ -1171,7 +1184,7 @@ export async function run(): Promise<void> {
     const refused = await agent.callTool({ name: 'step', arguments: { actions: [action] } });
     assert.equal(refused.isError, true, JSON.stringify(action));
   }
-  console.log(`the relay's schema refused ${schemaRefusals.length} malformed actions`);
+  mark(`the relay's schema refused ${schemaRefusals.length} malformed actions`);
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');
@@ -1184,7 +1197,7 @@ export async function run(): Promise<void> {
   }
   await until(() => new RegExp(`\\[info\\] socket \\d+ ${LEFT_ARROW} call \\d+ start`).test(traced()));
   await vscode.workspace.getConfiguration('aiPair').update('trace', undefined, vscode.ConfigurationTarget.Global);
-  console.log("relay session OK, with the project's guide");
+  mark("relay session OK, with the project's guide");
 
   // A relay tries the windows best first, skipping a file that isn't a window's, a window whose pid is gone, one whose
   // port nothing answers, one that rejects its hello, and one that answers with something not a message; a folder that
@@ -1333,7 +1346,7 @@ export async function run(): Promise<void> {
   const homeless = await relayAgent(relayEnv('AI_PAIR_HOME'));
   assert.equal((await homeless.listTools()).tools.length, tools.tools.length);
   await homeless.close();
-  console.log(
+  mark(
     'RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME',
   );
 
@@ -1378,7 +1391,7 @@ export async function run(): Promise<void> {
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
   // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
   await setUpAgents([]);
-  console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+  mark('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
   // On a home of its own, the agents that write under the home: OpenCode, Gemini CLI, and Cursor are set up, and
   // Claude Code through its CLI, found in ~/.local/bin, and reported when the CLI fails (agents.ts, `AGENTS`).
   const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-fakehome-'));
@@ -1408,7 +1421,7 @@ export async function run(): Promise<void> {
   await pickAgents(setUpAgent(api.launcher, fakeHost), [], /* accept= */ true);
   assert.equal(cliRuns.length, 4);
   fs.rmSync(fakeHome, { recursive: true });
-  console.log("Set Up Agent: the agents under a home of its own, and Claude Code's CLI");
+  mark("Set Up Agent: the agents under a home of its own, and Claude Code's CLI");
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
   await playerPaths(api, root);

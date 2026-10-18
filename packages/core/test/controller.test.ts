@@ -1235,7 +1235,9 @@ describe('settings', () => {
     h.controller.setReadingSpeed(3);
     h.controller.setConfirmCommands(false);
     h.controller.setTiming({ glideMs: 1 });
+    h.controller.setTimeouts({ maxBlockMs: 4, absentMs: 5 });
     expect([stage().speed(), stage().readingSpeed(), stage().config().confirmCommands]).toEqual([2, 3, false]);
+    expect([stage().config().maxBlockMs, stage().config().absentMs, stage().config().listenGraceMs]).toEqual([4, 5, CONFIG.listenGraceMs]);
     expect(withOverrides).toHaveBeenCalledWith(defaultConfig.timing, { glideMs: 1 });
     expect(h.controller.glideMs(10)).toBe(42);
     expect(glideDuration).toHaveBeenCalledWith(defaultConfig.timing, 10, 2);
