@@ -15,9 +15,9 @@ CONSTANTS
 
 ASSUME AssumeMaxSleeps == MaxSleeps \in Nat
 
-\* Why playback is paused: the Pause button, a draft in the reply box, and
-\* looking away.
-Reasons == {"user", "reply", "away"}
+\* Why playback is paused: the Pause button, a draft in the reply box,
+\* looking away, and a reading speed calibration (#109).
+Reasons == {"user", "reply", "away", "calibrate"}
 
 \* What a pending sleep is doing: waiting with no timer, or with its timer
 \* running.

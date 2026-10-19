@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.9
+
+-   The TLA+ specs, their README and COVERAGE tables, and the spec comments in
+    the code follow the code again, after an audit of every spec before the
+    code freeze (#192): `Panel.tla` models the `session` event that repeats a
+    suspension (`RepeatSession`), `Timeline.tla` has the calibration's pause
+    reason, `Start.tla` numbers the Start button's questions, so only the
+    latest one's answer reaches the page, as in the code (`LatestAnswer`), and
+    reads the CLI when it asks, and the comments in `Start.tla`, `Anchor.tla`, `Serialize.tla`,
+    `FollowMode.tla`, `EditEvents.tla`, `Outside.tla`, and `Calibration.tla`
+    name the code as it is. The documents name `setup.test.ts` and the test
+    titles as they are, and every function added since the specs last changed.
+    Nine actions that had no comment in the code have one.
+-   Three bugs the audit found, each modeled first, so TLC shows the bug, then
+    fixed in the spec and the code: a reply the reading speed calibration
+    takes left playback paused until the Resume button (#191, `Draft.tla`,
+    `ClearOnTaken`); a step refused as `unanchored` dropped a rejection
+    `restore` held, which now reaches the agent first (#193, `Anchor.tla`,
+    `DropsHeld`); and "Your move" stayed on through a `read`, and after a step
+    refused at once, until the listen grace ran out, where now every call ends
+    the grace (#194, `ListenGrace.tla`, `EndOnAnyCall`).
+-   The `unanchored` rejection, the `step` tool's description, the guide, and
+    the protocol say a failed batch also leaves the cursor where it stopped,
+    as an interrupted or discarded one does (#192). Three presence checks in
+    `calibration.ts` and `typing.ts` test outright, as the style rules ask.
+
 ## 0.7.8
 
 -   Every delay of the extension's own is in one place, with a set for real

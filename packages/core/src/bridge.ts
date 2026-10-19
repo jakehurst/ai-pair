@@ -187,6 +187,7 @@ export class Bridge {
       if (!message) return;
       trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(message)}`);
       if (!authenticated) {
+        // specs/Wire.tla, `Reject`: a hello with the wrong token or protocol version is refused, and the socket closed.
         if (message.type !== 'hello' || !this.tokenMatches(message.token)) {
           send({ type: 'rejected', reason: 'Authentication failed.' });
           ws.close();

@@ -432,7 +432,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   private onActiveEditor(editor: vscode.TextEditor | undefined): void {
     // specs/PointFocus.tla: away from the target is `LookAway`; no editor at all (`CloseTab`) pauses nothing.
-    // specs/FollowMode.tla, `Handle`: a change during our own navigation pauses nothing.
+    // specs/FollowMode.tla, `Handle`: a change during our own navigation pauses nothing; one later is `LookAway`.
     if (editor?.document.uri.scheme === 'file') this.onSelectionChange(editor);
     const target = this.target();
     if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return;

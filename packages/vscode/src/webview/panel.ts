@@ -166,7 +166,7 @@ function fileCurrent(): void {
 
 function add(el: HTMLElement): HTMLElement {
   // Newest first: the current message came before this entry, so it goes in first
-  // (specs/Panel.tla, `AddEntry`).
+  // (specs/Panel.tla, `AddEntry`; specs/PanelScroll.tla, `AddEntry`: the scroll position stays).
   fileCurrent();
   ui.history.prepend(el);
   return el;
@@ -552,7 +552,8 @@ function handle(message: ToPanel): void {
           current = undefined;
           const was = suspended;
           suspended = message.suspended === true;
-          // A revive repeats the suspension a disconnect already showed (#138).
+          // A revive repeats the suspension a disconnect already showed (#138): specs/Panel.tla, `RepeatSession`,
+          // with no divider; else `ChangeSession`.
           if (was !== suspended) {
             addDivider(suspended ? 'The agent disconnected: the session waits for it' : 'The agent is back: session resumed');
           }

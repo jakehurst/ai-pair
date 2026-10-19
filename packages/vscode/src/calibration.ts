@@ -48,7 +48,7 @@ export class Calibration {
   /** Arms a calibration, for the command, or for the agent's calibrate tool with a passage of its own. Refused while one is under way, or for an empty passage. specs/Calibration.tla, `Arm` and `Supply`. */
   arm(passage?: Passage): boolean {
     if (this.phase !== 'idle') return false;
-    if (passage) {
+    if (passage !== undefined) {
       if (readingChars(passage.text) === 0) return false;
       this.passage = passage;
     }

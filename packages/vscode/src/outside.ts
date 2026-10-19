@@ -5,11 +5,6 @@
 import { withinFolder } from '@ai-pair/protocol';
 import { timings } from './timings';
 
-/**
- * Changes this close together are one history entry: a bulk rename, a branch switch. They are
- * decided when the group settles, by which time VS Code has told of its own saves.
- */
-
 /** Folders whose files change by the hundred, from git or a package manager: not marked. */
 const UNWATCHED = new Set(['.git', 'node_modules']);
 

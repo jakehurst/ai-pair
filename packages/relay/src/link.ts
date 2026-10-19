@@ -53,6 +53,10 @@ function contains(folder: string, file: string): boolean {
   return withinFolder(folder, file) !== undefined;
 }
 
+/**
+ * Returns whether the process is running: a window that crashed (specs/Discovery.tla, `Crash`) leaves its file
+ * behind, and its pid may since belong to another process (`Reuse`), which the window's port then tells apart.
+ */
 function alive(pid: number): boolean {
   try {
     process.kill(pid, /* signal= */ 0);
@@ -275,6 +279,7 @@ export class EditorLink {
           this.connection = connection;
           resolve(connection);
         } else if (message.type === 'rejected') {
+          // specs/Wire.tla, `Reject`: the editor refused the hello, and closes its end.
           reject(new RelayError('no_editor', message.reason));
         } else if (message.type === 'result') {
           const call = settle(message.id);

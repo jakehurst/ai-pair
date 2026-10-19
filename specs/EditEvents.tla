@@ -28,8 +28,8 @@ NoText == CHOOSE v : v \notin Texts
 
 VARIABLES
     text,       \* the file's text
-    base,       \* s.baselines: its text at the first edit since the last
-                \* report, or NoText
+    base,       \* the event's `before`: the text at the first edit since
+                \* the last report, or NoText
     prog,       \* the pending event is the programmer's (`by`)
     intr,       \* the pending event interrupts: the programmer's, or marked
                 \* `interrupted`

@@ -4,8 +4,8 @@
 (* packages/vscode/src/panel.ts (`ready`, `start`, Starter), setup.ts         *)
 (* (claudeStarter), and webview/panel.ts (`canStart`, the click). A page asks *)
 (* once, as it loads, whether a session can be started from here; the answer  *)
-(* comes later, from Claude Code's configuration (read at once) and whether   *)
-(* its CLI is here (read when the promise resolves). A click runs Claude      *)
+(* comes later, from Claude Code's configuration, whether its CLI is here,    *)
+(* and whether a folder is open, all read at once. A click runs Claude        *)
 (* Code's CLI in a terminal with the prompt. Pages come and go: the view is   *)
 (* disposed, or its page reloads. The start keeps the Pair panel in front,    *)
 (* leaves Claude Code's `preferredLocation` setting as the programmer chose   *)
@@ -20,8 +20,8 @@ CONSTANTS
     MaxFlips,       \* how often the model changes the environment: Set Up
                     \* Agent, Claude Code installed or removed
     MaxClicks,      \* how many clicks the model makes
-    DropStale,      \* TRUE: an answer reaches only the page that asked (the
-                    \* fix)
+    DropStale,      \* TRUE: only the latest question's answer reaches the
+                    \* page (the fix)
     ReaskOnSetUp,   \* TRUE: Set Up Agent setting Claude Code up asks the live
                     \* page again (the fix)
     InTerminal,     \* TRUE: the CLI runs in a terminal never shown; FALSE:
@@ -58,8 +58,13 @@ VARIABLES
                 \* hidden
     setUp,      \* Claude Code's configuration runs the pair server
     cmd,        \* Claude Code's CLI is here, and a folder is open
-    pending,    \* checks asked and not yet answered: [for: the page, setUp:
-                \* Claude Code was set up when asked]
+    asked,      \* questions asked so far; the latest question's number
+    pending,    \* checks asked and not yet answered: [q: the question's
+                \* number, for: the page, setUp: Claude Code was set up when
+                \* asked, cmd: its CLI was here and a folder open when asked]
+    setBy,      \* the question whose answer last reached the live page; 0
+                \* when none has since the page loaded
+    newest,     \* the highest-numbered question answered so far; 0 when none
     flips,      \* environment changes so far
     clicks,     \* clicks on the button
     runs,       \* times the starter ran
@@ -73,8 +78,8 @@ VARIABLES
     session     \* the agent's `start` has landed, and no `end` since
 
 vars ==
-    <<page, pages, shown, shownFor, setUp, cmd, pending, flips, clicks, runs,
-      location, chosen, front, agents, note, session>>
+    <<page, pages, shown, shownFor, setUp, cmd, asked, pending, setBy, newest,
+      flips, clicks, runs, location, chosen, front, agents, note, session>>
 
 \* What a start changes: the setting, the sidebar, and the agents.
 startVars == <<location, chosen, front, agents>>
@@ -89,7 +94,11 @@ TypeOK ==
     /\ shownFor \in (1..pages) \cup {NoPage}
     /\ setUp \in BOOLEAN
     /\ cmd \in BOOLEAN
-    /\ pending \subseteq [for: 1..pages, setUp: BOOLEAN]
+    /\ asked \in Nat \ {0}
+    /\ pending \subseteq [q: 1..asked, for: 1..pages, setUp: BOOLEAN,
+                         cmd: BOOLEAN]
+    /\ setBy \in 0..asked
+    /\ newest \in 0..asked
     /\ flips \in Nat
     /\ clicks \in Nat
     /\ runs \in Nat
@@ -109,7 +118,10 @@ Init ==
     /\ shownFor = NoPage
     /\ setUp \in BOOLEAN
     /\ cmd \in BOOLEAN
-    /\ pending = {[for |-> 1, setUp |-> setUp]}
+    /\ asked = 1
+    /\ pending = {[q |-> 1, for |-> 1, setUp |-> setUp, cmd |-> cmd]}
+    /\ setBy = 0
+    /\ newest = 0
     /\ flips = 0
     /\ clicks = 0
     /\ runs = 0
@@ -120,16 +132,21 @@ Init ==
     /\ note = FALSE
     /\ session = FALSE
 
-\* `ready`: a page loads with its button hidden, and asks once; isSetUp is read
-\* now, the CLI later.
+\* `ready`: a page loads with its button hidden, and asks once. `askStart`
+\* numbers the question, and `available()` reads the configuration and the CLI
+\* at once; the answer comes when the promise resolves.
 LoadPage ==
     /\ page' = "live"
     /\ pages' = pages + 1
     /\ shown' = FALSE
     /\ shownFor' = NoPage
-    /\ pending' = pending \cup {[for |-> pages + 1, setUp |-> setUp]}
+    /\ asked' = asked + 1
+    /\ pending' =
+           pending \cup {[q |-> asked + 1, for |-> pages + 1, setUp |-> setUp,
+                          cmd |-> cmd]}
+    /\ setBy' = 0
     /\ note' = FALSE
-    /\ UNCHANGED <<setUp, cmd, flips, clicks, runs, startVars, session>>
+    /\ UNCHANGED <<setUp, cmd, newest, flips, clicks, runs, startVars, session>>
 
 \* onDidDispose: the view closes, and its page with it.
 Dispose ==
@@ -138,40 +155,46 @@ Dispose ==
     /\ shown' = FALSE
     /\ shownFor' = NoPage
     /\ note' = FALSE
-    /\ UNCHANGED <<pages, setUp, cmd, pending, flips, clicks, runs, startVars,
-                   session>>
+    /\ UNCHANGED <<pages, setUp, cmd, asked, pending, setBy, newest, flips,
+                   clicks, runs, startVars, session>>
 
-\* `available()` resolves for one check, in any order; the panel posts canStart
-\* to its view, if any. With DropStale, only to the page that asked.
+\* `available()` resolves for one check, in any order, with what it read when
+\* asked; the panel posts canStart to its view, if any. With DropStale, only
+\* the latest question's answer.
 Answer(c) ==
-    LET value == c.setUp /\ cmd
+    LET value == c.setUp /\ c.cmd
         answered == IF value THEN c.for ELSE NoPage
-        deliver == page = "live" /\ (~DropStale \/ c.for = pages)
+        deliver == page = "live" /\ (~DropStale \/ c.q = asked)
     IN  /\ c \in pending
         /\ shown' = IF deliver THEN value ELSE shown
         /\ shownFor' = IF deliver THEN answered ELSE shownFor
+        /\ setBy' = IF deliver THEN c.q ELSE setBy
+        /\ newest' = IF c.q > newest THEN c.q ELSE newest
         /\ pending' = pending \ {c}
-        /\ UNCHANGED <<page, pages, setUp, cmd, flips, clicks, runs, startVars,
-                       note, session>>
+        /\ UNCHANGED <<page, pages, setUp, cmd, asked, flips, clicks, runs,
+                       startVars, note, session>>
 
 \* Set Up Agent run or undone. With ReaskOnSetUp, setting Claude Code up asks
 \* the live page again.
 FlipSetUp ==
     /\ setUp' = ~setUp
-    /\ pending' =
-           IF ReaskOnSetUp /\ ~setUp /\ page = "live"
-           THEN pending \cup {[for |-> pages, setUp |-> TRUE]}
-           ELSE pending
+    /\ \/ /\ ReaskOnSetUp /\ ~setUp /\ page = "live"
+          /\ asked' = asked + 1
+          /\ pending' =
+                 pending \cup {[q |-> asked + 1, for |-> pages, setUp |-> TRUE,
+                                cmd |-> cmd]}
+       \/ /\ ~(ReaskOnSetUp /\ ~setUp /\ page = "live")
+          /\ UNCHANGED <<asked, pending>>
     /\ flips' = flips + 1
-    /\ UNCHANGED <<page, pages, shown, shownFor, cmd, clicks, runs, startVars,
-                   note, session>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, cmd, setBy, newest, clicks,
+                   runs, startVars, note, session>>
 
 \* Claude Code's CLI installed or removed, or the folder closed.
 FlipCmd ==
     /\ cmd' = ~cmd
     /\ flips' = flips + 1
-    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, pending, clicks, runs,
-                   startVars, note, session>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, asked, pending, setBy,
+                   newest, clicks, runs, startVars, note, session>>
 
 \* The click posts `start`; the panel runs the starter. In a terminal: the CLI
 \* starts with the prompt, sent at once, and nothing is shown. Through Claude
@@ -189,8 +212,8 @@ Click ==
     /\ front' = IF InTerminal THEN front ELSE "claude"
     /\ agents' = IF OneAgent /\ agents > 0 THEN agents ELSE agents + 1
     /\ note' = IF NoteOnClick THEN TRUE ELSE note
-    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, pending, flips,
-                   chosen, session>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, asked, pending,
+                   setBy, newest, flips, chosen, session>>
 
 \* An agent ends its turn when its session ends; `claude -p` exits, and its
 \* terminal closes.
@@ -198,16 +221,18 @@ Exit ==
     /\ agents > 0
     /\ agents' = agents - 1
     /\ note' = IF ClearOnExit THEN FALSE ELSE note
-    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, pending, flips,
-                   clicks, runs, location, chosen, front, session>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, asked, pending,
+                   setBy, newest, flips, clicks, runs, location, chosen, front,
+                   session>>
 
 \* The programmer sets Claude Code's preferred location to l, or Claude Code's
 \* own Open in Side Bar does.
 Choose(l) ==
     /\ location' = l
     /\ chosen' = l
-    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, pending, flips,
-                   clicks, runs, front, agents, note, session>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, asked, pending,
+                   setBy, newest, flips, clicks, runs, front, agents, note,
+                   session>>
 
 \* The agent's `start` lands: the `session` event reaches the page, and the
 \* note goes.
@@ -215,15 +240,15 @@ StartSession ==
     /\ ~session
     /\ note' = FALSE
     /\ session' = TRUE
-    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, pending, flips,
-                   clicks, runs, startVars>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, asked, pending,
+                   setBy, newest, flips, clicks, runs, startVars>>
 
 \* The session ends: the idle view, and its button, are back.
 EndSession ==
     /\ session
     /\ session' = FALSE
-    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, pending, flips,
-                   clicks, runs, startVars, note>>
+    /\ UNCHANGED <<page, pages, shown, shownFor, setUp, cmd, asked, pending,
+                   setBy, newest, flips, clicks, runs, startVars, note>>
 
 Next ==
     \/ LoadPage
@@ -250,11 +275,15 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 \* answer breaks this.
 OwnAnswer == shown => (page = "live" /\ shownFor = pages)
 
-\* A button that appears was earned: set up when asked, and the CLI there when
-\* answered.
+\* A button that appears was earned: set up, and the CLI there, when asked.
 GroundedProp ==
     [][\A c \in pending :
-           (Answer(c) /\ ~shown /\ shown') => (c.setUp /\ cmd)]_vars
+           (Answer(c) /\ ~shown /\ shown') => (c.setUp /\ c.cmd)]_vars
+
+\* An earlier question's answer never overrides a later one's on the live
+\* page: the answer that last reached it is the newest answered since it
+\* loaded. An answer that lands after the reask's breaks this.
+LatestAnswer == (page = "live" /\ setBy # 0) => setBy = newest
 
 \* One run per click, and no run without one.
 RunsAreClicks == runs = clicks
@@ -263,15 +292,14 @@ RunsAreClicks == runs = clicks
 ClicksNeedButtonProp ==
     [][(clicks' > clicks) => (shown /\ page = "live")]_vars
 
-\* A live page whose own check found Claude Code set up, with the command
-\* there, and nothing left to change: the model loads no more pages and makes
-\* no more flips.
+\* A live page whose latest check, still pending, found Claude Code set up,
+\* with the command there, and nothing left to change: the model loads no
+\* more pages and makes no more flips.
 OfferDue ==
     /\ page = "live"
     /\ pages = MaxPages
     /\ flips = MaxFlips
-    /\ cmd
-    /\ \E c \in pending : c.for = pages /\ c.setUp
+    /\ \E c \in pending : c.q = asked /\ c.setUp /\ c.cmd
 
 \* Such a page shows the button, unless the page goes first. A page that never
 \* showed it would fail this, so it says something must happen.

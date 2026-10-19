@@ -1,12 +1,13 @@
 ---- MODULE Calibration --------------------------------------------------------
 (******************************************************************************)
-(* Calibrating the programmer's reading speed, issue 109: the panel's         *)
-(* calibration flow in packages/vscode/src/webview/panel.ts and panel.ts, the *)
-(* calibrate pair tool that supplies a passage, in bridge.ts, the setting the *)
-(* rate is stored in, in extension.ts, and the say pause that reads it, in    *)
-(* player.ts. The measurement is a number; what the spec checks is the order  *)
-(* of things around it: the pause that holds playback while the passage is    *)
-(* read, and the stored rate reaching the player before playback resumes.     *)
+(* Calibrating the programmer's reading speed, issue 109: the flow in         *)
+(* packages/vscode/src/calibration.ts, its view in webview/panel.ts and       *)
+(* panel.ts, the calibrate pair tool that supplies a passage, in bridge.ts,   *)
+(* the setting the rate is stored in, in extension.ts, and the say pause that *)
+(* reads it, in player.ts. The measurement is a number; what the spec checks  *)
+(* is the order of things around it: the pause that holds playback while the  *)
+(* passage is read, and the stored rate reaching the player before playback   *)
+(* resumes.                                                                   *)
 (******************************************************************************)
 EXTENDS Naturals
 

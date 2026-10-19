@@ -431,6 +431,21 @@ describe('askStart', () => {
     await flush();
     expect(postedOf(view, 'canStart')).toEqual([{ type: 'canStart', value: false }]);
   });
+
+  it("LatestAnswer: drops an earlier question's answer that lands after the reask's, on the same page", async () => {
+    const { panel, starter } = harness();
+    const first = Promise.withResolvers<boolean>();
+    const reask = Promise.withResolvers<boolean>();
+    starter.available.mockReturnValueOnce(first.promise).mockReturnValueOnce(reask.promise);
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    panel.askStart();
+    reask.resolve(true);
+    await flush();
+    first.resolve(false);
+    await flush();
+    expect(postedOf(view, 'canStart')).toEqual([{ type: 'canStart', value: true }]);
+  });
 });
 
 describe('receive', () => {
@@ -479,7 +494,7 @@ describe('receive', () => {
     expect(readingSpeed.set.mock.calls).toEqual([[SPEEDS[3]]]);
   });
 
-  it('reply: goes to the calibration when it takes it, and otherwise resumes without revealing and sends it on', () => {
+  it("ReplyMeansDraft: a reply the calibration takes ends the draft's pause; any other resumes without revealing and is sent on", () => {
     const { panel, controller, calibration } = harness();
     const view = open(panel);
     calibration.reply.mockReturnValueOnce(true);
@@ -488,10 +503,7 @@ describe('receive', () => {
     view.send({ type: 'reply', text: 'with', attach: true });
     view.send({ type: 'reply', text: 'without' });
     expect(calibration.reply.mock.calls).toEqual([['done'], ['with'], ['without']]);
-    expect(controller.resume.mock.calls).toEqual([
-      [undefined, { reveal: false }],
-      [undefined, { reveal: false }],
-    ]);
+    expect(controller.resume.mock.calls).toEqual([['reply'], [undefined, { reveal: false }], [undefined, { reveal: false }]]);
     expect(controller.userMessage.mock.calls).toEqual([
       ['with', SELECTION],
       ['without', undefined],

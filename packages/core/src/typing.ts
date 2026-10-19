@@ -43,7 +43,7 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   // specs/Typing.tla, `Plan`: the indentation at the very start is one chunk first.
   if (atLineStart) {
     const indent = takeIndent();
-    if (indent) {
+    if (indent !== '') {
       chunks.push({ text: indent, delay: 0 });
       previous = ' ';
     }
@@ -58,7 +58,7 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
       const indent = takeIndent();
       chunks.push({ text: ch + indent, delay: delay * scale });
       pause = cadence.newlineMs;
-      previous = indent ? ' ' : '\n';
+      previous = indent === '' ? '\n' : ' ';
     } else {
       chunks.push({ text: ch, delay: delay * scale });
       pause = PUNCTUATION.has(ch) ? cadence.punctuationMs : OPEN_BRACKETS.has(ch) ? cadence.openBracketMs : 0;

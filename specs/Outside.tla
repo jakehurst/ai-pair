@@ -17,8 +17,8 @@ CONSTANTS
                 \* "every": mark every event; "afterSave": skip an event
                 \* that comes after a save
     Settle,     \* TRUE: decide only once a group of writes has settled, after
-                \* GROUP_MS without one, by which time VS Code has told the
-                \* code of its save
+                \* timings.groupMs without one, by which time VS Code has
+                \* told the code of its save
     MaxWrites   \* how many edits and outside writes the model makes
 
 ASSUME AssumeRule == Rule \in {"content", "every", "afterSave"}
@@ -151,8 +151,8 @@ Write ==
 
 \* The watcher reports what it hasn't yet, as one event; the code decides by
 \* its rule. Settled, it decides after the save's notification (a timing
-\* assumption: GROUP_MS, half a second). The CASE needs no OTHER: its arms
-\* cover every Rule that AssumeRule allows.
+\* assumption: timings.groupMs, half a second). The CASE needs no OTHER: its
+\* arms cover every Rule that AssumeRule allows.
 Report ==
     /\ pending
     /\ Settle => (notify = NoText)

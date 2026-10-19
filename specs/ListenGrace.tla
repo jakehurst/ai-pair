@@ -13,11 +13,14 @@
 CONSTANTS
     Grace,      \* TRUE: a listen that timed out with nothing to report keeps
                 \* "listening"
-    ShowAbsent  \* TRUE: with no call open for absentMs, the panel says the
+    ShowAbsent, \* TRUE: with no call open for absentMs, the panel says the
                 \* agent isn't listening (#149)
+    EndOnAnyCall \* TRUE: every call ends the grace; FALSE: only a call that
+                \* blocks does, the code before #194
 
 ASSUME AssumeGrace == Grace \in BOOLEAN
 ASSUME AssumeShowAbsent == ShowAbsent \in BOOLEAN
+ASSUME AssumeEndOnAnyCall == EndOnAnyCall \in BOOLEAN
 
 \* The calls the agent makes: a `listen`, or another (a `step` or `end`).
 Calls == {"listen", "other"}
@@ -70,8 +73,8 @@ Init ==
     /\ expired = FALSE
     /\ quiet = FALSE
 
-\* The agent makes a call, any tool: `serialize` or `read`, and for a call that
-\* waits, `block()`. It ends the grace and the quiet.
+\* The agent makes a call that blocks: a `listen`, or a `step` or `end`
+\* (`serialize`, then `block()`). It ends the grace and the quiet.
 Call(kind) ==
     /\ call = NoCall
     /\ call' = kind
@@ -81,6 +84,28 @@ Call(kind) ==
     /\ expired' = FALSE
     /\ quiet' = FALSE
     /\ UNCHANGED pending
+
+\* The agent calls `read`, which settles at once: it ends the quiet, and with
+\* EndOnAnyCall the grace.
+Read ==
+    /\ call = NoCall
+    /\ grace' = IF EndOnAnyCall THEN FALSE ELSE grace
+    /\ owes' = FALSE
+    /\ idle' = FALSE
+    /\ expired' = FALSE
+    /\ quiet' = FALSE
+    /\ UNCHANGED <<call, pending>>
+
+\* The agent calls `step`, and the batch is refused at once (rejectBatch,
+\* rejectUnanchored), without `block()`: it owes a response to the rejection.
+Refuse ==
+    /\ call = NoCall
+    /\ grace' = IF EndOnAnyCall THEN FALSE ELSE grace
+    /\ owes' = TRUE
+    /\ idle' = FALSE
+    /\ expired' = FALSE
+    /\ quiet' = FALSE
+    /\ UNCHANGED <<call, pending>>
 
 \* `finishCall` after maxBlockMs, nothing to report: the grace starts.
 TimeOut ==
@@ -128,6 +153,8 @@ GoQuiet ==
 
 Next ==
     \/ \E kind \in Calls : Call(kind)
+    \/ Read
+    \/ Refuse
     \/ TimeOut
     \/ Return
     \/ Act

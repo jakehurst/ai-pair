@@ -82,10 +82,20 @@ ChangeSession ==
     /\ added' = 0
     /\ history' = <<time + 1>> \o Flushed
 
+\* A `session` event repeating a suspension the page already shows (#138):
+\* the band is filed and empties, and no divider is added.
+RepeatSession ==
+    /\ band' = NoMessage
+    /\ flag' = FALSE
+    /\ added' = 0
+    /\ history' = Flushed
+    /\ UNCHANGED time
+
 Next ==
     \/ Say
     \/ AddEntry
     \/ ChangeSession
+    \/ RepeatSession
 
 Spec == Init /\ [][Next]_vars
 

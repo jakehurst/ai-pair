@@ -54,7 +54,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
    * Asks the starter whether a session can be started from here, and tells the page: for each new
    * page, and again after Set Up Agent (specs/Start.tla, `LoadPage`, and `FlipSetUp` with ReaskOnSetUp).
    * Only the latest question's answer reaches the page, so a page replaced before its answer landed
-   * cannot set the button on its successor (`Answer` with DropStale).
+   * cannot set the button on its successor, and an earlier question's answer cannot override a
+   * reask's (`Answer` with DropStale; OwnAnswer, LatestAnswer).
    */
   askStart(): void {
     const asked = ++this.asked;
@@ -189,7 +190,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
-        if (this.wiring.calibration().reply(message.text)) return;
+        if (this.wiring.calibration().reply(message.text)) {
+          // The box is empty now, and the page posts no `draft` for it: specs/Draft.tla, `SendToCalibration` (#191).
+          controller.resume('reply');
+          return;
+        }
         controller.resume(undefined, { reveal: false });
         controller.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;

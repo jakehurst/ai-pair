@@ -12,11 +12,14 @@ EXTENDS Naturals
 
 CONSTANTS
     MaxViews,       \* how many pages the webview may have, counting reloads
-    ClearOnReady    \* TRUE: `ready` and onDidDispose remove the "reply" pause,
+    ClearOnReady,   \* TRUE: `ready` and onDidDispose remove the "reply" pause,
                     \* since the new page's draft is empty
+    ClearOnTaken    \* TRUE: a reply the calibration takes removes the "reply"
+                    \* pause too (#191)
 
 ASSUME AssumeMaxViews == MaxViews \in Nat \ {0}
 ASSUME AssumeClearOnReady == ClearOnReady \in BOOLEAN
+ASSUME AssumeClearOnTaken == ClearOnTaken \in BOOLEAN
 
 VARIABLES
     view,    \* the webview: "live", "gone"
@@ -56,13 +59,25 @@ Type ==
     /\ reply' = TRUE
     /\ UNCHANGED <<view, views>>
 
-\* Deleting it, or sending it (takeDraft), or handing the turn back with it.
+\* Deleting it, or sending it to the agent (takeDraft), or handing the turn
+\* back with it.
 Clear ==
     /\ view = "live"
     /\ draft
     /\ draft' = FALSE
     /\ sent' = FALSE
     /\ reply' = FALSE
+    /\ UNCHANGED <<view, views>>
+
+\* Sending it while a reading speed calibration runs (#109): the calibration
+\* takes it (takeDraft), and the page posts no `draft`, since the box was
+\* emptied before syncDraft ran.
+SendToCalibration ==
+    /\ view = "live"
+    /\ draft
+    /\ draft' = FALSE
+    /\ sent' = FALSE
+    /\ reply' = IF ClearOnTaken THEN FALSE ELSE reply
     /\ UNCHANGED <<view, views>>
 
 \* The Resume button, or sending a reply: resume() with no reason removes all
@@ -94,6 +109,7 @@ Ready ==
 Next ==
     \/ Type
     \/ Clear
+    \/ SendToCalibration
     \/ ResumeAll
     \/ Dispose
     \/ Ready
