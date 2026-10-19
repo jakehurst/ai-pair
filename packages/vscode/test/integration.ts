@@ -71,6 +71,8 @@ const ABSENT_MS = 45_000;
 
 /** Past a timer, so it has fired. */
 const GRACE_SLACK_MS = 1000;
+/** The navigator's idle time, as the default is. */
+const NAVIGATOR_IDLE_MS = 3000;
 
 /** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
 interface RawSocket {
@@ -650,7 +652,8 @@ export async function run(): Promise<void> {
   console.log("a file written outside is marked until it's opened; saves and new files aren't");
 
   // During the programmer's turn, a listen made after they resume typing waits for their next pause
-  // (specs/Navigator.tla). The idle time is the default, 3 s.
+  // (specs/Navigator.tla). The idle time is set here to what the default is, through the controller's setTimeouts.
+  api.controller.setTimeouts({ navigatorIdleMs: NAVIGATOR_IDLE_MS });
   fs.writeFileSync(file('navigator.txt'), 'abc\n');
   const navigator = await vscode.workspace.openTextDocument(file('navigator.txt'));
   await vscode.window.showTextDocument(navigator);
@@ -658,7 +661,7 @@ export async function run(): Promise<void> {
   controller.takeTurn();
   await controller.listen();
   await insertAsProgrammer(navigator.uri, new vscode.Position(0, 3), 'd');
-  await sleep(3500);
+  await sleep(NAVIGATOR_IDLE_MS + GRACE_SLACK_MS);
   await insertAsProgrammer(navigator.uri, new vscode.Position(0, 4), 'e');
   const listenedAt = Date.now();
   const afterPause = await controller.listen();
