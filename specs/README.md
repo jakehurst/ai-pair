@@ -96,7 +96,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
 | `Calibration.cfg` | `MaxRuns = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
-| `Start.cfg` | `MaxPages = 3`, `MaxFlips = 2`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 12,684 |
+| `Start.cfg` | `MaxPages = 3`, `MaxFlips = 2`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 27,816 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 20 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
@@ -689,12 +689,17 @@ carries the invariant's name:
 `packages/vscode/src/panel.ts` (`askStart`, the `ready` and `start` messages),
 `setup.ts` (`claudeStarter`), and `webview/panel.ts` (`canStart`, the button),
 with `extension.ts` asking again after Set Up Agent. Issue #107. A page asks
-once as it loads; the answer comes later, from Claude Code's configuration read
-at once and VS Code's command list awaited; pages come and go; the environment
-flips. Two constants switch fixes the model found before the code was reviewed
-against it. `DropStale`: the panel posted every answer to whatever view it had;
-with `FALSE`, TLC violates `OwnAnswer` in three steps: `LoadPage` (page 2
-loads), then page 1's `Answer` lands on page 2. `ReaskOnSetUp`: the page asked
+once as it loads; the answer comes later, from Claude Code's configuration and
+its CLI, both read when asked; pages come and go; the environment flips. Two
+constants switch fixes the model found before the code was reviewed against it.
+`DropStale`: the panel posted every answer to whatever view it had; with
+`FALSE`, TLC violates `OwnAnswer` in three steps: `LoadPage` (page 2 loads),
+then page 1's `Answer` lands on page 2. Issue #192 numbered the questions: the
+model's `DropStale` had let any answer for the live page through, where the
+code posts only the latest question's; with that rule, TLC violates
+`LatestAnswer` in three steps: `FlipSetUp` asks again, its `Answer` lands, then
+the first question's `Answer` lands after it. The same issue moved the CLI
+check to the ask, where `available()` reads it. `ReaskOnSetUp`: the page asked
 only as it loaded; with `FALSE`, TLC violates `ReaskedProp` in three steps:
 `Answer` (hidden), then `FlipSetUp` sets Claude Code up with nothing pending.
 Issue #115 added how a start lands. `InTerminal`: the starter ran Claude Code's
@@ -712,7 +717,7 @@ TLC violates `Settles`: `Click`, then `Exit`, and the note stays.
 | Spec | Code |
 |---|---|
 | `LoadPage` | `ready`: `askStart` numbers the question and calls `available()`, which reads `isSetUp` at once |
-| `Answer(c)` | `available()` resolving, with the CLI found and a folder open; `canStart` is posted only if the question is still the latest; the page sets `hidden` |
+| `Answer(c)` | `available()` resolving with what it read when asked: Claude Code set up, the CLI found, a folder open; `canStart` is posted only if the question is still the latest; the page sets `hidden` |
 | `Dispose` | `onDidDispose`; the next page starts hidden |
 | `FlipSetUp` | Set Up Agent run or undone; `extension.ts` calls `askStart` after Set Up Agent |
 | `FlipCmd` | Claude Code's CLI installed or removed, or the folder closed |
@@ -729,9 +734,11 @@ a mutation of a copy of the model, run in TLC and then reverted:
 | Mutation | Breaks |
 |---|---|
 | `Choose` sets a location outside `Locations` | `TypeOK` |
-| `DropStale = FALSE` | `OwnAnswer` |
+| `DropStale = FALSE` | `OwnAnswer` and `LatestAnswer` |
+| `Answer` posts any answer for the live page, the model before #192 | `LatestAnswer` |
 | `ReaskOnSetUp = FALSE` | `ReaskedProp` |
 | `Answer`'s value ignores `cmd` | `GroundedProp` |
+| `Answer` reads `cmd` when it lands, not when asked | `GroundedProp` and `Offered` |
 | `Click` without a run | `RunsAreClicks` |
 | `Click` while hidden | `ClicksNeedButtonProp` |
 | `Answer` never delivered | `Offered` |
@@ -753,6 +760,7 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types, in `Starter`, `FromPanel`, and `ToPanel` |
 | `OwnAnswer` | `panel.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
+| `LatestAnswer` | `panel.test.ts`: LatestAnswer: drops an earlier question's answer that lands after the reask's, on the same page |
 | `GroundedProp` | `setup.test.ts`: GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
 | `RunsAreClicks` | `panel.test.ts`: RunsAreClicks: runs the starter once per start from the page; `webview/panel.test.ts`: RunsAreClicks: posts start when the button is clicked; `setup.test.ts`: RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one |

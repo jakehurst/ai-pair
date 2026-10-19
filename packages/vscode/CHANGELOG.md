@@ -6,7 +6,9 @@
     the code follow the code again, after an audit of every spec before the
     code freeze (#192): `Panel.tla` models the `session` event that repeats a
     suspension (`RepeatSession`), `Timeline.tla` has the calibration's pause
-    reason, and the comments in `Start.tla`, `Anchor.tla`, `Serialize.tla`,
+    reason, `Start.tla` numbers the Start button's questions, so only the
+    latest one's answer reaches the page, as in the code (`LatestAnswer`), and
+    reads the CLI when it asks, and the comments in `Start.tla`, `Anchor.tla`, `Serialize.tla`,
     `FollowMode.tla`, `EditEvents.tla`, `Outside.tla`, and `Calibration.tla`
     name the code as it is. The documents name `setup.test.ts` and the test
     titles as they are, and every function added since the specs last changed.

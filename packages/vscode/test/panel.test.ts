@@ -431,6 +431,21 @@ describe('askStart', () => {
     await flush();
     expect(postedOf(view, 'canStart')).toEqual([{ type: 'canStart', value: false }]);
   });
+
+  it("LatestAnswer: drops an earlier question's answer that lands after the reask's, on the same page", async () => {
+    const { panel, starter } = harness();
+    const first = Promise.withResolvers<boolean>();
+    const reask = Promise.withResolvers<boolean>();
+    starter.available.mockReturnValueOnce(first.promise).mockReturnValueOnce(reask.promise);
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    panel.askStart();
+    reask.resolve(true);
+    await flush();
+    first.resolve(false);
+    await flush();
+    expect(postedOf(view, 'canStart')).toEqual([{ type: 'canStart', value: true }]);
+  });
 });
 
 describe('receive', () => {
