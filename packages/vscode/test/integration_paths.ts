@@ -16,10 +16,10 @@ import { mark } from './integration_clock';
 const PATHS = 'alpha beta alpha\ngamma\ndelta beta\n';
 
 /** Long enough for an interrupt sent part way through a pause to land inside it. */
-const LONG_PAUSE_MS = 3000;
+const LONG_PAUSE_MS = 1500;
 
 /** When the interrupt is sent, into a pause of LONG_PAUSE_MS. */
-const INTO_PAUSE_MS = 800;
+const INTO_PAUSE_MS = 500;
 
 /** Past the extension's saving of the session, which waits 200 ms after a change. */
 const SAVE_SETTLE_MS = 400;
@@ -35,13 +35,13 @@ const DEMO_POLLS = 600;
 const FAR_LINES = 60;
 
 /** How long each key of a slow type takes. */
-const MS_PER_KEY = 1000;
+const MS_PER_KEY = 250;
 
 /** What a slow type types after its marker: ten keys. */
 const AFTER_MARKER = 'bcdefghijk';
 
 /** When the interrupt is sent into a slow type: past the move before it and a few keys after the marker. */
-const INTO_TYPING_MS = 4800;
+const INTO_TYPING_MS = 1500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -77,10 +77,13 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
     if (message !== undefined) assert.match(report.rejected.error.message, message);
     return report;
   }
-  /** Plays a batch, and returns each of its statuses once it is done. */
+  /** Plays a batch, and returns the report that carries its end: an empty step comes back without it at `maxBlockMs`. */
   async function played(actions: Action[]): Promise<Report> {
-    await controller.step(actions);
-    return controller.step([]);
+    let report = await controller.step(actions);
+    while (report.batches.length === 0 && report.rejected === undefined) {
+      report = await controller.step([]);
+    }
+    return report;
   }
   /** Waits for the panel to show a run of `command` in `phase`, and returns its id. */
   async function runShown(command: string, phase: string): Promise<number> {

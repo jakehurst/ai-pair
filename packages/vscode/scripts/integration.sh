@@ -3,16 +3,14 @@
 # Runs the integration tests in a fresh, isolated VS Code: test/integration.ts
 # in a workspace, test/integration_reload.ts in the same window's data, then
 # test/integration_nofolder.ts with no folder (#176). EXTENSION_PATH (e.g. an
-# unpacked .vsix) is tested instead of the dev build. With --coverage, the
-# extension host writes V8 coverage of the bundle, c8 reports it against the
-# sources in coverage/integration/, and the run fails below the file's
-# minimums in coverage_thresholds.json (#161).
+# unpacked .vsix) is tested instead of the dev build. With --coverage, c8
+# reports the extension host's V8 coverage against the sources, in
+# coverage/integration/, failing below coverage_thresholds.json (#161).
 set -e
 
 readonly MAC_CODE='/Applications/Visual Studio Code.app/Contents/MacOS/Code'
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 readonly ROOT
-# COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
 readonly COVERAGE_DIR="${COVERAGE_ROOT:-${ROOT}/coverage}/integration"
 readonly TESTS=(integration integration_reload integration_nofolder)
 
@@ -29,8 +27,8 @@ readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
-# The run's own ~/.ai-pair: under the home folder, so the relay shows a guide
-# there as `~/...`; apart from the real one, and gone at the end (#176).
+# The run's own ~/.ai-pair, under the home folder (the relay shows a guide
+# there as `~/...`), apart from the real one, gone at the end (#176).
 readonly PAIR_HOME="${HOME}/.ai-pair-integration-$$"
 export AI_PAIR_HOME="${PAIR_HOME}"
 trap 'rm -rf "${TMP}" "${PAIR_HOME}"' EXIT
@@ -39,8 +37,7 @@ if [[ -z "${EXTENSION_PATH}" ]]; then
   npm run build --silent
   EXTENSION_PATH="${PWD}"
 fi
-# jsonc-parser's `main` is a UMD build whose requires esbuild can't follow;
-# its ES module build bundles (scripts/build.mts).
+# jsonc-parser's `main` is a UMD build esbuild can't follow (scripts/build.mts).
 npx esbuild "${TESTS[@]/#/./test/}" --bundle --platform=node --format=cjs \
   --target=node22 --external:vscode --main-fields=module,main \
   --outdir=dist-test --log-level=warning
@@ -48,15 +45,12 @@ npx esbuild "${TESTS[@]/#/./test/}" --bundle --platform=node --format=cjs \
 # split on spaces.
 read -r -a CODE_ARGS <<<"${VSCODE_ARGS:-}"
 readonly CODE_ARGS
-# The test drives the panel's page over the Chrome DevTools Protocol, on a
-# port of its own, which the extension host learns from the environment.
+# The test drives the panel's page over CDP, on a port the host learns here.
 AI_PAIR_CDP_PORT="$(node -e 'const s = require("node:net").createServer();
   s.listen(0, () => { console.log(s.address().port); s.close(); })')"
 export AI_PAIR_CDP_PORT
-# A terminal inside VS Code, Claude Code's for one, can set
-# ELECTRON_RUN_AS_NODE, which runs Code as plain Node: no flag below (#152).
+# Set in a terminal inside VS Code: it would run Code as plain Node (#152).
 unset ELECTRON_RUN_AS_NODE
-
 #######################################
 # Runs one test bundle in VS Code, with the run's user data and extensions.
 # Set Up Agent writes agents' configurations: Claude Code's, Codex's, and
@@ -78,11 +72,17 @@ run_code() {
     --extensionTestsPath="${PWD}/dist-test/${test}.js" "$@"
 }
 
+# AI_PAIR_SECTIONS: sections of test/integration.ts to run alone, comma
+# separated; `reload` and `nofolder` name the other two launches.
 main() {
+  local sections=",${AI_PAIR_SECTIONS:-},"
   run_code integration "${TMP}/workspace"
-  run_code integration_reload "${TMP}/workspace"
-  touch "${TMP}/not-a-folder" # the launcher can't be written under a file
-  AI_PAIR_HOME="${TMP}/not-a-folder" run_code integration_nofolder
+  [[ "${sections}" == ',,' || "${sections}" == *,reload,* ]] \
+    && run_code integration_reload "${TMP}/workspace"
+  if [[ "${sections}" == ',,' || "${sections}" == *,nofolder,* ]]; then
+    touch "${TMP}/not-a-folder" # the launcher can't be written under a file
+    AI_PAIR_HOME="${TMP}/not-a-folder" run_code integration_nofolder
+  fi
   if ((coverage)); then
     # The bundles are selected before c8 follows their source maps back to the
     # sources; the report script keeps ours and drops node_modules. From the

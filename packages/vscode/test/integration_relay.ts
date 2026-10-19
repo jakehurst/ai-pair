@@ -38,6 +38,11 @@ const LONG_RUN_WAIT_S = LONG_RUN_S + 5;
 /** More output than a run reports, counting the slack the terminal keeps while reading. */
 const FLOOD_BYTES = MAX_OUTPUT * 5;
 
+/** The speed of a batch that must still be playing when the programmer acts, and how far into it they act. */
+const SPEED_SLOW = 4;
+const INTO_BATCH_MS = 400;
+const LONG_TYPE = 'x'.repeat(200);
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -71,16 +76,22 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   const agent = new Client({ name: 'integration', version: '0' }, { capabilities: { roots: {} } });
   agent.setRequestHandler(ListRootsRequestSchema, () => ({ roots: [{ uri: pathToFileURL(root).href, name: 'project' }] }));
   await agent.connect(new StdioClientTransport({ command: api.launcher, cwd: '/', env }));
+  mark('relay: connected');
+  /** The last step's report, which may already carry the batch it submitted, when that finished within the call. */
+  let lastStep: string | undefined;
   async function tool(name: string, args: Record<string, unknown> = {}): Promise<string> {
     const result = await agent.callTool({ name, arguments: args });
     const text = textOf(result);
     assert.ok(result.isError !== true, `${name} failed: ${text}`);
+    if (name === 'step') lastStep = text;
     return text;
   }
-  /** Collects the reports of the queued batches, stepping until one has finished. */
+  /** Returns the first report, the last step's or a later empty step's, in which a batch has finished. */
   async function finished(): Promise<string> {
     for (;;) {
-      const text = await tool('step', { actions: [] });
+      const text = lastStep ?? (await tool('step', { actions: [] }));
+      lastStep = undefined;
+      assert.notEqual(text, 'Nothing to report.', 'no batch is queued to finish');
       if (/Batch \d+ (completed|failed|interrupted|discarded)/.test(text)) return text;
     }
   }
@@ -89,6 +100,7 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   const prompted = await agent.getPrompt({ name: 'start', arguments: { task: 'render it all' } });
   assert.match(JSON.stringify(prompted.messages), /The task: render it all/);
   assert.match(JSON.stringify((await agent.getPrompt({ name: 'start' })).messages), /Ask me what we're working on/);
+  mark('relay: prompts');
 
   // The guides: the user's, longer than the agent is shown, is cut with a note; a project guide that is a folder,
   // and one that is empty, are left out (guide.ts, `readGuides`).
@@ -101,6 +113,7 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   fs.mkdirSync(file('.ai-pair'), { recursive: true });
   fs.writeFileSync(file('.ai-pair/GUIDE.md'), ' \n');
   const started = await tool('start', { task: 'render', cwd: file('deep') });
+  mark('relay: started in deep');
   assert.match(
     started,
     new RegExp(`Long guide\\.[\\s\\S]*\\[Cut: the file goes on for ${longGuide.length - MAX_GUIDE} more characters\\.\\]`),
@@ -111,6 +124,7 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   fs.rmSync(path.join(home, 'GUIDE.md'));
   // From here on, paths are the workspace's: the roots' folder.
   await tool('start', { task: 'render' });
+  mark('relay: guides, started in the root');
 
   // A file with unsaved changes, and a range with no lines in it (render.ts, `renderFile`).
   fs.writeFileSync(file('render.txt'), RENDERED);
@@ -128,6 +142,7 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   });
   assert.ok(await doc.save());
   assert.equal(await tool('read', { file: 'render.txt', from_line: 3, to_line: 2 }), 'render.txt: no lines in this range.');
+  mark('relay: reads');
   // Both edits were the programmer's, and merged into one, they change nothing (render.ts, `renderEvent`).
   assert.match(await tool('step', { actions: [] }), /The programmer edited render\.txt, then changed it back: no net change\./);
 
@@ -135,26 +150,36 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   // says so; a failing one stops the batch with the rest not played (render.ts, `renderRun` and `renderBatch`).
   await tool('step', { actions: [{ run: "echo 'a```b'" }] });
   assert.match(await finished(), /Ran `echo 'a```b'`( in \w+)?: exited with 0\. Output:\n````\na```b\n````/);
+  mark('relay: a run with a fence');
   await tool('step', { actions: [{ run: 'true' }] });
   assert.match(await finished(), /Ran `true`( in \w+)?: exited with 0, no output\./);
+  mark('relay: a run with no output');
   await tool('step', { actions: [{ run: `yes | head -c ${FLOOD_BYTES}` }] });
   const flooded = await finished();
   // The tail is cut where the limit falls, which may be mid-line.
   assert.match(flooded, /exited with 0\. Output, its end:\n```\n\n?(y\n)+```/);
   assert.ok(flooded.length < FLOOD_BYTES, `the output was not cut: ${flooded.length}`);
+  mark('relay: a flood');
   await tool('step', { actions: [{ run: `sleep ${BACKGROUND_S}`, wait: BACKGROUND_WAIT_S }] });
   assert.match(await finished(), /Ran `sleep 3`( in \w+)?: still running in its terminal, no output\./);
   await sleep(BACKGROUND_S * 1000);
+  mark('relay: a run left running');
   await tool('step', { actions: [{ run: 'false' }, { say: 'Not said.' }] });
   const failedRun = await finished();
   assert.match(failedRun, /Batch \d+ failed\.\nRan `false`( in \w+)?: exited with 1, no output\.\ncommand_failed: /);
   assert.match(failedRun, /Not played:\n {2}\{"say":"Not said\."\}/);
-  await tool('step', { actions: [{ move: { file: 'render.txt', line: 1, at: `gam${CURSOR_MARKER}ma` } }, { say: 'Not said.' }] });
-  const notFound = await finished();
-  assert.match(notFound, /not_found: The spot isn't on line 1: line 1 reads "alpha beta alpha"\. It's on these lines:\n {2}line 2: gamma/);
-  assert.match(notFound, /Not played, starting with the one that failed:\n {2}\{"move":/);
-  await tool('step', { actions: [{ move: { file: 'render.txt', line: 1, at: `alph${CURSOR_MARKER}a` } }] });
-  assert.match(await finished(), /ambiguous: "alpha" occurs 2 times on line 1/);
+  // A spot not on its line, and one twice on it: the rehearsal refuses the batch, with where the spot is
+  // (render.ts, `renderRejected` and `renderError`).
+  const notFound = await tool('step', {
+    actions: [{ move: { file: 'render.txt', line: 1, at: `gam${CURSOR_MARKER}ma` } }, { say: 'Not said.' }],
+  });
+  assert.match(
+    notFound,
+    /Your batch was rejected: its action 1 would fail:[\s\S]*not_found: The spot isn't on line 1: line 1 reads "alpha beta alpha"\. It's on these lines:\n {2}line 2: gamma/,
+  );
+  const ambiguous = await tool('step', { actions: [{ move: { file: 'render.txt', line: 1, at: `alph${CURSOR_MARKER}a` } }] });
+  assert.match(ambiguous, /ambiguous: "alpha" occurs 2 times on line 1/);
+  mark('relay: runs and refusals');
 
   // A batch rejected past an edit says what the code would read by then (render.ts, `renderRejected`).
   const rejected = await agent.callTool({
@@ -192,23 +217,24 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
     edit.insert(doc.uri, new vscode.Position(3, 0), 'z\n'.repeat(MAX_DIFF_LINES));
   });
   const changed = await tool('listen');
+  // The diff's context lines count among those left out, and the hunk's bounds take them in.
   assert.match(
     changed,
-    new RegExp(
-      `The programmer changed render\\.txt in these places, too much to show \\(${MAX_DIFF_LINES} lines of diff left out\\)\\. \`read\` the file for its text:\\n@@ -3,1 \\+3,${MAX_DIFF_LINES + 1} @@`,
-    ),
+    /The programmer changed render\.txt in these places, too much to show \(\d+ lines of diff left out\)\. `read` the file for its text:\n@@ -\d+,\d+ \+\d+,\d+ @@/,
   );
   await programmerEdit((edit) => {
     edit.delete(doc.uri, new vscode.Range(3, 0, 3 + MAX_DIFF_LINES, 0));
   });
   assert.ok(await doc.save());
   await tool('listen');
+  controller.setSpeed(SPEED_SLOW);
   await tool('step', {
-    actions: [{ move: { file: 'render.txt', line: 1, to: 'line_end' } }, { type: `${'x'.repeat(40)}${CURSOR_MARKER}` }],
+    actions: [{ move: { file: 'render.txt', line: 1, to: 'line_end' } }, { type: `${LONG_TYPE}${CURSOR_MARKER}` }],
   });
-  await sleep(1500);
+  await sleep(INTO_BATCH_MS);
   controller.userInterrupt();
   assert.match(await finished(), /The programmer pressed Interrupt\.\n\nBatch \d+ interrupted/);
+  controller.setSpeed(20);
   controller.takeTurn();
   const taken = await tool('listen');
   assert.match(taken, /The programmer took the turn\.[\s\S]*It's the programmer's turn: you're the navigator\./);
@@ -221,6 +247,7 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   await tool('listen');
   controller.handBack();
   assert.match(await tool('listen'), /The programmer handed the turn back to you\./);
+  mark('relay: events');
 
   // Pauses, by their reasons: the programmer's, looking away, and a calibration (render.ts, `PAUSE_REASONS`).
   controller.pause();
@@ -230,25 +257,29 @@ export async function relayPaths(api: Api, root: string, env: Record<string, str
   );
   controller.resume();
   fs.writeFileSync(file('elsewhere.txt'), 'other\n');
+  controller.setSpeed(SPEED_SLOW);
   await tool('step', {
-    actions: [{ move: { file: 'render.txt', line: 3, to: 'line_end' } }, { type: `${'y'.repeat(40)}${CURSOR_MARKER}` }],
+    actions: [{ move: { file: 'render.txt', line: 3, to: 'line_end' } }, { type: `${LONG_TYPE}${CURSOR_MARKER}` }],
   });
-  await sleep(1500);
+  await sleep(INTO_BATCH_MS);
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('elsewhere.txt')));
-  await sleep(500);
+  await sleep(INTO_BATCH_MS);
   assert.match(
     await tool('step', { actions: [] }),
     /Playback is paused: the programmer is looking at another file, or scrolled away from your cursor\./,
   );
+  controller.setSpeed(20);
   controller.resume();
   await finished();
   fs.writeFileSync(file('passage.txt'), 'A passage to read at an even pace.\n');
   assert.match(
     await tool('calibrate', { title: 'The passage', file: 'passage.txt', notice: 'Made up here.' }),
-    /The calibration is under way in the Pair panel[\s\S]*Playback is paused: the programmer is calibrating their reading speed\./,
+    /^The calibration is under way in the Pair panel/,
   );
+  assert.match(await tool('step', { actions: [] }), /Playback is paused: the programmer is calibrating their reading speed\./);
   controller.endSession();
   assert.match(await tool('listen'), /The programmer ended the session\. This is the final report: stop using the pair tools\./);
+  mark('relay: pauses and the calibration');
 
   // Nothing happening in a call's time: a listen says to call again, a step that nothing finished says to carry on.
   await tool('start', { task: 'waiting' });

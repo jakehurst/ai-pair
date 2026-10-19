@@ -42,12 +42,15 @@ export const DEFAULT_TIMINGS: Readonly<Timings> = {
   tipWarmMs: 300,
 };
 
-/** The delays for a test: the waits it has to sit out are short; what paces the view stays as it is. */
+/**
+ * The delays for a test: the waits it has to sit out are short; what paces the view stays as it is, and so does the
+ * wait for shell integration, which a cold terminal needs most of on a busy machine, and which only a terminal without
+ * it ever sits out.
+ */
 export const TEST_TIMINGS: Readonly<Timings> = {
   ...DEFAULT_TIMINGS,
   saveMs: 50,
   groupMs: 100,
-  shellIntegrationMs: 2000,
   drainMs: 100,
 };
 
