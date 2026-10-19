@@ -38,6 +38,8 @@ fi
 npx esbuild test/integration.ts --bundle --platform=node --format=cjs \
   --target=node22 --external:vscode --outfile=dist-test/integration.js \
   --log-level=warning
+# AI_PAIR_SECTIONS: the sections of test/integration.ts to run alone, comma
+# separated (#186); the extension host reads it from the environment.
 # VSCODE_ARGS: more flags, like the ones a CI machine needs (--no-sandbox),
 # split on spaces.
 read -r -a CODE_ARGS <<<"${VSCODE_ARGS:-}"
