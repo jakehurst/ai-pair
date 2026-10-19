@@ -29,18 +29,16 @@ describe('terminal text', () => {
 describe('line offsets', () => {
   const text = 'a\nb';
 
-  it('has no span for line 0', () => {
-    expect(lineSpan(text, 0)).toBeUndefined();
-  });
-
   it('ends a line past the last at the end of the text', () => {
     expect(lineEnd(text, 5)).toBe(text.length);
   });
 
-  it('spans a line from its start through its newline, or the end of the text, and none past the last', () => {
+  it('spans a line from its start through its newline, or the end of the text, and a line past the last at the end', () => {
     expect(lineSpan(text, 1)).toEqual({ start: 0, end: 1 });
     expect(lineSpan(text, 2)).toEqual({ start: 2, end: 3 });
-    expect(lineSpan(text, 3)).toBeUndefined();
+    expect(lineSpan(text, 3)).toEqual({ start: 3, end: 3 });
+    expect(lineSpan('a\n', 2)).toEqual({ start: 2, end: 2 });
+    expect(lineSpan('a\r\nb', 1)).toEqual({ start: 0, end: 2 });
   });
 
   it("gives a line's text, either line ending, and none past the end", () => {

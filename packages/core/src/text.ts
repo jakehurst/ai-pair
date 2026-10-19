@@ -38,19 +38,16 @@ export function fileLines(text: string): { lines: string[]; finalNewline: boolea
 }
 
 /**
- * Returns the offsets on a line, as `position` counts them: from its first character through its newline,
- * or the end of the text. None for a line the text doesn't have.
+ * Returns the offsets on a line (from 1), as `position` counts them: from its first character through
+ * its newline, or the end of the text. A line past the last is empty, at the end of the text.
  */
-export function lineSpan(text: string, line: number): { start: number; end: number } | undefined {
-  if (line < 1) return undefined;
-  let start = 0;
-  for (let l = 1; l < line; l++) {
-    const next = text.indexOf('\n', start);
-    if (next === -1) return undefined;
-    start = next + 1;
-  }
-  const newline = text.indexOf('\n', start);
-  return { start, end: newline === -1 ? text.length : newline };
+export function lineSpan(text: string, line: number): { start: number; end: number } {
+  const lines = text.split('\n');
+  const start = Math.min(
+    text.length,
+    lines.slice(0, line - 1).reduce((offset, before) => offset + before.length + 1, 0),
+  );
+  return { start, end: start + lines.slice(line - 1, line).join('').length };
 }
 
 /** Returns the text of `line` (from 1), or an empty string past the end. */

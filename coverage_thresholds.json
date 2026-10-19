@@ -84,7 +84,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 97,
+      "branches": 100,
       "functions": 100
     }
   },
@@ -132,7 +132,7 @@
     },
     "integration": {
       "lines": 100,
-      "branches": 83,
+      "branches": 92,
       "functions": 100
     }
   },
@@ -376,8 +376,8 @@
     },
     "integration": {
       "lines": 92,
-      "branches": 91,
-      "functions": 82
+      "branches": 92,
+      "functions": 83
     }
   },
   "packages/vscode/src/output.ts": {
@@ -423,8 +423,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 65,
-      "branches": 53,
+      "lines": 66,
+      "branches": 56,
       "functions": 82
     }
   },

@@ -76,7 +76,12 @@ function once<T>(f: (arg: T) => void): (arg: T) => void {
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
 
-  const editor = new VsCodeEditor(root, config().get(AGENT_NAME, 'Agent'));
+  // Activation is a cycle: the editor and the panel call the controller, which drives them through
+  // their ports, and the panel and the calibration call each other. The two made later are read only
+  // from callbacks that run after activation returns.
+  let controller: Controller;
+  let calibration: Calibration;
+  const editor = new VsCodeEditor(root, config().get(AGENT_NAME, 'Agent'), () => controller);
   const speed = {
     get: () => settingSpeed(config().get<unknown>(SPEED, 1)),
     set: (value: number) => {
@@ -99,6 +104,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       log.trace(line);
     }
   }
+  const launcher = writeLauncher(context.extensionPath);
+  const starter = claudeStarter(launcher);
   const panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
@@ -109,16 +116,15 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     trace,
     context.extensionUri,
+    { controller: () => controller, calibration: () => calibration, starter },
   );
-  const controller = new Controller(editor, panel);
+  controller = new Controller(editor, panel);
   controller.trace = (line) => {
     log.info(line);
   };
-  editor.controller = controller;
   editor.onSelection = (ref) => {
     panel.showSelection(ref);
   };
-  panel.controller = controller;
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
   controller.setTiming(config().get(TIMING));
@@ -136,7 +142,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       ...(notice === undefined ? {} : { notice }),
     };
   }
-  const calibration = new Calibration(
+  calibration = new Calibration(
     {
       now: () => Date.now(),
       pause: () => {
@@ -160,7 +166,6 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     passage(),
   );
-  panel.calibration = calibration;
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel);
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
   // specs/Resume.tla, `Reload`): saved shortly after each change, and once more as the window goes (`Save`).
@@ -201,9 +206,6 @@ export function activate(context: vscode.ExtensionContext): Api {
   ready.catch((error: unknown) => {
     void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(error)}`);
   });
-  const launcher = writeLauncher(context.extensionPath);
-  const starter = claudeStarter(launcher);
-  panel.starter = starter;
   // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, `FlipSetUp`).
   function setUp(): Promise<void> {
     return setUpAgent(launcher).then(() => {
