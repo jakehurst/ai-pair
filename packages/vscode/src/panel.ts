@@ -189,7 +189,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
-        if (this.wiring.calibration().reply(message.text)) return;
+        if (this.wiring.calibration().reply(message.text)) {
+          // The box is empty now, and the page posts no `draft` for it: specs/Draft.tla, `SendToCalibration` (#191).
+          controller.resume('reply');
+          return;
+        }
         controller.resume(undefined, { reveal: false });
         controller.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;

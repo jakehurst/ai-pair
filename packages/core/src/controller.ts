@@ -372,9 +372,10 @@ export class Controller {
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block('step', session, {}, signal);
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
-      // specs/Anchor.tla, `SubmitAnchored` and `SubmitUnanchored`).
+      // specs/Anchor.tla, `SubmitAnchored` and `RefuseUnanchored`). A rejection `restore` holds comes first, in the
+      // report of the step discarded as stale (`Deliver`, #193).
       const anchor = cursorAnchor(actions);
-      if (session.anchorNeeded && anchor && !anchor.anchored) return this.rejectUnanchored(session, anchor);
+      if (session.anchorNeeded && anchor && !anchor.anchored && session.held.length === 0) return this.rejectUnanchored(session, anchor);
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
       const rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
@@ -396,7 +397,7 @@ export class Controller {
     }, signal);
   }
 
-  /** Blocks until there is something to report: `Listen` in specs/Controller.tla. */
+  /** Blocks until there is something to report: `Listen` in specs/Controller.tla and in specs/Navigator.tla. */
   listen(signal?: AbortSignal): Promise<Report> {
     return this.serialize(() => {
       return this.block('listen', this.requireSession(), {}, signal);
@@ -413,7 +414,11 @@ export class Controller {
   /** Reads a file. Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
   async read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
     const session = this.requireSession();
-    // `Call` and `GoQuiet` in specs/ListenGrace.tla: a read is a call too, settled at once.
+    // `Read` and `GoQuiet` in specs/ListenGrace.tla: a read is a call too, settled at once; it ends the grace (#194).
+    if (this.grace !== undefined) {
+      this.endGrace();
+      this.render();
+    }
     if (this.openCalls === 0) this.startQuiet();
     const path = this.resolvePath(session, file);
     const planned = this.planned(session, path);
@@ -681,7 +686,7 @@ export class Controller {
     const session = this.session;
     if (session) {
       // A point the programmer looked away from is stale: from now on the view follows the cursor,
-      // not it (specs/PointFocus.tla). The editor is told before a reveal targets it.
+      // not it (specs/PointFocus.tla, `Resume`). The editor is told before a reveal targets it.
       if (lookedAway && session.scene.focus === 'point') {
         session.scene.focus = 'cursor';
         this.render();
@@ -791,9 +796,10 @@ export class Controller {
 
   /** Runs tool calls one at a time. A call cancelled while waiting its turn never runs. */
   private serialize<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-    // `Call` in specs/ListenGrace.tla: the agent is calling, so it's listening.
+    // `Call` in specs/ListenGrace.tla: the agent is calling, so it's listening; any call ends the grace (#194).
     this.openCalls++;
     this.endQuiet();
+    this.endGrace();
     // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
     function guarded(): Promise<T> {
       return signal?.aborted === true ? Promise.reject(cancelled()) : fn();
@@ -869,7 +875,6 @@ export class Controller {
           this.finishCall(call, /* timedOut= */ true);
         }, this.config.maxBlockMs),
       };
-      this.endGrace();
       this.call = call;
       // specs/Serialize.tla, `Abort`: the listener releases the call only while it is this.call.
       // `Cancel` in specs/Controller.tla: a blocked call is released at once.
@@ -936,7 +941,7 @@ export class Controller {
     }, this.config.listenGraceMs);
   }
 
-  /** Ends the grace: a new call does (`Call` in specs/ListenGrace.tla). */
+  /** Ends the grace: any call does (`Call`, `Read`, and `Refuse` in specs/ListenGrace.tla, #194), and closing the session. */
   private endGrace(): void {
     if (this.grace) clearTimeout(this.grace);
     this.grace = undefined;
@@ -1063,8 +1068,11 @@ export class Controller {
     this.trace?.(`batch ${batch.id} discarded`);
   }
 
-  /** Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and `EndSession`).
-   * A batch already playing plays on and may complete (specs/Rehearsal.tla, `Interrupted`, #151). */
+  /**
+   * Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and
+   * `EndSession`; specs/Actions.tla, `Interrupt`). A batch already playing plays on and may complete
+   * (specs/Rehearsal.tla, `Interrupted`, #151).
+   */
   private interrupt(session: Session): void {
     session.stale = true;
     const discarded = session.queue.filter((b) => b.state === 'queued').map((b) => b.id);
@@ -1122,6 +1130,7 @@ export class Controller {
     }
   }
 
+  /** Starts the next batch, with the timeline reset: specs/Turns.tla, `Begin`. */
   private startHead(session: Session): void {
     const head = session.queue[0];
     if (head?.state !== 'queued') return;

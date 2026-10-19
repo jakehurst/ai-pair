@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: integration, 2026-10-19.
+Last updated: tla, 2026-10-19.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -45,7 +45,7 @@ Last updated: integration, 2026-10-19.
 | `packages/core/test/places.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -63,23 +63,25 @@ Last updated: integration, 2026-10-19.
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 67.4% B 52.2% F 69.2% | - | - | - | - |
 | `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.1% B 83.0% F 88.9% | - | - | - | - |
+| `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/render.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/server.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/relay/test/timings.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/scripts/icon/Package.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 99.3% R 93.3% F 100.0% | - | - |
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.1% R 98.2% F 97.9% | - | - |
 | `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.1% B 66.7% F 87.2% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 71.7% B 88.9% F 50.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 81.3% F 100.0% | - | - | - | - |
@@ -94,6 +96,7 @@ Last updated: integration, 2026-10-19.
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 84.2% F 83.3% | - | - | - | - |
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.4% B 98.1% F 92.3% | - | - | - | - |
+| `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 115 of 115 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -102,37 +105,38 @@ Last updated: integration, 2026-10-19.
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/editor.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/extension.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/panel.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/passage.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/setup.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/timings.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
-| `scripts/check_ascii.test.ts` | TypeScript | test | test | - | - | - | test |
+| `scripts/check_ascii.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/check_ascii.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/coverage_report.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `scripts/coverage_report.test.ts` | TypeScript | test | test | - | - | - | test |
+| `scripts/coverage_report.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `scripts/coverage_report.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/coverage_report.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/coverage_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/coverage_swift.sh` | Shell | - | - | - | - | - | - |
 | `scripts/lint_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/lint_tla.test.ts` | TypeScript | test | test | test | test | test | test |
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/lint_web.test.ts` | TypeScript | test | test | - | - | - | test |
+| `scripts/lint_web.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/release.test.ts` | TypeScript | test | test | - | - | - | test |
+| `scripts/release.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
 | `specs/ActionValidation.cfg` | TLC config | - | - | - | - | - | - |
@@ -140,7 +144,7 @@ Last updated: integration, 2026-10-19.
 | `specs/Actions.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Actions.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/Anchor.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Anchor.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/Anchor.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/BatchFile.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/BatchFile.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Bridge.cfg` | TLC config | - | - | - | - | - | - |
@@ -153,7 +157,7 @@ Last updated: integration, 2026-10-19.
 | `specs/Discovery.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Discovery_InPlace.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Draft.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Draft.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
+| `specs/Draft.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/EditEvents.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/EditEvents.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/EditorAdapter.cfg` | TLC config | - | - | - | - | - | - |
@@ -165,13 +169,13 @@ Last updated: integration, 2026-10-19.
 | `specs/LineIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LineIdentity.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/ListenGrace.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ListenGrace.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
+| `specs/ListenGrace.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Outside.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Panel.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/Panel.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelReplay.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelScroll.cfg` | TLC config | - | - | - | - | - | - |

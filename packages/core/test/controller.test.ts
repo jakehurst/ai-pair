@@ -633,6 +633,17 @@ describe('steps and their batches', () => {
     expect((await report(h.controller.step([type]))).rejected).toBeUndefined();
   });
 
+  it('NoRejectionLost: delivers a held rejection with the step discarded as stale before refusing an unanchored one (#193)', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    await report(h.controller.step(SAY));
+    const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line' as const, message: 'No.' } };
+    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected });
+    const type: Action = { type: `x${CURSOR_MARKER}` };
+    expect(await report(h.controller.step([type]))).toMatchObject({ rejected, batches: [{ status: 'discarded' }] });
+    expect((await report(h.controller.step([type]))).rejected?.error.kind).toBe('unanchored');
+  });
+
   it('CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch', async () => {
     const h = await started();
     const listen = h.controller.listen();
@@ -1306,6 +1317,22 @@ describe('the status in the panel', () => {
     const listen = h.controller.listen();
     await settle(CONFIG.maxBlockMs);
     await report(listen);
+    expect(statuses(h).at(-1)).toBe('thinking');
+  });
+
+  it('NoFalseYourMove: ends the grace when the agent reads, and when its step is refused at once (#194)', async () => {
+    const h = await started();
+    void h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    expect(statuses(h).at(-1)).toBe('listening');
+    await h.controller.read('a.ts').catch(() => undefined);
+    expect(statuses(h).at(-1)).toBe('thinking');
+    h.controller.userInterrupt();
+    await report(h.controller.step(SAY));
+    void h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    expect(statuses(h).at(-1)).toBe('listening');
+    expect((await report(h.controller.step([{ type: `x${CURSOR_MARKER}` }]))).rejected?.error.kind).toBe('unanchored');
     expect(statuses(h).at(-1)).toBe('thinking');
   });
 

@@ -127,8 +127,9 @@ Rehearse(i) ==
        ELSE \E b \in BatchStates : batch' = [batch EXCEPT ![i] = b]
     /\ UNCHANGED <<aborted, abortedAt, empty, rejected>>
 
-\* rejectBatch: the batch failed its rehearsal, so the call answers with the
-\* rejection, queuing nothing.
+\* rejectBatch, or rejectUnanchored: the batch failed its rehearsal, or did
+\* not anchor the cursor, so the call answers with the rejection, queuing
+\* nothing.
 Reject(i) ==
     /\ pc[i] = "rehearsing"
     /\ ~empty[i]

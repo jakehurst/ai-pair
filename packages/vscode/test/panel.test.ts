@@ -479,7 +479,7 @@ describe('receive', () => {
     expect(readingSpeed.set.mock.calls).toEqual([[SPEEDS[3]]]);
   });
 
-  it('reply: goes to the calibration when it takes it, and otherwise resumes without revealing and sends it on', () => {
+  it("ReplyMeansDraft: a reply the calibration takes ends the draft's pause; any other resumes without revealing and is sent on", () => {
     const { panel, controller, calibration } = harness();
     const view = open(panel);
     calibration.reply.mockReturnValueOnce(true);
@@ -488,10 +488,7 @@ describe('receive', () => {
     view.send({ type: 'reply', text: 'with', attach: true });
     view.send({ type: 'reply', text: 'without' });
     expect(calibration.reply.mock.calls).toEqual([['done'], ['with'], ['without']]);
-    expect(controller.resume.mock.calls).toEqual([
-      [undefined, { reveal: false }],
-      [undefined, { reveal: false }],
-    ]);
+    expect(controller.resume.mock.calls).toEqual([['reply'], [undefined, { reveal: false }], [undefined, { reveal: false }]]);
     expect(controller.userMessage.mock.calls).toEqual([
       ['with', SELECTION],
       ['without', undefined],

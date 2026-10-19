@@ -4,8 +4,8 @@
 (* packages/vscode/src/panel.ts (`ready`, `start`, Starter), setup.ts         *)
 (* (claudeStarter), and webview/panel.ts (`canStart`, the click). A page asks *)
 (* once, as it loads, whether a session can be started from here; the answer  *)
-(* comes later, from Claude Code's configuration (read at once) and whether   *)
-(* its CLI is here (read when the promise resolves). A click runs Claude      *)
+(* comes later, from Claude Code's configuration, whether its CLI is here,    *)
+(* and whether a folder is open, all read at once. A click runs Claude        *)
 (* Code's CLI in a terminal with the prompt. Pages come and go: the view is   *)
 (* disposed, or its page reloads. The start keeps the Pair panel in front,    *)
 (* leaves Claude Code's `preferredLocation` setting as the programmer chose   *)
@@ -20,8 +20,9 @@ CONSTANTS
     MaxFlips,       \* how often the model changes the environment: Set Up
                     \* Agent, Claude Code installed or removed
     MaxClicks,      \* how many clicks the model makes
-    DropStale,      \* TRUE: an answer reaches only the page that asked (the
-                    \* fix)
+    DropStale,      \* TRUE: only the latest question's answer reaches the
+                    \* page (the fix); the model also lets an earlier answer
+                    \* reach the page that asked, which the code never does
     ReaskOnSetUp,   \* TRUE: Set Up Agent setting Claude Code up asks the live
                     \* page again (the fix)
     InTerminal,     \* TRUE: the CLI runs in a terminal never shown; FALSE:
@@ -120,8 +121,8 @@ Init ==
     /\ note = FALSE
     /\ session = FALSE
 
-\* `ready`: a page loads with its button hidden, and asks once; isSetUp is read
-\* now, the CLI later.
+\* `ready`: a page loads with its button hidden, and asks once; the answer
+\* comes when the promise resolves.
 LoadPage ==
     /\ page' = "live"
     /\ pages' = pages + 1

@@ -6,7 +6,11 @@
 export interface Timings {
   /** After a change, how long until the session is saved to the workspace's storage; changes come a keystroke at a time (#25). */
   saveMs: number;
-  /** How long writes reported outside the editor are grouped before they are decided (#15). */
+  /**
+   * How long writes reported outside the editor are grouped before they are decided (#15). Changes this close
+   * together are one history entry: a bulk rename, a branch switch. They are decided when the group settles, by which
+   * time VS Code has told of its own saves.
+   */
   groupMs: number;
   /** How long after the extension's own navigation a view change is its own (specs/FollowMode.tla, `Expire`). */
   selfNavMs: number;

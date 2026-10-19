@@ -64,7 +64,7 @@ StartShow ==
     /\ show' = "awaiting"
     /\ UNCHANGED <<active, target, paused, looked>>
 
-\* SELF_NAV_MS passes. A held window doesn't expire.
+\* timings.selfNavMs passes. A held window doesn't expire.
 Expire ==
     /\ window = "open"
     /\ window' = "closed"
@@ -86,8 +86,8 @@ Handle ==
     /\ paused' = (paused \/ (window = "closed" /\ active # target))
     /\ UNCHANGED <<active, target, window, looked>>
 
-\* showTextDocument resolves: a held window gets its SELF_NAV_MS from now; the
-\* player then moves the cursor to b.
+\* showTextDocument resolves: a held window gets its timings.selfNavMs from
+\* now; the player then moves the cursor to b.
 Resolve ==
     /\ show = "done"
     /\ target = "a"

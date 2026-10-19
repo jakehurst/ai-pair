@@ -372,6 +372,7 @@ export class Player {
     }
 
     if ('say' in action) {
+      // specs/BatchFile.tla, `Say`: it acts in no file.
       panel.post({ type: 'say', text: action.say });
       // specs/Calibration.tla, `StartSay`: timed with the rate in force now; the sleep's end is `EndSay`.
       const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed();

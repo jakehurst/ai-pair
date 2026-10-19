@@ -20,24 +20,25 @@ Code goes without a spec for one of these reasons:
 
 | Functions | Spec |
 |---|---|
-| `step`, `listen`, `block`, `finishCall`, `ready`, `pump`, `update` | `Serialize`, `Controller` |
-| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents` |
+| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller` |
+| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `Deliver`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Interrupt`), `Actions` (`Interrupt`) |
-| `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Rehearsal` (`EditAsOther`) |
+| `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
 | `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
-| `confirm`, `decideRun` | `RunBox` (`Decided`) |
+| `confirm`, `decideRun` | `RunBox` (`Go`, `Decline`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
 | `resumeSession`, `open`, `saved`, `revive`, `isSuspended`, `onChange` | `Resume` |
 | `textOrMissing` | `FileText` (`MissingFile`) |
-| `state`, `startGrace`, `endGrace`, and the grace in `block`, `finishCall`, and `close` | `ListenGrace` |
+| `state`, `startGrace`, `endGrace`, `startQuiet`, `endQuiet`, and the grace and the quiet in `serialize`, `read`, `block`, `finishCall`, and `close` | `ListenGrace` |
+| `describeReport`, `cancelled`, `isRecorded`, `pendingEdit` | Pure, Format |
 | `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
-| `setSpeed`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
+| `setSpeed`, `setReadingSpeed`, `setTimeouts`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
 | `calibrate`, with the bridge's `calibrate` option, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
 
 ### `player.ts`
@@ -51,13 +52,14 @@ Code goes without a spec for one of these reasons:
 | `unseen`, `locate`, `span` | `Rehearsal` (`Accept`); finding text: `Places` |
 | `save`, `runCommand`, `confirm` | `RunBox`, `Actions`; the save: `EditorAdapter` |
 | `follow` | `Scroll` (`Move`) |
-| `code`, `clearPoint`, `render`, `displayPath`, `resolvePath`, `agentPath`, `config`, `speed` | Pure, Format |
+| `code`, `codeAt`, `clearPoint`, `render`, `displayPath`, `resolvePath`, `agentPath`, `config`, `speed`, `readingSpeed` | Pure, Format |
 
 ### The rest of core
 
 | File | Functions | Spec |
 |---|---|---|
 | `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge` |
+| | `connections` | Glue: what a test reads |
 | | `writeDiscovery`, `focused`, `file` | `Discovery` |
 | | `tokenMatches` | Pure: compares tokens in constant time |
 | | `optionalNumber`, `optionalString`, `optionalStrings` | Pure: argument checks |
@@ -73,7 +75,7 @@ Code goes without a spec for one of these reasons:
 | `diff.ts` | `lineChanges` | `Reload` (`Refine`) |
 | | `fileDiff` | Format |
 | `text.ts`, `timing.ts` | all | Pure |
-| `ports.ts`, `config.ts`, `paths.ts`, `index.ts` | | Types |
+| `ports.ts`, `config.ts`, `paths.ts`, `index.ts` | | Types; `config.ts` also holds the defaults and `TEST_TIMEOUTS` |
 
 ## relay
 
@@ -91,6 +93,7 @@ Code goes without a spec for one of these reasons:
 | `tools.ts` | `action`, `actionError`, `combined` | Pure: the tools' schemas; `validation.test.ts` holds them to the player's checks |
 | `render.ts` | all | Format; `render.test.ts` |
 | `main.ts` | the entry: `serve` with the process's stdio | Glue |
+| `timings.ts` | `RELAY_TIMINGS` | Glue: the relay's delays, one set for tests |
 | `md.d.ts` | | Types |
 
 ## protocol
@@ -129,7 +132,7 @@ Code goes without a spec for one of these reasons:
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
-| | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed` | Glue |
+| | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
 | `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
@@ -145,7 +148,7 @@ Code goes without a spec for one of these reasons:
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
-| `agents.ts` | all | Pure, Glue: agents' config files; `setup.properties.test.ts` |
+| `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
 | `setup.ts` | `claudeStarter` | `Start` (`Answer`, `Click`, `Exit`) |
 | | the rest | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
@@ -155,6 +158,7 @@ Code goes without a spec for one of these reasons:
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |
 | `calibration.ts` | all | `Calibration` |
 | `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
+| `timings.ts` | `setTimings` | Glue: the extension's delays, one set for tests |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |
