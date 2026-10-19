@@ -56,6 +56,8 @@ function unitThresholds(): Record<string, FileThresholds> {
 // Vitest reads its configuration from the default export; there is no named form.
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
+  // The relay's version, which the extension's build defines from its manifest.
+  define: { AI_PAIR_VERSION: JSON.stringify('test') },
   test: {
     // Only vitest's tests: Playwright's are *.spec.ts, under test/visual.
     include: ['**/*.test.ts'],

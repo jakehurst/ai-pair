@@ -16,6 +16,7 @@ import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProbl
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
+import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
@@ -317,11 +318,10 @@ export async function run(): Promise<void> {
     ['completed'],
   );
   await controller.read('follow-b.txt');
-  const selfNavMs = api.editor.selfNavMs;
-  api.editor.selfNavMs = 0;
+  api.setTimings({ selfNavMs: 0 });
   await controller.step([{ move: { file: 'follow-b.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
   const moved = await controller.step([]);
-  api.editor.selfNavMs = selfNavMs;
+  api.setTimings({ selfNavMs: DEFAULT_TIMINGS.selfNavMs });
   assert.equal(controller.isPaused, false, 'paused by our own move');
   assert.deepEqual(
     moved.batches.map((b) => b.status),

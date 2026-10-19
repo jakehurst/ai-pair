@@ -70,14 +70,14 @@ function list(names: string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
 
-/** Asks which agent to connect, and registers the relay's launcher with it. */
-export async function setUpAgent(launcher: string): Promise<void> {
+/** Asks which agent to connect, and registers the relay's launcher with it, on `h`: the real machine, or a test's. */
+export async function setUpAgent(launcher: string, h: Host = host): Promise<void> {
   type Item = vscode.QuickPickItem & { id: string };
   const items: Item[] = AGENTS.map((agent) => ({
     id: agent.id,
     label: agent.label,
-    description: agent.isSetUp(host, launcher) ? 'set up' : agent.detect(host) ? 'installed' : undefined,
-    picked: agent.detect(host) && !agent.isSetUp(host, launcher),
+    description: agent.isSetUp(h, launcher) ? 'set up' : agent.detect(h) ? 'installed' : undefined,
+    picked: agent.detect(h) && !agent.isSetUp(h, launcher),
   }));
   items.push({ id: 'other', label: 'Another agent', description: 'Copy an MCP server configuration to the clipboard' });
   const picked = await vscode.window.showQuickPick(items, {
@@ -89,7 +89,7 @@ export async function setUpAgent(launcher: string): Promise<void> {
   const done: string[] = [];
   for (const agent of AGENTS.filter((a) => picked.some((p) => p.id === a.id))) {
     try {
-      await agent.setUp(host, launcher);
+      await agent.setUp(h, launcher);
       done.push(agent.label);
     } catch (error) {
       void vscode.window.showErrorMessage(`Couldn't set up ${agent.label}: ${error instanceof Error ? error.message : String(error)}`);

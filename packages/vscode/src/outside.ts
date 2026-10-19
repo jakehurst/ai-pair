@@ -3,12 +3,12 @@
 // files and draws the marks.
 
 import { withinFolder } from '@ai-pair/protocol';
+import { timings } from './timings';
 
 /**
  * Changes this close together are one history entry: a bulk rename, a branch switch. They are
  * decided when the group settles, by which time VS Code has told of its own saves.
  */
-export const GROUP_MS = 500;
 
 /** Folders whose files change by the hundred, from git or a package manager: not marked. */
 const UNWATCHED = new Set(['.git', 'node_modules']);
@@ -42,7 +42,7 @@ export class OutsideChanges {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       void this.settle();
-    }, GROUP_MS);
+    }, timings.groupMs);
   }
 
   /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */

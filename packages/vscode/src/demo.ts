@@ -142,9 +142,9 @@ export const SCRIPT: Action[][] = [
 const SUMMARY =
   "That's the demo: the direction first, then one path end to end, then broadening one case at a time. Updating and deleting would follow the same cycle.";
 
-/** Returns where an action goes, if it says. */
+/** Returns where an action goes, if it says: the script moves and points, and selects nothing. */
 function target(action: Action): { file?: string; line?: number } | undefined {
-  return 'move' in action ? action.move : 'select' in action ? action.select : 'point' in action ? action.point : undefined;
+  return 'move' in action ? action.move : 'point' in action ? action.point : undefined;
 }
 
 /**

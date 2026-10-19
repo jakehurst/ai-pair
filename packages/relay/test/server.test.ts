@@ -173,7 +173,8 @@ afterEach(() => {
 describe('createServer', () => {
   it('registers the six tools with their schemas from the tool table, and the start prompt', () => {
     const { sdk } = build();
-    expect(sdk.info).toEqual({ name: 'ai-pair', version: 'dev' });
+    // The version is the build's define; vitest.config.ts defines "test".
+    expect(sdk.info).toEqual({ name: 'ai-pair', version: 'test' });
     expect(sdk.options).toEqual({ instructions: INSTRUCTIONS });
     expect([...sdk.tools.keys()]).toEqual(TOOL_NAMES);
     for (const name of TOOL_NAMES) {
@@ -181,14 +182,6 @@ describe('createServer', () => {
     }
     expect(sdk.prompt?.name).toBe('start');
     expect(sdk.prompt?.handler({ task: 'a todos API' }).messages[0]?.content.text).toBe(startPrompt('a todos API'));
-  });
-
-  it('tells the harness the version the build defines', async () => {
-    vi.stubGlobal('AI_PAIR_VERSION', '9.9.9');
-    vi.resetModules();
-    const loaded = await import('../src/server');
-    loaded.createServer(new EditorLink('/project/src', '/discovery'), 'THE GUIDE', '/project/src');
-    expect(fakes.FakeMcpServer.made.at(-1)?.info).toEqual({ name: 'ai-pair', version: '9.9.9' });
   });
 
   it("renders a tool's report from the link's answer", async () => {

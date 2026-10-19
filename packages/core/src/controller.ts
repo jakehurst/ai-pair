@@ -30,7 +30,7 @@ import {
 import { followChange, rehearse, type Rehearsal } from './rehearsal';
 import { fileLines } from './text';
 import { Timeline } from './timeline';
-import { defaultConfig, type Config } from './config';
+import { defaultConfig, type Config, type Timeouts } from './config';
 import { defaultTiming, glideDuration, withOverrides } from './timing';
 
 const UNANCHORED =
@@ -703,6 +703,11 @@ export class Controller {
 
   setReadingSpeed(speed: number): void {
     this.readingSpeed = speed;
+  }
+
+  /** Sets the timeouts given, in milliseconds: a test sets `TEST_TIMEOUTS`, which it can wait out. */
+  setTimeouts(overrides: Partial<Timeouts>): void {
+    this.config = { ...this.config, ...overrides };
   }
 
   setConfirmCommands(confirm: boolean): void {

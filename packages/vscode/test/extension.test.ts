@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSavedSession } from '@ai-pair/core';
 import { playDemo } from '../src/demo';
 import { activate, deactivate } from '../src/extension';
+import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
 import { settingSpeed } from '../src/panel_html';
 import { builtInPassage } from '../src/passage';
@@ -117,6 +118,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showCalibration = vi.fn();
+    readonly showTimings = vi.fn();
     readonly restoreHistory = vi.fn();
     readonly focusReply = vi.fn();
     readonly askStart = vi.fn();
@@ -234,6 +236,7 @@ vi.mock('../src/setup', () => ({
   writeLauncher: vi.fn(() => '/ext/launcher'),
 }));
 vi.mock('../src/calibration', () => ({ Calibration: fakes.FakeCalibration }));
+vi.mock('../src/timings', () => ({ timings: { saveMs: 200 }, setTimings: vi.fn() }));
 vi.mock('../src/passage', () => ({ builtInPassage: vi.fn(() => ({ title: 'Built in', text: 'Built-in words.' })) }));
 
 /** The extension's context, faked: its storage, and what it is asked to dispose. */
@@ -481,6 +484,13 @@ describe('the session across a reload', () => {
     vi.advanceTimersByTime(200);
     expect(stored.get('aiPair.history')).toBeUndefined();
     expect(h.api.history()).toEqual(['history']);
+  });
+
+  it("setTimings: sets the extension's delays and tells the page its own", () => {
+    const h = activated();
+    h.api.setTimings({ saveMs: 1 });
+    expect(vi.mocked(setTimings)).toHaveBeenCalledWith({ saveMs: 1 });
+    expect(h.panel.showTimings).toHaveBeenCalledOnce();
   });
 });
 

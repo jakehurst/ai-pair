@@ -9,6 +9,7 @@ import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
 import { settingSpeed } from './panel_html';
 import { claudeStarter, setUpAgent, writeLauncher } from './setup';
+import { setTimings, timings, type Timings } from './timings';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 
@@ -16,8 +17,6 @@ import { builtInPassage, type Passage } from './passage';
 const SAVED_SESSION = 'aiPair.session';
 /** Where the session's panel history waits across a reload, next to the session. */
 const SAVED_HISTORY = 'aiPair.history';
-/** How long after a change the session is saved: changes come a keystroke at a time. */
-const SAVE_MS = 200;
 /** Whether Set Up Agent was offered once, in the global state. */
 const OFFERED_SETUP = 'aiPair.offeredSetup';
 /** The settings under `aiPair`, as `config().get` and `update` name them. */
@@ -41,6 +40,8 @@ export interface Api {
   saved: () => SavedSession | undefined;
   /** What the panel was posted, as a view replays it. */
   history: () => readonly PanelEvent[];
+  /** Sets the extension's own delays (timings.ts), for a test that cannot wait the shipped ones out. */
+  setTimings: (overrides: Partial<Timings>) => void;
 }
 
 function config(): vscode.WorkspaceConfiguration {
@@ -185,7 +186,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   controller.onChange = panel.onPost = () => {
     clearTimeout(saving);
-    saving = setTimeout(save, SAVE_MS);
+    saving = setTimeout(save, timings.saveMs);
   };
 
   const bridge = new Bridge(controller, {
@@ -315,6 +316,10 @@ export function activate(context: vscode.ExtensionContext): Api {
       return isSavedSession(kept) ? kept : undefined;
     },
     history: () => panel.history,
+    setTimings: (overrides) => {
+      setTimings(overrides);
+      panel.showTimings();
+    },
   };
 }
 

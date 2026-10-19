@@ -1,4 +1,4 @@
-export { defaultConfig, type Config } from './config';
+export { defaultConfig, TEST_TIMEOUTS, type Config, type Timeouts } from './config';
 export { Controller, isSavedSession, type SavedSession } from './controller';
 export type {
   AgentState,

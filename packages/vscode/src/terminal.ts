@@ -5,11 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { samePath, type CommandOutcome, type RunOptions } from '@ai-pair/core';
 import { MAX_OUTPUT, outcomeOf, Tail } from './output';
+import { timings } from './timings';
 
-/** How long a new terminal gets to report shell integration before the command is just typed in. */
-const SHELL_INTEGRATION_MS = 5000;
-/** After the command ends, how long its output stream gets to drain. */
-const DRAIN_MS = 500;
 /** The tail keeps this many times the output it reports, so a cut at its start loses nothing it shows. */
 const TAIL_SLACK = 4;
 
@@ -42,7 +39,7 @@ function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promi
     });
     const timer = setTimeout(() => {
       done(terminal.shellIntegration);
-    }, SHELL_INTEGRATION_MS);
+    }, timings.shellIntegrationMs);
     cleanup.push(() => {
       clearTimeout(timer);
     });
@@ -157,7 +154,7 @@ export class PairTerminals implements vscode.Disposable {
     });
 
     const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)]);
-    if (finished) await Promise.race([drained, delay(DRAIN_MS)]);
+    if (finished) await Promise.race([drained, delay(timings.drainMs)]);
 
     return outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended });
   }
