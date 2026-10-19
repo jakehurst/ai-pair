@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.8
+
+-   Every delay of the extension's own is in one place, with a set for real
+    use and a set a test can wait out (#176, #186): the controller's timeouts
+    (`setTimeouts`, `TEST_TIMEOUTS`), the extension's delays (`timings.ts`,
+    `Api.setTimings`, which also tells the panel's page its tooltip delays),
+    and the relay's (`AI_PAIR_TIMINGS=test` in its environment).
+-   Code no run reaches is gone: the relay's own catch around serving (Node
+    exits the same way), a dev version for an unbuilt relay (the build
+    defines it, and so does vitest), the demo's unused `select` target, two
+    fallbacks for a line past the end of a file, and the panel's empty
+    `default`. Set Up Agent takes a host, as the starter does.
+
 ## 0.7.7
 
 -   The editor and the panel take the controller, the calibration, and the

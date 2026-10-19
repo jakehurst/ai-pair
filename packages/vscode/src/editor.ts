@@ -20,6 +20,7 @@ import {
   type RunOptions,
   type SharedSelection,
 } from '@ai-pair/core';
+import { timings } from './timings';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport, type Lines } from './view';
 import { PairTerminals } from './terminal';
 
@@ -38,25 +39,12 @@ interface Target {
 /** States in which the programmer's view follows the agent cursor. */
 const FOLLOWING: ReadonlySet<AgentState> = new Set(['typing', 'read', 'thinking', 'absent', 'listening']);
 
-/** View changes within this long after our own navigation are ours, not the programmer's. */
-const SELF_NAV_MS = 400;
-/** How often the read cursor pulses. */
-const PULSE_MS = 450;
 /** VS Code's default for `editor.stickyScroll.maxLineCount`. */
 const STICKY_LINES = 5;
 /** The cursor's opacity in each state. */
 const DIM = 0.6;
 const FAINT = 0.45;
 const SOFT = 0.8;
-
-/** With smooth scrolling, our own scroll has finished once the visible ranges stay unchanged this long. */
-const SCROLL_QUIET_MS = 50;
-
-/** The longest we wait for our own scroll to finish. */
-const SCROLL_MAX_MS = 500;
-
-/** A glide's frame. */
-const FRAME_MS = 16;
 
 /** A shared selection is cut off here; the agent can `read` the rest. */
 const MAX_EXCERPT = 8000;
@@ -113,8 +101,6 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private selfNavUntil = 0;
   /** Our shows in progress: view changes meanwhile are ours, however long VS Code takes (#56). */
   private showing = 0;
-  /** How long after our own navigation view changes are ours. Tests set it to 0, to leave only `showing`. */
-  selfNavMs = SELF_NAV_MS;
   /**
    * How many lines each editor group's viewport shows, as last seen without a document's end in view,
    * or measured. A zoom or a resize since, with a document's end in view, goes unnoticed.
@@ -250,7 +236,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         viewColumn: vscode.window.activeTextEditor?.viewColumn,
       });
     } finally {
-      // specs/FollowMode.tla, `Resolve`: the held window gets its SELF_NAV_MS from now (`Expire`).
+      // specs/FollowMode.tla, `Resolve`: the held window gets its `selfNavMs` from now (`Expire`).
       this.showing--;
       this.selfNav();
     }
@@ -537,7 +523,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     // specs/Scroll.tla, `Glide`: each frame nearer the landing, until the state stops following.
     while (top !== to) {
       await new Promise((resolve) => {
-        setTimeout(resolve, FRAME_MS);
+        setTimeout(resolve, timings.frameMs);
       });
       if (!FOLLOWING.has(this.state)) {
         this.cut = true;
@@ -586,11 +572,11 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         }
         resolve();
       }
-      let quiet = setTimeout(done, SCROLL_QUIET_MS);
+      let quiet = setTimeout(done, timings.scrollQuietMs);
       cleanup.push(() => {
         clearTimeout(quiet);
       });
-      const max = setTimeout(done, SCROLL_MAX_MS);
+      const max = setTimeout(done, timings.scrollMaxMs);
       cleanup.push(() => {
         clearTimeout(max);
       });
@@ -601,7 +587,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
           return;
         }
         clearTimeout(quiet);
-        quiet = setTimeout(done, SCROLL_QUIET_MS);
+        quiet = setTimeout(done, timings.scrollQuietMs);
       });
       cleanup.push(() => {
         changes.dispose();
@@ -650,13 +636,13 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.pulse = setInterval(() => {
       this.pulseOn = !this.pulseOn;
       this.redraw();
-    }, PULSE_MS);
+    }, timings.pulseMs);
   }
 
   // ---- Helpers -------------------------------------------------------------
 
   private selfNav(): void {
-    this.selfNavUntil = Date.now() + this.selfNavMs;
+    this.selfNavUntil = Date.now() + timings.selfNavMs;
   }
 
   /** Returns whether a view change now is from our own navigation. */

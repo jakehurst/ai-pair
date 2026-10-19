@@ -9,17 +9,14 @@ import { aiPairHome, FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type ToolName } from '@
 import { readGuides, renderGuides, type Guide } from './guide';
 import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
+import { RELAY_TIMINGS } from './timings';
 import { TOOLS } from './tools';
 
-/** The extension's version, which the build defines; unbuilt, as in tests, there's none. */
-declare const AI_PAIR_VERSION: string | undefined;
-const VERSION = typeof AI_PAIR_VERSION === 'string' ? AI_PAIR_VERSION : 'dev';
+/** The extension's version: the build defines it, and vitest.config.ts defines one for the unit tests. */
+declare const AI_PAIR_VERSION: string;
 
 /** How many answered reports the relay keeps, for a cancel that arrives after its answer (#67). */
 export const MAX_ANSWERED = 16;
-
-/** How long to wait for the harness to list its roots: one that claims to but never answers mustn't block `start`. */
-const ROOTS_MS = 2000;
 
 /** Always loaded by the harness, so kept short; the full guide comes with `start`. */
 export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Never end your turn during a session; call \`listen\` instead.`;
@@ -60,12 +57,12 @@ function shownPath(file: string): string {
  * roots, and `cwd`. Some harnesses start MCP servers in `/` or in their own install folder.
  */
 export function createServer(link: EditorLink, guide: string, cwd: string): McpServer {
-  const server = new McpServer({ name: 'ai-pair', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'ai-pair', version: AI_PAIR_VERSION }, { instructions: INSTRUCTIONS });
 
   async function roots(): Promise<string[]> {
     if (!server.server.getClientCapabilities()?.roots) return [];
     try {
-      const listed = await server.server.listRoots(/* params= */ undefined, { timeout: ROOTS_MS });
+      const listed = await server.server.listRoots(/* params= */ undefined, { timeout: RELAY_TIMINGS.rootsMs });
       return listed.roots.filter((r) => r.uri.startsWith('file:')).map((r) => fileURLToPath(r.uri));
     } catch {
       return [];

@@ -74,6 +74,7 @@ vi.mock('vscode', () => {
     env: { openExternal: vi.fn(() => Promise.resolve(true)) },
   };
 });
+vi.mock('../src/timings', () => ({ timings: { tipDelayMs: 7, tipWarmMs: 8 } }));
 vi.mock(import('../src/panel_html'), async (importOriginal) => ({
   ...(await importOriginal()),
   panelHtml: vi.fn(() => '<html>'),
@@ -455,8 +456,16 @@ describe('receive', () => {
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
       { type: 'selection', ref: REF },
+      { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
       { type: 'canStart', value: true },
     ]);
+  });
+
+  it('showTimings: tells the page its delays, as a test sets them', () => {
+    const { panel } = harness();
+    const view = open(panel);
+    panel.showTimings();
+    expect(view.posted).toEqual([{ type: 'timings', tipDelayMs: 7, tipWarmMs: 8 }]);
   });
 
   it("speed, readingSpeed: sets a speed from the menu, and ignores one that isn't", () => {

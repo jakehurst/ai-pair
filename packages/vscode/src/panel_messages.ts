@@ -42,4 +42,6 @@ export type ToPanel =
   /** Whether the idle view offers Start a session: Claude Code is set up, its CLI is here, a folder is open (#107). */
   | { type: 'canStart'; value: boolean }
   /** The agent the Start a session button ran has exited, with or without a session: the note goes (#118). */
-  | { type: 'startEnded' };
+  | { type: 'startEnded' }
+  /** The page's delays (timings.ts), for a test that cannot wait the shipped ones out. */
+  | { type: 'timings'; tipDelayMs: number; tipWarmMs: number };
