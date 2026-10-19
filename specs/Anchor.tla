@@ -1,12 +1,12 @@
 ---- MODULE Anchor -------------------------------------------------------------
 (******************************************************************************)
-(* The agent's cursor after a discarded or interrupted batch, issue 112: the  *)
-(* agent plans the next batch against where the discarded batch would have    *)
-(* ended, while the cursor is where it stopped. step in                       *)
-(* packages/core/src/controller.ts, with the reports snapshot builds. With    *)
-(* the guard, a batch after such a report must anchor the cursor, a move,     *)
-(* select or point naming its file and line, before any action at the cursor, *)
-(* or it is refused.                                                          *)
+(* The agent's cursor after a batch that was not completed (interrupted,      *)
+(* discarded, or failed), issue 112: the agent plans the next batch against   *)
+(* where that batch would have ended, while the cursor is where it stopped.   *)
+(* step in packages/core/src/controller.ts, with the reports snapshot builds. *)
+(* With the guard, a batch after such a report must anchor the cursor, a move *)
+(* or select naming its file and line, before any action at the cursor, or it *)
+(* is refused.                                                                *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -27,8 +27,8 @@ Positions == 1..3
 VARIABLES
     cursor,     \* where the agent's cursor is
     belief,     \* where the agent thinks it is
-    pending,    \* a report said a batch was discarded or interrupted, and no
-                \* anchored batch was accepted since
+    pending,    \* a report said a batch was not completed, and no anchored
+                \* batch was accepted since
     misplaced,  \* an edit played where the agent did not think the cursor was
     held,       \* rejections `restore` holds for the next reports (#67)
     lost,       \* a held rejection reached no report

@@ -193,7 +193,7 @@ Read every report. It shows each finished batch's code as it now reads, with you
 
 An empty batch waits for your queued batches without waiting for the programmer.
 
-After a report says a batch was interrupted or discarded, your cursor is where it stopped: \`read\`, then anchor the cursor with a \`move\` or \`select\` giving both \`file\` and \`line\` before anything else at the cursor, or the batch is refused with \`unanchored\`.`,
+After a report says a batch was interrupted, discarded, or failed, your cursor is where it stopped: \`read\`, then anchor the cursor with a \`move\` or \`select\` giving both \`file\` and \`line\` before anything else at the cursor, or the batch is refused with \`unanchored\`.`,
     inputSchema: {
       actions: z.array(actionSchema).describe('Played in order.'),
     },

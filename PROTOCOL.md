@@ -422,12 +422,12 @@ An action on any other line is rejected with `line_not_seen`, saying what the
 line reads now, and the lines where its text is. Those count as shown, so the
 agent can fix the batch without a `read`.
 
-After a report says a batch was interrupted or discarded, the agent cursor is
-where that batch stopped, not where it would have ended. The next batch's first
-action at the cursor must then be a `move` or `select` giving both `file` and
-`line`, or the batch is rejected with `unanchored`; a batch of only `say`,
-`point` or `run` is fine. An accepted anchored batch ends the requirement (#112,
-`specs/Anchor.tla`).
+After a report says a batch was interrupted, discarded, or failed, the agent
+cursor is where that batch stopped, not where it would have ended. The next
+batch's first action at the cursor must then be a `move` or `select` giving
+both `file` and `line`, or the batch is rejected with `unanchored`; a batch of
+only `say`, `point` or `run` is fine. An accepted anchored batch ends the
+requirement (#112, `specs/Anchor.tla`).
 
 **Text copied from a report** may carry the cursor marker. A span ignores it. In
 a spot, `▌` is where the cursor goes, so text copied into `at` leaves the

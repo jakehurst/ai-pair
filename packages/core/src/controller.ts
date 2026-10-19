@@ -34,7 +34,7 @@ import { defaultConfig, type Config, type Timeouts } from './config';
 import { defaultTiming, glideDuration, withOverrides } from './timing';
 
 const UNANCHORED =
-  'Your previous batch was interrupted or discarded, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
+  'Your previous batch was interrupted, discarded, or failed, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
 
 interface Batch {
   id: number;

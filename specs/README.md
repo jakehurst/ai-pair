@@ -569,7 +569,7 @@ short.
 
 `step` and `snapshot` in `packages/core/src/controller.ts`. The agent plans a
 batch against where the one before would have ended; when that one is
-interrupted or discarded, the cursor is where it stopped (#112). `Guard`
+interrupted, discarded, or failed, the cursor is where it stopped (#112). `Guard`
 switches the refusal; with `FALSE`, TLC violates `NoMisplacedEdit` in two steps:
 `Discard`, `SubmitUnanchored`. `DropsHeld` is the bug of #193: the refusal's
 report took a rejection `restore` held and overwrote it; with `TRUE`, TLC

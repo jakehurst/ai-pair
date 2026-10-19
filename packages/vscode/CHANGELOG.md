@@ -19,6 +19,10 @@
     `DropsHeld`); and "Your move" stayed on through a `read`, and after a step
     refused at once, until the listen grace ran out, where now every call ends
     the grace (#194, `ListenGrace.tla`, `EndOnAnyCall`).
+-   The `unanchored` rejection, the `step` tool's description, the guide, and
+    the protocol say a failed batch also leaves the cursor where it stopped,
+    as an interrupted or discarded one does (#192). Three presence checks in
+    `calibration.ts` and `typing.ts` test outright, as the style rules ask.
 
 ## 0.7.8
 
