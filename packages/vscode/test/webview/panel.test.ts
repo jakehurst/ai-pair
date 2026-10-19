@@ -1023,5 +1023,4 @@ describe('guards', () => {
     expect(element('tip').hidden).toBe(false);
     expect(text('tip')).toBe('');
   });
-
 });
