@@ -1,294 +1,442 @@
-# Changes to the specs for #197
+# Changes to the specs
 
-A running changelog of the renames and additions that make a term mean one
-thing across the TLA+ specs, for the architecture documents to be updated
-from. One entry per fix, newest last.
+What changed in the TLA+ specs in `specs/` on 2026-10-19 and 2026-10-20,
+newest first, for the architecture documents and any reader of an older spec to
+be updated from. Each section names its pull request and issues;
+[`specs/README.md`](README.md) has every spec as it is now, with its mutations,
+the tests for each invariant, and the results.
 
-## Fixes
+## Cross-spec gaps, and two bugs fixed spec first
 
-1.  **`pending` named one thing per spec** (finding 1). Wire keeps `pending`,
-    the code's own word for a sent call awaiting its answer (`link.ts`). The
-    others are named for what they hold: Start `unanswered` (checks asked and
-    not answered), Resume `message` (the programmer's message the agent has
-    not been sent), ListenGrace and Navigator `unreported` (what the programmer
-    did and the agent has not been told), Anchor `mustAnchor` (a report said a
-    batch did not complete, and no anchored batch since), Outside `coalescing`
-    (writes the watcher has not reported), Timeline `sleeping` (the sleep in
-    progress, with the code's `Timeline.pending` renamed `Timeline.sleeping`,
-    since the class's `sleep` is its method), and
-    Calibration `written` (a rate written to the settings, not yet applied).
-    TLC: every config holds with its state count unchanged.
+Pull request #221, issues #200, #219, and #220, 2026-10-20. An audit of every
+spec against the code, then a check of what falls between related specs: where
+the code takes a path a spec did not model, the spec gained it. Every new
+mutation is listed in the README with the invariant it breaks.
 
-2.  **`call` named one thing per spec** (finding 2). Controller's one call is
-    `phase`, the word Calibration, Player, and Turns use for where their one
-    process is, and its `answering` phase is `committed`, Serialize's name for
-    the same point (the snapshot taken, the answer on its way). Wire's map from
-    call id to state is `pc`, Serialize's name for the same map. Terminals'
-    run() call is `run`, and RunBox's player phase `player`, so the two do not
-    share a name; Terminals' `CallStates` is `RunStates`, since Wire's
-    `CallStates` is a different set. Navigator's open call is `call`, one of
-    `Calls` or `NoCall`, with ListenGrace's two definitions word for word, so
-    the two specs agree. TLC: every config holds with its state count
-    unchanged.
+| Spec | What it models now | Properties | Distinct states |
+|---|---|---|---|
+| `Rehearsal` | The programmer's edits (`EditAsProgrammer`, interrupting in the agent's turn, never followed) and turn changes (`ChangeTurn`); a batch rehearsed in the programmer's turn queues no edit (`RehearsalTurn`); `FailPlay(made)` for any batch that does not complete, with its change made or not; every report as `Report`, which with a batch still playing sets `staleReported`, and `EndStale` clears `stale` when that batch ends (#219). New constants `MaxProgrammerEdits` and `ReportWaitsForQueue`, variables `turn`, `programmerEdits`, and `staleReported` | `ReportedWhilePlaying` (new) | 79,999 -> 6,721,044 |
+| `Serialize` | The programmer ending the session (`End`), the socket closing (`CloseSocket`), and an interrupt (`Interrupt`) at any point, with variables `ended`, `gone`, and `closed`; a call refused with `"noSession"`; a discarded batch (`"discarded"`), whose step waits until nothing is queued (#219) | `NeverBlockedClosed`, `ReadyWhenEnded`, `DiscardedWaits` (new) | 709 -> 3,646 |
+| `Start` | Two asks in flight; `newestAnswered` is gone | `LatestAnswer` became the action property `LatestAnswerProp`: only an answer the page shows counts | 27,816 -> 242,152 |
+| `Timeline` | A second sleep while one is pending (`SleepAgain`), and a replaced sleep's timer firing (`FireReplaced`) | `LatestPending` (new) | 176 -> 656 |
+| `ListenGrace` | News that wakes no listen (`QuietNews`), and a timeout with news to report (`TimeoutWithNews`) | `NewsSkipsGraceProp` (new) | 20 -> 40 |
+| `Resume` | The programmer ending a suspended session closes it at once, and an ended one closes on its agent's next call (`CloseEnded`) | `EndedHasAgent` (new); `WaitsProp` names `EndByProgrammer` | 62 -> 56 |
+| `EditorAdapter` | An edit VS Code refuses (`RejectEdit`, `ownEdit` `"rejected"`), and `create`'s save (`StartCreateSave`, `FinishCreateSave`, variable `creating`); fairness on `ResolveEdit` | `EditsEnd` (new) | 1,464 -> 3,195 |
+| `Discovery` | A window that refuses the relay's hello (variable `refuses`); `open()` goes on to the next | `FindsOpen` asks only for a window that welcomes the relay | 217 -> 782; `Discovery_InPlace` 302 -> 1,106 |
+| `Outside` | The file's open document becoming the active editor again (`FocusDocument`) | | 564 -> 614 |
+| `FollowMode` | `show` returning early for a file already in a visible editor (`ShowVisible`, `showCall` `"visible"`, variable `destinationVisible`) | | 13 -> 19 |
+| `Scroll` | The programmer's turn as a reason not to follow (`"navigator"`), which drops a cut glide (variable `turnSinceFollow`) | `ComesInView` excuses a turn since follow mode last followed | 7,552 -> 14,131 |
+| `BatchFile` | The selection a `delete` needs (variable `selected`, `no_selection`) | `EditAtCursorProp` asks a `delete` to have a selection | 207 -> 369 |
+| `Reload` | A selection at the start of a changed run, which `mapThrough` keeps in place (`Holding`, `Moved`, variable `selectionAtStart`) | `StartOfRunStays` (new) | 160 -> 320 |
+| `EditEvents` | One pending edit event a file (variable `events`) | `OnePendingEdit` (new) | 516, unchanged |
+| `Calibration`, `Draft`, `RunBox`, `Timeline` | Comments only: they say what the code does | | unchanged |
 
-3.  **`active` named one thing per spec** (finding 3). PointFocus and
-    FollowMode call the active editor's file `editor`. RunBox's boolean for the
-    session being active in the page is `live`, the word Resume's `Views` uses
-    for a live session. Bridge and Resume keep `"active"` as the session's
-    phase. TLC: every config holds with its state count unchanged.
+The two bugs, each shown by TLC before the fix:
 
-4.  **One session vocabulary, and no absent value spelled as a string**
-    (finding 4). Resume takes Bridge's `Phases` and `NoSession` definitions
-    word for word, its `state` is `session` as in Bridge, and its `"none"` is
-    gone. ActionValidation's `None == "none"` was two things: the answer for
-    no problem is now the model value `NoProblem`, over a `Problems` set the
-    spec names, and the kind for a missing `old` field is `"missing"` (first
-    `"absent"`; fix 16 settled the word), like
-    every other field's. TLC: both hold, Resume with its state count
-    unchanged.
+-   **#219:** a report while the batch an interrupt left playing still played
+    cleared `stale`, so the next batch was rehearsed from that batch's fork,
+    which missed the programmer's edit, and a line just read was refused.
+    `ReportWaitsForQueue = FALSE` breaks `ReadIsStart`; the old `Return`
+    breaks `DiscardedWaits`.
+-   **#220:** after the link closed, `open()` still tried the next window,
+    against `Wire`'s `OpenSocket` guard. `Wire` was right; only the code
+    changed.
 
-5.  **`runs` counts one thing per spec** (finding 5). Calibration counts
-    `rounds`, bounded by `MaxRounds` (first `completed`, which Controller uses
-    for a batch played to the end; see 16); Start counts `starts`,
-    and `RunsAreClicks` is `StartsAreClicks`, in the README's rows and the
-    three tests named for it; Terminals keeps `runs` for run() calls. TLC:
-    both hold with their state counts unchanged.
+A sweep with every bound raised by one found only `Controller` at
+`MaxCancels = 3`, which is #202.
 
-6.  **A call cut off by its socket's close is `severed`** (finding 6), with
-    `severedBy` the socket, in Wire. `rejected` now means one thing: a batch
-    that failed rehearsal (Serialize, Controller). The hello's `rejected`
-    answer is the protocol's own message type and stays. TLC: holds with the
-    state count unchanged.
+## One meaning per term
 
-7.  **`idle` means nothing in flight everywhere** (finding 7). ListenGrace's
-    boolean for a listen that timed out empty is `timedOut`. TLC: holds with
-    the state count unchanged.
+Pull request #199, issues #197 and #198, 2026-10-19. Every term means one thing
+across the specs, and every variable is named for what it holds. TLC held on
+every config, with the state counts unchanged except where a model changed:
+`Turns` 538 -> 1,234 (`type_fast` checks for the interrupt as `type` does),
+`EditorAdapter` 311 -> 1,464 (the `disk` author and `Reload`), and `BatchFile`
+121 -> 207 (a third file).
 
-8.  **`stale` is the queue gate only** (finding 8). PointFocus's boolean for a
-    reply that showed a point the programmer had looked away from is `reshown`.
-    TLC: holds with the state count unchanged.
+-   **The rules.** A term means one thing in every spec; a name of two or more
+    words is lowerCamelCase, a string value too, as section 5.10 of
+    [the style guide](tlaplus-style-guide.md) says; an absent value is a model
+    value, not a string; a spec's one process is `phase`; id sets are `Num*`
+    and bounds `Max*`; an action names its object where a verb was shared
+    (`CloseSocket`, `OpenDocument`).
+-   **`PairDefs.tla`**, new: the shared vocabulary, `ActionKinds`,
+    `SessionPhases` and `NoSession`, `Views`, `PageStates`, `Calls` and
+    `NoCall`, `PauseReasons`, `Files` and `NoFile`, and the letters `Letter`,
+    `OtherLetter`, `Space`, `LineFeed`, `CarriageReturn`, with `Seqs`. The specs
+    that used them `EXTENDS` it.
+-   **The programmer is `programmer`, never `user`**, in the specs and on the
+    wire: the turn, the Pause button's reason, the code, the tests, and
+    `PROTOCOL.md`, with version 0.8.0.
+-   **Models that changed:** `EditorAdapter` gained the `disk` author and
+    `Reload`; `Turns` takes `ActionKinds` from `PairDefs`; `FollowMode`'s
+    `LookAway` goes to `"otherFile"`; `BatchFile`'s `EditAtCursorProp` covers
+    `type_fast`.
+-   **The review (#198)** found names the sweep left behind, in 49 code and test
+    comments and in nine `ASSUME` names; nothing it found changed a formula's
+    meaning.
 
-9.  **Set names name their set** (finding 9). Timeline's pause reasons are
-    `PauseReasons`, and Scroll's reasons the view stops following are
-    `AwayReasons`; Player's are `DeleteOutcomes` with `NoDeleteOutcome`, and
-    Serialize's `CallOutcomes` with `NoCallOutcome`. The kinds of action are
-    `ActionKinds`, one list of eight, in PairDefs (fix 13): Actions keeps
-    `Shapes`, the kinds its step table tells apart (`type_fast` steps as
-    `type`; `type0` is a `type` with nothing to type); BatchFile takes all
-    eight (`run` acts in no file, like `say`; `type_fast` edits at the cursor);
-    Turns takes them from PairDefs instead of its config, and `type_fast`
-    checks for the interrupt as `type` does, which TLC caught when the first
-    run let it take effect in the programmer's turn. TLC: Turns 538 to 1,234
-    states; the rest unchanged.
+Every rename, by spec. A row with `none` in Was is new; one with `none` in Now
+is gone, and says where it went:
 
-10.  **The programmer is `programmer`, never `user`** (finding 10). The turn
-     (Turns, Controller) and the Pause button's reason (`PauseReasons`) say so;
-     the code, the tests, the stylesheet's `programmer-turn` class, and
-     `PROTOCOL.md` follow, with a minor version bump to 0.8.0. TLC: both hold.
+| Spec | Kind | Was | Now |
+|---|---|---|---|
+| ActionValidation | definition | `None` | `NoProblem`, over the new set `Problems` |
+| ActionValidation | value | `"absent"` | `"missing"` |
+| ActionValidation | value | `"none"` | `NoProblem` |
+| ActionValidation | value | `"other"` | `"otherText"` |
+| ActionValidation | value | `"throws"` | `Throws`, a model value |
+| Actions | variable | `current` | `action` |
+| Actions | variable | `effects` | `effectsPlayed` |
+| Actions | constant | `MaxLen` | `MaxActions` |
+| Actions | definition | `Full` | `FullEffects` |
+| Actions | definition | `Kinds` | `ActionShapes` |
+| Actions | value | none | `"type_fast"` in the step table |
+| Anchor | variable | `cursor` | `place` |
+| Anchor | variable | `pending` | `mustAnchor` |
+| Anchor | variable | `misplaced` | `wrongPlace` |
+| Anchor | variable | `held` | `heldCount` |
+| Anchor | variable | `lost` | `rejectionLost` |
+| Anchor | definition | `Discard` | `StopShort` |
+| Anchor | definition | `Deliver` | `TakeHeld` |
+| BatchFile | variable | `cursor` | `cursorFile` |
+| BatchFile | variable | `named` | `namedFile` |
+| BatchFile | variable | `played` | `actionsPlayed` |
+| BatchFile | constant | `Files` | `Files` in `PairDefs` |
+| BatchFile | definition | `Names` | `NamingKinds` |
+| BatchFile | definition | `Reject` | `Stop` |
+| BatchFile | definition | `NoFile` | `NoFile` in `PairDefs` |
+| BatchFile | definition | `Kinds` | `ActionKinds` in `PairDefs` |
+| BatchFile | value | none | `"run"` and `"type_fast"` among its kinds |
+| Bridge | variable | `sock` | `socketState` |
+| Bridge | variable | `recent` | `restorable` |
+| Bridge | definition | `Close` | `CloseSocket` |
+| Bridge | definition | `EndSession` | `EndByProgrammer` |
+| Bridge | definition | `CallEnd` | `EndByAgent` |
+| Bridge | definition | `Phases` | `SessionPhases` in `PairDefs` |
+| Bridge | definition | `NoSession` | `NoSession` in `PairDefs` |
+| Calibration | variable | `passage` | `passageSource` |
+| Calibration | variable | `pending` | `rateUnapplied` |
+| Calibration | variable | `pause` | `calibratePause` |
+| Calibration | variable | `say` | `sayRate` |
+| Calibration | variable | `finished` | `calibratedOnce` |
+| Calibration | variable | `runs` | `rounds` |
+| Calibration | constant | `MaxRuns` | `MaxRounds` |
+| Calibration | definition | `Finish` | `StopTimer` |
+| Calibration | definition | `Cancel` | `CancelCalibration` |
+| Calibration | definition | none | `Rates` |
+| Calibration | value | `"armed"` | `"ready"` |
+| Calibration | value | `"old"` | `"staleDefault"` |
+| Controller | variable | `call` | `phase` |
+| Controller | variable | `rejected` | `reportRejection` |
+| Controller | variable | `returned` | `returningRejection` |
+| Controller | variable | `knownQuiet` | `knownQuietEdits` |
+| Controller | variable | `quietState` | `quietEditState` |
+| Controller | variable | `quietDeliveries` | `quietEditDeliveries` |
+| Controller | variable | `lastRejected` | `lastRejection` |
+| Controller | variable | `repeat` | `returnedAfterTaken` |
+| Controller | definition | `Batches` | `BatchIds` |
+| Controller | definition | `Events` | `EventIds` |
+| Controller | definition | `Got` | `HasReached` |
+| Controller | definition | `Again` | `CarriesRepeat` |
+| Controller | definition | `Finish` | `Complete` |
+| Controller | definition | `EndSession` | `EndByProgrammer` |
+| Controller | definition | `Answer` | `Deliver` |
+| Controller | value | `"answering"` | `"committed"` |
+| Controller | value | `"user"` | `"programmer"` |
+| Discovery | variable | `win` | `windowState` |
+| Discovery | variable | `relay` | `phase` |
+| Discovery | variable | `tries` | `untried` |
+| Discovery | variable | `conn` | `connectedTo` |
+| Discovery | constant | `Junk` | `JunkFile` |
+| Discovery | value | `"none"` | `"unstarted"` |
+| Discovery | value | `"reused"` | `"pidReused"` |
+| Draft | variable | `view` | `page` |
+| Draft | variable | `draft` | `hasDraft` |
+| Draft | variable | `sent` | `reportedDraft` |
+| Draft | variable | `reply` | `replyPause` |
+| Draft | variable | `views` | `pages` |
+| Draft | constant | `MaxViews` | `MaxPages` |
+| Draft | definition | `Type` | `TypeDraft` |
+| Draft | definition | `Ready` | `LoadPage` |
+| Draft | value | `"gone"` | `"disposed"` |
+| Draft | value | `"live"` | `"loaded"` |
+| EditEvents | variable | `base` | `baseline` |
+| EditEvents | variable | `prog` | `byProgrammer` |
+| EditEvents | variable | `intr` | `interrupts` |
+| EditEvents | variable | `last` | `report` |
+| EditEvents | variable | `steps` | `edits` |
+| EditEvents | constant | `MaxSteps` | `MaxEdits` |
+| EditEvents | definition | `Texts` | `Contents` |
+| EditorAdapter | variable | `own` | `ownEdit` |
+| EditorAdapter | variable | `made` | `changes` |
+| EditorAdapter | variable | `wrong` | `wrongAttributions` |
+| EditorAdapter | definition | `Note` | `WrongAttribution` |
+| EditorAdapter | definition | `Edit` | `EditAsAgent` |
+| EditorAdapter | definition | `Type` | `EditAsProgrammer` |
+| EditorAdapter | definition | `OK` | `RightAttribution` |
+| EditorAdapter | definition | none | `Reload` |
+| EditorAdapter | value | `"programmer during save"` | `"programmerDuringSave"` |
+| EditorAdapter | value | `"seen"` | `"handled"` |
+| EditorAdapter | value | `"sent"` | `"awaiting"` |
+| EditorAdapter | value | none | `"disk"`, an author |
+| FileText | variable | `disk` | `diskText` |
+| FileText | variable | `doc` | `documentText` |
+| FileText | variable | `steps` | `changes` |
+| FileText | constant | `MaxSteps` | `MaxChanges` |
+| FileText | constant | `Fixed` | `PreferDirty` |
+| FileText | definition | `Texts` | `Contents` |
+| FileText | definition | `Missing` | `NoSuchFile` |
+| FileText | definition | `Error` | `Internal` |
+| FileText | definition | `Open` | `OpenDocument` |
+| FileText | definition | `Close` | `CloseDocument` |
+| FollowMode | variable | `active` | `activeFile` |
+| FollowMode | variable | `window` | `selfNavigationWindow` |
+| FollowMode | variable | `show` | `showCall` |
+| FollowMode | variable | `paused` | `awayPause` |
+| FollowMode | variable | `looked` | `lookedAway` |
+| FollowMode | definition | `Expire` | `WindowExpires` |
+| FollowMode | definition | `Handle` | `HandleEditorChange` |
+| FollowMode | definition | `Resolve` | `ShowResolves` |
+| FollowMode | definition | `Files` | `Files` in `PairDefs` |
+| FollowMode | definition | `Other` | none: `LookAway` goes to `"otherFile"` |
+| FollowMode | value | `"a"` | `"sourceFile"` |
+| FollowMode | value | `"b"` | `"destinationFile"` |
+| FollowMode | value | `"none"` | `"idle"` |
+| FollowMode | value | `"event"` | `"eventQueued"` |
+| FollowMode | value | `"done"` | `"eventHandled"` |
+| FollowMode | value | `"held"` | `"heldOpen"` |
+| LineIdentity | constant | `MaxLen` | `MaxChars` |
+| LineIdentity | definition | `Newlines` | `LineFeeds` |
+| LineIdentity | definition | `Apply` | `ApplyChange` |
+| LineIdentity | value | `"n"`, `"x"` | `LineFeed`, `Letter` in `PairDefs` |
+| ListenGrace | variable | `grace` | `inGrace` |
+| ListenGrace | variable | `owes` | `owesResponse` |
+| ListenGrace | variable | `pending` | `unreported` |
+| ListenGrace | variable | `idle` | `timedOut` |
+| ListenGrace | variable | `expired` | `graceExpired` |
+| ListenGrace | variable | `quiet` | `absent` |
+| ListenGrace | definition | `Refuse` | `FailRehearsal` |
+| ListenGrace | definition | `TimeOut` | `Timeout` |
+| ListenGrace | definition | `Act` | `Interrupt` |
+| ListenGrace | definition | `GoQuiet` | `GoAbsent` |
+| ListenGrace | definition | `NoYourMoveAfterAct` | `NoYourMoveAfterInterrupt` |
+| ListenGrace | definition | `Calls` | `Calls` in `PairDefs` |
+| ListenGrace | definition | `NoCall` | `NoCall` in `PairDefs` |
+| ListenGrace | value | `"other"` | `"stepOrEnd"` |
+| Navigator | variable | `timer` | `timerArmed` |
+| Navigator | variable | `ready` | `navigatorReady` |
+| Navigator | variable | `pending` | `unreported` |
+| Navigator | variable | `early` | `returnedWhileTyping` |
+| Navigator | definition | `Edit` | `EditAsProgrammer` |
+| Navigator | definition | `Pause` | `Lull` |
+| Navigator | value | `"listening"` | `"listen"` |
+| Navigator | value | `"idle"` | `NoCall` |
+| Outside | variable | `doc` | `documentText` |
+| Outside | variable | `known` | `knownText` |
+| Outside | variable | `pending` | `unreportedWrites` |
+| Outside | variable | `notify` | `unreportedSave` |
+| Outside | variable | `marked` | `badged` |
+| Outside | variable | `outside` | `writtenOutside` |
+| Outside | definition | `Open` | `OpenDocument` |
+| Outside | definition | `Close` | `CloseDocument` |
+| Outside | definition | `Create` | `Show` |
+| Outside | definition | `Write` | `WriteOutside` |
+| Outside | definition | `Report` | `WatcherReports` |
+| Outside | definition | none | `NoDocument`, a model value |
+| Panel | variable | `band` | `currentMessage` |
+| Panel | variable | `flag` | `messageFiled` |
+| Panel | variable | `added` | `entriesSinceMessage` |
+| Panel | definition | `Flushed` | `WithMessageFiled` |
+| PanelReplay | variable | `live` | `liveViewSession` |
+| PanelReplay | constant | `MaxPosts` | `MaxEvents` |
+| PanelReplay | definition | `NoSession` | `NoSessionEvent` |
+| PanelScroll | variable | `above` | `entriesAboveView` |
+| PanelScroll | variable | `last` | `lastEvent` |
+| PanelScroll | variable | `before` | `topBefore` |
+| PanelScroll | constant | `MaxEntries` | `MaxEvents` |
+| PanelScroll | definition | `InRange` | `ViewAtEntry` |
+| PanelScroll | definition | none | `EventKinds` |
+| Places | constant | `MaxLen` | `MaxChars` |
+| Places | definition | `Seqs` | `Seqs` in `PairDefs` |
+| Places | value | `"x"`, `"y"`, `"n"` | `Letter`, `OtherLetter`, `LineFeed` in `PairDefs`; `"m"`, the marker, is no character now |
+| Player | variable | `target` | `selectedTextStart` |
+| Player | variable | `selection` | `selectionStart` |
+| Player | variable | `copy` | `copiedStart` |
+| Player | definition | `Outcomes` | `DeleteOutcomes` |
+| Player | definition | `NoOutcome` | `NoDeleteOutcome` |
+| Player | definition | `Begin` | `StartDelete` |
+| PointFocus | variable | `active` | `activeFile` |
+| PointFocus | variable | `looked` | `awayPause` |
+| PointFocus | variable | `stale` | `stalePointRevealed` |
+| PointFocus | variable | `jumped` | `replyMovedEditor` |
+| PointFocus | variable | `acted` | `cursorActed` |
+| PointFocus | definition | `Reply` | `SendReply` |
+| PointFocus | definition | `Resume` | `ResumeAll` |
+| PointFocus | definition | `Files` | `Files` in `PairDefs` |
+| PointFocus | definition | `NoFile` | `NoFile` in `PairDefs` |
+| PointFocus | value | `"a"` | `"sourceFile"` |
+| PointFocus | value | `"b"` | `"destinationFile"` |
+| PointFocus | value | `"other"` | `"otherFile"` |
+| Rehearsal | variable | `seen` | `shownLines` |
+| Rehearsal | variable | `bad` | `wrongLine` |
+| Rehearsal | variable | `others` | `otherChanges` |
+| Rehearsal | variable | `next` | `nextId` |
+| Rehearsal | variable | `fresh` | `justRead` |
+| Rehearsal | definition | `Ops` | `ChangesTo` |
+| Rehearsal | definition | `BatchOps` | `BatchChangesTo` |
+| Rehearsal | definition | `Editor` | `EditorLines` |
+| Rehearsal | definition | `Start` | `Origin` |
+| Rehearsal | definition | `Interrupted` | `QueuesAfterInterrupt` |
+| Reload | variable | `sel` | `selectionLine` |
+| Reload | variable | `orig` | `selectionBefore` |
+| Reload | constant | `Refine` | `SplitRuns` |
+| Reload | definition | `NewLines` | `Replacements` |
+| Resume | variable | `state` | `session` |
+| Resume | variable | `dir` | `directory` |
+| Resume | variable | `conn` | `connected` |
+| Resume | variable | `pending` | `messageWaiting` |
+| Resume | variable | `saved` | `stored` |
+| Resume | constant | `Dirs` | `Directories` |
+| Resume | constant | `MaxIds` | `MaxSessions` |
+| Resume | definition | `NoDir` | `NoDirectory` |
+| Resume | definition | `Save` | `Store` |
+| Resume | definition | `States` | `SessionPhases` in `PairDefs` |
+| Resume | definition | `Views` | `Views` in `PairDefs` |
+| Resume | definition | `Reload` | `ReloadWindow` |
+| Resume | value | `"none"` | `NoSession` |
+| RunBox | variable | `run` | `playerPhase` |
+| RunBox | variable | `box` | `boxShows` |
+| RunBox | variable | `active` | `sessionLive` |
+| RunBox | value | `"off"` | `"cleared"` |
+| Scroll | variable | `target` | `targetLine` |
+| Scroll | variable | `top` | `viewTop` |
+| Scroll | variable | `goal` | `landing` |
+| Scroll | variable | `from` | `targetAtStart` |
+| Scroll | variable | `away` | `awayReason` |
+| Scroll | variable | `cut` | `glideCut` |
+| Scroll | variable | `changes` | `followSwitches` |
+| Scroll | variable | `beyond` | `scrollBeyondLastLine` |
+| Scroll | constant | `MaxChanges` | `MaxFollowSwitches` |
+| Scroll | definition | `Return` | `Follow` |
+| Scroll | definition | `Settled` | `InView` |
+| Scroll | definition | `Settles` | `ComesInView` |
+| Scroll | definition | `Reasons` | `AwayReasons` |
+| Scroll | value | `"no"` | `NotAway`, a model value |
+| Scroll | value | `"paused"` | `"pause"` |
+| Serialize | variable | `aborted` | `canceled` |
+| Serialize | variable | `abortedAt` | `canceledAt` |
+| Serialize | variable | `current` | `blockedCall` |
+| Serialize | variable | `batch` | `queueState` |
+| Serialize | variable | `outcome` | `settledAs` |
+| Serialize | variable | `empty` | `emptyStep` |
+| Serialize | variable | `rejected` | `rehearsalFailed` |
+| Serialize | constant | `Fixed` | `AbortInBlock` |
+| Serialize | definition | `Calls` | `CallIds` |
+| Serialize | definition | `BatchStates` | `QueueStates` |
+| Serialize | definition | `Outcomes` | `CallOutcomes` |
+| Serialize | definition | `NoCall` | `NoCallId` |
+| Serialize | definition | `NoBatch` | `NoQueueState` |
+| Serialize | definition | `NoOutcome` | `NoCallOutcome` |
+| Serialize | definition | `Reject` | `FailRehearsal` |
+| Serialize | definition | `Abort` | `Cancel` |
+| Serialize | definition | `Play` | `Played` |
+| Serialize | definition | `Finish` | `Return` |
+| Serialize | definition | `TimeOut` | `Timeout` |
+| Serialize | definition | `Resolve` | `HandBack` |
+| Serialize | value | `"cancelled"` | `"canceled"` |
+| Serialize | value | `"waiting"` | `"inChain"` |
+| Start | variable | `shown` | `visible` |
+| Start | variable | `shownFor` | `visibleFor` |
+| Start | variable | `cmd` | `cliAndFolder` |
+| Start | variable | `asked` | `questions` |
+| Start | variable | `pending` | `unanswered` |
+| Start | variable | `setBy` | `deliveredQuestion` |
+| Start | variable | `newest` | `newestAnswered` |
+| Start | variable | `flips` | `environmentChanges` |
+| Start | variable | `runs` | `starts` |
+| Start | variable | `chosen` | `chosenLocation` |
+| Start | variable | `front` | `sidebarShows` |
+| Start | variable | `note` | `startingNoteShown` |
+| Start | variable | `session` | `sessionLive` |
+| Start | constant | `MaxFlips` | `MaxEnvironmentChanges` |
+| Start | definition | `RunsAreClicks` | `StartsAreClicks` |
+| Start | definition | `Answer` | `AnswerCheck` |
+| Start | definition | `FlipCmd` | `FlipCliAndFolder` |
+| Start | definition | `Exit` | `AgentExits` |
+| Start | definition | `Settles` | `NoteGoes` |
+| Start | definition | none | `NoQuestion`, a model value (was 0) |
+| Start | value | `"gone"` | `"disposed"` |
+| Start | value | `"live"` | `"loaded"` |
+| Terminals | variable | `cmd` | `command` |
+| Terminals | variable | `call` | `run` |
+| Terminals | variable | `at` | `callTerminal` |
+| Terminals | variable | `aborted` | `interrupted` |
+| Terminals | variable | `reused` | `busyReused` |
+| Terminals | variable | `dir` | `directory` |
+| Terminals | constant | `MaxTerminals` | `NumTerminals` |
+| Terminals | constant | `Dirs` | `Directories` |
+| Terminals | definition | `CallStates` | `RunStates` |
+| Terminals | definition | `Start` | `Acquire` |
+| Terminals | definition | `Close` | `CloseTerminal` |
+| Terminals | value | `"integration"` | `"awaitingIntegration"` |
+| Terminals | value | `"returned"` | `"settled"` |
+| Timeline | variable | `reasons` | `pauseReasons` |
+| Timeline | variable | `pending` | `sleeping` |
+| Timeline | definition | `Reasons` | `PauseReasons` in `PairDefs` |
+| Timeline | value | `"user"` | `"programmer"` |
+| Timeline | value | `"waiting"` | `"timerStopped"` |
+| Timeline | value | `"away"`, `"calibrate"`, `"reply"` | `PauseReasons` in `PairDefs` |
+| Turns | variable | `changes` | `turnChanges` |
+| Turns | variable | `bad` | `wrongTurn` |
+| Turns | constant | `Kinds` | `ActionKinds` in `PairDefs` |
+| Turns | constant | `MaxLen` | `MaxActions` |
+| Turns | constant | `MaxChanges` | `MaxTurns` |
+| Turns | definition | `Edits` | `EditKinds` |
+| Turns | definition | `Begin` | `StartHead` |
+| Turns | definition | `Start` | `Perform` |
+| Turns | value | `"start"` | `"before"` |
+| Turns | value | `"user"` | `"programmer"` |
+| Turns | value | none | `"type_fast"` among its kinds |
+| Typing | constant | `MaxLen` | `MaxChars` |
+| Typing | value | `"n"`, `"s"`, `"x"` | `LineFeed`, `Space`, `Letter` in `PairDefs` |
+| Wire | variable | `sock` | `socketState` |
+| Wire | variable | `cur` | `activeSocket` |
+| Wire | variable | `call` | `pc` |
+| Wire | variable | `on` | `sentOn` |
+| Wire | variable | `pending` | `awaitingAnswer` |
+| Wire | variable | `rejectedBy` | `severedBy` |
+| Wire | variable | `garbage` | `garbageSent` |
+| Wire | variable | `aborted` | `canceled` |
+| Wire | variable | `noticed` | `cancelNoticed` |
+| Wire | variable | `answered` | `answerAtClient` |
+| Wire | variable | `marked` | `mayRepeat` |
+| Wire | constant | `MaxSockets` | `NumSockets` |
+| Wire | constant | `MaxCalls` | `NumCalls` |
+| Wire | constant | `PerSocket` | `RejectPerSocket` |
+| Wire | constant | `WaitCancelled` | `WaitForReturn` |
+| Wire | definition | `Calls` | `CallIds` |
+| Wire | definition | `Open` | `OpenSocket` |
+| Wire | definition | `Close` | `CloseSocket` |
+| Wire | definition | `Reject` | `RejectHello` |
+| Wire | value | `"cancelled"` | `"canceled"` |
+| Wire | value | `"no"` | `"unanswered"` |
+| Wire | value | `"pending"` | `"awaitingAnswer"` |
+| Wire | value | `"rejected"` | `"severed"` |
+| Wire | value | `"requestedAborted"` | `"requestedCanceled"` |
 
-11.  **`ReloadWindow`** (finding 11): Resume's window reload, so `Reload` is a
-     file replaced on disk only (Reload, FileText); the README rows and the two
-     code comments follow.
+## The specs follow the code, and three bugs fixed spec first
 
-12.  **`phase` is where a spec's one process is** (finding 12): Controller's
-     call (fix 2) and Resume's session (fix 4) joined Calibration, Player, and
-     Turns; a function over objects keeps its own name (Terminals' `state[t]`,
-     Wire's `sock[s]` and `pc[c]`).
+Pull request #196, issues #191, #192, #193, and #194, 2026-10-19. An audit of
+every spec against the code; TLC passed every config, and the drift was in what
+the specs said about the code.
 
-13.  **`PairDefs.tla`** (finding 13): one module for the shared vocabulary,
-     `ActionKinds`, `Phases` and `NoSession`, `Calls` and `NoCall`, and
-     `PauseReasons`. Actions, BatchFile, Turns, Bridge, Resume, ListenGrace,
-     Navigator, and Timeline `EXTENDS` it and dropped their copies; the README
-     has its section. TLC: every config holds.
-
-14.  **The hand-back names its neighbors** (finding 14): Wire's `Abort` and
-     `Reply`, Bridge's `Restore`, and Controller's `Bounce`, `BounceLate`, and
-     `Restore` each say where the path continues, as the code's comments did.
-
-15.  **An outside write to an open file** (finding 15): Outside's header names
-     the path through EditorAdapter and Rehearsal's `EditAsOther`. EditorAdapter
-     has the `disk` author and the `Reload` action, attributed `other` as
-     `byProgrammer` does for a clean document reading what is on disk; the
-     mutation that takes it for the programmer's breaks `RightAuthor`, and the
-     README's tables have the action, the mutation, and the existing test. TLC:
-     EditorAdapter 311 to 1,464 states.
-
-16.  **A second sweep over every name** (every variable, constant, definition,
-     and string value in the 37 modules, compared by its comment). Variables:
-     Terminals' playback signal is `interrupted`, the word the other playback
-     specs use; the flags for what an invariant forbids are `wrongLine`
-     (Rehearsal), `wrongTurn` (Turns), and `wrongPlace` (Anchor, was
-     `misplaced`); Serialize's per-call batch state is `batchState`, how its
-     call settled `settledAs`, and its failed rehearsal `failed`; Scroll's
-     follow switches are `switches` with `MaxSwitches`, and Turns' turn changes
-     `turnChanges` with `MaxTurns`; Start's CLI-and-folder check is `cli`, with
-     `FlipCli`, its button `visible` with `visibleFor`, and its session `live`
-     as in RunBox; Calibration's count is `rounds` with `MaxRounds`;
-     Discovery's `connectedTo` and Resume's `connected`; Actions' playing
-     action is `action`; EditEvents' last report is `report` and PanelScroll's
-     last event `event`; PanelReplay's `shown`; Outside's badge is `badged`
-     and Wire's hand-back mark `mayRepeat`, the code's word; Resume's storage
-     is `stored`, so Outside keeps `saved`; Player's `textAt`. Constants and
-     definitions: `PreferDirty` (FileText) and `AbortInBlock` (Serialize) for
-     the two switches both called `Fixed`; `MaxChars` for a text's length
-     (LineIdentity, Places, Typing), so `MaxLen` is actions per batch;
-     Controller's `BatchIds` and `EventIds`; PanelReplay's `NoSessionEvent`.
-     Values: a sleep with no timer is `paused` (Timeline), an action before its
-     awaits `before` (Turns, as Player), a run() call that came back `settled`
-     (Terminals, as Serialize), a window kept open `awaiting` (FollowMode), a
-     field not given `missing` (ActionValidation), a calibration waiting for go
-     `ready`, a show not started `idle` (FollowMode); Scroll's `NotAway` and
-     Outside's `NoDocument` are model values. Left alone, with the reason: the
-     model alphabets `Files`, `Chars`, and `Texts`, which differ per module
-     because one alphabet would multiply the state spaces. TLC: every config
-     holds.
-
-17.  **The alphabets and the files, in PairDefs** (item 20 of the second
-     sweep, on Justine's steer). `Letter`, `OtherLetter`, `Space`, `LineFeed`,
-     and `CarriageReturn` name the letters, and `Seqs` the texts over them;
-     LineIdentity, Places, and Typing build their own `Chars` from those names,
-     so `n` is a line feed in each and the state spaces stay as they were.
-     `Files` is `{"a", "b", "other"}` with `NoFile` for BatchFile, FollowMode,
-     and PointFocus; BatchFile's config no longer names the files. TLC: every
-     config holds; BatchFile's state count moves with the third file.
-
-18.  **A third pass, over action and definition names** (Justine, 2026-10-19:
-     "do another consistency pass"). Three readers compared every name in the 37
-     modules by its comment, and every hit was checked against its lines. Same
-     name, two things: Wire's and Serialize's call ids are `CallIds`, and
-     Serialize's absent call `NoCallId` (PairDefs' `Calls` is the kinds);
-     Serialize's `QueueStates`, `queueState`, and `NoQueueState` (Controller's
-     `BatchStates` is per batch); Anchor's cursor is `place` and its count
-     `heldCount` (Controller's `held` is a set); ListenGrace's `absent`
-     (Controller's `quiet` edits); FileText's and EditEvents' text as a number
-     is `Contents`, as in Outside; FileText's `NoSuchFile` and `Internal` (the
-     code's `internal`); Rehearsal's `Origin`, `EditorLines`,
-     `QueuesAfterInterrupt`, `justRead`; LineIdentity's `ApplyChange` and
-     `LineFeeds`; Reload's `Replacements`; BatchFile's `NamingKinds`; Scroll's
-     `targetLine` and `"pause"` reason; PanelScroll's `topBefore`; Discovery's
-     one process is `phase`; PairDefs' `SessionPhases`, since `phase` is a
-     process's. One code path, one name: the session ends by `EndByProgrammer`
-     (Bridge, Controller, Resume) or `EndByAgent` (Bridge, Resume); the cancel
-     is `Cancel` and `canceled` (Serialize, as Controller; `canceled` spelled
-     one way, Wire too); a failed rehearsal is `FailRehearsal` (Serialize,
-     ListenGrace); `Return` is finishCall with a report (Serialize too);
-     `Timeout` everywhere; `Deliver` is the report reaching the agent
-     (Controller); `Interrupt` (ListenGrace); `EditAsProgrammer` (Navigator,
-     EditorAdapter) and `EditAsAgent`; `LoadPage` and `PageStates`, `"loaded"`
-     or `"disposed"`, for a webview page (Draft, Start), so `live` is a session
-     alone; `Views` in PairDefs, from Resume; `Store` for workspace storage
-     (Resume); id sets are `Num*` and bounds `Max*`; the counts are
-     `MaxEdits`/`edits` and `MaxChanges`/`changes`; `MaxEvents` in the three
-     panel specs; the pause flags are `replyPause`, `calibratePause`, and
-     `awayPause`; `ResumeAll` for resume() with no reason; `selection`,
-     `baseline`, `byProgrammer`, and `interrupts` spelled out. An action names
-     its object where a verb was shared: `CloseSocket` and `OpenSocket`,
-     `CloseDocument` and `OpenDocument`, `CloseTerminal`, `Acquire`,
-     `RejectHello`, `Perform` and `StartHead` (Turns), `StartDelete`, `Complete`
-     (Controller), `Played` and `HandBack` (Serialize), `TakeHeld` and
-     `StopShort` (Anchor), `Stop` (BatchFile), `WriteOutside`, `WatcherReports`,
-     and `Show` (Outside, as FileText), `AnswerCheck` and `AgentExits` (Start),
-     `CancelCalibration` and `StopTimer`, `SendReply`, `ShowResolves`,
-     `WindowExpires`, `HandleEditorChange`, `Follow` and `InView` (Scroll),
-     `Lull` (Navigator), `ViewAtEntry`, `TypeDraft`. Properties: Start's
-     `NoteGoes` and Scroll's `ComesInView` (both were `Settles`), and
-     `NoYourMoveAfterInterrupt`; the tests named for them follow. Absent values
-     as model values: Start's `NoQuestion` (was 0) and ActionValidation's
-     `Throws` (was a string); Discovery's `"unstarted"` and Wire's
-     `"unanswered"` for states that read as absent. Sets named: `Rates`
-     (Calibration), `EventKinds` (PanelScroll). Models: FollowMode's `LookAway`
-     goes to `"other"` and its `Other(f)` is gone; BatchFile's
-     `EditAtCursorProp` covers `type_fast`; Turns' and Actions' `Batches` and
-     ProjectGuide's `Paths` are `Seqs`; RunBox says it stops at the first `run`
-     post (`exited` comes later, to a box already off). Comments behind a rename
-     in eleven modules follow it, and the three pure-function headers name their
-     letters from PairDefs. The code comments naming these actions, the README's
-     tables, and `COVERAGE.md` follow. Left alone, with the reason: `NoText`,
-     `NoDocument`, and `NoOffset` are each a `CHOOSE` over a local set, so they
-     stay local; PanelReplay's `SessionEvents` are events, not `Views`;
-     EditorAdapter's `"other"` is the wire's `by`. `Files` is
-     `{"sourceFile", "destinationFile", "otherFile"}`, Justine's names: where
-     the cursor is, where it goes, and a file the programmer went to on their
-     own; so a file and the other kind of call no longer share a word, and
-     `"other"` in `Calls` stays. TLC: every config holds with its state count
-     unchanged.
-
-19.  **Variables named for what they hold** (Justine, 2026-10-19: "these specs
-     should be self-documenting"; a name a reader needs the comment for gets a
-     clearer one, compound in lowerCamelCase as the style guide's new 5.10
-     says). Three readers judged every variable, constant, record field, and
-     string value by its comment and its uses; each proposal was checked at its
-     line, and kept where the name is the code's own (`pc`, `no_editor`,
-     `internal`, `old`, applyChange's `a`, `b`, `k`) or already plain. Wire:
-     `socketState`, `activeSocket`, `sentOn`, `awaitingAnswer`, `garbageSent`,
-     `canceled` (was `aborted`, with `requestedCanceled`), `cancelNoticed`,
-     `answerAtClient`, `RejectPerSocket`, `WaitForReturn` (Controller's name
-     for the same #59 fix). Discovery: `windowState`, `untried`, `JunkFile`,
-     `pidReused`. Bridge: `socketState`, `restorable`. Resume: `Directories`,
-     `NoDirectory`, `directory`, `MaxSessions`, `messageWaiting`. Serialize:
-     `inChain` (a call waiting its turn; `awaiting` is an action inside its
-     awaits), `blockedCall`, `emptyStep`, `rehearsalFailed`. Controller:
-     `knownQuietEdits`, `quietEditState`, `quietEditDeliveries`,
-     `reportRejection`, `returningRejection`, `lastRejection`,
-     `returnedAfterTaken`, `HasReached`, `CarriesRepeat`. ListenGrace:
-     `inGrace`, `owesResponse`, `graceExpired`. Navigator: `timerArmed`,
-     `navigatorReady`, `returnedWhileTyping`. Turns and Actions: `MaxActions`
-     (was `MaxLen`), `EditKinds`, `ActionShapes`, `FullEffects`,
-     `effectsPlayed`, `firstUnplayed`, `chunksLeft`. PairDefs' call kind is
-     `stepOrEnd`. Player: `selectedTextStart`, `selectionStart`,
-     `copiedStart`. BatchFile: `cursorFile`, `namedFile`, `actionsPlayed`,
-     `namedAfter`, `looksIn`. Typing: `Chunks`, `indent`. Places: `fromStart`.
-     LineIdentity: `lineFeedsBefore`, `lineFeedsAfter`, `offset`,
-     `deleteLength`, `inserted` (the code's names), `textAfter`, `changedIds`.
-     Rehearsal: `change`, `hasOwnIds`, `shownLines`, `otherChanges`, `nextId`,
-     `ChangesTo`, `BatchChangesTo`, `batch`, `ghostsAfter`. Reload:
-     `SplitRuns`, `selectionLine`, `selectionBefore`. FileText: `diskText`,
-     `documentText`. EditorAdapter: `ownEdit`, `handled` (was `seen`),
-     `changes`, `attribution`, `RightAttribution`, `WrongAttribution`,
-     `programmerDuringSave`. EditEvents: `netChange`. Anchor: `rejectionLost`.
-     ActionValidation: `otherText`. Panel: `currentMessage`, `messageFiled`,
-     `entriesSinceMessage`, `WithMessageFiled`. PanelReplay:
-     `liveViewSession`. PanelScroll: `entriesAboveView`, `lastEvent`. Draft:
-     `hasDraft`, `reportedDraft`. RunBox: `playerPhase`, `boxShows`,
-     `cleared`, `sessionLive`. Start: `MaxEnvironmentChanges`,
-     `environmentChanges`, `cliAndFolder`, `FlipCliAndFolder`, `questions`,
-     `question` and `page` fields, `deliveredQuestion`, `newestAnswered`,
-     `chosenLocation`, `sidebarShows`, `startingNoteShown`, `sessionLive`.
-     Calibration: `passageSource`, `staleDefault`, `rateUnapplied`,
-     `sayRate`, `calibratedOnce`. Timeline: `timerStopped` (a sleep; `paused`
-     is the variable), `pauseReasons`. Terminals: `Directories`, `directory`,
-     `command`, `callTerminal`, `busyReused`, `awaitingIntegration`. Outside:
-     `documentText`, `knownText`, `unreportedWrites`, `unreportedSave`,
-     `writtenOutside`. Scroll: `MaxFollowSwitches`, `followSwitches`,
-     `viewTop`, `landing`, `targetAtStart`, `awayReason`, `glideCut`,
-     `scrollBeyondLastLine`. FollowMode: `activeFile`,
-     `selfNavigationWindow`, `showCall`, `eventQueued`, `eventHandled`,
-     `lookedAway`. PointFocus: `activeFile`, `stalePointRevealed`,
-     `replyMovedEditor`, `cursorActed`. The ASSUMEs named for a constant that
-     had been renamed follow it. Lines the longer names pushed past 80 columns
-     were rewrapped; four headers that quoted a code name in backticks keep it.
-     TLC: every config holds with its state count unchanged.
-
-20.  **What the review of this branch found** (#198). An adversarial review of
-     the squashed diff found names the sweep left behind; nothing it found
-     changed a formula's meaning. Code and test comments that name a spec action
-     follow the renames in every form of reference, not only the `specs/X.tla`
-     one: 49 lines in `controller.ts`, `player.ts`, `lines.ts`, `link.ts`,
-     `calibration.ts`, `panel.ts`, `editor.ts`, `extension.ts`, `setup.ts`,
-     `outside.ts`, `timings.ts`, `terminal.ts`, `webview/panel.ts`,
-     `integration.ts`, and `integration_paths.ts`. `specs/COVERAGE.md` names
-     Anchor's `TakeHeld` and Resume's `Store` and `ReloadWindow`, and the
-     README's `AddYours` row the `programmer` event. Spec comments name
-     `MaxActions`, `actionsPlayed`, `EditAsProgrammer`, `SplitRuns`,
-     `NoDirectory`, `MaxSessions`, `environmentChanges`, `RejectPerSocket`, and
-     `followSwitches`; nine ASSUMEs are named for the constant they check
-     (`AssumeNumSockets`, `AssumeNumCalls`, `AssumeRejectPerSocket`,
-     `AssumeJunkFile`, `AssumeSplitRuns`, `AssumeDirectories` twice).
-     FollowMode's held window is `"heldOpen"`, so `"awaiting"` there is the show
-     call alone; BatchFile's flag is `stopped` again, set by `Stop`, since
-     `rejected` is a batch that failed rehearsal (fix 6); Bridge's `recent` is
-     `restorable`, the rename fix 19 listed. Every VARIABLES and CONSTANTS block
-     whose comment column the renames left ragged is aligned at one column, its
-     comments refilled; six header lines are 80 wide. Fix 18's sentences on
-     `NoCallId` and the end actions say which specs have them. TLC: every config
-     holds with its state count unchanged.
+| Spec | Change | Distinct states |
+|---|---|---|
+| `Draft` | `ClearOnTaken` (#191): a reply the calibration took left the reply pause in place; with `FALSE`, `ReplyMeansDraft` is violated | 12, unchanged |
+| `Anchor` | `DropsHeld` (#193): a step refused as unanchored dropped a rejection `restore` held; new invariant `NoRejectionLost` | 46 -> 113 |
+| `ListenGrace` | `EndOnAnyCall` (#194): every call ends the grace, not only one that blocked; with `FALSE`, `NoFalseYourMove` is violated | 20, unchanged |
+| `Start` | Questions carry a number, and the CLI is read when it asks (#192); new invariant `LatestAnswer`, since replaced (see the first section) | 12,684 -> 27,816 |
+| `Panel` | The session event that repeats a suspension (`RepeatSession`, #138) | 21, unchanged |
+| `Timeline` | The calibration's pause reason, `"calibrate"` | 88 -> 176 |
+| `Anchor`, `Serialize`, `FollowMode`, `EditEvents`, `Outside`, `Calibration` | Comments name the code as it is; `Anchor` says a failed batch needs an anchor too | unchanged |
