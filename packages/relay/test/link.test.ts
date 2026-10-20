@@ -404,7 +404,7 @@ describe('call', () => {
     await expect(fourth).rejects.toMatchObject({ code: 'no_editor' });
   });
 
-  it('ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do', async () => {
+  it('ConnectedToOpen, FindsOpen: tries the next window when one fails, and fails with the first error when all do', async () => {
     window('new', ['/a'], { lastFocused: 2 });
     window('old', ['/a'], { lastFocused: 1 });
     const link = new EditorLink('/a', DIR);
@@ -469,6 +469,17 @@ describe('close', () => {
     await expect(first).rejects.toMatchObject({ code: 'no_editor', message: LINK_CLOSED });
     expect(socket.close).toHaveBeenCalled();
     await expect(link.call('read', {})).rejects.toMatchObject({ code: 'no_editor', message: LINK_CLOSED });
+    expect(fakes.FakeSocket.made).toHaveLength(1);
+  });
+
+  it('ExitsAfterShutdown: tries no other window once the link closed while the first one failed', async () => {
+    window('new', ['/a'], { lastFocused: 2 });
+    window('old', ['/a'], { lastFocused: 1 });
+    const link = new EditorLink('/a', DIR);
+    const call = link.call('read', {});
+    link.close();
+    lastSocket().fail('ECONNREFUSED');
+    await expect(call).rejects.toMatchObject({ code: 'no_editor', message: LINK_CLOSED });
     expect(fakes.FakeSocket.made).toHaveLength(1);
   });
 });

@@ -49,7 +49,7 @@ Init ==
     /\ replyPause = FALSE
     /\ pages = 1
 
-\* syncDraft: typing makes the draft nonempty, and the page posts `hasDraft`
+\* syncDraft: typing makes the draft nonempty, and the page posts `draft`
 \* when
 \* emptiness changes.
 TypeDraft ==
@@ -71,7 +71,7 @@ Clear ==
     /\ UNCHANGED <<page, pages>>
 
 \* Sending it while a reading speed calibration runs (#109): the calibration
-\* takes it (takeDraft), and the page posts no `hasDraft`, since the box was
+\* takes it (takeDraft), and the page posts no `draft`, since the box was
 \* emptied before syncDraft ran.
 SendToCalibration ==
     /\ page = "loaded"

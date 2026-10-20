@@ -7,7 +7,9 @@
 (* self-navigation window, away from what the view follows, pauses playback   *)
 (* (`pause("away")`) until the programmer resumes. The model makes one move,  *)
 (* from the source file to the destination file, and ends once the programmer *)
-(* has looked away after it.                                                  *)
+(* has looked away after it. The destination file may already be in a visible *)
+(* editor, a split beside the active one: then `show` returns before it       *)
+(* navigates, so no window opens and the active editor stays.                 *)
 (******************************************************************************)
 EXTENDS Naturals, PairDefs
 
@@ -26,12 +28,15 @@ VARIABLES
     showCall,             \* our show("destinationFile"): "idle" (not started),
                           \* "awaiting" (openTextDocument and showTextDocument),
                           \* "eventQueued" (the change is queued), or
-                          \* "eventHandled"
+                          \* "eventHandled", or "visible" (returned early:
+                          \* the file is in a visible editor)
     awayPause,            \* playback paused as `away`
-    lookedAway            \* the programmer looked away themselves
+    lookedAway,           \* the programmer looked away themselves
+    destinationVisible    \* the destination file is in a visible editor that
+                          \* is not the active one
 
 vars == <<activeFile, target, selfNavigationWindow, showCall, awayPause,
-          lookedAway>>
+          lookedAway, destinationVisible>>
 
 --------------------------------------------------------------------------------
 
@@ -40,9 +45,11 @@ TypeOK ==
     /\ activeFile \in Files
     /\ target \in Files
     /\ selfNavigationWindow \in {"closed", "open", "heldOpen"}
-    /\ showCall \in {"idle", "awaiting", "eventQueued", "eventHandled"}
+    /\ showCall \in {"idle", "awaiting", "eventQueued", "eventHandled",
+                    "visible"}
     /\ awayPause \in BOOLEAN
     /\ lookedAway \in BOOLEAN
+    /\ destinationVisible \in BOOLEAN
 
 --------------------------------------------------------------------------------
 
@@ -53,20 +60,33 @@ Init ==
     /\ showCall = "idle"
     /\ awayPause = FALSE
     /\ lookedAway = FALSE
+    /\ destinationVisible \in BOOLEAN
 
 \* The move to the destination file: show("destinationFile")
 \* calls selfNav(), then awaits.
 StartShow ==
     /\ showCall = "idle"
+    /\ ~destinationVisible
     /\ selfNavigationWindow' = IF HoldWhileShowing THEN "heldOpen" ELSE "open"
     /\ showCall' = "awaiting"
-    /\ UNCHANGED <<activeFile, target, awayPause, lookedAway>>
+    /\ UNCHANGED <<activeFile, target, awayPause, lookedAway,
+                   destinationVisible>>
+
+\* show("destinationFile") with the file in a visible editor: it returns
+\* before selfNav(), and VS Code changes no editor.
+ShowVisible ==
+    /\ showCall = "idle"
+    /\ destinationVisible
+    /\ showCall' = "visible"
+    /\ UNCHANGED <<activeFile, target, selfNavigationWindow, awayPause,
+                   lookedAway, destinationVisible>>
 
 \* timings.selfNavMs passes. A held window doesn't expire.
 WindowExpires ==
     /\ selfNavigationWindow = "open"
     /\ selfNavigationWindow' = "closed"
-    /\ UNCHANGED <<activeFile, target, showCall, awayPause, lookedAway>>
+    /\ UNCHANGED <<activeFile, target, showCall, awayPause, lookedAway,
+                   destinationVisible>>
 
 \* VS Code shows the destination file: the active editor changes, and its
 \* event is queued before the call's reply.
@@ -74,7 +94,8 @@ ShowFile ==
     /\ showCall = "awaiting"
     /\ activeFile' = "destinationFile"
     /\ showCall' = "eventQueued"
-    /\ UNCHANGED <<target, selfNavigationWindow, awayPause, lookedAway>>
+    /\ UNCHANGED <<target, selfNavigationWindow, awayPause, lookedAway,
+                   destinationVisible>>
 
 \* onActiveEditor: inside the window, the change is ignored; outside it, a
 \* change away from the target pauses.
@@ -83,27 +104,30 @@ HandleEditorChange ==
     /\ showCall' = "eventHandled"
     /\ awayPause' = (awayPause \/ (selfNavigationWindow = "closed"
                                    /\ activeFile # target))
-    /\ UNCHANGED <<activeFile, target, selfNavigationWindow, lookedAway>>
+    /\ UNCHANGED <<activeFile, target, selfNavigationWindow, lookedAway,
+                   destinationVisible>>
 
-\* showTextDocument resolves: a held window gets its timings.selfNavMs from
-\* now; the player then moves the cursor to the destination file.
+\* showTextDocument resolves, or show returned early: a held window gets its
+\* timings.selfNavMs from now; the player then moves the cursor to the
+\* destination file.
 ShowResolves ==
-    /\ showCall = "eventHandled"
+    /\ showCall \in {"eventHandled", "visible"}
     /\ target = "sourceFile"
     /\ target' = "destinationFile"
     /\ selfNavigationWindow' = IF selfNavigationWindow = "heldOpen"
                                THEN "open" ELSE selfNavigationWindow
-    /\ UNCHANGED <<activeFile, showCall, awayPause, lookedAway>>
+    /\ UNCHANGED <<activeFile, showCall, awayPause, lookedAway,
+                   destinationVisible>>
 
 \* The programmer switches to another file themselves: pausing then is right.
 LookAway ==
     /\ selfNavigationWindow = "closed"
-    /\ showCall \in {"idle", "eventHandled"}
+    /\ showCall \in {"idle", "eventHandled", "visible"}
     /\ activeFile = target
     /\ activeFile' = "otherFile"
     /\ awayPause' = TRUE
     /\ lookedAway' = TRUE
-    /\ UNCHANGED <<target, selfNavigationWindow, showCall>>
+    /\ UNCHANGED <<target, selfNavigationWindow, showCall, destinationVisible>>
 
 \* The move is done and the programmer has looked away from it: the model has
 \* nothing more to do, and ends here by design (6.13).
@@ -115,6 +139,7 @@ Finished ==
 
 Next ==
     \/ StartShow
+    \/ ShowVisible
     \/ WindowExpires
     \/ ShowFile
     \/ HandleEditorChange
@@ -125,6 +150,7 @@ Next ==
 \* Our show goes on to its end; the programmer looks away when they do.
 Fairness ==
     /\ WF_vars(StartShow)
+    /\ WF_vars(ShowVisible)
     /\ WF_vars(ShowFile)
     /\ WF_vars(HandleEditorChange)
     /\ WF_vars(ShowResolves)

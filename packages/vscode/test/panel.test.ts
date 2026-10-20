@@ -432,7 +432,7 @@ describe('askStart', () => {
     expect(postedOf(view, 'canStart')).toEqual([{ type: 'canStart', value: false }]);
   });
 
-  it("LatestAnswer: drops an earlier question's answer that lands after the reask's, on the same page", async () => {
+  it("LatestAnswerProp: drops an earlier question's answer that lands after the reask's, on the same page", async () => {
     const { panel, starter } = harness();
     const first = Promise.withResolvers<boolean>();
     const reask = Promise.withResolvers<boolean>();

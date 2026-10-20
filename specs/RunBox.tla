@@ -78,8 +78,8 @@ Decline ==
     /\ UNCHANGED sessionLive
 
 \* The command: done or background when it ran, declined when it never
-\* started or threw. A background command's later `exited` post finds the box
-\* off, so the spec stops at the first post.
+\* started or threw. A background command's later `exited` post only updates its
+\* history entry and never touches the box, so the spec stops at the first post.
 FinishCommand ==
     /\ playerPhase = "running"
     /\ playerPhase' = "over"

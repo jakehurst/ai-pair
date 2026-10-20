@@ -46,7 +46,8 @@ export function watchOutside(
   function onDisk(uri: vscode.Uri): void {
     if (uri.scheme === 'file' && controller.isActive && watched(uri.fsPath, folders())) outside.reported(uri.fsPath);
   }
-  // Opening a file, or its diff (whose editor is the file's), is seeing it, marked or not: one
+  // Opening a file, or its diff (whose editor is the file's), or switching back to it, is seeing it, marked or not
+  // (specs/Outside.tla, `FocusDocument` for a file already open): one
   // written outside may be opened before its writes are decided (specs/Outside.tla, `OpenDocument`).
   async function opened(editorShown: vscode.TextEditor | undefined): Promise<void> {
     const file = editorShown?.document.uri;

@@ -70,8 +70,6 @@ VARIABLES
                         \* when asked]
     deliveredQuestion,  \* the question whose answer last reached the live page;
                         \* NoQuestion when none has since the page loaded
-    newestAnswered,     \* the highest-numbered question answered so far;
-                        \* NoQuestion when none
     environmentChanges, \* environment changes so far
     clicks,             \* clicks on the button
     starts,             \* times the starter ran
@@ -86,8 +84,8 @@ VARIABLES
 
 vars ==
     <<page, pages, visible, visibleFor, setUp, cliAndFolder, questions,
-      unanswered, deliveredQuestion, newestAnswered, environmentChanges, clicks,
-      starts, location, chosenLocation, sidebarShows, agents, startingNoteShown,
+      unanswered, deliveredQuestion, environmentChanges, clicks, starts,
+      location, chosenLocation, sidebarShows, agents, startingNoteShown,
       sessionLive>>
 
 \* What a start changes: the setting, the sidebar, and the agents.
@@ -108,7 +106,6 @@ TypeOK ==
                              setUp: BOOLEAN,
                          cliAndFolder: BOOLEAN]
     /\ deliveredQuestion \in (1..questions) \cup {NoQuestion}
-    /\ newestAnswered \in (1..questions) \cup {NoQuestion}
     /\ environmentChanges \in Nat
     /\ clicks \in Nat
     /\ starts \in Nat
@@ -132,7 +129,6 @@ Init ==
     /\ unanswered = {[question |-> 1, page |-> 1, setUp |-> setUp,
                       cliAndFolder |-> cliAndFolder]}
     /\ deliveredQuestion = NoQuestion
-    /\ newestAnswered = NoQuestion
     /\ environmentChanges = 0
     /\ clicks = 0
     /\ starts = 0
@@ -157,8 +153,8 @@ LoadPage ==
                             setUp |-> setUp, cliAndFolder |-> cliAndFolder]}
     /\ deliveredQuestion' = NoQuestion
     /\ startingNoteShown' = FALSE
-    /\ UNCHANGED <<setUp, cliAndFolder, newestAnswered, environmentChanges,
-                   clicks, starts, startVars, sessionLive>>
+    /\ UNCHANGED <<setUp, cliAndFolder, environmentChanges, clicks, starts,
+                   startVars, sessionLive>>
 
 \* onDidDispose: the view closes, and its page with it.
 Dispose ==
@@ -168,8 +164,8 @@ Dispose ==
     /\ visibleFor' = NoPage
     /\ startingNoteShown' = FALSE
     /\ UNCHANGED <<pages, setUp, cliAndFolder, questions, unanswered,
-                   deliveredQuestion, newestAnswered, environmentChanges,
-                   clicks, starts, startVars, sessionLive>>
+                   deliveredQuestion, environmentChanges, clicks, starts,
+                   startVars, sessionLive>>
 
 \* `available()` resolves for one check, in any order, with what it read when
 \* asked; the panel posts canStart to its view, if any. With DropStale, only
@@ -183,10 +179,6 @@ AnswerCheck(c) ==
         /\ visibleFor' = IF deliver THEN answered ELSE visibleFor
         /\ deliveredQuestion' = IF deliver THEN c.question
                                 ELSE deliveredQuestion
-        /\ newestAnswered' =
-               IF newestAnswered = NoQuestion \/ c.question > newestAnswered
-               THEN c.question
-               ELSE newestAnswered
         /\ unanswered' = unanswered \ {c}
         /\ UNCHANGED <<page, pages, setUp, cliAndFolder, questions,
                        environmentChanges, clicks, starts, startVars,
@@ -206,7 +198,7 @@ FlipSetUp ==
           /\ UNCHANGED <<questions, unanswered>>
     /\ environmentChanges' = environmentChanges + 1
     /\ UNCHANGED <<page, pages, visible, visibleFor, cliAndFolder,
-                   deliveredQuestion, newestAnswered, clicks, starts, startVars,
+                   deliveredQuestion, clicks, starts, startVars,
                    startingNoteShown, sessionLive>>
 
 \* Claude Code's CLI installed or removed, or the folder closed.
@@ -214,8 +206,8 @@ FlipCliAndFolder ==
     /\ cliAndFolder' = ~cliAndFolder
     /\ environmentChanges' = environmentChanges + 1
     /\ UNCHANGED <<page, pages, visible, visibleFor, setUp, questions,
-                   unanswered, deliveredQuestion, newestAnswered, clicks,
-                   starts, startVars, startingNoteShown, sessionLive>>
+                   unanswered, deliveredQuestion, clicks, starts, startVars,
+                   startingNoteShown, sessionLive>>
 
 \* The click posts `start`; the panel runs the starter. In a terminal: the CLI
 \* starts with the prompt, sent at once, and nothing is shown. Through Claude
@@ -234,8 +226,8 @@ Click ==
     /\ agents' = IF OneAgent /\ agents > 0 THEN agents ELSE agents + 1
     /\ startingNoteShown' = IF NoteOnClick THEN TRUE ELSE startingNoteShown
     /\ UNCHANGED <<page, pages, visible, visibleFor, setUp, cliAndFolder,
-                   questions, unanswered, deliveredQuestion, newestAnswered,
-                   environmentChanges, chosenLocation, sessionLive>>
+                   questions, unanswered, deliveredQuestion, environmentChanges,
+                   chosenLocation, sessionLive>>
 
 \* An agent ends its turn when its session ends; `claude -p` exits, and its
 \* terminal closes.
@@ -244,9 +236,9 @@ AgentExits ==
     /\ agents' = agents - 1
     /\ startingNoteShown' = IF ClearOnExit THEN FALSE ELSE startingNoteShown
     /\ UNCHANGED <<page, pages, visible, visibleFor, setUp, cliAndFolder,
-                   questions, unanswered, deliveredQuestion, newestAnswered,
-                   environmentChanges, clicks, starts, location, chosenLocation,
-                   sidebarShows, sessionLive>>
+                   questions, unanswered, deliveredQuestion, environmentChanges,
+                   clicks, starts, location, chosenLocation, sidebarShows,
+                   sessionLive>>
 
 \* The programmer sets Claude Code's preferred location to l, or Claude Code's
 \* own Open in Side Bar does.
@@ -254,9 +246,9 @@ Choose(l) ==
     /\ location' = l
     /\ chosenLocation' = l
     /\ UNCHANGED <<page, pages, visible, visibleFor, setUp, cliAndFolder,
-                   questions, unanswered, deliveredQuestion, newestAnswered,
-                   environmentChanges, clicks, starts, sidebarShows, agents,
-                   startingNoteShown, sessionLive>>
+                   questions, unanswered, deliveredQuestion, environmentChanges,
+                   clicks, starts, sidebarShows, agents, startingNoteShown,
+                   sessionLive>>
 
 \* The agent's `start` lands: the `session` event reaches the page, and the
 \* note goes.
@@ -265,17 +257,16 @@ StartSession ==
     /\ startingNoteShown' = FALSE
     /\ sessionLive' = TRUE
     /\ UNCHANGED <<page, pages, visible, visibleFor, setUp, cliAndFolder,
-                   questions, unanswered, deliveredQuestion, newestAnswered,
-                   environmentChanges, clicks, starts, startVars>>
+                   questions, unanswered, deliveredQuestion, environmentChanges,
+                   clicks, starts, startVars>>
 
 \* The session ends: the idle view, and its button, are back.
 EndSession ==
     /\ sessionLive
     /\ sessionLive' = FALSE
     /\ UNCHANGED <<page, pages, visible, visibleFor, setUp, cliAndFolder,
-                   questions, unanswered, deliveredQuestion, newestAnswered,
-                   environmentChanges, clicks, starts, startVars,
-                   startingNoteShown>>
+                   questions, unanswered, deliveredQuestion, environmentChanges,
+                   clicks, starts, startVars, startingNoteShown>>
 
 Next ==
     \/ LoadPage
@@ -309,10 +300,13 @@ GroundedProp ==
                                                         /\ c.cliAndFolder)]_vars
 
 \* An earlier question's answer never overrides a later one's on the live
-\* page: the answer that last reached it is the newest answered since it
-\* loaded. An answer that lands after the reask's breaks this.
-LatestAnswer == (page = "loaded" /\ deliveredQuestion # NoQuestion)
-    => deliveredQuestion = newestAnswered
+\* page: on one page, the question whose answer last reached it never goes
+\* back. An answer that lands after the reask's breaks this; one the page drops
+\* does not.
+LatestAnswerProp ==
+    [][(page = "loaded" /\ page' = "loaded" /\ pages' = pages
+        /\ deliveredQuestion # NoQuestion /\ deliveredQuestion' # NoQuestion)
+       => deliveredQuestion' >= deliveredQuestion]_vars
 
 \* One run per click, and no run without one.
 StartsAreClicks == starts = clicks

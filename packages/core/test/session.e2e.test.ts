@@ -288,7 +288,7 @@ describe('where the controller and the player meet', () => {
     expect(report.rejected?.error.kind).toBe('line_not_seen');
   });
 
-  it('ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla)', async () => {
+  it('ReadIsStart: accepts a line a tool inserted, read while a batch that edits no file plays (specs/Rehearsal.tla)', async () => {
     const { editor, controller } = setup({ 'a.ts': 'hello\n' });
     await controller.start();
     await controller.read('a.ts');

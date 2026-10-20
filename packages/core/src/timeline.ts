@@ -40,7 +40,10 @@ export class Timeline {
     if (this.abort.signal.aborted) this.abort = new AbortController();
   }
 
-  /** Waits `ms` of unpaused time. Resolves `false` if interrupted (specs/Timeline.tla, `Sleep`). */
+  /**
+   * Waits `ms` of unpaused time. Resolves `false` if interrupted (specs/Timeline.tla, `Sleep`). A sleep while one is
+   * pending replaces it, which no caller does (`SleepAgain`).
+   */
   sleep(ms: number): Promise<boolean> {
     if (this.interrupted) return Promise.resolve(false);
     return new Promise((resolve) => {
@@ -84,6 +87,7 @@ export class Timeline {
     p.startedAt = Date.now();
     // specs/Timeline.tla, `Fire`: the sleep resolves `true`.
     p.timer = setTimeout(() => {
+      // A replaced sleep's timer leaves the later sleep pending (specs/Timeline.tla, `FireReplaced`).
       if (this.sleeping === p) this.sleeping = undefined;
       p.resolve(true);
     }, p.remaining);

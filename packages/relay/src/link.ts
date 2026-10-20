@@ -231,6 +231,8 @@ export class EditorLink {
   private async open(): Promise<Connection> {
     let first: unknown;
     for (const window of findWindows([this.folder], this.dir).windows) {
+      // specs/Wire.tla, `OpenSocket` with CloseAfterShutdown: once the link closed, no other window is tried (#220).
+      if (this.closed) throw new RelayError('no_editor', LINK_CLOSED);
       try {
         return await this.openWindow(window);
       } catch (error) {

@@ -293,6 +293,20 @@ describe('transformScene', () => {
     transformScene(scene, A, { offset: 0, deleteLength: 0, text: 'x' });
     expect(scene.selection).toEqual({ start: 2, end: 3 });
   });
+
+  it('StartOfRunStays: keeps a selection that starts where a change starts, and moves its end past the change', () => {
+    const scene: Scene = {
+      turn: 'agent',
+      focus: 'cursor',
+      pointFar: false,
+      allowedCommands: new Set(),
+      cursor: { file: A, offset: 2 },
+      selection: { start: 2, end: 3 },
+    };
+    transformScene(scene, A, { offset: 2, deleteLength: 2, text: 'xyz' });
+    expect(scene.cursor).toEqual({ file: A, offset: 2 });
+    expect(scene.selection).toEqual({ start: 2, end: 5 });
+  });
 });
 
 describe('play', () => {
@@ -421,7 +435,7 @@ describe('actions the player refuses', () => {
     expect((await h.player.play(1, [none as Action])).result.error).toEqual({ kind: 'invalid_action', message: 'Unknown action: {}' });
   });
 
-  it("Start: allows only say and point during the programmer's turn", async () => {
+  it("OnlyTalkInTheirTurn, Perform: allows only say and point during the programmer's turn", async () => {
     const h = harness({ files: { 'a.ts': 'x\n' }, scene: { turn: 'programmer' } });
     expect((await played(h, [moveTo(1)])).result.error).toEqual({
       kind: 'not_your_turn',
@@ -451,7 +465,7 @@ describe('actions the player refuses', () => {
     });
   });
 
-  it('refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected', async () => {
+  it('EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected', async () => {
     const h = harness({ files: { 'a.ts': 'x\n' } });
     const noCursor = { kind: 'no_cursor', message: "Your cursor isn't in a file yet; give `file`." };
     expect((await played(h, [{ move: { line: 1, to: 'line_end' } }])).result.error).toEqual(noCursor);
@@ -666,7 +680,7 @@ describe('type', () => {
     expect(h.editor.edit.mock.calls.length).toBe(before);
   });
 
-  it("StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed", async () => {
+  it("PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed", async () => {
     expect(await cutTyping(1, { type: `ab${CURSOR_MARKER}cd` })).toMatchObject({
       status: 'interrupted',
       unplayed: [{ type: `b${CURSOR_MARKER}cd` }, { say: 'After.' }],

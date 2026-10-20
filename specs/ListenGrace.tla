@@ -8,6 +8,8 @@
 (* next call, when the programmer acts, or when it expires. With              *)
 (* `ShowAbsent`, once no call has been open for absentMs, the status is       *)
 (* "absent" ("Agent isn't listening") until the agent calls again (#149).     *)
+(* A listen that times out with only news that wakes no listen (a batch that  *)
+(* completed, an edit that interrupts nothing) starts no grace (#200).        *)
 (******************************************************************************)
 EXTENDS PairDefs
 
@@ -29,14 +31,16 @@ VARIABLES
     owesResponse, \* the agent was handed something to act on, and has not
                   \* called since
     unreported,   \* the programmer did something not yet reported
+    quietNews,    \* news not yet reported that wakes no listen: a batch that
+                  \* completed, or an edit that interrupts nothing
     timedOut,     \* the agent's last listen timed out empty, and it has not
                   \* called since
     graceExpired, \* listenGraceMs passed since that timeout
     absent        \* absentMs passed since the agent's last call ended, with no
                   \* call since
 
-vars == <<call, inGrace, owesResponse, unreported, timedOut, graceExpired,
-          absent>>
+vars == <<call, inGrace, owesResponse, unreported, quietNews, timedOut,
+          graceExpired, absent>>
 
 --------------------------------------------------------------------------------
 
@@ -46,6 +50,7 @@ TypeOK ==
     /\ inGrace \in BOOLEAN
     /\ owesResponse \in BOOLEAN
     /\ unreported \in BOOLEAN
+    /\ quietNews \in BOOLEAN
     /\ timedOut \in BOOLEAN
     /\ graceExpired \in BOOLEAN
     /\ absent \in BOOLEAN
@@ -64,6 +69,7 @@ Init ==
     /\ inGrace = FALSE
     /\ owesResponse = FALSE
     /\ unreported = FALSE
+    /\ quietNews = FALSE
     /\ timedOut = FALSE
     /\ graceExpired = FALSE
     /\ absent = FALSE
@@ -78,7 +84,7 @@ Call(kind) ==
     /\ timedOut' = FALSE
     /\ graceExpired' = FALSE
     /\ absent' = FALSE
-    /\ UNCHANGED unreported
+    /\ UNCHANGED <<unreported, quietNews>>
 
 \* The agent calls `read`, which settles at once: it ends the quiet, and with
 \* EndOnAnyCall the grace.
@@ -89,27 +95,42 @@ Read ==
     /\ timedOut' = FALSE
     /\ graceExpired' = FALSE
     /\ absent' = FALSE
-    /\ UNCHANGED <<call, unreported>>
+    /\ UNCHANGED <<call, unreported, quietNews>>
 
 \* The agent calls `step`, and the batch is refused at once (rejectBatch,
 \* rejectUnanchored), without `block()`: it owes a response to the rejection.
+\* The rejection's report (`snapshot`) takes the events and batches waiting.
 FailRehearsal ==
     /\ call = NoCall
     /\ inGrace' = IF EndOnAnyCall THEN FALSE ELSE inGrace
     /\ owesResponse' = TRUE
+    /\ unreported' = FALSE
+    /\ quietNews' = FALSE
     /\ timedOut' = FALSE
     /\ graceExpired' = FALSE
     /\ absent' = FALSE
-    /\ UNCHANGED <<call, unreported>>
+    /\ UNCHANGED call
 
 \* `finishCall` after maxBlockMs, nothing to report: the grace starts.
 Timeout ==
     /\ call = "listen"
     /\ ~unreported
+    /\ ~quietNews
     /\ call' = NoCall
     /\ inGrace' = Grace
     /\ timedOut' = TRUE
-    /\ UNCHANGED <<owesResponse, unreported, graceExpired, absent>>
+    /\ UNCHANGED <<owesResponse, unreported, quietNews, graceExpired, absent>>
+
+\* `finishCall` after maxBlockMs, with only quiet news to report: the report
+\* is not empty, so no grace starts, and the agent has the news to act on.
+TimeoutWithNews ==
+    /\ call = "listen"
+    /\ ~unreported
+    /\ quietNews
+    /\ call' = NoCall
+    /\ owesResponse' = TRUE
+    /\ quietNews' = FALSE
+    /\ UNCHANGED <<inGrace, unreported, timedOut, graceExpired, absent>>
 
 \* `finishCall` with a report the agent has to act on: the programmer's input,
 \* or a step's.
@@ -120,6 +141,7 @@ Return ==
     /\ inGrace' = FALSE
     /\ owesResponse' = TRUE
     /\ unreported' = FALSE
+    /\ quietNews' = FALSE
     /\ UNCHANGED <<timedOut, graceExpired, absent>>
 
 \* A message, an interrupt, an edit of the programmer's, a turn change: an
@@ -127,7 +149,16 @@ Return ==
 Interrupt ==
     /\ ~unreported
     /\ unreported' = TRUE
-    /\ UNCHANGED <<call, inGrace, owesResponse, timedOut, graceExpired, absent>>
+    /\ UNCHANGED <<call, inGrace, owesResponse, quietNews, timedOut,
+                   graceExpired, absent>>
+
+\* A batch completes, or a tool edits a file no batch is going to edit: news
+\* for the next report that wakes no listen.
+QuietNews ==
+    /\ ~quietNews
+    /\ quietNews' = TRUE
+    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, timedOut,
+                   graceExpired, absent>>
 
 \* listenGraceMs pass: the grace timer fires.
 Expire ==
@@ -135,7 +166,8 @@ Expire ==
     /\ ~graceExpired
     /\ inGrace' = FALSE
     /\ graceExpired' = TRUE
-    /\ UNCHANGED <<call, owesResponse, unreported, timedOut, absent>>
+    /\ UNCHANGED <<call, owesResponse, unreported, quietNews, timedOut,
+                   absent>>
 
 \* absentMs pass with no call open: the panel says the agent isn't listening
 \* (#149), once any grace is over.
@@ -144,16 +176,18 @@ GoAbsent ==
     /\ call = NoCall
     /\ ~absent
     /\ absent' = TRUE
-    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, timedOut,
-                   graceExpired>>
+    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, quietNews,
+                   timedOut, graceExpired>>
 
 Next ==
     \/ \E kind \in Calls : Call(kind)
     \/ Read
     \/ FailRehearsal
     \/ Timeout
+    \/ TimeoutWithNews
     \/ Return
     \/ Interrupt
+    \/ QuietNews
     \/ Expire
     \/ GoAbsent
 
@@ -179,6 +213,10 @@ NoYourMoveInOtherCall == (call = "stepOrEnd") => (Status = "thinking")
 \* stays "listening" until the grace expires or the programmer acts.
 NoFlicker == (timedOut /\ ~graceExpired
               /\ ~unreported) => (Status = "listening")
+
+\* A listen that returns with news to report starts no grace (#200).
+NewsSkipsGraceProp ==
+    [][(call = "listen" /\ call' = NoCall /\ quietNews) => ~inGrace']_vars
 
 \* The grace ends, whether or not the agent calls again. Code whose grace never
 \* ended would fail it, so it says something must happen.

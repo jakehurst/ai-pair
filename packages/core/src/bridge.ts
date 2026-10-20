@@ -142,7 +142,8 @@ export class Bridge {
     try {
       fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 });
       // Written beside it, then renamed over it, so a relay reading it never sees it half written
-      // (#72, `AtomicWrite` in specs/Discovery.tla). Not a `.json`, so relays don't read the temporary one.
+      // (#72, `AtomicWrite` in specs/Discovery.tla; without it, `Focus` truncates the file and `FinishWrite` ends
+      // the write). Not a `.json`, so relays don't read the temporary one.
       const written = `${this.file}.tmp`;
       fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 });
       fs.renameSync(written, this.file);
@@ -235,7 +236,8 @@ export class Bridge {
 
     ws.on('close', () => {
       trace?.(`socket ${socket} closed`);
-      // specs/Bridge.tla, `CloseSocket`: the owner's socket gone, the session is suspended, or closed if it ended.
+      // specs/Bridge.tla and specs/Serialize.tla, `CloseSocket`: the socket's calls are aborted, then the owner's
+      // socket gone, the session is suspended, or closed if it ended.
       for (const abort of calls.values()) {
         abort.abort();
       }

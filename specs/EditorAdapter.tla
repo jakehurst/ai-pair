@@ -33,23 +33,27 @@ Attributions == {"agent", "other", "programmer"}
 
 VARIABLES
     ownEdit,          \* the agent's edit in flight: "idle", "awaiting"
-                      \* (applying), or "handled" (its event handled)
+                      \* (applying), "handled" (its event handled), or
+                      \* "rejected" (refused: no event comes)
     saving,           \* our save: "idle", "participants" (save participants
                       \* run), or "writing" (they're done)
+    creating,         \* TRUE while create() saves the document it emptied,
+                      \* without `saving`
     inbox,            \* change events not yet handled, oldest first: who made
                       \* each, and whether during our save
     changes,          \* how many changes have happened
     wrongAttributions \* attributions that don't match who made the change:
                       \* [author, as]
 
-vars == <<ownEdit, saving, inbox, changes, wrongAttributions>>
+vars == <<ownEdit, saving, creating, inbox, changes, wrongAttributions>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ ownEdit \in {"idle", "awaiting", "handled"}
+    /\ ownEdit \in {"idle", "awaiting", "handled", "rejected"}
     /\ saving \in {"idle", "participants", "writing"}
+    /\ creating \in BOOLEAN
     /\ inbox \in Seq(Authors)
     /\ changes \in Nat
     /\ wrongAttributions \subseteq [author : Authors,
@@ -80,27 +84,37 @@ WrongAttribution(author, attribution) ==
 Init ==
     /\ ownEdit = "idle"
     /\ saving = "idle"
+    /\ creating = FALSE
     /\ inbox = <<>>
     /\ changes = 0
     /\ wrongAttributions = {}
 
 \* edit(): the entry goes into `ownEdit`, VS Code applies the edit, and its
-\* event
-\* is queued.
+\* event is queued.
 EditAsAgent ==
     /\ ownEdit = "idle"
     /\ saving = "idle"
+    /\ creating = FALSE
     /\ ownEdit' = "awaiting"
     /\ inbox' = Append(inbox, "agent")
     /\ changes' = changes + 1
-    /\ UNCHANGED <<saving, wrongAttributions>>
+    /\ UNCHANGED <<saving, creating, wrongAttributions>>
 
-\* edit() resolves after its event; `finally` drops the entry if it's still
-\* there.
+\* edit(): the entry goes into `ownEdit`, and VS Code refuses the edit, or the
+\* document can't be read: no change, so no event; edit() throws.
+RejectEdit ==
+    /\ ownEdit = "idle"
+    /\ saving = "idle"
+    /\ creating = FALSE
+    /\ ownEdit' = "rejected"
+    /\ UNCHANGED <<saving, creating, inbox, changes, wrongAttributions>>
+
+\* edit() resolves after its event, or throws; `finally` drops the entry if
+\* it's still there.
 ResolveEdit ==
-    /\ ownEdit = "handled"
+    /\ ownEdit \in {"handled", "rejected"}
     /\ ownEdit' = "idle"
-    /\ UNCHANGED <<saving, inbox, changes, wrongAttributions>>
+    /\ UNCHANGED <<saving, creating, inbox, changes, wrongAttributions>>
 
 \* The programmer types: the change event is queued for the extension host.
 EditAsProgrammer ==
@@ -109,14 +123,14 @@ EditAsProgrammer ==
                   ELSE "programmerDuringSave"
     IN  /\ inbox' = Append(inbox, author)
         /\ changes' = changes + 1
-        /\ UNCHANGED <<ownEdit, saving, wrongAttributions>>
+        /\ UNCHANGED <<ownEdit, saving, creating, wrongAttributions>>
 
 \* A file replaced on disk while open, as a git checkout does: VS Code reloads
 \* the document, and the change event is queued (Reload.tla has the lines).
 Reload ==
     /\ inbox' = Append(inbox, "disk")
     /\ changes' = changes + 1
-    /\ UNCHANGED <<ownEdit, saving, wrongAttributions>>
+    /\ UNCHANGED <<ownEdit, saving, creating, wrongAttributions>>
 
 \* save(): `saving` is set, participants such as format on save may change the
 \* document, the file is written, and save() resolves after every event before
@@ -125,22 +139,33 @@ Reload ==
 StartSave ==
     /\ saving = "idle"
     /\ ownEdit = "idle"
+    /\ creating = FALSE
     /\ FlushBeforeSave => (inbox = <<>>)
     /\ saving' = "participants"
-    /\ UNCHANGED <<ownEdit, inbox, changes, wrongAttributions>>
+    /\ UNCHANGED <<ownEdit, creating, inbox, changes, wrongAttributions>>
 
-\* A save participant changes the document while our save runs.
+\* create(), in show(), for a file deleted while VS Code kept its document:
+\* once its edit emptied the document, it saves it with doc.save(), without
+\* `saving` and without the round trip.
+StartCreateSave ==
+    /\ saving = "idle"
+    /\ ownEdit = "idle"
+    /\ creating = FALSE
+    /\ creating' = TRUE
+    /\ UNCHANGED <<ownEdit, saving, inbox, changes, wrongAttributions>>
+
+\* A save participant changes the document while our save runs, or create's.
 RunParticipant ==
-    /\ saving = "participants"
+    /\ saving = "participants" \/ creating
     /\ inbox' = Append(inbox, "participant")
     /\ changes' = changes + 1
-    /\ UNCHANGED <<ownEdit, saving, wrongAttributions>>
+    /\ UNCHANGED <<ownEdit, saving, creating, wrongAttributions>>
 
 \* The save participants are done, and the file is written.
 FinishParticipants ==
     /\ saving = "participants"
     /\ saving' = "writing"
-    /\ UNCHANGED <<ownEdit, inbox, changes, wrongAttributions>>
+    /\ UNCHANGED <<ownEdit, creating, inbox, changes, wrongAttributions>>
 
 \* save() resolves after every event before it, which came over the same
 \* channel.
@@ -148,13 +173,20 @@ FinishSave ==
     /\ saving = "writing"
     /\ inbox = <<>>
     /\ saving' = "idle"
-    /\ UNCHANGED <<ownEdit, inbox, changes, wrongAttributions>>
+    /\ UNCHANGED <<ownEdit, creating, inbox, changes, wrongAttributions>>
+
+\* create's doc.save() resolves; nothing waits on its events.
+FinishCreateSave ==
+    /\ creating
+    /\ creating' = FALSE
+    /\ UNCHANGED <<ownEdit, saving, inbox, changes, wrongAttributions>>
 
 \* onChange: an event while the agent's edit is in flight is that edit (events
 \* come in order, and the agent's is the one its entry matches); otherwise
 \* byProgrammer: during our save, a tool's (`this.saving.has(file)`); a reload
 \* from disk, a tool's (a clean document reading what is on disk); and
-\* otherwise the programmer's.
+\* otherwise the programmer's. A rejected edit's entry stays until `finally`,
+\* but matches no event: no change is the edit it refused.
 Handle ==
     /\ inbox # <<>>
     /\ LET author == Head(inbox)
@@ -168,21 +200,25 @@ Handle ==
            /\ inbox' = Tail(inbox)
            /\ wrongAttributions' =
                    wrongAttributions \cup WrongAttribution(author, attribution)
-    /\ UNCHANGED <<saving, changes>>
+    /\ UNCHANGED <<saving, creating, changes>>
 
 Next ==
     \/ EditAsAgent
+    \/ RejectEdit
     \/ ResolveEdit
     \/ EditAsProgrammer
     \/ Reload
     \/ StartSave
+    \/ StartCreateSave
     \/ RunParticipant
     \/ FinishParticipants
     \/ FinishSave
+    \/ FinishCreateSave
     \/ Handle
 
-\* onChange runs for every event VS Code delivers.
-Fairness == WF_vars(Handle)
+\* onChange runs for every event VS Code delivers, and edit()'s `finally`
+\* runs once VS Code answers.
+Fairness == WF_vars(Handle) /\ WF_vars(ResolveEdit)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
@@ -198,6 +234,10 @@ RightAuthor == wrongAttributions = {}
 \* something must happen.
 ChangesHandled ==
     \A n \in 1..MaxChanges : (changes >= n) ~> (changes - Len(inbox) >= n)
+
+\* Every edit of the agent's ends, applied or refused, with its entry gone:
+\* an entry left behind would stand first in `own` for the next edit.
+EditsEnd == (ownEdit # "idle") ~> (ownEdit = "idle")
 
 \* Changes run out only so that the model is finite (6.8).
 Constraint == changes <= MaxChanges

@@ -13,7 +13,7 @@ setup() {
   cat >"${FAKE}/code" <<'CODE'
 #!/bin/bash
 printf '%s\n' "$@" >"${RECORD}"
-env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME)=' >"${ENV_RECORD}" || true
+env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME|TMPDIR)=' >"${ENV_RECORD}" || true
 CODE
   chmod +x "${FAKE}/code"
   export VSCODE_BIN="${FAKE}/code"
@@ -55,6 +55,15 @@ CODE
   user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}")"
   [[ -n "${user}" ]]
   [[ ! -e "$(dirname "${user}")" ]]
+}
+
+@test "gives Code a short temporary folder of its own, and removes it when it ends" {
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
+  [[ "${status}" -eq 0 ]]
+  local tmpdir
+  tmpdir="$(sed -n 's/^TMPDIR=//p' "${ENV_RECORD}")"
+  [[ "${tmpdir}" == /tmp/ai-pair.* ]]
+  [[ ! -e "${tmpdir}" ]]
 }
 
 @test "passes VSCODE_ARGS through, split on spaces" {

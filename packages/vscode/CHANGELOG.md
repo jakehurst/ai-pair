@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.8.1
+
+-   The TLA+ specs and the code agree again, after an audit of every spec
+    against the code and checks across specs (#200). Comments, README rows,
+    and test titles that #199's renames left behind name the code as it is.
+    Thirteen specs model a path the code takes that they missed: the session
+    ending or the socket closing while calls wait (`Serialize.tla`), an edit
+    VS Code refuses and `create`'s save (`EditorAdapter.tla`), a window that
+    refuses the relay's hello (`Discovery.tla`), focusing an open document
+    (`Outside.tla`), `show` returning early for a file already in view
+    (`FollowMode.tla`), the programmer's turn in follow mode (`Scroll.tla`),
+    the selection a `delete` needs (`BatchFile.tla`), a selection where a
+    reload's change starts (`Reload.tla`), one pending edit event a file
+    (`EditEvents.tla`), two asks in flight for the Start button
+    (`Start.tla`), a second sleep while one is pending (`Timeline.tla`), news
+    during the listen grace (`ListenGrace.tla`), and closing an ended session
+    (`Resume.tla`).
+-   The relay's search for project guides stops only at the workspace
+    folder, which always holds the working directory; the check for the
+    file system's root, which no run reached, is removed.
+-   After an interrupt, the agent's next batch waits until the batch the
+    interrupt left playing has ended (#219). Before, a report while that batch
+    still played cleared the interrupt, so the next batch was planned from
+    where the playing batch was planned, without the programmer's edit, and a
+    line the agent had just read could be refused. A step discarded meanwhile
+    now reports once the playing batch ends, instead of at once.
+-   Once the agent's harness goes away, the relay tries no other window after
+    the one it was connecting to fails (#220).
+
 ## 0.8.0
 
 -   The programmer is `programmer` on the wire, never `user`: the turn

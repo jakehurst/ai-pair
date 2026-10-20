@@ -98,8 +98,10 @@ interface Session {
   /** Finished batches not yet reported. */
   finished: BatchResult[];
   events: PendingEvent[];
-  /** An unreported interruption or failure: new batches are discarded. */
+  /** An interruption or failure not yet reported, or reported while a batch it left still plays: new batches are discarded. */
   stale: boolean;
+  /** A report told the agent of the interruption while a batch it left plays: `stale` clears when that batch ends (#219). */
+  staleReported: boolean;
   /** A report told the agent a batch stopped short: the next batch must anchor the cursor with a file and line (#112). */
   anchorNeeded: boolean;
   /** Rejections handed back by `restore`, to be reported again, one per report (#28), each marked if the agent may have seen it. */
@@ -153,12 +155,21 @@ function pendingEdit(session: Session, file: string): RecordedEdit | undefined {
   return session.events.find((e): e is RecordedEdit => isRecorded(e) && e.file === file);
 }
 
+/** Marks an interruption or failure the agent has not been told of (specs/Rehearsal.tla: `stale`, not `staleReported`). */
+function markStale(session: Session): void {
+  session.stale = true;
+  session.staleReported = false;
+}
+
 /** Returns whether a call can return its report now: specs/Serialize.tla, `Return`. */
 function callReady(session: Session, call: Call): boolean {
   switch (call.kind) {
     case 'step':
+      // An empty step, or one whose batch was discarded, waits for the queued batches, so its report comes after the
+      // batch an interrupt left playing (#219).
+      if (call.batch === undefined || call.batch.result?.status === 'discarded') return session.queue.length === 0;
       // A step's batch is done, or plays next (`AtHead`): the step returns once the one before it has (#150).
-      return call.batch ? call.batch.state === 'done' || session.queue[0] === call.batch : session.queue.length === 0;
+      return call.batch.state === 'done' || session.queue[0] === call.batch;
     case 'end':
       return session.queue.length === 0;
     default:
@@ -166,6 +177,7 @@ function callReady(session: Session, call: Call): boolean {
       call.kind satisfies 'listen';
       if (session.held.length > 0) return true;
       if (session.finished.some((r) => r.status !== 'completed')) return true;
+      // A completed batch, or an edit that interrupts nothing, doesn't wake a listen (specs/ListenGrace.tla, `QuietNews`).
       if (session.queue.length > 0) return false;
       if (session.scene.turn === 'agent') return session.events.some(interrupting);
       // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
@@ -309,6 +321,7 @@ export class Controller {
       finished: [],
       events: [],
       stale: false,
+      staleReported: false,
       anchorNeeded: false,
       held: [],
       mayRepeat: false,
@@ -372,8 +385,8 @@ export class Controller {
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block('step', session, {}, signal);
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
-      // specs/Anchor.tla, `SubmitAnchored` and `RefuseUnanchored`). A rejection `restore` holds comes first, in the
-      // report of the step discarded as stale (`Deliver`, #193).
+      // specs/Anchor.tla, `SubmitAnchored`, `SubmitUnanchored`, and `RefuseUnanchored`). A rejection `restore` holds comes first, in the
+      // report of the step discarded as stale (`TakeHeld`, #193).
       const anchor = cursorAnchor(actions);
       if (session.anchorNeeded && anchor && !anchor.anchored && session.held.length === 0) return this.rejectUnanchored(session, anchor);
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
@@ -467,7 +480,7 @@ export class Controller {
    * `mayRepeat`: or the cancellation came after the answer, and the agent may have seen it (#67).
    */
   restore(report: Report, mayRepeat = false): void {
-    // `Restore` in specs/Controller.tla. Also once the session ended, or the report closed it: the next call takes the report again,
+    // `Restore` in specs/Controller.tla and specs/Anchor.tla. Also once the session ended, or the report closed it: the next call takes the report again,
     // and closes the session again (#60).
     const session = this.session ?? this.closed;
     if (!session) return;
@@ -479,11 +492,11 @@ export class Controller {
     session.finished.unshift(...report.batches);
     session.events.unshift(...report.events);
     if (mayRepeat) session.mayRepeat = true;
-    if (report.events.some(interrupting) || report.batches.some((b) => b.status !== 'completed')) session.stale = true;
+    if (report.events.some(interrupting) || report.batches.some((b) => b.status !== 'completed')) markStale(session);
     // A step that never queued its batch: its rejection is the only report of it.
     if (report.rejected) {
       session.held.push({ rejected: report.rejected, mayRepeat });
-      session.stale = true;
+      markStale(session);
     }
     this.update();
   }
@@ -518,7 +531,8 @@ export class Controller {
     if (!session) return;
     this.recordEdit(session, file, before, after, changes, 'programmer');
     if (session.scene.turn === 'agent') {
-      // specs/Player.tla, `TypeBefore` and `TypeAfter`: the edit interrupts playback.
+      // specs/Player.tla, `TypeBefore` and `TypeAfter`, and specs/Rehearsal.tla, `EditAsProgrammer`: the edit
+      // interrupts playback.
       this.interrupt(session);
     } else {
       // Interrupting nothing (specs/Controller.tla, `EditQuietly`). Typing again: the pause the timer marked is
@@ -597,7 +611,7 @@ export class Controller {
     session.scene.focus = 'cursor';
     session.events.push({ kind: 'turn', to: 'programmer' });
     this.panel.post({ type: 'turn', to: 'programmer' });
-    // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
+    // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(session);
     this.update();
   }
@@ -612,7 +626,7 @@ export class Controller {
     if (selection) event.selection = this.excerpt(session, selection);
     session.events.push(event);
     this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
-    // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
+    // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(session);
     this.update();
   }
@@ -627,7 +641,8 @@ export class Controller {
       this.panel.post({ type: 'session', active: false, reason: 'programmer' });
       return;
     }
-    // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
+    // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it
+    // (`End` in specs/Serialize.tla).
     session.ended = true;
     session.events.push({ kind: 'end' });
     this.interrupt(session);
@@ -671,7 +686,7 @@ export class Controller {
   /**
    * Removes one pause reason, or all of them. Playback continues when none are left (specs/Timeline.tla, `Resume`).
    * `reveal`: bring the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
-   * `Reply`, issue 125).
+   * `SendReply`, issue 125).
    */
   resume(reason?: PauseReason, { reveal = true }: { reveal?: boolean } = {}): void {
     if (this.pauseReasons.size === 0) return;
@@ -686,7 +701,7 @@ export class Controller {
     const session = this.session;
     if (session) {
       // A point the programmer looked away from is stale: from now on the view follows the cursor,
-      // not it (specs/PointFocus.tla, `Resume`). The editor is told before a reveal targets it.
+      // not it (specs/PointFocus.tla, `ResumeAll`). The editor is told before a reveal targets it.
       if (lookedAway && session.scene.focus === 'point') {
         session.scene.focus = 'cursor';
         this.render();
@@ -913,7 +928,8 @@ export class Controller {
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
     const closing = (session.ended && session.held.length === 0) || call.kind === 'end';
     if (closing) {
-      // specs/Bridge.tla, `CloseEnded`, or `EndByAgent` for the agent's `end`; `this.closed` is `restorable`.
+      // specs/Bridge.tla and specs/Resume.tla, `CloseEnded`, or `EndByAgent` for the agent's `end`; `this.closed` is
+      // `restorable`.
       this.close(session);
       this.closed = session;
       if (call.kind === 'end' && !session.ended) {
@@ -921,6 +937,7 @@ export class Controller {
       }
     }
     // `Timeout` in specs/ListenGrace.tla: nothing came back for the agent to act on.
+    // With batches or events to report, a listen that times out starts no grace (`TimeoutWithNews`).
     const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected;
     if (call.kind === 'listen' && report.waiting && empty) this.startGrace();
     this.render();
@@ -1027,9 +1044,16 @@ export class Controller {
       }
     }
     session.finished = [];
+    // specs/Resume.tla, `Report`: a message from the programmer goes out with these events.
     session.events = [];
-    // specs/Rehearsal.tla, `Report`: the agent now knows of the interrupt.
-    session.stale = false;
+    // specs/Rehearsal.tla, `Report`: the agent now knows of the interrupt. A batch it left still playing would
+    // plan the next batch from where it was rehearsed, so `stale` waits for it to end (#219, `EndStale`).
+    if (session.queue.length === 0) {
+      session.stale = false;
+      session.staleReported = false;
+    } else if (session.stale) {
+      session.staleReported = true;
+    }
     session.navigatorReady = false;
 
     const report: Report = { batches, events, turn: session.scene.turn };
@@ -1039,12 +1063,13 @@ export class Controller {
     if (this.pauseReasons.size > 0) report.paused = [...this.pauseReasons];
     if (session.mayRepeat) report.repeated = true;
     session.mayRepeat = false;
-    // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
+    // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded
+    // (specs/Anchor.tla, `TakeHeld`).
     const held = session.held.shift();
     if (held) report.rejected = held.rejected;
     // Its own mark: a report before it may have taken session.mayRepeat (specs/Controller.tla, `Commit` with MarkHeld).
     if (held?.mayRepeat === true) report.repeated = true;
-    if (session.held.length > 0) session.stale = true;
+    if (session.held.length > 0) markStale(session);
     return report;
   }
 
@@ -1070,11 +1095,11 @@ export class Controller {
 
   /**
    * Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and
-   * `EndByProgrammer`; specs/Actions.tla, `Interrupt`). A batch already playing plays on and may complete
+   * `EndByProgrammer`; specs/Actions.tla and specs/Serialize.tla, `Interrupt`). A batch already playing plays on and may complete
    * (specs/Rehearsal.tla, `QueuesAfterInterrupt`, #151).
    */
   private interrupt(session: Session): void {
-    session.stale = true;
+    markStale(session);
     const discarded = session.queue.filter((b) => b.state === 'queued').map((b) => b.id);
     const playing = session.queue.find((b) => b.state === 'playing');
     this.trace?.(`interrupt: discarding [${discarded.join(', ')}]${playing ? `, batch ${playing.id} plays on` : ''}`);
@@ -1121,6 +1146,11 @@ export class Controller {
         session.finished.push(result);
         // specs/Rehearsal.tla, `FailPlay`: a batch that didn't complete interrupts the queue behind it.
         if (result.status !== 'completed') this.interrupt(session);
+        // specs/Rehearsal.tla, `EndStale`: the batch an interruption left playing has ended, and it was reported (#219).
+        if (session.staleReported) {
+          session.stale = false;
+          session.staleReported = false;
+        }
         // Mark the next batch as playing before reporting, so the report says so.
         this.startHead(session);
         this.update();

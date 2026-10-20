@@ -467,7 +467,7 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'programmer' });
   });
 
-  it('rejects the open call when the agent disconnects, and closes at once a session the programmer ended', async () => {
+  it('EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended', async () => {
     const h = await started();
     const listen = h.controller.listen();
     const refused = expect(listen).rejects.toMatchObject({ code: 'no_session', message: 'Disconnected.' });
@@ -657,7 +657,7 @@ describe('steps and their batches', () => {
     expect(rehearse).not.toHaveBeenCalled();
   });
 
-  it('CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal', async () => {
+  it('NeverBlockedClosed, CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal', async () => {
     const h = await started();
     const abort = new AbortController();
     const { promise, resolve } = Promise.withResolvers<Awaited<ReturnType<typeof rehearse>>>();
@@ -735,7 +735,7 @@ describe('playing the queue', () => {
     expect(h.traced).toContain('interrupt: discarding [2]');
   });
 
-  it('stops playing a session that closed while a batch played', async () => {
+  it('ReadyWhenEnded: stops playing a session that closed while a batch played', async () => {
     const h = await started();
     const finish = holdPlay();
     await report(h.controller.step(SAY));
@@ -758,6 +758,33 @@ describe('playing the queue', () => {
     expect(h.traced).toContain('interrupt: discarding [], batch 1 plays on');
     finish({ status: 'interrupted' });
     expect((await report(listen)).batches).toEqual([{ id: 1, status: 'interrupted' }]);
+  });
+
+  it('DiscardedWaits: reports a step discarded while an interrupted batch plays once that batch ends, then rehearses the next', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userInterrupt();
+    const discarded = h.controller.step(SAY);
+    expect(await pending(discarded)).toBe(true);
+    finish({ status: 'interrupted' });
+    expect((await report(discarded)).batches.map((b) => b.status)).toEqual(['interrupted', 'discarded']);
+    await report(h.controller.step(SAY));
+    expect(rehearse).toHaveBeenCalledTimes(2);
+  });
+
+  it('ReadIsStart, ReportedWhilePlaying: stays stale after a report while the batch an interrupt left plays, until it completes', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userInterrupt();
+    const timedOut = h.controller.step(SAY);
+    await settle(CONFIG.maxBlockMs);
+    expect(await report(timedOut)).toMatchObject({ batches: [{ id: 2, status: 'discarded' }], waiting: true });
+    finish();
+    await settle();
+    expect((await report(h.controller.step(SAY))).batches).toEqual([{ id: 1, status: 'completed' }]);
+    expect(rehearse).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1014,7 +1041,7 @@ describe("the programmer's input", () => {
     expect(h.controller.turn).toBeUndefined();
   });
 
-  it('NetReported, EditInterrupts: reports programmer edits as one diff a file, the agent cursor moving with them', async () => {
+  it('NetReported, EditInterrupts, OnePendingEdit: reports programmer edits as one diff a file, the agent cursor moving with them', async () => {
     const h = await started();
     const changes = [
       { offset: 0, deleteLength: 0, text: 'x' },
@@ -1310,7 +1337,7 @@ describe('the status in the panel', () => {
     expect(statuses(h).at(-1)).toBe('thinking');
   });
 
-  it('NoFalseYourMove: shows thinking when a listen times out with a batch to report', async () => {
+  it('NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report', async () => {
     const h = await started();
     await report(h.controller.step(SAY));
     await settle();

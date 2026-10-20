@@ -61,32 +61,32 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
-| `Serialize.cfg` | `NumCalls = 2` calls, each empty or not | holds | 709 |
+| `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
 | `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"` | holds | 42 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxEvents = 6` | holds | 127 |
 | `Controller.cfg` | `NumBatches = 2` batches, `NumEvents = 1` event, `NumQuietEdits = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
-| `Discovery.cfg` | `NumWindows = 2` windows, one junk file, a write that may fail | holds | 217 |
-| `Discovery_InPlace.cfg` | the same, `AtomicWrite = FALSE`: the write in place, so `Focus` and `FinishWrite` fire; `FindsRunningProp` left out | holds | 302 |
-| `EditorAdapter.cfg` | `MaxChanges = 5` changes | holds | 1,464 |
-| `FollowMode.cfg` | one move to another file, the programmer looking away, `HoldWhileShowing = TRUE` | holds | 13 |
+| `Discovery.cfg` | `NumWindows = 2` windows, one junk file, a write that may fail, a window that may refuse the hello | holds | 782 |
+| `Discovery_InPlace.cfg` | the same, `AtomicWrite = FALSE`: the write in place, so `Focus` and `FinishWrite` fire; `FindsRunningProp` left out | holds | 1,106 |
+| `EditorAdapter.cfg` | `MaxChanges = 5` changes, an edit refused, `create`'s save | holds | 3,195 |
+| `FollowMode.cfg` | one move to another file, the programmer looking away, `HoldWhileShowing = TRUE`, the file in a visible editor or not | holds | 19 |
 | `Bridge.cfg` | `NumSockets = 2` sockets | holds | 76 |
 | `Draft.cfg` | `MaxPages = 3` pages, `ClearOnTaken = TRUE` | holds | 12 |
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, `MaxChanges = 4` changes | holds | 123 |
-| `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 564 |
+| `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 614 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
-| `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
+| `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
-| `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 62 |
-| `Timeline.cfg` | `MaxSleeps = 3` sleeps | holds | 176 |
+| `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
+| `Timeline.cfg` | `MaxSleeps = 3` sleeps, a second sleep while one is pending | holds | 656 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,234 |
-| `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk | holds | 160 |
-| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxBatches = 2` batches, `MaxQueued = 2` queued | holds | 79,999 |
-| `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE` | holds | 207 |
+| `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
+| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
+| `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 369 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -96,8 +96,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
-| `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 2`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 27,816 |
-| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 20 |
+| `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
+| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 40 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -105,6 +105,22 @@ Each violation TLC found was checked against the code step by step before it was
 reported. The traces are in the issues.
 
 ## Specs and the code they model
+
+The code that implements a spec's action carries a comment naming the spec and
+the action. The actions below have no code of their own: they stand for the
+programmer, VS Code, the disk, the agent's MCP client, or the end of a run, so no
+comment names them.
+
+| Spec | Actions | What they stand for |
+|---|---|---|
+| `Actions`, `Bridge`, `FollowMode`, `Player`, `Reload`, `RunBox`, `Serialize`, `Wire` | `Finished` | the model's end: nothing left to do |
+| `EditorAdapter` | `EditAsProgrammer`, `Reload` | the programmer typing; VS Code reloading a clean document from disk |
+| `FileText` | `OpenDocument`, `CloseDocument`, `Write`, `Delete`, `Edit`, `Save`, `Reload` | VS Code and the disk |
+| `Navigator` | `Lull` | the programmer pausing their typing for `navigatorIdleMs` |
+| `Outside` | `CloseDocument`, `Edit`, `Save`, `WriteOutside` | VS Code, the programmer, and another program writing the file |
+| `PanelScroll` | `Scroll` | the programmer scrolling the history |
+| `Start` | `Choose`, `FlipCliAndFolder` | the programmer setting `preferredLocation`; the CLI installed or removed, or the folder closed |
+| `Wire` | `AbortInClient`, `Deliver` | the agent's client canceling a call; the MCP SDK handing the relay's answer to the client |
 
 ### `PairDefs`: the vocabulary the specs share
 
@@ -136,8 +152,11 @@ check at the top of `block()` (#1).
 | `FailRehearsal` | `rejectBatch`, or `rejectUnanchored` (#112): the call answers with the rejection at once; an abort meanwhile ends it with that, not `canceled` |
 | `Cancel` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Played` | the player finishing batches in queue order |
-| `Return`, `Timeout`, `Commit` | `finishCall` from `ready()`, where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call`, and reports on `call.session`, the session the call was made on |
+| `Return`, `Timeout`, `Commit` | `finishCall` from `ready()`, true at once for an ended session; an empty step, or one whose batch was discarded, once nothing is queued (#219); else where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call`, and reports on `call.session`, the session the call was made on |
 | `HandBack` | `withCursor(...).then(call.resolve)`: the report handed back after the commit |
+| `End` | `endSession`: `s.ended`, and `interrupt()` discarding every queued batch but the one playing; a step on a closed session refused by `requireSession()` |
+| `Interrupt` | `interrupt()`, for an edit, a turn, or a batch that did not complete: every queued batch discarded, the one playing plays on (#151) |
+| `CloseSocket` | the bridge's close handler: `abort()` on each of the socket's calls, then `disconnect()`, which closes an ended session (#174) |
 | `Finished` | every call settled: the agent makes no more calls |
 
 Each invariant was proved to bite with a mutation of a copy of the model, run
@@ -153,6 +172,9 @@ with the deadlock check off, since TLC otherwise stops first at the deadlock:
 | an abort of a blocked call takes its batch off the queue | `CancelKeepsBatch` |
 | `AbortInBlock = FALSE`, the code at 57ac07f | `CancelReleases` |
 | the chain runs a call only after the calls before it were reported, as `this.chain.then(guarded)` with no rejection handler would | `ChainProgresses`, `CancelReleases` |
+| `CloseSocket` aborts only the blocked call | `NeverBlockedClosed` |
+| `Return` without its `ended` disjunct | `ReadyWhenEnded` |
+| `Return` lets a discarded step go as one whose batch is done, the code before #219 | `DiscardedWaits` |
 
 Every invariant and property names the test that proves the code obeys it; the
 test's title carries its name:
@@ -165,6 +187,9 @@ test's title carries its name:
 | `CancelKeepsBatch` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
 | `CancelReleases` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal; CancelKeepsBatch, CancelReleases: a step canceled while it waits its turn never queues its batch |
 | `ChainProgresses` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report |
+| `NeverBlockedClosed` | `bridge.test.ts`: NeverBlockedClosed, CloseSocket: aborts a closed socket's calls, and suspends the session only when the socket owned it; `controller.test.ts`: NeverBlockedClosed, CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal |
+| `ReadyWhenEnded` | `controller.test.ts`: ReadyWhenEnded: stops playing a session that closed while a batch played |
+| `DiscardedWaits` | `controller.test.ts`: DiscardedWaits: reports a step discarded while an interrupted batch plays once that batch ends, then rehearses the next; `integration.ts`, in VS Code: the controller paths, where a step discarded during a batch's held last save waits for it |
 
 ### `Wire`: the relay's side of the WebSocket
 
@@ -182,7 +207,7 @@ earlier one (`RepeatsMarked`).
 
 | Spec | Code |
 |---|---|
-| `OpenSocket`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none |
+| `OpenSocket`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none, and `open()` tries no other window once it closed (#220) |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
 | `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, which the SDK runs only while the call is unanswered, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
@@ -217,7 +242,7 @@ the test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `OwnCloseOnly` | `link.test.ts`: OwnCloseOnly: rejects a call only when the socket it was sent on closes |
-| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a string, a number, an array, an object with no type, or a rejection whose reason isn't a text; RelayStaysUp: drops a frame that is not a message after the welcome, and an answer to no call; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME |
+| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with $name (a string, a number, an array, an object with no type, or a rejection whose reason isn't a text); RelayStaysUp: drops a frame that is not a message after the welcome, and an answer to no call; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, canceled and shut down cleanly, and started without AI_PAIR_HOME |
 | `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
 | `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
@@ -267,8 +292,8 @@ is `"you"`.
 
 | Spec | Code |
 |---|---|
-| `AddEntry` | everything `add()` puts in but the programmer's message: the agent's message filed, runs, dividers, changes outside the editor |
-| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message: it sets `scrollTop` to 0 |
+| `AddEntry` | everything put in but the programmer's message: the agent's message filed (by `add()`, or by `setNow` through `fileCurrent` when a new message replaces it), runs, dividers, changes outside the editor |
+| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message or a selection: it sets `scrollTop` to 0 |
 | `Scroll` | the programmer scrolling the history |
 | `entriesAboveView`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
 
@@ -346,7 +371,7 @@ report, where before it closed with the first.
 |---|---|
 | `Submit`, `Listen` | `step` with a batch, in the agent's turn (a `say` or `point` batch in the programmer's turn is `Turns`'s); `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
 | `EndByProgrammer` | `endSession()`: `ended`, the `end` event, `interrupt()` |
-| `FailRehearsal`, `PassRehearsal` | `rejectBatch()` with the action the rehearsal `failed` at; the batch queued, or discarded when `stale`, then `block()` |
+| `FailRehearsal`, `PassRehearsal` | `rejectBatch()` with the action the rehearsal `failed` at, or `rejectUnanchored()` before any rehearsal (#112); the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Complete` | `run()` |
 | `Interrupt` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
 | `Commit` | `finishCall` -> `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
@@ -383,7 +408,7 @@ test's title carries its name:
 | `NoUnmarkedRepeat` | `controller.test.ts`: NoUnmarkedRepeat: says a returned report may repeat one already seen, and marks each returned rejection the agent may have seen; `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `HeldMeansStale` | `controller.test.ts`: HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has |
 | `PlaysKnowingEvents` | `controller.test.ts`: PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen |
-| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
+| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
 | `BatchesDelivered` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call; HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has; `relay.test.ts`: BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28) |
 | `EventsDelivered` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; EndDelivered, EventsDelivered: reports a returned report again after the programmer ended the session with it (#60); EventsDelivered: returns once something interrupts, and not for a quiet edit by others; `relay.test.ts`: EventsDelivered: cancels a blocked call without losing the report, even when racing |
 | `QuietDelivered` | `controller.test.ts`: NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back |
@@ -408,7 +433,7 @@ breaks it, as the mutation below shows.
 | `Focus`, `FinishWrite` | `focused()` -> `writeDiscovery`: in place, the file is truncated, then written; renamed, it is replaced whole |
 | `OpenWindow` unlisted, `ListWindow` | the write failing (`failed`): the window runs, and no relay finds it; a later focus writing it |
 | `Start` | `locate` -> `findWindows`: files that hold a `Discovery` with a live `pid`, and parse; it gives the workspace folder it matched too, which `workspace()` takes as the root (#180) |
-| `Try` | `openWindow` on one candidate, best first |
+| `Try` | `openWindow` on one candidate, best first; a window that refuses the hello (`rejected`, or garbage on its port) sends `open()` to the next |
 | `Disconnect` | the socket closing, so the next call opens again |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -421,6 +446,9 @@ model, run in TLC and then reverted:
 | `AtomicWrite = FALSE`, the code before #72 | `FindsRunningProp` |
 | `Try` connects without setting `connectedTo` | `ConnectedToOpen` |
 | `Try` skips every candidate | `FindsOpen` |
+| `Try` gives up at the first window that refuses the hello | `FindsOpen` |
+| `FindsOpen` without `~refuses[w]`: a relay finds a window that refuses it | `FindsOpen` |
+| `Try` connects to a window that refuses the hello | Nothing: `ConnectedToOpen` asks only that the window be open, and the relay's error for a refused hello is `link.test.ts`'s |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -429,7 +457,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoInternal` | `link.test.ts`: NoInternal: skips a file that isn't JSON, JSON that isn't a window's, and a file not named as JSON; `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
 | `FindsRunningProp` | `bridge.test.ts`: OpenWindow, FindsRunningProp: listens on 127.0.0.1, then writes its discovery file beside it and renames it over; `integration.ts`, in VS Code: FindsRunningProp: the discovery file is never half written |
-| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME |
+| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen, FindsOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, canceled and shut down cleanly, and started without AI_PAIR_HOME |
 | `FindsOpen` | `link.test.ts`: FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed; `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
 
 ### `EditorAdapter`: who made a change
@@ -442,7 +470,9 @@ before them: one channel, in order.
 
 | Spec | Code |
 |---|---|
-| `EditAsAgent`, `ResolveEdit` | `edit()`: the entry in `ownEdit`, VS Code applying it, `finally` |
+| `EditAsAgent`, `ResolveEdit` | `edit()`: the entry in `own`, VS Code applying it, `finally` |
+| `RejectEdit` | `edit()`: VS Code refusing the edit (`if (!applied) throw`), or the document unreadable: no change event comes |
+| `StartCreateSave`, `FinishCreateSave` | `create()`, in `show()`: `doc.save()` on the document it emptied, without `saving` |
 | `EditAsProgrammer` | a keystroke: its change event is queued for the extension host |
 | `StartSave`, `RunParticipant`, `FinishParticipants`, `FinishSave` | `save()`: the round trip, `saving`, the save participants (format on save), the write |
 | `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
@@ -465,12 +495,16 @@ model, run in TLC and then reverted:
 | `onChange` never runs | `ChangesHandled` |
 | `Handle` without fairness | `ChangesHandled` |
 | `Handle` takes a reload from disk for the programmer's | `RightAuthor` |
+| `Handle` matches a rejected edit's entry to the next change | `RightAuthor` |
+| `Handle` takes a change during `create`'s save for the programmer's | `RightAuthor` |
+| `ResolveEdit` waits for a handled event, so a rejected edit's entry stays | `EditsEnd` |
 
 Every invariant and property names the test that proves the code obeys it:
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `EditsEnd` | `editor.test.ts`: EditsEnd, RejectEdit: rejects an edit its editor refuses, and forgets it |
 | `RightAuthor`, `ChangesHandled` | `integration.ts`, in VS Code: RightAuthor, ChangesHandled: changes by others are reported as theirs; RightAuthor, ChangesHandled: a keystroke just before a save is the programmer's; `editor.test.ts`: RightAuthor, ChangesHandled: reports a keystroke as the programmer's, its changes from the highest offset down; RightAuthor: reports a reload from disk, read without its BOM, as others'; RightAuthor: counts as the programmer's a clean change that isn't what's on disk, an unreadable file, and an undo; RightAuthor, ChangesHandled: reports changes while we save as others', and after it as the programmer's; RightAuthor: edits a file in view through its editor, with its undo stops, and takes its change event for its own |
 
 ### `FollowMode`: our own navigation against looking away
@@ -484,6 +518,7 @@ a `move` that shows its file before the agent cursor moves there.
 | `StartShow`, `WindowExpires`, `ShowResolves` | `show()`: our navigation starts; the window (`timings.selfNavMs`) runs out; `showTextDocument` resolves, and the `move` puts the agent cursor in the file |
 | `ShowFile`, `HandleEditorChange` | VS Code's change of active editor, and `onActiveEditor` pausing as `away` outside the window |
 | `LookAway` | the programmer switching files themselves |
+| `ShowVisible` | `show()` returning early for a file in a visible editor (`visibleEditor`), before `selfNav()` |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
 model, run in TLC and then reverted:
@@ -494,6 +529,8 @@ model, run in TLC and then reverted:
 | `HoldWhileShowing = FALSE`, the code before #56 | `NoPauseFromOurOwnShow` |
 | `LookAway` leaves `awayPause` as it was | `LookAwayPauses` |
 | `ShowResolves` leaves the agent cursor where it was | `MoveEnds` |
+| `ShowVisible` focuses the file's editor, as `showTextDocument` would | `NoPauseFromOurOwnShow` |
+| `ShowResolves` only after a handled event, not after an early return | the deadlock check, and `MoveEnds` |
 | `Next` without `Finished` | the deadlock check |
 
 Every invariant and property names the test that proves the code obeys it:
@@ -501,7 +538,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NoPauseFromOurOwnShow`, `MoveEnds` | `integration.ts`, in VS Code: NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause; `editor.test.ts`: NoPauseFromOurOwnShow, MoveEnds: a change of active editor during our show, or SELF_NAV_MS after, pauses nothing; LookAwayPauses: one later pauses |
+| `NoPauseFromOurOwnShow`, `MoveEnds` | `integration.ts`, in VS Code: NoPauseFromOurOwnShow, MoveEnds: our own move to another file doesn't pause; `editor.test.ts`: NoPauseFromOurOwnShow: leaves a file already in view as it is; NoPauseFromOurOwnShow, MoveEnds: a change of active editor during our show, or SELF_NAV_MS after, pauses nothing; LookAwayPauses: one later pauses |
 | `LookAwayPauses` | `editor.test.ts`: NoPauseFromOurOwnShow, MoveEnds: a change of active editor during our show, or SELF_NAV_MS after, pauses nothing; LookAwayPauses: one later pauses; LookAwayPauses: follows the point when the focus is on it, and the cursor when there is no point. No test looks away in VS Code yet |
 
 ### `Bridge`: who drives the session
@@ -554,6 +591,7 @@ away (`editor.ts`).
 | `Sleep`, `Fire` | `sleep(ms)` and its timer |
 | `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
+| `SleepAgain`, `FireReplaced` | `sleep(ms)` with a sleep pending, which no caller makes; the replaced sleep's timer in `arm`, which leaves `sleeping` alone (#174) |
 
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code
 doesn't end the `away` pause, and the agent isn't told about pauses.
@@ -568,6 +606,8 @@ in TLC and then reverted:
 | `Pause` leaves the timer running | `NoTimerWhilePaused` |
 | `Interrupt` resolves the pending sleep but keeps it pending | `ResolvedOnce` |
 | `Resume` never restarts a waiting sleep's timer | `ResumeContinues` |
+| `FireReplaced` clears the pending sleep, the code without its check | `LatestPending` |
+| `FireReplaced` leaves its sleep in `replaced` | `TypeOK` |
 
 Every invariant names the test that proves the code obeys it; the test's title
 carries the invariant's name:
@@ -578,14 +618,14 @@ carries the invariant's name:
 | `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone |
 | `NoTimerWhilePaused` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 | `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset`; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
+| `LatestPending` | `timeline.test.ts`: LatestPending: an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short |
 | `ResumeContinues` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 
-Two sleeps at once are outside the model: `Sleep` needs none pending, and the
-player awaits its sleeps one at a time. `sleep` does accept a second one, and
-the first's timer, running out, must leave the second pending, so an interrupt
-still cuts it short; `timeline.test.ts` checks that: an earlier sleep that runs
-out leaves the later sleep that replaced it pending, for an interrupt to cut
-short.
+Two sleeps at once: `sleep` accepts a second while one is pending, though no
+caller makes one, and the first's timer, running out, leaves the second pending,
+so an interrupt still cuts it short (`LatestPending`, #174). A replaced sleep's
+own timer keeps running through a pause, and an interrupt does not cut it short;
+no caller can reach either, since no caller makes a second sleep.
 
 ### `Anchor`: the cursor after a discarded batch
 
@@ -604,7 +644,7 @@ violates `NoRejectionLost` in three steps: `StopShort`, `Restore`,
 | `SubmitAnchored` | a batch whose first action at the cursor is a `move` or `select` with `file` and `line`: accepted, and the flag cleared |
 | `SubmitUnanchored` | any other action at the cursor first, accepted while the flag is clear |
 | `RefuseUnanchored` | such a batch while the flag holds: `rejectUnanchored`, with `unanchored`, while nothing is held; with a held rejection, `step` discards it as stale and its report delivers the rejection |
-| `Restore` | `restore` of a report with a rejection: onto `heldCount`, and `stale` set (#67) |
+| `Restore` | `restore` of a report with a rejection: onto `held`, and `stale` set (#67) |
 | `TakeHeld` | `snapshot` taking one held rejection into the report of a `listen`, an `end`, or a step discarded as stale |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
@@ -641,7 +681,7 @@ with the default rate.
 |---|---|
 | `Arm`, `Supply` | the Calibrate Reading Speed command, or the calibrate tool, which the bridge refuses unless idle; both add the calibrate pause reason |
 | `Go`, `StopTimer` | the programmer typing go and x in the panel; the extension timestamps both |
-| `ApplyRate` | the configuration change applying the new timing, which also removes the pause |
+| `ApplyRate` | `store` awaits the settings write, then `controller.setTiming` applies the new timing; once `store` resolves, `finish` removes the pause |
 | `CancelCalibration` | any other reply, the view disposed, the session ending |
 | `StartSay` | the reading time computed in the player from the timing in force at that moment |
 | `EndSay` | the reading time's sleep ending |
@@ -680,7 +720,7 @@ with `TRUE`, TLC violates `ReplyKeepsView` in two steps: `LookAway`, `SendReply`
 
 | Spec | Code |
 |---|---|
-| `Point`, `ActAtCursor` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `activeFile.show` before each edit) |
+| `Point`, `ActAtCursor` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `editor.show` before each edit) |
 | `LookAway` | `onActiveEditor` away from the target: `pause("away")` |
 | `CloseTab` | the programmer closing the target's tab, or every tab: `onActiveEditor(undefined)` returns early, so nothing pauses |
 | `SendReply` | the panel's `reply`: `resume(undefined, { reveal: false })`, then `userMessage`; a stale point is dropped, and nothing is revealed |
@@ -719,8 +759,12 @@ constants switch fixes the model found before the code was reviewed against it.
 then page 1's `AnswerCheck` lands on page 2. Issue #192 numbered the questions:
 the model's `DropStale` had let any answer for the live page through, where the
 code posts only the latest question's; with that rule, TLC violates
-`LatestAnswer` in three steps: `FlipSetUp` asks again, its `AnswerCheck` lands,
-then the first question's `AnswerCheck` lands after it. The same issue moved
+`LatestAnswerProp` in three steps: `FlipSetUp` asks again, its `AnswerCheck`
+lands, then the first question's `AnswerCheck` lands after it. #200 made it an
+action property: as an invariant over the newest answer, it also counted an
+answer the page drops, so it failed on correct behavior once the bound allowed
+two asks in flight, which `MaxEnvironmentChanges = 2` had hidden; the bound is
+now 4. The same issue moved
 the CLI check to the ask, where `available()` reads it. `ReaskOnSetUp`: the
 page asked only as it loaded; with `FALSE`, TLC violates `ReaskedProp` in three
 steps: `AnswerCheck` (hidden), then `FlipSetUp` sets Claude Code up with
@@ -758,8 +802,8 @@ a mutation of a copy of the model, run in TLC and then reverted:
 | Mutation | Breaks |
 |---|---|
 | `Choose` sets a location outside `Locations` | `TypeOK` |
-| `DropStale = FALSE` | `OwnAnswer` and `LatestAnswer` |
-| `AnswerCheck` posts any answer for the live page, the model before #192 | `LatestAnswer` |
+| `DropStale = FALSE` | `OwnAnswer` and `LatestAnswerProp` |
+| `AnswerCheck` posts any answer for the live page, the model before #192 | `LatestAnswerProp` |
 | `ReaskOnSetUp = FALSE` | `ReaskedProp` |
 | `AnswerCheck`'s value ignores `cliAndFolder` | `GroundedProp` |
 | `AnswerCheck` reads `cliAndFolder` when it lands, not when asked | `GroundedProp` and `Offered` |
@@ -784,12 +828,12 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types, in `Starter`, `FromPanel`, and `ToPanel` |
 | `OwnAnswer` | `panel.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
-| `LatestAnswer` | `panel.test.ts`: LatestAnswer: drops an earlier question's answer that lands after the reask's, on the same page |
+| `LatestAnswerProp` | `panel.test.ts`: LatestAnswerProp: drops an earlier question's answer that lands after the reask's, on the same page |
 | `GroundedProp` | `setup.test.ts`: GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
 | `StartsAreClicks` | `panel.test.ts`: StartsAreClicks: runs the starter once per start from the page; `webview/panel.test.ts`: StartsAreClicks: posts start when the button is clicked; `setup.test.ts`: StartsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one |
 | `Offered` | `panel.test.ts`: Offered: tells a new page whether it can start a session |
-| `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
+| `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload; `extension.test.ts`: ReaskedProp: sets the agent up, and offers the panel the start again |
 | `KeepsLocation`, `StaysOnPair`, `StartsProp` | `setup.test.ts`: StartsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `OneAtATime` | `setup.test.ts`: OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes |
 | `Closes` | the same test, for the terminal closing. Nothing yet proves the CLI exits when the session ends; that needs a run in the editor |
@@ -836,7 +880,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
+| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
 | `DiscardedMeansNothing` | `session.e2e.test.ts`: DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla); PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: Stop: discards a batch interrupted before its first action, and reports no code for it |
 | `EventuallyReported` | `session.e2e.test.ts`: EventuallyReported: runs a command, reporting its output and exit code with the batch; `player.test.ts`: SaveAndRun: saves the batch first, runs in the root, waits as long as asked within the most, and reports the run |
 
@@ -886,8 +930,8 @@ elsewhere an action without `file` looked in the cursor's file, and a `type` or
 | `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete` |
 | `Say` | a `say` or `run`, which act in no file |
 | `ActInFile` | `move`, `select` and `point` in the file `fileOf` gives; only `move` and `select` move the cursor |
-| `ActAtCursor` | `type` and `delete` at the cursor, rejected with it outside the named file |
-| `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file |
+| `ActAtCursor` | `type` and `delete` at the cursor, rejected with it outside the named file, and a `delete` with nothing selected (`no_selection`) |
+| `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, the cursor outside the named file, or a `delete` with nothing selected; the other ways an action fails (a text not found, the programmer's turn) are other specs' |
 | `EndBatch` | a new `Playing` for the next batch; the cursor stays |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -899,6 +943,9 @@ model, run in TLC and then reverted:
 | `FallBackToNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
 | `CursorInNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
 | `ActAtCursor` rejects an edit in a batch that named no file | `EditAtCursorProp` |
+| `EditAtCursorProp` without `k = "delete" => selected`: a `delete` with nothing selected must edit | `EditAtCursorProp` |
+| `ActAtCursor` refuses a `delete` even with a selection | `EditAtCursorProp` |
+| `move` makes a selection | Nothing: no property says a `delete` after a `move` fails; `player.test.ts` does |
 
 Every invariant and property names the test that proves the code obeys it; the
 test's title carries its name:
@@ -907,7 +954,7 @@ test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `ActsInNamedFile` | `session.e2e.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing; `player.test.ts`: Act: refuses a second file in a batch, and a file named after its first edit; ActAtCursor: refuses a type or delete when the cursor is in another file than the batch's |
-| `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none; `player.test.ts`: Complete: plays each action, saves the files it edited, and reports the code around its change, the cursor marked |
+| `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none; `player.test.ts`: EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected; `player.test.ts`: Complete: plays each action, saves the files it edited, and reports the code around its change, the cursor marked |
 
 ### `Draft`: the reply box's pause, across the view's page
 
@@ -1016,7 +1063,7 @@ Every invariant and property names the test that proves the code obeys it:
 
 ### `Outside`: marking files changed outside the protocol
 
-The feature of #15, specified before its code: `writtenOutside.ts` and
+The feature of #15, specified before its code: `outside.ts` and
 `outside_watch.ts` in `packages/vscode/src`. One file, written by VS Code's
 saves, by the extension's own `show`, and by anything else; a watcher that
 reports writes late and merges them. The code marks a file when a group of
@@ -1032,6 +1079,7 @@ nothing the programmer does falls in between.
 | `WriteOutside` | anything else writing the file; an open document without unsaved changes reloads |
 | `WatcherReports` | the watcher's events -> `reported`; the group settles -> `settle` reads and compares |
 | `OpenDocument` | opening the file or its diff -> `seen` |
+| `FocusDocument` | the file's open document becoming the active editor again -> `seen`, which reads the disk |
 
 Each invariant and property was proved to bite with a mutation, run in TLC and
 then reverted. The other rules and an unsettled decision all break
@@ -1041,6 +1089,9 @@ NoFalseMark, so Marks has a mutation of its own:
 |---|---|
 | an outside write leaves content 0 | `TypeOK` |
 | `Rule = "every"`, `Rule = "afterSave"`, or `Settle = FALSE` | `NoFalseMark` |
+| `FocusDocument` leaves the known text as it was | `NoFalseMark` |
+| `FocusDocument` takes the document's text, not the disk's | `NoFalseMark` |
+| `FocusDocument` leaves the mark | `NoFalseMark` |
 | the content rule never marks | `Marks` |
 
 Every invariant and property names the test that proves the code obeys it:
@@ -1087,21 +1138,23 @@ workspace's storage (`extension.ts`). A session whose agent disconnects, or that
 the window reloads with, is suspended, not ended, and waits until the programmer
 ends it or a `start` resumes it. Checked: a `start` from its directory resumes
 the same session (`ResumesSameProp`); it leaves the suspended state only to
-resume, end, or give way to a session from another directory (`WaitsProp`); the
-storage holds the session as it is (`SavedIsCurrent`); a message isn't lost
-while it waits, or across a reload (`NotLostProp`); a message the agent can be
-sent reaches it (`Arrives`); and the panel shows the session as it is
-(`ShownIsState`; #138: after a reload, the replayed history showed a suspended
-session as live). The spec saves with every change; the code saves 200 ms after
-the last one and again as the window goes, so a reload within 200 ms of a change
-relies on that last save.
+resume, end, or give way to a session from another directory (`WaitsProp`); a
+session the programmer ended has its agent to tell, or is closed
+(`EndedHasAgent`); the storage holds the session as it is (`SavedIsCurrent`); a
+message isn't lost while it waits, or across a reload (`NotLostProp`); a message
+the agent can be sent reaches it (`Arrives`); and the panel shows the session as
+it is (`ShownIsState`; #138: after a reload, the replayed history showed a
+suspended session as live). The spec saves with every change; the code saves 200
+ms after the last one and again as the window goes, so a reload within 200 ms of
+a change relies on that last save.
 
 | Spec | Code |
 |---|---|
-| `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended |
+| `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended (no session) |
 | `ReloadWindow` | the window reloading: `activate` revives the saved session, suspended (`revive`), with the panel's history; `revive` posts the suspended event (`PostOnRevive`), and the page adds its divider only when the session goes between live and suspended |
 | `Start(d)` | `start`: a suspended session from `d` resumes (`resumeSession`); another directory ends it and starts a new one |
-| `EndByProgrammer`, `EndByAgent` | `endSession`, which closes a suspended session at once; the agent's `end` |
+| `EndByProgrammer`, `EndByAgent` | `endSession`: an active session is ended, a suspended one closed at once (no session); the agent's `end` |
+| `CloseEnded` | `finishCall` closing an ended session with its last report |
 | `SendMessage`, `Report` | `userMessage`, to an active or a suspended session; the next report, once the agent is back |
 | `Store` | `onChange` and `onPost`: the extension writes `stored` and the panel's history 200 ms after a change, and as the window goes |
 
@@ -1117,6 +1170,9 @@ model, run in TLC and then reverted:
 | `ReloadWindow` brings back no session, checked without `ShownIsState`, which fails first | `WaitsProp` |
 | `ReloadWindow` drops the pending message | `NotLostProp` |
 | `Spec` without `Fairness`, `WF_vars(Report)` | `Arrives` |
+| `EndByProgrammer` ends a suspended session as `"ended"`, the model before #200 | `EndedHasAgent` |
+| `Disconnect` leaves an ended session ended | `EndedHasAgent` |
+| a suspended session closed while connected by other than `EndByProgrammer` | `WaitsProp` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1126,6 +1182,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
+| `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
 | `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
 
 ### `Navigator`: the programmer's edits, reported when they pause
@@ -1183,8 +1240,9 @@ holds "thinking", "absent", and "listening".
 | `Status` | `state()` with the queue empty |
 | `Call` | a call that blocks arriving: `serialize` counting it in `openCalls`, ending the quiet with `endQuiet` and the grace with `endGrace`, then `block()`; `close` ends both |
 | `Read` | `read`: `endGrace`, and the quiet restarted at once |
-| `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, and the agent owes a response to the rejection |
+| `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, the agent owes a response to the rejection, and the report takes the events |
 | `Timeout` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
+| `QuietNews`, `TimeoutWithNews` | a batch completing, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
 | `Return` | `finishCall` with anything else |
 | `Interrupt` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
@@ -1204,6 +1262,8 @@ model, run in TLC and then reverted:
 | `ShowAbsent = FALSE`, the code before #149 | `AbsentShows` |
 | `EndOnAnyCall = FALSE`, the code before #194 | `NoFalseYourMove`: `Call("listen")`, `Timeout`, `FailRehearsal` |
 | `Call` leaves `absent` set, checked without `NoYourMoveInOtherCall`, which it breaks first | `AbsentWithoutCall` |
+| `TimeoutWithNews` starts the grace | `NoFalseYourMove` |
+| `Timeout` ignores `quietNews` | `NewsSkipsGraceProp` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1212,11 +1272,12 @@ Every invariant and property names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoFlicker` | `controller.test.ts`: NoFlicker, GraceEnds: keeps listening after a listen times out with nothing to report, until the grace runs out |
 | `GraceEnds` | `controller.test.ts`: NoFlicker, GraceEnds: keeps listening after a listen times out with nothing to report, until the grace runs out |
-| `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove: shows thinking when a listen times out with a batch to report; NoFalseYourMove: ends the grace when the agent reads, and when its step is refused at once (#194) |
+| `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report; NoFalseYourMove: ends the grace when the agent reads, and when its step is refused at once (#194) |
 | `NoYourMoveAfterInterrupt` | `controller.test.ts`: NoYourMoveAfterInterrupt, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace |
 | `NoYourMoveInOtherCall` | `controller.test.ts`: NoYourMoveAfterInterrupt, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace |
 | `AbsentWithoutCall` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `AbsentShows` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
+| `NewsSkipsGraceProp` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report. No test times a listen out with only an edit that interrupts nothing yet |
 
 ### `EditEvents`: an edit undone, in the report
 
@@ -1231,7 +1292,7 @@ left out.
 
 | Spec | Code |
 |---|---|
-| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: the event's `before` (the baseline) and `after`, `by`, `interrupted`; the event holds both texts, so a pending edit always has them (#176) |
+| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: a new event only with none pending for the file (`pendingEdit`); the event's `before` (the baseline) and `after`, `by`, `interrupted`; the event holds both texts, so a pending edit always has them (#176) |
 | `Report` | `snapshot`: the event, unless the file is unchanged and the edit didn't interrupt |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
@@ -1242,13 +1303,16 @@ reverted:
 | an edit to a text outside `Contents` | `TypeOK` |
 | an event only for an edit that interrupted | `NetReported` |
 | `KeepInterrupts = FALSE`, the code before | `Explained` |
+| `Record` adds an event for every edit | `OnePendingEdit` |
+| `Report` leaves the events pending | `OnePendingEdit` |
 
 Every invariant names the test that proves the code obeys it:
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NetReported` | `controller.test.ts`: NetReported, EditInterrupts: reports programmer edits as one diff a file, the agent cursor moving with them |
+| `NetReported` | `controller.test.ts`: NetReported, EditInterrupts, OnePendingEdit: reports programmer edits as one diff a file, the agent cursor moving with them |
+| `OnePendingEdit` | `controller.test.ts`: NetReported, EditInterrupts, OnePendingEdit: reports programmer edits as one diff a file, the agent cursor moving with them |
 | `Explained` | `controller.test.ts`: Explained: reports an interrupting edit the programmer undid, and drops a quiet edit by others that was undone |
 
 ### `Scroll`: follow mode's scrolling
@@ -1271,7 +1335,7 @@ the model already has.
 | Spec | Code |
 |---|---|
 | `Move` | an action moving the target, and the player's `follow()`; no action plays while a command runs |
-| `Leave`, `Follow` | the state leaving the following states (`paused`, `running`) and coming back: `renderCursor`; a pause's end: `resume`'s `reveal` |
+| `Leave`, `Follow` | the state leaving the following states (`paused`, `running`, `navigator`) and coming back: `renderCursor`; a pause's end: `resume`'s `reveal`, which a reply turns off (#125), so only the Resume button reveals |
 | `Glide` | `glide`'s frames; `scroll`'s `finally` and its follow if the target moved |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -1284,6 +1348,9 @@ model, run in TLC and then reverted:
 | `CatchUp = FALSE`, the code before the fix | `ComesInView` |
 | a finished `Glide` does not follow a target that moved | `ComesInView` |
 | `Follow` from a pause does not reveal the target | `ComesInView` |
+| `ComesInView` without `~turnSinceFollow`: the view follows a target moved before the programmer's turn | `ComesInView` |
+| the turn keeps a glide cut before it | Nothing: a glide picked up after the turn only brings the target in view |
+| a glide cut on the programmer's turn is kept | Nothing: as above |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1324,7 +1391,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `OnlyTalkInTheirTurn` | `controller.test.ts`: OnlyTalkInTheirTurn: takes the turn, interrupting playback, and hands it back with no message or selection; `player.test.ts`: Start: allows only say and point during the programmer's turn; `session.e2e.test.ts`: OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing |
+| `OnlyTalkInTheirTurn` | `controller.test.ts`: OnlyTalkInTheirTurn: takes the turn, interrupting playback, and hands it back with no message or selection; `player.test.ts`: OnlyTalkInTheirTurn, Perform: allows only say and point during the programmer's turn; `session.e2e.test.ts`: OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing |
 | `BatchEnds` | `controller.test.ts`: BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes |
 
 ### `Reload`: a file changed on disk
@@ -1338,7 +1405,7 @@ last, unchanged lines included. `SplitRuns` is the fix for #65: `lineChanges` in
 
 | Spec | Code |
 |---|---|
-| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` -> `recordEdit` moves the scene (`mapThrough`) and the identities (`applyChange`) through them |
+| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` -> `recordEdit` moves the scene (`mapThrough`, which keeps a position where a change starts) and the identities (`applyChange`) through them |
 | `Runs`, `Coarse` | the changes `recordEdit` is given, with and without `lineChanges` |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
@@ -1349,6 +1416,7 @@ first, and SelectionStays with UnchangedKeepIds left out of the config:
 |---|---|
 | a selection moved past the file | `TypeOK` |
 | a selection on an unchanged line moves down one | `SelectionStays` |
+| a selection at the start of a changed run moves past it, as one inside it does | `StartOfRunStays` |
 | every line gets a fresh id | `UnchangedKeepIds` |
 | no line gets a fresh id | `ChangedGetNewIds` |
 
@@ -1359,6 +1427,7 @@ Every invariant names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `SelectionStays` | `session.e2e.test.ts`: SelectionStays: keeps the agent's selection on a line between the changed ones |
 | `UnchangedKeepIds` | `session.e2e.test.ts`: UnchangedKeepIds: keeps the numbers of the lines between the changed ones known |
+| `StartOfRunStays` | `player.test.ts`: StartOfRunStays: keeps a selection that starts where a change starts, and moves its end past the change |
 | `ChangedGetNewIds` | `session.e2e.test.ts`: ChangedGetNewIds: forgets the number of a changed line, so a batch has to read it again |
 
 ### `Rehearsal`: line identities across a rehearsal
@@ -1373,23 +1442,33 @@ by others to a file the queue edits interrupts it (`OtherInterrupts`), and
 (`AdoptChecksText`). An interrupt discards the batches still queued, but one
 already playing plays on and may complete, as when a formatter changes the file
 on save (#151); `AdoptChecksText` keeps that batch's fork ids off the changed
-text. Until a report says the queue was interrupted (`stale`), no batch is
-rehearsed, and `read` shows the editor's text. Batches are queued, each
-rehearsed from the one before; the config bounds the queue. `ReadIsStart`: right
-after a read, the agent's next batch is checked against what it was shown.
-`ShareIds` is the fix for a bug this spec found: `followChange` gave a queued
-batch's fork its own id for a line a tool inserted, unlike the editor's id the
-agent was shown, so a line the agent had just read was refused. Now the fork
-drops its copy of the file's ids, and reads the editor's.
+text. The programmer's edit interrupts in the agent's turn and is never
+followed; a turn change interrupts too. Until a report says the queue was
+interrupted, and the batch the interrupt left playing has ended (`stale`), no
+batch is rehearsed, and `read` shows the editor's text. A report while that
+batch plays marks the interrupt reported (`staleReported`), and `stale` clears
+when it ends (`ReportWaitsForQueue`, the fix for #219: a report cleared `stale`
+at once, so the next batch was rehearsed from the playing batch's fork, which
+missed the programmer's edit, and a line just read was refused). Batches are
+queued, each rehearsed from the one before; the config bounds the queue.
+`ReadIsStart`: right after a read, the agent's next batch is checked against
+what it was shown. `ShareIds` is the fix for a bug this spec found:
+`followChange` gave a queued batch's fork its own id for a line a tool inserted,
+unlike the editor's id the agent was shown, so a line the agent had just read
+was refused. Now the fork drops its copy of the file's ids, and reads the
+editor's.
 
 | Spec | Code |
 |---|---|
 | `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), unless `stale`; else the editor's |
 | `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Origin`), the batch played in memory; while `stale`, the batch is discarded unrehearsed |
-| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a failure interrupts the queue |
+| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a batch that does not complete (interrupted, discarded, or failed), with its change made or not, is not adopted, and interrupts the queue |
+| `EndStale` | the player's loop: once the batch an interrupt left playing ends, an interrupt already reported is over (`staleReported`) |
 | `EditAsOther` | `otherEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file (`interrupt`: the batches still queued are discarded, one already playing plays on, and `stale` is set), else each rehearsal follows it (`followChange`) |
+| `EditAsProgrammer` | `userEdit`: the editor tracks the change; in the agent's turn it interrupts, whatever file it is in; never followed |
+| `ChangeTurn` | `takeTurn` and `handBack`, each interrupting the queue |
 | `Accept` | the rehearsal's `knows` in `unseen`: the id the agent was shown at a number is the id there where the rehearsal starts |
-| `Report` | the report's `snapshot` clearing `stale`; `ready()` holds the report until a batch interrupted while playing has finished |
+| `Report` | every `snapshot`: a step's, from `ready()` or its timer, `rejectBatch`'s, `rejectUnanchored`'s, and `resumeSession`'s, which forgets `seen`; it clears `stale` with the queue empty, and otherwise sets `staleReported` (#219) |
 
 Each invariant was proved to bite with a mutation of a copy of the model, run in
 TLC and then reverted:
@@ -1405,6 +1484,11 @@ TLC and then reverted:
 | `AdoptChecksText = FALSE`, with `OtherInterrupts = FALSE` | `OnePerLine` |
 | `AdoptChecksText = FALSE` alone | `OnePerLine`: a batch playing when a change by others interrupted the queue completes, and adopts its fork's ids for a text with a line more or fewer (#151) |
 | an interrupt discards the playing batch too, the spec before #151, with `AdoptChecksText = FALSE` | nothing: no batch then plays on a text other than its fork's, so that spec could not see what `AdoptChecksText` guards |
+| a programmer's edit in the agent's turn leaves the queue alone | `ReadIsStart` |
+| `FailPlay` adopts the fork's ids for a change it made | `OnePerLine` |
+| `Submit` queues an edit rehearsed in the programmer's turn | `ReadIsStart` |
+| `ReportWaitsForQueue = FALSE`, the code before #219 | `ReadIsStart` |
+| the player's loop does not end a reported interrupt (`EndStale` left out) | `ReportedWhilePlaying` |
 | `Submit` queues a batch while `stale` | nothing here: `Controller`'s `PlaysKnowingEvents` checks that no batch is queued before the agent knows of an interrupt |
 
 `OtherInterrupts = FALSE` alone does not break `AcceptedOnlyForThatLine`. With
@@ -1420,7 +1504,8 @@ Every invariant names the test that proves the code obeys it:
 | `AcceptedOnlyForThatLine` | `session.e2e.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
 | `IdsDistinct` | `lines.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
 | `OnePerLine` | `lines.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
-| `ReadIsStart` | `session.e2e.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits; `controller.test.ts`: ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it |
+| `ReadIsStart` | `session.e2e.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a batch that edits no file plays (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits; `controller.test.ts`: ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it; ReadIsStart, ReportedWhilePlaying: stays stale after a report while the batch an interrupt left plays, until it completes |
+| `ReportedWhilePlaying` | `controller.test.ts`: ReadIsStart, ReportedWhilePlaying: stays stale after a report while the batch an interrupt left plays, until it completes; `integration.ts`, in VS Code: the controller paths, where a report during a batch's held last save leaves the next step rehearsed once it completes |
 
 ### `Terminals`: running commands
 
@@ -1453,7 +1538,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoReuseWhileBusy` | `terminal.test.ts`: NoReuseWhileBusy: gives a second command a new terminal while the first one's command still runs |
 | `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd, Exit: reuses a terminal once its command ends, in the folder it's in, and not one whose shell exited |
-| `RunReturns` | `terminal.test.ts`: RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing |
+| `RunReturns` | `terminal.test.ts`: RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing; RunReturns, ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell; RunReturns, StopWaiting: returns with the command still running when the wait is over, or playback is interrupted; RunReturns, CloseTerminal: ends the wait when the programmer closes the terminal, and not for another terminal; RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it |
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`, `ActionValidation`
 

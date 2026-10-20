@@ -224,6 +224,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   async show(file: string): Promise<void> {
     const uri = vscode.Uri.file(file);
     await this.create(file);
+    // A file already in a visible editor: no navigation, no window (specs/FollowMode.tla, `ShowVisible`).
     if (this.visibleEditor(file)) return;
     // The change of active editor comes before showTextDocument's reply, however long that takes
     // (specs/FollowMode.tla, `StartShow` with `HoldWhileShowing`, then `ShowFile`).
@@ -256,6 +257,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         const applied = await editor.edit((b) => {
           b.replace(range, text);
         }, options);
+        // specs/EditorAdapter.tla, `RejectEdit`: a refused edit sends no event; `finally` drops its entry.
         if (!applied) throw new Error('The edit was rejected.');
       } else {
         // Not visible (e.g. the programmer looked away): no control over undo stops. An edit is to the
@@ -267,7 +269,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         if (!(await vscode.workspace.applyEdit(edit))) throw new Error('The edit was rejected.');
       }
     } finally {
-      // `ResolveEdit`: the entry goes, if its event didn't take it.
+      // specs/EditorAdapter.tla, `ResolveEdit`: the entry goes, if its event didn't take it.
       const i = pending.indexOf(entry);
       if (i !== -1) pending.splice(i, 1);
     }
@@ -282,11 +284,11 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     await vscode.workspace.fs.stat(doc.uri);
     this.saving.add(file);
     try {
-      // The save participants run (`RunParticipant`, `FinishParticipants`), then the file is written.
+      // The save participants run (specs/EditorAdapter.tla, `RunParticipant`, `FinishParticipants`), then the file is written.
       // A save that fails, say because the file on disk is newer, resolves to false instead of throwing.
       if (!(await doc.save())) throw new Error("the editor didn't save it; the file on disk may have changed");
     } finally {
-      // `FinishSave`: save() resolves after every change event before it.
+      // specs/EditorAdapter.tla, `FinishSave`: save() resolves after every change event before it.
       this.saving.delete(file);
     }
   }
@@ -303,7 +305,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (!changed) return;
     // A scroll a command cut short goes on once it's done; a pause's end reveals the target anyway,
     // and the programmer's turn is theirs to look where they like. specs/Scroll.tla: leaving the
-    // following states is `Leave`, and coming back `Return`.
+    // following states is `Leave`, and coming back `Follow`.
     if (state === 'navigator') {
       this.cut = false;
     } else if (this.cut && FOLLOWING.has(state)) {
@@ -694,6 +696,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const text = doc?.getText() ?? '';
     if (doc && text !== '') {
       await this.edit(file, 0, text.length, '', { undoStopBefore: true, undoStopAfter: true });
+      // specs/EditorAdapter.tla, `StartCreateSave` and `FinishCreateSave`: saved without `saving`, so a change made
+      // during this save counts as the programmer's.
       if (!(await doc.save())) throw new Error(`Couldn't create ${file}.`);
       return;
     }

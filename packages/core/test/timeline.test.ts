@@ -69,7 +69,7 @@ describe('timeline', () => {
     expect(results).toEqual([true]);
   });
 
-  it('an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short', async () => {
+  it('LatestPending: an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short', async () => {
     const timeline = new Timeline(/* paused= */ false);
     const results: boolean[] = [];
     void timeline.sleep(sleepMs).then((completed) => {
