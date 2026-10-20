@@ -976,7 +976,7 @@ describe('runCommand', () => {
 });
 
 describe('follow mode: scrolling', () => {
-  it('Settles: glides the target to a third of the way down, a frame at a time, leaving room for sticky scroll', async () => {
+  it('ComesInView: glides the target to a third of the way down, a frame at a time, leaving room for sticky scroll', async () => {
     const { editor, controller } = made();
     const view = inView(FILE);
     answering(view);
@@ -1175,7 +1175,7 @@ describe('follow mode: scrolling', () => {
     ]);
   });
 
-  it('Settles: a measure that a command cuts short goes on once the command is done', async () => {
+  it('ComesInView: a measure that a command cuts short goes on once the command is done', async () => {
     const { editor, controller } = made();
     const view = inView(FILE, 960, 999);
     outOfView(controller, 970, FRAME_MS);
@@ -1197,7 +1197,7 @@ describe('follow mode: scrolling', () => {
     expect(revealed(view).at(1)).toEqual([990, fakes.reveal.InCenter]);
   });
 
-  it("Settles: a glide a command cuts short goes on once it is done, not while paused, and not on the programmer's turn", async () => {
+  it("ComesInView: a glide a command cuts short goes on once it is done, not while paused, and not on the programmer's turn", async () => {
     const { editor, controller } = made();
     const view = inView(FILE);
     answering(view);
@@ -1225,7 +1225,7 @@ describe('follow mode: scrolling', () => {
     expect(revealed(view)).toHaveLength(6);
   });
 
-  it('Settles: catches up after a glide with a target that moved on in its file, and lets go of one that left it', async () => {
+  it('ComesInView: catches up after a glide with a target that moved on in its file, and lets go of one that left it', async () => {
     const { editor, controller } = made();
     const view = inView(FILE);
     answering(view);
@@ -1248,7 +1248,7 @@ describe('follow mode: scrolling', () => {
     expect(vi.mocked(row).mock.calls).toHaveLength(4);
   });
 
-  it('Settles: reveal shows the target and follows it there, and does nothing with no target', async () => {
+  it('ComesInView: reveal shows the target and follows it there, and does nothing with no target', async () => {
     fakes.onDisk.add(FILE);
     const { editor, controller } = made();
     editor.reveal();

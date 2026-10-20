@@ -93,9 +93,9 @@ const SCENARIO: object[] = [
   { type: 'state', state: 'absent', turn: 'agent', paused: false },
   { type: 'state', state: 'listening', turn: 'agent', paused: false },
   { type: 'state', state: 'typing', turn: 'agent', paused: true },
-  { type: 'state', state: 'navigator', turn: 'user', paused: false },
-  { type: 'turn', to: 'user', message: 'Your turn: fix the import.', ref: { file: 'src/todos.ts', line: 3, endLine: 5 } },
-  { type: 'user', text: 'Looks good.', ref: { file: 'src/todos.ts', line: 1, endLine: 2 } },
+  { type: 'state', state: 'navigator', turn: 'programmer', paused: false },
+  { type: 'turn', to: 'programmer', message: 'Your turn: fix the import.', ref: { file: 'src/todos.ts', line: 3, endLine: 5 } },
+  { type: 'programmer', text: 'Looks good.', ref: { file: 'src/todos.ts', line: 1, endLine: 2 } },
   { type: 'turn', to: 'agent' },
   { type: 'interrupt' },
   { type: 'point', file: 'src/server.ts', line: 12 },
@@ -115,7 +115,7 @@ const SCENARIO: object[] = [
   { type: 'calibration', view: { phase: 'reading', title: 'Comma Gets a Cure', text: 'Well, here is a story.', notice: 'Public domain.' } },
   { type: 'calibration', view: { phase: 'done', msPerChar: 60, wordsPerMinute: 230 } },
   { type: 'calibration', view: { phase: 'idle' } },
-  { type: 'session', active: false, reason: 'user' },
+  { type: 'session', active: false, reason: 'programmer' },
   { type: 'startEnded' },
 ];
 

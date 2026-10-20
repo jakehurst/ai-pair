@@ -11,7 +11,7 @@
 EXTENDS Naturals
 
 CONSTANTS
-    MaxBatches,     \* how many batches the model submits
+    MaxBatches,     \* how many batches the model submits, and restores
     Guard,          \* TRUE: a batch after a discard report must anchor the
                     \* cursor
     DropsHeld       \* TRUE: the refusal's report overwrites a rejection
@@ -25,76 +25,79 @@ ASSUME AssumeDropsHeld == DropsHeld \in BOOLEAN
 Positions == 1..3
 
 VARIABLES
-    cursor,     \* where the agent's cursor is
-    belief,     \* where the agent thinks it is
-    pending,    \* a report said a batch was not completed, and no anchored
-                \* batch was accepted since
-    misplaced,  \* an edit played where the agent did not think the cursor was
-    held,       \* rejections `restore` holds for the next reports (#67)
-    lost,       \* a held rejection reached no report
-    batches     \* batches submitted, and reports restored
+    place,         \* where the agent's cursor is
+    belief,        \* where the agent thinks it is
+    mustAnchor,    \* a report said a batch was not completed, and no anchored
+                   \* batch was accepted since
+    wrongPlace,    \* an edit played where the agent did not think the cursor
+                   \* was
+    heldCount,     \* how many rejections `restore` holds for the next reports
+                   \* (#67)
+    rejectionLost, \* a held rejection reached no report
+    batches        \* batches submitted, and reports restored
 
-vars == <<cursor, belief, pending, misplaced, held, lost, batches>>
+vars == <<place, belief, mustAnchor, wrongPlace, heldCount, rejectionLost,
+          batches>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ cursor \in Positions
+    /\ place \in Positions
     /\ belief \in Positions
-    /\ pending \in BOOLEAN
-    /\ misplaced \in BOOLEAN
-    /\ held \in Nat
-    /\ lost \in BOOLEAN
+    /\ mustAnchor \in BOOLEAN
+    /\ wrongPlace \in BOOLEAN
+    /\ heldCount \in Nat
+    /\ rejectionLost \in BOOLEAN
     /\ batches \in Nat
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ cursor = 1
+    /\ place = 1
     /\ belief = 1
-    /\ pending = FALSE
-    /\ misplaced = FALSE
-    /\ held = 0
-    /\ lost = FALSE
+    /\ mustAnchor = FALSE
+    /\ wrongPlace = FALSE
+    /\ heldCount = 0
+    /\ rejectionLost = FALSE
     /\ batches = 0
 
 \* A batch plays through: the cursor ends where the agent planned.
 Complete ==
     /\ \E c \in Positions :
-           /\ cursor' = c
+           /\ place' = c
            /\ belief' = c
     /\ batches' = batches + 1
-    /\ UNCHANGED <<pending, misplaced, held, lost>>
+    /\ UNCHANGED <<mustAnchor, wrongPlace, heldCount, rejectionLost>>
 
 \* A batch is not completed (interrupted, discarded, or failed): the cursor
 \* stops short of the plan, and the report says so.
-Discard ==
+StopShort ==
     /\ \E c, b \in Positions :
            /\ c # b
-           /\ cursor' = c
+           /\ place' = c
            /\ belief' = b
-    /\ pending' = TRUE
+    /\ mustAnchor' = TRUE
     /\ batches' = batches + 1
-    /\ UNCHANGED <<misplaced, held, lost>>
+    /\ UNCHANGED <<wrongPlace, heldCount, rejectionLost>>
 
 \* A batch whose first action at the cursor names its file and line: the
 \* cursor goes there, the belief with it.
 SubmitAnchored ==
     /\ \E c \in Positions :
-           /\ cursor' = c
+           /\ place' = c
            /\ belief' = c
-    /\ pending' = FALSE
+    /\ mustAnchor' = FALSE
     /\ batches' = batches + 1
-    /\ UNCHANGED <<misplaced, held, lost>>
+    /\ UNCHANGED <<wrongPlace, heldCount, rejectionLost>>
 
 \* A batch that types at the cursor, trusting the plan: accepted while the
 \* guard holds no pending report.
 SubmitUnanchored ==
-    /\ ~(Guard /\ pending)
-    /\ misplaced' = (misplaced \/ (cursor # belief))
+    /\ ~(Guard /\ mustAnchor)
+    /\ wrongPlace' = (wrongPlace \/ (place # belief))
     /\ batches' = batches + 1
-    /\ UNCHANGED <<cursor, belief, pending, held, lost>>
+    /\ UNCHANGED <<place, belief, mustAnchor, heldCount, rejectionLost>>
 
 \* Such a batch while the guard holds a pending report. With nothing held, it
 \* is refused with the `unanchored` rejection, in a report of its own
@@ -102,46 +105,47 @@ SubmitUnanchored ==
 \* DropsHeld the refusal's snapshot overwrites it; else the step is discarded
 \* as stale and its report delivers it (#193).
 RefuseUnanchored ==
-    /\ Guard /\ pending
-    /\ held' = IF held > 0 THEN held - 1 ELSE held
-    /\ lost' = (lost \/ (DropsHeld /\ held > 0))
+    /\ Guard /\ mustAnchor
+    /\ heldCount' = IF heldCount > 0 THEN heldCount - 1 ELSE heldCount
+    /\ rejectionLost' = (rejectionLost \/ (DropsHeld /\ heldCount > 0))
     /\ batches' = batches + 1
-    /\ UNCHANGED <<cursor, belief, pending, misplaced>>
+    /\ UNCHANGED <<place, belief, mustAnchor, wrongPlace>>
 
 \* `restore` of a report with a rejection: held for the next report (#67).
 Restore ==
-    /\ held' = held + 1
+    /\ heldCount' = heldCount + 1
     /\ batches' = batches + 1
-    /\ UNCHANGED <<cursor, belief, pending, misplaced, lost>>
+    /\ UNCHANGED <<place, belief, mustAnchor, wrongPlace, rejectionLost>>
 
 \* A report of any other call takes one held rejection (snapshot).
-Deliver ==
-    /\ held > 0
-    /\ held' = held - 1
-    /\ UNCHANGED <<cursor, belief, pending, misplaced, lost, batches>>
+TakeHeld ==
+    /\ heldCount > 0
+    /\ heldCount' = heldCount - 1
+    /\ UNCHANGED <<place, belief, mustAnchor, wrongPlace, rejectionLost,
+                   batches>>
 
 Next ==
     \/ Complete
-    \/ Discard
+    \/ StopShort
     \/ SubmitAnchored
     \/ SubmitUnanchored
     \/ RefuseUnanchored
     \/ Restore
-    \/ Deliver
+    \/ TakeHeld
 
 Spec == Init /\ [][Next]_vars
 
 --------------------------------------------------------------------------------
 
 \* No edit plays where the agent did not think the cursor was.
-NoMisplacedEdit == ~misplaced
+NoMisplacedEdit == ~wrongPlace
 
 \* Something must happen: with no discard pending, an unanchored batch is
 \* accepted. A guard that refused every batch would fail it.
-AcceptsUnanchored == ~pending => ENABLED SubmitUnanchored
+AcceptsUnanchored == ~mustAnchor => ENABLED SubmitUnanchored
 
 \* Every rejection `restore` held reaches a report (#193).
-NoRejectionLost == ~lost
+NoRejectionLost == ~rejectionLost
 
 \* Batches run out only so that the model is finite (6.8).
 Constraint == batches <= MaxBatches

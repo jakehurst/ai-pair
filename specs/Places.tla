@@ -1,19 +1,19 @@
 ---- MODULE Places -------------------------------------------------------------
 (******************************************************************************)
 (* resolveSpot and resolveSpan in packages/core/src/places.ts, checked over   *)
-(* every small text. Characters are "x", "y", and "n" (a line feed); "m" is   *)
-(* the cursor marker in a spot. Offsets count from 0. Places in #19: a        *)
-(* resolved spot or span lies on the given line, and an ambiguous or missing  *)
-(* text never resolves.                                                       *)
+(* every small text. Characters are Letter, OtherLetter, and LineFeed, named  *)
+(* in PairDefs; a spot gives the text before and after its cursor marker.     *)
+(* Offsets count from 0. Places in #19: a resolved spot or span lies on the   *)
+(* given line, and an ambiguous or missing text never resolves.               *)
 (******************************************************************************)
-EXTENDS Integers, Sequences, FiniteSets
+EXTENDS Integers, Sequences, FiniteSets, PairDefs
 
 CONSTANTS
-    MaxLen,     \* the longest text the check covers
-    MaxNeedle   \* the longest needle: a spot's two halves together, a span's
-                \* text, `from`, or `through`
+    MaxChars, \* the longest text the check covers
+    MaxNeedle \* the longest needle: a spot's two halves together, a span's
+              \* text, `from`, or `through`
 
-ASSUME AssumeMaxLen == MaxLen \in Nat
+ASSUME AssumeMaxChars == MaxChars \in Nat
 ASSUME AssumeMaxNeedle == MaxNeedle \in Nat
 
 \* No offset: what resolving gives when it finds no single match. Any value
@@ -22,15 +22,12 @@ NoOffset == CHOOSE v : v \notin Int
 
 --------------------------------------------------------------------------------
 
-\* The characters: "x", "y", and "n" for a line feed.
-Chars == {"x", "y", "n"}
-
-\* Every sequence of up to n characters from cs.
-Seqs(cs, n) == UNION {[1..m -> cs] : m \in 0..n}
+\* The characters: any other, a second such character, and a line feed.
+Chars == {Letter, OtherLetter, LineFeed}
 
 \* The line, from 1, of offset o: one more than the line feeds before it
 \* (position in text.ts).
-LineOf(t, o) == Cardinality({i \in 1..o : t[i] = "n"}) + 1
+LineOf(t, o) == Cardinality({i \in 1..o : t[i] = LineFeed}) + 1
 
 LineCount(t) == LineOf(t, Len(t))
 
@@ -69,18 +66,18 @@ NoRange == [start |-> NoOffset, end |-> NoOffset]
 \* With `from` and `through`: the first `through` at or after the end of
 \* `from`. The CHOOSE takes the smallest such start; there is one smallest.
 ResolveRange(t, from, through, line) ==
-    LET s == ResolveText(t, from, line)
+    LET fromStart == ResolveText(t, from, line)
         ends ==
             IF through = <<>>
             THEN {}
-            ELSE {o \in Starts(t, through) : o >= s + Len(from)}
+            ELSE {o \in Starts(t, through) : o >= fromStart + Len(from)}
         first == CHOOSE o \in ends : \A p \in ends : o <= p
-    IN  IF s = NoOffset \/ ends = {}
+    IN  IF fromStart = NoOffset \/ ends = {}
         THEN NoRange
-        ELSE [start |-> s, end |-> first + Len(through)]
+        ELSE [start |-> fromStart, end |-> first + Len(through)]
 
 \* Every text and every needle the check covers.
-Texts == Seqs(Chars, MaxLen)
+Texts == Seqs(Chars, MaxChars)
 Needles == Seqs(Chars, MaxNeedle)
 
 --------------------------------------------------------------------------------
@@ -108,17 +105,17 @@ SpotOnlyWhenUnique ==
 
 \* A resolved span starts on its line and is exactly its text.
 SpanOK ==
-    \A t \in Texts, needle \in Needles, line \in 1..(MaxLen + 1) :
-        LET s == ResolveText(t, needle, line)
-        IN  s # NoOffset =>
-                /\ LineOf(t, s) = line
-                /\ SubSeq(t, s + 1, s + Len(needle)) = needle
+    \A t \in Texts, needle \in Needles, line \in 1..(MaxChars + 1) :
+        LET fromStart == ResolveText(t, needle, line)
+        IN  fromStart # NoOffset =>
+                /\ LineOf(t, fromStart) = line
+                /\ SubSeq(t, fromStart + 1, fromStart + Len(needle)) = needle
 
 \* A range starts with `from` on its line and ends with the first `through`
 \* after it.
 RangeOK ==
     \A t \in Texts, from \in Needles, through \in Needles,
-       line \in 1..(MaxLen + 1) :
+       line \in 1..(MaxChars + 1) :
         LET r == ResolveRange(t, from, through, line)
         IN  r # NoRange =>
                 /\ LineOf(t, r.start) = line

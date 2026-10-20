@@ -289,11 +289,11 @@ describe('post', () => {
   it("ReplayShowsSession: replays the session's end when that is the last session event", () => {
     const panel = harness().panel;
     panel.post({ type: 'session', active: true });
-    panel.post({ type: 'session', active: false, reason: 'user' });
+    panel.post({ type: 'session', active: false, reason: 'programmer' });
     for (let i = 0; i < 1000; i++) {
       panel.post({ type: 'say', text: `message ${i}` });
     }
-    expect(replayed(panel).filter((e) => e.type === 'session')).toEqual([{ type: 'session', active: false, reason: 'user' }]);
+    expect(replayed(panel).filter((e) => e.type === 'session')).toEqual([{ type: 'session', active: false, reason: 'programmer' }]);
   });
 
   it('cuts the oldest events beyond MAX_LOG, putting back no session when none was cut or one is still on the log', () => {
@@ -532,7 +532,7 @@ describe('receive', () => {
   });
 
   it("turn: hands the turn back on the programmer's turn, with the selection when attached", () => {
-    const { panel, controller } = harness('user');
+    const { panel, controller } = harness('programmer');
     const view = open(panel);
     view.send({ type: 'turn', message: 'yours', attach: true });
     view.send({ type: 'turn' });
@@ -604,7 +604,7 @@ describe('receive', () => {
 });
 
 describe('start', () => {
-  it('RunsAreClicks: runs the starter once per start from the page', () => {
+  it('StartsAreClicks: runs the starter once per start from the page', () => {
     const { panel, starter } = harness();
     const view = open(panel);
     starter.start.mockReturnValue(new Promise(() => {}));
@@ -613,7 +613,7 @@ describe('start', () => {
     expect(starter.start.mock.calls).toHaveLength(2);
   });
 
-  it('Settles: tells the page once the agent a start ran has exited', async () => {
+  it('NoteGoes: tells the page once the agent a start ran has exited', async () => {
     const { panel, starter } = harness();
     const exit = Promise.withResolvers<void>();
     starter.start.mockReturnValue(exit.promise);

@@ -12,143 +12,144 @@
 EXTENDS Naturals
 
 CONSTANTS
-    MaxSteps,   \* how many changes the model makes
-    Fixed       \* TRUE: the code as #88 and #89 fix it
+    MaxChanges, \* how many changes the model makes
+    PreferDirty \* TRUE: the code as #88 and #89 fix it
 
-ASSUME AssumeMaxSteps == MaxSteps \in Nat
-ASSUME AssumeFixed == Fixed \in BOOLEAN
+ASSUME AssumeMaxChanges == MaxChanges \in Nat
+ASSUME AssumePreferDirty == PreferDirty \in BOOLEAN
 
 \* The file's texts, as numbers; 0 is the empty text.
-Texts == 0..2
+Contents == 0..2
 
 \* No file on disk, no document, and getText's two failures: the file doesn't
 \* exist, or something else is thrown (`internal`, as #89 saw). Each is any
 \* value that is not a text and not one defined before it; the config makes
 \* each a model value (6.20).
-Absent == CHOOSE v : v \notin Texts
-NoDocument == CHOOSE v : v \notin Texts \cup {Absent}
-Missing == CHOOSE v : v \notin Texts \cup {Absent, NoDocument}
-Error == CHOOSE v : v \notin Texts \cup {Absent, NoDocument, Missing}
+Absent == CHOOSE v : v \notin Contents
+NoDocument == CHOOSE v : v \notin Contents \cup {Absent}
+NoSuchFile == CHOOSE v : v \notin Contents \cup {Absent, NoDocument}
+Internal == CHOOSE v : v \notin Contents \cup {Absent, NoDocument, NoSuchFile}
 
 VARIABLES
-    disk,     \* the file on disk: a text, or Absent
-    doc,      \* the document's text, or NoDocument
-    dirty,    \* the document has unsaved changes
-    created,  \* `show` just created the file, and nothing has changed it since
-    steps     \* changes so far
+    diskText,     \* the file on disk: a text, or Absent
+    documentText, \* the document's text, or NoDocument
+    dirty,        \* the document has unsaved changes
+    created,      \* `show` just created the file, and nothing has changed it
+                  \* since
+    changes       \* changes so far
 
-vars == <<disk, doc, dirty, created, steps>>
+vars == <<diskText, documentText, dirty, created, changes>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ disk \in Texts \cup {Absent}
-    /\ doc \in Texts \cup {NoDocument}
+    /\ diskText \in Contents \cup {Absent}
+    /\ documentText \in Contents \cup {NoDocument}
     /\ dirty \in BOOLEAN
     /\ created \in BOOLEAN
-    /\ steps \in Nat
+    /\ changes \in Nat
 
 \* What getText returns.
 GetText ==
-    IF Fixed
-    THEN IF doc # NoDocument /\ dirty
-         THEN doc
-         ELSE IF disk = Absent
-              THEN Missing
-              ELSE IF doc # NoDocument
-                   THEN doc
-                   ELSE disk
-    ELSE IF doc # NoDocument
-         THEN doc
-         ELSE IF disk = Absent
-              THEN Error
-              ELSE disk
+    IF PreferDirty
+    THEN IF documentText # NoDocument /\ dirty
+         THEN documentText
+         ELSE IF diskText = Absent
+              THEN NoSuchFile
+              ELSE IF documentText # NoDocument
+                   THEN documentText
+                   ELSE diskText
+    ELSE IF documentText # NoDocument
+         THEN documentText
+         ELSE IF diskText = Absent
+              THEN Internal
+              ELSE diskText
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ disk \in Texts
-    /\ doc = NoDocument
+    /\ diskText \in Contents
+    /\ documentText = NoDocument
     /\ dirty = FALSE
     /\ created = FALSE
-    /\ steps = 0
+    /\ changes = 0
 
 \* Something opens a document for the file: the programmer, or another
 \* extension.
-Open ==
-    /\ doc = NoDocument
-    /\ disk # Absent
-    /\ doc' = disk
+OpenDocument ==
+    /\ documentText = NoDocument
+    /\ diskText # Absent
+    /\ documentText' = diskText
     /\ dirty' = FALSE
-    /\ UNCHANGED <<disk, created, steps>>
+    /\ UNCHANGED <<diskText, created, changes>>
 
 \* VS Code drops a document no one holds any more.
-Close ==
-    /\ doc # NoDocument
+CloseDocument ==
+    /\ documentText # NoDocument
     /\ ~dirty
-    /\ doc' = NoDocument
-    /\ UNCHANGED <<disk, dirty, created, steps>>
+    /\ documentText' = NoDocument
+    /\ UNCHANGED <<diskText, dirty, created, changes>>
 
 \* The file is written on disk by anything.
 Write ==
-    /\ disk' \in Texts
+    /\ diskText' \in Contents
     /\ created' = FALSE
-    /\ steps' = steps + 1
-    /\ UNCHANGED <<doc, dirty>>
+    /\ changes' = changes + 1
+    /\ UNCHANGED <<documentText, dirty>>
 
 \* The file is deleted on disk by anything.
 Delete ==
-    /\ disk # Absent
-    /\ disk' = Absent
+    /\ diskText # Absent
+    /\ diskText' = Absent
     /\ created' = FALSE
-    /\ steps' = steps + 1
-    /\ UNCHANGED <<doc, dirty>>
+    /\ changes' = changes + 1
+    /\ UNCHANGED <<documentText, dirty>>
 
 \* An edit in the document.
 Edit ==
-    /\ doc # NoDocument
-    /\ doc' \in Texts
+    /\ documentText # NoDocument
+    /\ documentText' \in Contents
     /\ dirty' = TRUE
     /\ created' = FALSE
-    /\ steps' = steps + 1
-    /\ UNCHANGED disk
+    /\ changes' = changes + 1
+    /\ UNCHANGED diskText
 
 \* A save writes the document to disk, recreating a deleted file.
 Save ==
-    /\ doc # NoDocument
+    /\ documentText # NoDocument
     /\ dirty
-    /\ disk' = doc
+    /\ diskText' = documentText
     /\ dirty' = FALSE
-    /\ UNCHANGED <<doc, created, steps>>
+    /\ UNCHANGED <<documentText, created, changes>>
 
 \* VS Code reloads a document without unsaved changes from the file on disk.
 Reload ==
-    /\ doc # NoDocument
+    /\ documentText # NoDocument
     /\ ~dirty
-    /\ disk # Absent
-    /\ doc # disk
-    /\ doc' = disk
-    /\ UNCHANGED <<disk, dirty, created, steps>>
+    /\ diskText # Absent
+    /\ documentText # diskText
+    /\ documentText' = diskText
+    /\ UNCHANGED <<diskText, dirty, created, changes>>
 
 \* `show` on a missing file creates it, empty. Before the fix, `fs.stat` found
 \* no file, the file is written empty on disk, and the document keeps its text
-\* until a reload. Fixed: getText says the file is missing, so unsaved text is
-\* kept, and a document for it without unsaved changes is emptied and saved,
-\* which creates the file through VS Code, so the two agree at once.
+\* until a reload. PreferDirty: getText says the file is missing, so unsaved
+\* text is kept, and a document for it without unsaved changes is emptied and
+\* saved, which creates the file through VS Code, so the two agree at once.
 Show ==
-    /\ IF Fixed THEN GetText = Missing ELSE disk = Absent
-    /\ disk' = 0
-    /\ IF Fixed /\ doc # NoDocument
-       THEN /\ doc' = 0
+    /\ IF PreferDirty THEN GetText = NoSuchFile ELSE diskText = Absent
+    /\ diskText' = 0
+    /\ IF PreferDirty /\ documentText # NoDocument
+       THEN /\ documentText' = 0
             /\ dirty' = FALSE
-       ELSE UNCHANGED <<doc, dirty>>
+       ELSE UNCHANGED <<documentText, dirty>>
     /\ created' = TRUE
-    /\ UNCHANGED steps
+    /\ UNCHANGED changes
 
 Next ==
-    \/ Open
-    \/ Close
+    \/ OpenDocument
+    \/ CloseDocument
     \/ Write
     \/ Delete
     \/ Edit
@@ -164,18 +165,19 @@ Spec == Init /\ [][Next]_vars
 \* text it had. A getText that returned the document as it was would fail it,
 \* so it says something must happen.
 NotStale ==
-    (disk = Absent /\ ~(doc # NoDocument /\ dirty)) => (GetText = Missing)
+    (diskText = Absent /\ ~(documentText # NoDocument
+                            /\ dirty)) => (GetText = NoSuchFile)
 
 \* #89: a missing file is reported as missing, never as another failure.
-MissingIsReported == GetText # Error
+MissingIsReported == GetText # Internal
 
 \* A file `show` just created reads as empty, until something changes it.
 CreatedIsEmpty == created => (GetText = 0)
 
 \* The programmer's unsaved text changes only by their own edits.
-KeepsUnsavedProp == [][(dirty /\ doc' # doc) => dirty']_vars
+KeepsUnsavedProp == [][(dirty /\ documentText' # documentText) => dirty']_vars
 
 \* Changes run out only so that the model is finite (6.8).
-Constraint == steps <= MaxSteps
+Constraint == changes <= MaxChanges
 
 ================================================================================

@@ -162,7 +162,9 @@ describe('reports', () => {
   });
 
   it("says when it's the programmer's turn, and when the session ends", () => {
-    expect(renderReport(report({ turn: 'user', events: [{ kind: 'turn', to: 'user' }] }), 'listen')).toMatch(/programmer's turn/);
+    expect(renderReport(report({ turn: 'programmer', events: [{ kind: 'turn', to: 'programmer' }] }), 'listen')).toMatch(
+      /programmer's turn/,
+    );
     expect(renderReport(report({ events: [{ kind: 'end' }] }), 'listen')).toMatch(/ended the session/);
     expect(renderReport(report({}), 'end')).toMatch(/ended/);
   });
@@ -310,7 +312,7 @@ describe('every field', () => {
         { kind: 'interrupt' },
         { kind: 'turn', to: 'agent', message: 'handback-1' },
       ],
-      turn: 'user',
+      turn: 'programmer',
       cursor: fieldCode('cursor.ts', 16),
       waiting: true,
     };

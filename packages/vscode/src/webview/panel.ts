@@ -26,7 +26,7 @@ const STATUS: Record<AgentState, [string, string]> = {
   navigator: ['ring', 'Your turn'],
 };
 
-const ENDED = { agent: 'The agent ended the session', user: 'You ended the session', disconnected: 'The agent disconnected' };
+const ENDED = { agent: 'The agent ended the session', programmer: 'You ended the session', disconnected: 'The agent disconnected' };
 
 // Tooltips: an element's data-tip shows under it after a moment's hover, or at once while one is
 // showing or just was, the way VS Code's own hovers do; and on keyboard focus. A click hides it.
@@ -157,7 +157,7 @@ function entry(cls: string, html?: string): HTMLElement {
 
 /**
  * Puts the current message into the history, once: when the next entry comes, or when it is replaced
- * (specs/Panel.tla, `Flushed`).
+ * (specs/Panel.tla, `WithMessageFiled`).
  */
 function fileCurrent(): void {
   if (current !== undefined && !filed) ui.history.prepend(entry('agent', rich(current)));
@@ -439,15 +439,17 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   turn = e.turn;
   paused = e.paused;
   document.body.classList.toggle('paused', paused);
-  document.body.classList.toggle('user-turn', turn === 'user');
+  document.body.classList.toggle('programmer-turn', turn === 'programmer');
   ui.pause.classList.toggle('on', paused);
   ui.pause.setAttribute('aria-label', paused ? 'Resume' : 'Pause');
   setTip(ui.pause, paused ? 'Resume (Space)' : 'Pause (Space)');
-  ui.turnLabel.textContent = turn === 'user' ? 'Hand back' : 'My turn';
+  ui.turnLabel.textContent = turn === 'programmer' ? 'Hand back' : 'My turn';
   ui.turn.setAttribute('aria-label', ui.turnLabel.textContent);
   setTip(
     ui.turn,
-    turn === 'user' ? 'Hand the turn back to the agent, with your reply if you typed one' : 'Take the turn: you drive, the agent navigates',
+    turn === 'programmer'
+      ? 'Hand the turn back to the agent, with your reply if you typed one'
+      : 'Take the turn: you drive, the agent navigates',
   );
   syncStatus();
   syncTip();
@@ -534,11 +536,11 @@ function handle(message: ToPanel): void {
       replaying = false;
       return;
     case 'canStart':
-      // specs/Start.tla, `Answer`: the button shows exactly what the extension answered.
+      // specs/Start.tla, `AnswerCheck`: the button shows exactly what the extension answered.
       ui.start.hidden = !message.value;
       return;
     case 'startEnded':
-      // specs/Start.tla, `Exit`: the agent is done, session or not (Settles).
+      // specs/Start.tla, `AgentExits`: the agent is done, session or not (NoteGoes).
       ui.starting.hidden = true;
       return;
     case 'session':
@@ -591,7 +593,7 @@ function handle(message: ToPanel): void {
     case 'state':
       setState(message);
       return;
-    case 'user':
+    case 'programmer':
       addYou(message.text, message.ref);
       return;
     case 'interrupt':
@@ -601,9 +603,9 @@ function handle(message: ToPanel): void {
       addOutside(message.files);
       return;
     case 'turn':
-      addDivider(message.to === 'user' ? 'You took the turn' : 'You handed the turn back');
+      addDivider(message.to === 'programmer' ? 'You took the turn' : 'You handed the turn back');
       if (message.message !== undefined || message.ref !== undefined) addYou(message.message, message.ref);
-      ui.reply.placeholder = message.to === 'user' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
+      ui.reply.placeholder = message.to === 'programmer' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
       return;
     case 'point':
       pointed = codeLink(`${RIGHT_ARROW} ${message.file}:${message.line}`, message.file, message.line);
@@ -669,7 +671,7 @@ function handle(message: ToPanel): void {
 
 // ---- The reply box ---------------------------------------------------------
 
-// specs/Draft.tla, `Type` and `Clear`: posts `draft` when the box's emptiness changes.
+// specs/Draft.tla, `TypeDraft` and `Clear`: posts `draft` when the box's emptiness changes.
 function syncDraft(): void {
   const empty = ui.reply.value.trim() === '';
   ui.reply.style.height = 'auto';
@@ -731,7 +733,7 @@ ui.interrupt.addEventListener('click', () => {
   vscode.postMessage({ type: 'interrupt' });
 });
 ui.turn.addEventListener('click', () => {
-  const handingBack = turn === 'user';
+  const handingBack = turn === 'programmer';
   const message = handingBack ? takeDraft() : '';
   const attach = handingBack && takeAttach();
   vscode.postMessage({ type: 'turn', ...(message ? { message } : {}), ...(attach ? { attach } : {}) });
@@ -784,7 +786,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || !active) return;
   if (e.target === ui.reply) return;
   e.preventDefault();
-  if (e.repeat || turn === 'user') return;
+  if (e.repeat || turn === 'programmer') return;
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });
 });
 

@@ -464,7 +464,7 @@ describe('a session the agent leaves, and comes back to', () => {
     h.controller.disconnect();
     h.controller.endSession();
     expect(h.controller.isActive).toBe(false);
-    expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'user' });
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'programmer' });
   });
 
   it('rejects the open call when the agent disconnects, and closes at once a session the programmer ended', async () => {
@@ -508,7 +508,7 @@ describe('a session the agent leaves, and comes back to', () => {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       scene: {
         root: ROOT,
-        turn: 'user',
+        turn: 'programmer',
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         cursor: JSON.parse('null') as undefined,
         selection: { start: 0, end: 1 },
@@ -519,7 +519,7 @@ describe('a session the agent leaves, and comes back to', () => {
     };
     h.controller.revive(saved);
     expect(h.controller.isSuspended).toBe(true);
-    expect(scene()).toMatchObject({ cursor: undefined, selection: { start: 0, end: 1 }, turn: 'user', focus: 'cursor' });
+    expect(scene()).toMatchObject({ cursor: undefined, selection: { start: 0, end: 1 }, turn: 'programmer', focus: 'cursor' });
     expect(scene().allowedCommands).toEqual(new Set(['ls']));
     expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: 'Kept.', suspended: true });
     expect(h.traced).toContain('session revived after a reload, suspended');
@@ -988,7 +988,7 @@ describe("the programmer's input", () => {
   it('records a message, with the code they had selected, and shows it in the panel', async () => {
     const h = await started();
     h.controller.userMessage('This.', selection());
-    expect(posted(h).at(-1)).toEqual({ type: 'user', text: 'This.', ref: { file: 'a.ts', line: 1, endLine: 2 } });
+    expect(posted(h).at(-1)).toEqual({ type: 'programmer', text: 'This.', ref: { file: 'a.ts', line: 1, endLine: 2 } });
     expect((await report(h.controller.listen())).events).toEqual([
       { kind: 'message', text: 'This.', selection: { ...selection(), file: 'a.ts' } },
     ]);
@@ -1077,18 +1077,18 @@ describe("the programmer's input", () => {
     const h = await started();
     scene().focus = 'point';
     h.controller.takeTurn();
-    expect(h.controller.turn).toBe('user');
+    expect(h.controller.turn).toBe('programmer');
     expect(scene().focus).toBe('cursor');
     expect(timeline().interrupt).toHaveBeenCalled();
     h.controller.takeTurn();
     h.controller.handBack();
     h.controller.handBack();
     expect(posted(h).filter((event) => event.type === 'turn')).toEqual([
-      { type: 'turn', to: 'user' },
+      { type: 'turn', to: 'programmer' },
       { type: 'turn', to: 'agent', message: undefined, ref: undefined },
     ]);
     expect((await report(h.controller.listen())).events).toEqual([
-      { kind: 'turn', to: 'user' },
+      { kind: 'turn', to: 'programmer' },
       { kind: 'turn', to: 'agent' },
     ]);
   });
@@ -1097,7 +1097,7 @@ describe("the programmer's input", () => {
     const h = await started();
     h.controller.endSession();
     expect(h.controller.isActive).toBe(false);
-    expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'user' });
+    expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'programmer' });
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'end' }]);
     expect(h.traced).toContain('session closed');
     expect(h.editor.renderPoint.mock.calls).toContainEqual([undefined]);
@@ -1150,18 +1150,18 @@ describe('the cursor in a report', () => {
 describe('pause and resume', () => {
   it('PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone', async () => {
     const h = await started();
-    h.controller.pause('user');
+    h.controller.pause('programmer');
     h.controller.pause('reply');
     h.controller.pause('reply');
     expect(timeline().pause).toHaveBeenCalledTimes(3);
-    expect(h.traced.filter((line) => line.startsWith('pause'))).toEqual(['pause user', 'pause reply']);
+    expect(h.traced.filter((line) => line.startsWith('pause'))).toEqual(['pause programmer', 'pause reply']);
     h.controller.resume('reply');
     expect(timeline().resume).not.toHaveBeenCalled();
     expect(h.controller.isPaused).toBe(true);
     h.controller.resume('calibrate');
-    h.controller.resume('user');
+    h.controller.resume('programmer');
     expect(timeline().resume).toHaveBeenCalledOnce();
-    expect(h.traced).toEqual(expect.arrayContaining(['resume reply', 'resume user']));
+    expect(h.traced).toEqual(expect.arrayContaining(['resume reply', 'resume programmer']));
     expect(h.traced).not.toContain('resume calibrate');
     h.controller.resume();
     expect(timeline().resume).toHaveBeenCalledOnce();
@@ -1191,7 +1191,7 @@ describe('pause and resume', () => {
     h.controller.resume();
     expect(h.editor.reveal.mock.calls).toHaveLength(1);
     scene().cursor = { file: A, offset: 0 };
-    scene().turn = 'user';
+    scene().turn = 'programmer';
     h.controller.pause();
     h.controller.resume();
     expect(h.editor.reveal.mock.calls).toHaveLength(1);
@@ -1283,7 +1283,7 @@ describe('the status in the panel', () => {
     await settle();
     h.controller.takeTurn();
     expect(statuses(h)).toEqual(['thinking', 'typing', 'read', 'running', 'paused', 'running', 'thinking', 'navigator']);
-    expect(h.traced).toContain("status navigator, user's turn");
+    expect(h.traced).toContain("status navigator, programmer's turn");
   });
 
   it('shows the cursor and its selection in the editor, and no cursor once the session closed', async () => {
@@ -1336,7 +1336,7 @@ describe('the status in the panel', () => {
     expect(statuses(h).at(-1)).toBe('thinking');
   });
 
-  it('NoYourMoveAfterAct, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace', async () => {
+  it('NoYourMoveAfterInterrupt, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace', async () => {
     const h = await started();
     void h.controller.listen();
     await settle(CONFIG.maxBlockMs);

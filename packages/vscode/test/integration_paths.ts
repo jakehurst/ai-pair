@@ -401,7 +401,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   // It played on the text written again.
   assert.equal(followed.batches.at(-1)?.code?.lines[0]?.text, `b${CURSOR_MARKER}`, JSON.stringify(followed));
 
-  // A delete interrupted while its file comes into view stops before it deletes (specs/Player.tla, `Begin`).
+  // A delete interrupted while its file comes into view stops before it deletes (specs/Player.tla, `StartDelete`).
   controller.setSpeed(20);
   await controller.read('pauses.txt');
   await played([{ select: { file: 'pauses.txt', line: 1, text: 'one' } }]);
@@ -467,7 +467,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   await assert.rejects(controller.read('folder'));
   // The turn's toggle, as the command and the panel's button give it (specs/Turns.tla, `ChangeTurn`).
   await vscode.commands.executeCommand('aiPair.toggleTurn');
-  assert.equal(controller.turn, 'user');
+  assert.equal(controller.turn, 'programmer');
   controller.takeTurn();
   await controller.listen();
   await vscode.commands.executeCommand('aiPair.toggleTurn');
@@ -479,12 +479,12 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
 
   // Pauses: a report while paused says why; one reason of two resumed leaves it paused; a point the programmer
   // looked away from stops being what the view follows (specs/PointFocus.tla).
-  controller.pause('user');
+  controller.pause('programmer');
   controller.pause('away');
   controller.userInterrupt();
   const paused = await controller.listen();
-  assert.deepEqual(paused.paused?.toSorted(), ['away', 'user']);
-  controller.resume('user');
+  assert.deepEqual(paused.paused?.toSorted(), ['away', 'programmer']);
+  controller.resume('programmer');
   assert.equal(controller.isPaused, true);
   controller.resume();
   await controller.read('paths.txt');
@@ -506,7 +506,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('paths.txt')));
 
   // A call canceled while it waits its turn never runs; one canceled while its batch is rehearsed ends without
-  // blocking; a cancel after the call ended changes nothing (specs/Serialize.tla: `Guard`, `Rehearse`, `Abort`).
+  // blocking; a cancel after the call ended changes nothing (specs/Serialize.tla: `Guard`, `Rehearse`, `Cancel`).
   const first = controller.listen();
   const waiting = new AbortController();
   const second = controller.listen(waiting.signal);

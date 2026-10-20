@@ -92,8 +92,8 @@ const STATES: Array<{ name: string; events: object[] }> = [
     name: 'your-turn',
     events: [
       { type: 'session', active: true, task: 'Add tests' },
-      { type: 'turn', to: 'user', message: 'Your turn: fix the import.', ref: { file: 'src/todos.ts', line: 3, endLine: 5 } },
-      { type: 'state', state: 'navigator', turn: 'user', paused: false },
+      { type: 'turn', to: 'programmer', message: 'Your turn: fix the import.', ref: { file: 'src/todos.ts', line: 3, endLine: 5 } },
+      { type: 'state', state: 'navigator', turn: 'programmer', paused: false },
     ],
   },
   {
@@ -108,7 +108,7 @@ const STATES: Array<{ name: string; events: object[] }> = [
     events: [
       { type: 'session', active: true, task: 'Add tests' },
       { type: 'say', text: 'First.' },
-      { type: 'user', text: 'Looks good.', ref: { file: 'src/todos.ts', line: 1, endLine: 2 } },
+      { type: 'programmer', text: 'Looks good.', ref: { file: 'src/todos.ts', line: 1, endLine: 2 } },
       { type: 'run', id: 1, command: 'npm test', phase: 'running' },
       { type: 'run', id: 1, command: 'npm test', phase: 'done', exitCode: 0 },
       { type: 'run', id: 2, command: 'npm run lint', phase: 'running' },

@@ -6,7 +6,7 @@ import { ELLIPSIS, RANGE_DASH } from '@ai-pair/core/constants';
 
 /** What holds playback, for each pause reason, as the agent reads it (#149). */
 const PAUSE_REASONS: Record<PauseReason, string> = {
-  user: 'the programmer pressed Pause',
+  programmer: 'the programmer pressed Pause',
   reply: 'the programmer is typing a reply',
   away: 'the programmer is looking at another file, or scrolled away from your cursor',
   calibrate: 'the programmer is calibrating their reading speed',
@@ -128,7 +128,7 @@ function renderEvent(event: Event): string {
     case 'interrupt':
       return 'The programmer pressed Interrupt.';
     case 'turn':
-      if (event.to === 'user') return 'The programmer took the turn.';
+      if (event.to === 'programmer') return 'The programmer took the turn.';
       return `The programmer handed the turn back to you${event.message === undefined ? '.' : `:\n${quote(event.message)}`}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
     default:
       // The last kind, `end`: a new kind would widen `event.kind` here and fail the `satisfies`.
@@ -183,7 +183,7 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   const ended = report.events.some((e) => e.kind === 'end');
   if (tool === 'end' && !ended) {
     sections.push('The session has ended.');
-  } else if (report.turn === 'user' && !ended) {
+  } else if (report.turn === 'programmer' && !ended) {
     sections.push("It's the programmer's turn: you're the navigator. Only `say` and `point` work, and `listen` follows along.");
   }
   return sections.length > 0 ? sections.join('\n\n') : 'Nothing to report.';

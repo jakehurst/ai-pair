@@ -1,68 +1,71 @@
 ---- MODULE LineIdentity -------------------------------------------------------
 (******************************************************************************)
 (* `applyChange` in packages/core/src/lines.ts, checked over every small text *)
-(* and change. Texts are sequences of "x" (any other character), "n" (a line  *)
-(* feed) and "r" (a carriage return). Offsets count from 0, as in the code.   *)
+(* and change. Texts are sequences of Letter, LineFeed, and CarriageReturn,   *)
+(* named in PairDefs. Offsets count from 0, as in the code.                   *)
 (* Old identities are 1, 2, ...; the ones a change makes are 100, 101, ...,   *)
 (* in the order the code calls `fresh`. The agent's line numbers rest on it:  *)
 (* a line number is accepted only while the line it was shown at still has    *)
 (* the identity it had, so identities must name one line each, and follow the *)
 (* rules in applyChange's comment.                                            *)
 (******************************************************************************)
-EXTENDS Naturals, Sequences, FiniteSets
+EXTENDS Naturals, Sequences, FiniteSets, PairDefs
 
 CONSTANTS
-    MaxLen,     \* the longest text the check covers
-    MaxInsert   \* the longest inserted text it covers
+    MaxChars, \* the longest text the check covers
+    MaxInsert \* the longest inserted text it covers
 
-ASSUME AssumeMaxLen == MaxLen \in Nat
+ASSUME AssumeMaxChars == MaxChars \in Nat
 ASSUME AssumeMaxInsert == MaxInsert \in Nat
 
 --------------------------------------------------------------------------------
 
-\* The characters: "x" for any other, "n" for a line feed, "r" for a carriage
-\* return.
-Chars == {"x", "n", "r"}
+\* The characters: any other, a line feed, and a carriage return.
+Chars == {Letter, LineFeed, CarriageReturn}
 
 \* Every text up to n characters.
-Texts(n) == UNION {[1..m -> Chars] : m \in 0..n}
+Texts(n) == Seqs(Chars, n)
 
 \* t[from + 1 .. to], the characters at offsets from .. to - 1.
 Slice(t, from, to) == SubSeq(t, from + 1, to)
 
 \* text.indexOf("\n", from) counted up to `to`.
-Newlines(t, from, to) == Cardinality({i \in (from + 1)..to : t[i] = "n"})
+LineFeeds(t, from, to) == Cardinality({i \in (from + 1)..to : t[i] = LineFeed})
 
-LineCount(t) == Newlines(t, 0, Len(t)) + 1
+LineCount(t) == LineFeeds(t, 0, Len(t)) + 1
 
-\* text.lastIndexOf("\n", start - 1) + 1: where the line holding offset `start`
+\* text.lastIndexOf("\n", start - 1) + 1: where the line holding offset `offset`
 \* begins, 0 on the first line. The CHOOSE takes the largest offset of a line
-\* feed before `start`; there is one largest.
-LineStart(t, start) ==
-    LET nl == {i \in 1..start : t[i] = "n"}
-    IN  IF nl = {} THEN 0 ELSE CHOOSE i \in nl : \A j \in nl : j <= i
+\* feed before `offset`; there is one largest.
+LineStart(t, offset) ==
+    LET lineFeedsBefore == {i \in 1..offset : t[i] = LineFeed}
+    IN  IF lineFeedsBefore = {} THEN 0 ELSE CHOOSE i \in lineFeedsBefore
+        : \A j \in lineFeedsBefore : j <= i
 
 \* text.indexOf("\n", end), or the text's length, and before a "\r" that ends
 \* the line: where the line holding offset `end` ends. The CHOOSE takes the
 \* smallest offset of a line feed after `end`; there is one smallest.
 LineEnd(t, end) ==
-    LET nlAfter == {i \in (end + 1)..Len(t) : t[i] = "n"}
+    LET lineFeedsAfter == {i \in (end + 1)..Len(t) : t[i] = LineFeed}
         rawEnd ==
-            IF nlAfter = {}
+            IF lineFeedsAfter = {}
             THEN Len(t)
-            ELSE (CHOOSE i \in nlAfter : \A j \in nlAfter : i <= j) - 1
-    IN  IF rawEnd > end /\ t[rawEnd] = "r" THEN rawEnd - 1 ELSE rawEnd
+            ELSE (CHOOSE i \in lineFeedsAfter : \A j \in lineFeedsAfter
+                  : i <= j) - 1
+    IN  IF rawEnd > end /\ t[rawEnd] = CarriageReturn
+        THEN rawEnd - 1
+        ELSE rawEnd
 
 \* The code, step by step. As applyChange's comment puts it: ids[0] = v.ids[a]
 \* with a prefix, or ids[suffix ? k : 0] = v.ids[a] within one line (keepsA),
 \* and ids[k] = v.ids[b] when the change ends inside a later line (keepsB).
-Apply(t, ids, start, del, ins) ==
-    LET end == start + del
-        after == Slice(t, 0, start) \o ins \o Slice(t, end, Len(t))
-        a == Newlines(t, 0, start)
-        b == a + Newlines(t, start, end)
-        k == Newlines(ins, 0, Len(ins))
-        prefix == start > LineStart(t, start)
+ApplyChange(t, ids, offset, deleteLength, inserted) ==
+    LET end == offset + deleteLength
+        textAfter == Slice(t, 0, offset) \o inserted \o Slice(t, end, Len(t))
+        a == LineFeeds(t, 0, offset)
+        b == a + LineFeeds(t, offset, end)
+        k == LineFeeds(inserted, 0, Len(inserted))
+        prefix == offset > LineStart(t, offset)
         suffix == end < LineEnd(t, end)
         fresh == [i \in 1..(k + 1) |-> 99 + i]
         keepsA(i) ==
@@ -70,7 +73,7 @@ Apply(t, ids, start, del, ins) ==
             THEN i = 1
             ELSE a = b /\ i = (IF suffix THEN k + 1 ELSE 1)
         keepsB(i) == i = k + 1 /\ b > a /\ suffix /\ (k > 0 \/ ~prefix)
-        made ==
+        changedIds ==
             [i \in 1..(k + 1) |->
                 IF keepsB(i)
                 THEN ids[b + 1]
@@ -78,19 +81,23 @@ Apply(t, ids, start, del, ins) ==
                      THEN ids[a + 1]
                      ELSE fresh[i]]
     IN  IF a = b /\ k = 0
-        THEN [text |-> after, ids |-> ids]
-        ELSE [text |-> after,
-              ids |-> SubSeq(ids, 1, a) \o made \o SubSeq(ids, b + 2, Len(ids))]
+        THEN [text |-> textAfter, ids |-> ids]
+        ELSE [text |-> textAfter,
+              ids |-> SubSeq(ids, 1, a) \o changedIds \o SubSeq(ids, b + 2,
+                                                                Len(ids))]
 
 \* Every change within its text: a record for each, read by field (6.15).
 Cases ==
-    {c \in [text : Texts(MaxLen), start : 0..MaxLen, del : 0..MaxLen,
-            ins : Texts(MaxInsert)] :
-        c.start + c.del <= Len(c.text)}
+    {c \in [text : Texts(MaxChars), offset : 0..MaxChars,
+            deleteLength : 0..MaxChars,
+            inserted : Texts(MaxInsert)] :
+        c.offset + c.deleteLength <= Len(c.text)}
 
 \* The case run through the code, from identities 1, 2, ... for the lines.
 Result(c) ==
-    Apply(c.text, [i \in 1..LineCount(c.text) |-> i], c.start, c.del, c.ins)
+    ApplyChange(c.text, [i \in 1..LineCount(c.text) |-> i], c.offset,
+                c.deleteLength,
+                c.inserted)
 
 --------------------------------------------------------------------------------
 
@@ -107,18 +114,18 @@ Distinct(c) ==
 \* identities, in place before it and shifted by the change's line count
 \* after it.
 Untouched(c) ==
-    LET a == Newlines(c.text, 0, c.start)
-        b == a + Newlines(c.text, c.start, c.start + c.del)
+    LET a == LineFeeds(c.text, 0, c.offset)
+        b == a + LineFeeds(c.text, c.offset, c.offset + c.deleteLength)
         r == Result(c).ids
-        shift == Newlines(c.ins, 0, Len(c.ins)) - (b - a)
+        shift == LineFeeds(c.inserted, 0, Len(c.inserted)) - (b - a)
     IN  /\ \A i \in 1..a : r[i] = i
         /\ \A i \in (b + 2)..LineCount(c.text) : r[i + shift] = i
 
 \* Within one line, nothing changes identity.
 WithinALine(c) ==
     LET oneLine ==
-            /\ Newlines(c.text, c.start, c.start + c.del) = 0
-            /\ Newlines(c.ins, 0, Len(c.ins)) = 0
+            /\ LineFeeds(c.text, c.offset, c.offset + c.deleteLength) = 0
+            /\ LineFeeds(c.inserted, 0, Len(c.inserted)) = 0
     IN  oneLine => (Result(c).ids = [i \in 1..LineCount(c.text) |-> i])
 
 \* A line keeps its identity wherever its text goes: typing a line break at
@@ -127,25 +134,25 @@ WithinALine(c) ==
 \* an empty line of a CRLF file ends), either may keep it.
 BreakAtEnd(c) ==
     LET t == c.text
-        a == Newlines(t, 0, c.start)
+        a == LineFeeds(t, 0, c.offset)
         atEnd ==
-            /\ c.del = 0
-            /\ c.ins = <<"n">>
-            /\ c.start > 0
-            /\ (c.start = Len(t) \/ t[c.start + 1] = "n")
-            /\ t[c.start] = "x"
+            /\ c.deleteLength = 0
+            /\ c.inserted = <<LineFeed>>
+            /\ c.offset > 0
+            /\ (c.offset = Len(t) \/ t[c.offset + 1] = LineFeed)
+            /\ t[c.offset] = Letter
     IN  atEnd => (Result(c).ids[a + 1] = a + 1)
 
 \* See BreakAtEnd.
 BreakAtStart(c) ==
     LET t == c.text
-        a == Newlines(t, 0, c.start)
+        a == LineFeeds(t, 0, c.offset)
         atStart ==
-            /\ c.del = 0
-            /\ c.ins = <<"n">>
-            /\ (c.start = 0 \/ t[c.start] = "n")
-            /\ c.start < Len(t)
-            /\ t[c.start + 1] = "x"
+            /\ c.deleteLength = 0
+            /\ c.inserted = <<LineFeed>>
+            /\ (c.offset = 0 \/ t[c.offset] = LineFeed)
+            /\ c.offset < Len(t)
+            /\ t[c.offset + 1] = Letter
     IN  atStart => (Result(c).ids[a + 2] = a + 1)
 
 ASSUME AssumeOnePerLine == \A c \in Cases : OnePerLine(c)

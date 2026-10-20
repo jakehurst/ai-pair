@@ -4,35 +4,35 @@
 (* step, and block. Issue #19; its first validation target is issue #1. Each  *)
 (* call waits its turn in the chain, rehearses its batch and queues it, then  *)
 (* blocks until it is ready to report or its timer fires; an abort can come   *)
-(* at any point before it settles. The constant Fixed switches the abort      *)
-(* check at the top of block() (#1).                                          *)
+(* at any point before it settles. The constant AbortInBlock switches the     *)
+(* abort check at the top of block() (#1).                                    *)
 (******************************************************************************)
 EXTENDS Naturals
 
 CONSTANTS
-    NumCalls,   \* how many step calls the agent makes, one after another
-    Fixed       \* TRUE: block() checks signal.aborted (2cab175). FALSE: the
-                \* code at 57ac07f.
+    NumCalls,    \* how many step calls the agent makes, one after another
+    AbortInBlock \* TRUE: block() checks signal.aborted (2cab175). FALSE: the
+                 \* code at 57ac07f.
 
 ASSUME AssumeNumCalls == NumCalls \in Nat
-ASSUME AssumeFixed == Fixed \in BOOLEAN
+ASSUME AssumeAbortInBlock == AbortInBlock \in BOOLEAN
 
 \* The calls, in the order the agent makes them.
-Calls == 1..NumCalls
+CallIds == 1..NumCalls
 
 \* Where a call is: waiting its turn in the chain, rehearsing its batch,
 \* blocked in block(), committed to a report, or settled.
-Pcs == {"waiting", "rehearsing", "blocked", "committed", "settled"}
+Pcs == {"inChain", "rehearsing", "blocked", "committed", "settled"}
 
 \* A queued batch, and one played or discarded.
-BatchStates == {"queued", "done"}
+QueueStates == {"queued", "done"}
 
 \* How a call settles: canceled, or with its report handed back.
-Outcomes == {"cancelled", "reported"}
+CallOutcomes == {"canceled", "reported"}
 
 \* No call: this.call is null. Any value that is not a call will do, so the
 \* config makes it a model value (6.20).
-NoCall == CHOOSE v : v \notin Calls
+NoCallId == CHOOSE v : v \notin CallIds
 
 \* No pc: the call's abort has not fired. Any value that is not a pc will do,
 \* so the config makes it a model value (6.20).
@@ -41,205 +41,212 @@ NoPc == CHOOSE v : v \notin Pcs
 \* No batch: an empty step, or one canceled before it queued its batch. Any
 \* value that is not a batch state will do, so the config makes it a model
 \* value (6.20).
-NoBatch == CHOOSE v : v \notin BatchStates
+NoQueueState == CHOOSE v : v \notin QueueStates
 
 \* No outcome: the call has not settled. Any value that is not an outcome will
 \* do, so the config makes it a model value (6.20).
-NoOutcome == CHOOSE v : v \notin Outcomes
+NoCallOutcome == CHOOSE v : v \notin CallOutcomes
 
 VARIABLES
-    pc,         \* where each call is, one of Pcs
-    aborted,    \* whether the call's AbortSignal has fired
-    abortedAt,  \* the pc the call was at when its abort fired, or NoPc
-    current,    \* this.call: the call blocked in block(), or NoCall
-    batch,      \* the call's batch: one of BatchStates, or NoBatch
-    outcome,    \* how the call settled: one of Outcomes, or NoOutcome
-    empty,      \* the step has no actions: it only waits for the queued
-                \* batches
-    rejected    \* its batch failed its rehearsal, and the call answered with
-                \* the rejection
+    pc,             \* where each call is, one of Pcs
+    canceled,       \* the call's AbortSignal has fired: the agent canceled it
+    canceledAt,     \* the pc the call was at when it was canceled, or NoPc
+    blockedCall,    \* this.call: the call blocked in block(), or NoCallId
+    queueState,     \* the call's batch: one of QueueStates, or NoQueueState
+    settledAs,      \* how the call settled: one of CallOutcomes, or
+                    \* NoCallOutcome
+    emptyStep,      \* the step has no actions: it only waits for the queued
+                    \* batches
+    rehearsalFailed \* its batch failed its rehearsal, and the call answered
+                    \* with the rejection
 
-vars == <<pc, aborted, abortedAt, current, batch, outcome, empty, rejected>>
+vars == <<pc, canceled, canceledAt, blockedCall, queueState, settledAs,
+          emptyStep, rehearsalFailed>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ pc \in [Calls -> Pcs]
-    /\ aborted \in [Calls -> BOOLEAN]
-    /\ abortedAt \in [Calls -> Pcs \cup {NoPc}]
-    /\ current \in Calls \cup {NoCall}
-    /\ batch \in [Calls -> BatchStates \cup {NoBatch}]
-    /\ outcome \in [Calls -> Outcomes \cup {NoOutcome}]
-    /\ empty \in [Calls -> BOOLEAN]
-    /\ rejected \in [Calls -> BOOLEAN]
+    /\ pc \in [CallIds -> Pcs]
+    /\ canceled \in [CallIds -> BOOLEAN]
+    /\ canceledAt \in [CallIds -> Pcs \cup {NoPc}]
+    /\ blockedCall \in CallIds \cup {NoCallId}
+    /\ queueState \in [CallIds -> QueueStates \cup {NoQueueState}]
+    /\ settledAs \in [CallIds -> CallOutcomes \cup {NoCallOutcome}]
+    /\ emptyStep \in [CallIds -> BOOLEAN]
+    /\ rehearsalFailed \in [CallIds -> BOOLEAN]
 
 \* The call's batch plays next: queued, with no batch before it still queued.
 AtHead(i) ==
-    /\ batch[i] = "queued"
-    /\ \A j \in 1..(i - 1) : batch[j] # "queued"
+    /\ queueState[i] = "queued"
+    /\ \A j \in 1..(i - 1) : queueState[j] # "queued"
 
 \* finishCall: the blocked call commits to a report, and this.call is cleared.
 Commit(i) ==
     /\ pc' = [pc EXCEPT ![i] = "committed"]
-    /\ current' = NoCall
-    /\ UNCHANGED <<aborted, abortedAt, batch, outcome, empty, rejected>>
+    /\ blockedCall' = NoCallId
+    /\ UNCHANGED <<canceled, canceledAt, queueState, settledAs, emptyStep,
+                   rehearsalFailed>>
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ pc = [i \in Calls |-> "waiting"]
-    /\ aborted = [i \in Calls |-> FALSE]
-    /\ abortedAt = [i \in Calls |-> NoPc]
-    /\ current = NoCall
-    /\ batch = [i \in Calls |-> NoBatch]
-    /\ outcome = [i \in Calls |-> NoOutcome]
-    /\ empty \in [Calls -> BOOLEAN]
-    /\ rejected = [i \in Calls |-> FALSE]
+    /\ pc = [i \in CallIds |-> "inChain"]
+    /\ canceled = [i \in CallIds |-> FALSE]
+    /\ canceledAt = [i \in CallIds |-> NoPc]
+    /\ blockedCall = NoCallId
+    /\ queueState = [i \in CallIds |-> NoQueueState]
+    /\ settledAs = [i \in CallIds |-> NoCallOutcome]
+    /\ emptyStep \in [CallIds -> BOOLEAN]
+    /\ rehearsalFailed = [i \in CallIds |-> FALSE]
 
 \* serialize: once every call before it has settled, the call runs, unless its
 \* abort fired while it waited.
 Guard(i) ==
-    /\ pc[i] = "waiting"
+    /\ pc[i] = "inChain"
     /\ \A j \in 1..(i - 1) : pc[j] = "settled"
-    /\ IF aborted[i]
+    /\ IF canceled[i]
        THEN /\ pc' = [pc EXCEPT ![i] = "settled"]
-            /\ outcome' = [outcome EXCEPT ![i] = "cancelled"]
+            /\ settledAs' = [settledAs EXCEPT ![i] = "canceled"]
        ELSE /\ pc' = [pc EXCEPT ![i] = "rehearsing"]
-            /\ UNCHANGED outcome
-    /\ UNCHANGED <<aborted, abortedAt, current, batch, empty, rejected>>
+            /\ UNCHANGED settledAs
+    /\ UNCHANGED <<canceled, canceledAt, blockedCall, queueState, emptyStep,
+                   rehearsalFailed>>
 
 \* step, after its rehearsal: an empty step blocks with no batch. A batch is
 \* queued, or done at once (discarded) when an interrupt came first (`stale`)
-\* or the session ended. With Fixed, block() first checks for an abort that
-\* fired during the rehearsal.
+\* or the session ended. With AbortInBlock, block() first checks for an abort
+\* that fired during the rehearsal.
 Rehearse(i) ==
     /\ pc[i] = "rehearsing"
-    /\ IF Fixed /\ aborted[i]
+    /\ IF AbortInBlock /\ canceled[i]
        THEN /\ pc' = [pc EXCEPT ![i] = "settled"]
-            /\ outcome' = [outcome EXCEPT ![i] = "cancelled"]
-            /\ UNCHANGED current
+            /\ settledAs' = [settledAs EXCEPT ![i] = "canceled"]
+            /\ UNCHANGED blockedCall
        ELSE /\ pc' = [pc EXCEPT ![i] = "blocked"]
-            /\ current' = i
-            /\ UNCHANGED outcome
-    /\ IF empty[i]
-       THEN UNCHANGED batch
-       ELSE \E b \in BatchStates : batch' = [batch EXCEPT ![i] = b]
-    /\ UNCHANGED <<aborted, abortedAt, empty, rejected>>
+            /\ blockedCall' = i
+            /\ UNCHANGED settledAs
+    /\ IF emptyStep[i]
+       THEN UNCHANGED queueState
+       ELSE \E b \in QueueStates : queueState' = [queueState EXCEPT ![i] = b]
+    /\ UNCHANGED <<canceled, canceledAt, emptyStep, rehearsalFailed>>
 
 \* rejectBatch, or rejectUnanchored: the batch failed its rehearsal, or did
 \* not anchor the cursor, so the call answers with the rejection, queuing
 \* nothing.
-Reject(i) ==
+FailRehearsal(i) ==
     /\ pc[i] = "rehearsing"
-    /\ ~empty[i]
+    /\ ~emptyStep[i]
     /\ pc' = [pc EXCEPT ![i] = "committed"]
-    /\ rejected' = [rejected EXCEPT ![i] = TRUE]
-    /\ UNCHANGED <<aborted, abortedAt, current, batch, outcome, empty>>
+    /\ rehearsalFailed' = [rehearsalFailed EXCEPT ![i] = TRUE]
+    /\ UNCHANGED <<canceled, canceledAt, blockedCall, queueState, settledAs,
+                   emptyStep>>
 
 \* The call's AbortSignal fires. Its listener in block() is attached only once
 \* the call blocks, and it releases the call only if it is this.call.
-Abort(i) ==
-    /\ ~aborted[i]
+Cancel(i) ==
+    /\ ~canceled[i]
     /\ pc[i] # "settled"
     /\ IF pc[i] = "blocked"
        THEN /\ pc' = [pc EXCEPT ![i] = "settled"]
-            /\ current' = NoCall
-            /\ outcome' = [outcome EXCEPT ![i] = "cancelled"]
-       ELSE UNCHANGED <<pc, current, outcome>>
-    /\ aborted' = [aborted EXCEPT ![i] = TRUE]
-    /\ abortedAt' = [abortedAt EXCEPT ![i] = pc[i]]
-    /\ UNCHANGED <<batch, empty, rejected>>
+            /\ blockedCall' = NoCallId
+            /\ settledAs' = [settledAs EXCEPT ![i] = "canceled"]
+       ELSE UNCHANGED <<pc, blockedCall, settledAs>>
+    /\ canceled' = [canceled EXCEPT ![i] = TRUE]
+    /\ canceledAt' = [canceledAt EXCEPT ![i] = pc[i]]
+    /\ UNCHANGED <<queueState, emptyStep, rehearsalFailed>>
 
 \* The player finishes the call's batch, after every batch queued before it.
-Play(i) ==
+Played(i) ==
     /\ AtHead(i)
-    /\ batch' = [batch EXCEPT ![i] = "done"]
-    /\ UNCHANGED <<pc, aborted, abortedAt, current, outcome, empty, rejected>>
+    /\ queueState' = [queueState EXCEPT ![i] = "done"]
+    /\ UNCHANGED <<pc, canceled, canceledAt, blockedCall, settledAs, emptyStep,
+                   rehearsalFailed>>
 
 \* ready(): an empty step is ready once nothing is queued, any other once its
 \* batch is done or plays next (#150); then finishCall.
-Finish(i) ==
+Return(i) ==
     /\ pc[i] = "blocked"
-    /\ IF empty[i]
-       THEN \A j \in Calls : batch[j] # "queued"
-       ELSE batch[i] = "done" \/ AtHead(i)
+    /\ IF emptyStep[i]
+       THEN \A j \in CallIds : queueState[j] # "queued"
+       ELSE queueState[i] = "done" \/ AtHead(i)
     /\ Commit(i)
 
 \* The maxBlockMs timer fires, and finishCall reports what there is.
-TimeOut(i) ==
+Timeout(i) ==
     /\ pc[i] = "blocked"
     /\ Commit(i)
 
 \* withCursor(...).then(call.resolve): the report is handed back after the
 \* commit.
-Resolve(i) ==
+HandBack(i) ==
     /\ pc[i] = "committed"
     /\ pc' = [pc EXCEPT ![i] = "settled"]
-    /\ outcome' = [outcome EXCEPT ![i] = "reported"]
-    /\ UNCHANGED <<aborted, abortedAt, current, batch, empty, rejected>>
+    /\ settledAs' = [settledAs EXCEPT ![i] = "reported"]
+    /\ UNCHANGED <<canceled, canceledAt, blockedCall, queueState, emptyStep,
+                   rehearsalFailed>>
 
 \* Every call has settled: the agent makes no more calls.
 Finished ==
-    /\ \A i \in Calls : pc[i] = "settled"
+    /\ \A i \in CallIds : pc[i] = "settled"
     /\ UNCHANGED vars
 
 Next ==
-    \/ \E i \in Calls :
+    \/ \E i \in CallIds :
            \/ Guard(i)
            \/ Rehearse(i)
-           \/ Reject(i)
-           \/ Abort(i)
-           \/ Play(i)
-           \/ Finish(i)
-           \/ TimeOut(i)
-           \/ Resolve(i)
+           \/ FailRehearsal(i)
+           \/ Cancel(i)
+           \/ Played(i)
+           \/ Return(i)
+           \/ Timeout(i)
+           \/ HandBack(i)
     \/ Finished
 
 \* The controller goes on through each call, and the player through each
 \* batch; an abort comes when it does. A rehearsal ends one way or the other,
-\* so Rehearse and Reject share one condition.
+\* so Rehearse and FailRehearsal share one condition.
 Fairness ==
-    \A i \in Calls :
+    \A i \in CallIds :
         /\ WF_vars(Guard(i))
-        /\ WF_vars(Rehearse(i) \/ Reject(i))
-        /\ WF_vars(Play(i))
-        /\ WF_vars(Finish(i))
-        /\ WF_vars(TimeOut(i))
-        /\ WF_vars(Resolve(i))
+        /\ WF_vars(Rehearse(i) \/ FailRehearsal(i))
+        /\ WF_vars(Played(i))
+        /\ WF_vars(Return(i))
+        /\ WF_vars(Timeout(i))
+        /\ WF_vars(HandBack(i))
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
 \* The blocked call is this.call, so at most one call is blocked.
-BlockedIsCurrent == \A i \in Calls : (pc[i] = "blocked") => (current = i)
+BlockedIsCurrent == \A i \in CallIds : (pc[i] = "blocked") => (blockedCall = i)
 
 \* A blocked step whose batch plays next is ready to report (#150): a step
 \* returns once the step before it has, not once its own batch has played.
 ReadyAtHead ==
-    \A i \in Calls :
-        (pc[i] = "blocked" /\ ~empty[i] /\ AtHead(i)) => ENABLED Finish(i)
+    \A i \in CallIds :
+        (pc[i] = "blocked" /\ ~emptyStep[i] /\ AtHead(i)) => ENABLED Return(i)
 
-\* A step cancelled after Guard keeps its batch queued; one cancelled by
+\* A step canceled after Guard keeps its batch queued; one canceled by
 \* Guard never queues it.
 CancelKeepsBatch ==
-    \A i \in Calls :
-        (~empty[i] /\ outcome[i] = "cancelled") =>
-            ((batch[i] = NoBatch) <=> (abortedAt[i] = "waiting"))
+    \A i \in CallIds :
+        (~emptyStep[i] /\ settledAs[i] = "canceled") =>
+            ((queueState[i] = NoQueueState) <=> (canceledAt[i] = "inChain"))
 
 \* An abort that fires before the call commits to a report ends the call
-\* with cancelled, or with its batch's rejection, which the relay hands back
+\* with canceled, or with its batch's rejection, which the relay hands back
 \* (Controller.tla).
 CancelReleases ==
-    \A i \in Calls :
-        (aborted[i] /\ pc[i] \in {"waiting", "rehearsing", "blocked"}) ~>
-            (outcome[i] = "cancelled" \/ rejected[i])
+    \A i \in CallIds :
+        (canceled[i] /\ pc[i] \in {"inChain", "rehearsing", "blocked"}) ~>
+            (settledAs[i] = "canceled" \/ rehearsalFailed[i])
 
 \* A call waiting its turn in the serialize chain eventually settles. A
 \* chain that never ran a call would fail it, so it says something must
 \* happen.
 ChainProgresses ==
-    \A i \in Calls : (pc[i] = "waiting") ~> (pc[i] = "settled")
+    \A i \in CallIds : (pc[i] = "inChain") ~> (pc[i] = "settled")
 
 ================================================================================

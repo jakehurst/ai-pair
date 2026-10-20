@@ -5,186 +5,184 @@
 (* nothing to report, and the agent calls `listen` again a few seconds later. *)
 (* With `Grace`, such a timeout starts listenGraceMs of grace, during which   *)
 (* the status stays "listening" ("Your move"). The grace ends at the agent's  *)
-(* next call, when the programmer acts, or when it expires. With             *)
+(* next call, when the programmer acts, or when it expires. With              *)
 (* `ShowAbsent`, once no call has been open for absentMs, the status is       *)
 (* "absent" ("Agent isn't listening") until the agent calls again (#149).     *)
 (******************************************************************************)
+EXTENDS PairDefs
 
 CONSTANTS
-    Grace,      \* TRUE: a listen that timed out with nothing to report keeps
-                \* "listening"
-    ShowAbsent, \* TRUE: with no call open for absentMs, the panel says the
-                \* agent isn't listening (#149)
+    Grace,       \* TRUE: a listen that timed out with nothing to report keeps
+                 \* "listening"
+    ShowAbsent,  \* TRUE: with no call open for absentMs, the panel says the
+                 \* agent isn't listening (#149)
     EndOnAnyCall \* TRUE: every call ends the grace; FALSE: only a call that
-                \* blocks does, the code before #194
+                 \* blocks does, the code before #194
 
 ASSUME AssumeGrace == Grace \in BOOLEAN
 ASSUME AssumeShowAbsent == ShowAbsent \in BOOLEAN
 ASSUME AssumeEndOnAnyCall == EndOnAnyCall \in BOOLEAN
 
-\* The calls the agent makes: a `listen`, or another (a `step` or `end`).
-Calls == {"listen", "other"}
-
-\* No call open. Any value that is not a call will do, so the config makes it
-\* a model value (6.20).
-NoCall == CHOOSE v : v \notin Calls
-
 VARIABLES
-    call,       \* the agent's open call: one of Calls, or NoCall
-    grace,      \* the grace timer is armed
-    owes,       \* the agent was handed something to act on, and has not
-                \* called since
-    pending,    \* the programmer did something not yet reported
-    idle,       \* the agent's last listen timed out empty, and it has not
-                \* called since
-    expired,    \* listenGraceMs passed since that timeout
-    quiet       \* absentMs passed since the agent's last call ended, with no
-                \* call since
+    call,         \* the agent's open call: one of Calls, or NoCall
+    inGrace,      \* the grace timer is armed
+    owesResponse, \* the agent was handed something to act on, and has not
+                  \* called since
+    unreported,   \* the programmer did something not yet reported
+    timedOut,     \* the agent's last listen timed out empty, and it has not
+                  \* called since
+    graceExpired, \* listenGraceMs passed since that timeout
+    absent        \* absentMs passed since the agent's last call ended, with no
+                  \* call since
 
-vars == <<call, grace, owes, pending, idle, expired, quiet>>
+vars == <<call, inGrace, owesResponse, unreported, timedOut, graceExpired,
+          absent>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
     /\ call \in Calls \cup {NoCall}
-    /\ grace \in BOOLEAN
-    /\ owes \in BOOLEAN
-    /\ pending \in BOOLEAN
-    /\ idle \in BOOLEAN
-    /\ expired \in BOOLEAN
-    /\ quiet \in BOOLEAN
+    /\ inGrace \in BOOLEAN
+    /\ owesResponse \in BOOLEAN
+    /\ unreported \in BOOLEAN
+    /\ timedOut \in BOOLEAN
+    /\ graceExpired \in BOOLEAN
+    /\ absent \in BOOLEAN
 
 \* The panel's status with the queue empty: "listening" ("Your move"),
 \* "absent" ("Agent isn't listening"), or "thinking".
 Status ==
-    IF call = "listen" \/ (grace /\ ~pending)
+    IF call = "listen" \/ (inGrace /\ ~unreported)
     THEN "listening"
-    ELSE IF quiet THEN "absent" ELSE "thinking"
+    ELSE IF absent THEN "absent" ELSE "thinking"
 
 --------------------------------------------------------------------------------
 
 Init ==
     /\ call = NoCall
-    /\ grace = FALSE
-    /\ owes = FALSE
-    /\ pending = FALSE
-    /\ idle = FALSE
-    /\ expired = FALSE
-    /\ quiet = FALSE
+    /\ inGrace = FALSE
+    /\ owesResponse = FALSE
+    /\ unreported = FALSE
+    /\ timedOut = FALSE
+    /\ graceExpired = FALSE
+    /\ absent = FALSE
 
 \* The agent makes a call that blocks: a `listen`, or a `step` or `end`
 \* (`serialize`, then `block()`). It ends the grace and the quiet.
 Call(kind) ==
     /\ call = NoCall
     /\ call' = kind
-    /\ grace' = FALSE
-    /\ owes' = FALSE
-    /\ idle' = FALSE
-    /\ expired' = FALSE
-    /\ quiet' = FALSE
-    /\ UNCHANGED pending
+    /\ inGrace' = FALSE
+    /\ owesResponse' = FALSE
+    /\ timedOut' = FALSE
+    /\ graceExpired' = FALSE
+    /\ absent' = FALSE
+    /\ UNCHANGED unreported
 
 \* The agent calls `read`, which settles at once: it ends the quiet, and with
 \* EndOnAnyCall the grace.
 Read ==
     /\ call = NoCall
-    /\ grace' = IF EndOnAnyCall THEN FALSE ELSE grace
-    /\ owes' = FALSE
-    /\ idle' = FALSE
-    /\ expired' = FALSE
-    /\ quiet' = FALSE
-    /\ UNCHANGED <<call, pending>>
+    /\ inGrace' = IF EndOnAnyCall THEN FALSE ELSE inGrace
+    /\ owesResponse' = FALSE
+    /\ timedOut' = FALSE
+    /\ graceExpired' = FALSE
+    /\ absent' = FALSE
+    /\ UNCHANGED <<call, unreported>>
 
 \* The agent calls `step`, and the batch is refused at once (rejectBatch,
 \* rejectUnanchored), without `block()`: it owes a response to the rejection.
-Refuse ==
+FailRehearsal ==
     /\ call = NoCall
-    /\ grace' = IF EndOnAnyCall THEN FALSE ELSE grace
-    /\ owes' = TRUE
-    /\ idle' = FALSE
-    /\ expired' = FALSE
-    /\ quiet' = FALSE
-    /\ UNCHANGED <<call, pending>>
+    /\ inGrace' = IF EndOnAnyCall THEN FALSE ELSE inGrace
+    /\ owesResponse' = TRUE
+    /\ timedOut' = FALSE
+    /\ graceExpired' = FALSE
+    /\ absent' = FALSE
+    /\ UNCHANGED <<call, unreported>>
 
 \* `finishCall` after maxBlockMs, nothing to report: the grace starts.
-TimeOut ==
+Timeout ==
     /\ call = "listen"
-    /\ ~pending
+    /\ ~unreported
     /\ call' = NoCall
-    /\ grace' = Grace
-    /\ idle' = TRUE
-    /\ UNCHANGED <<owes, pending, expired, quiet>>
+    /\ inGrace' = Grace
+    /\ timedOut' = TRUE
+    /\ UNCHANGED <<owesResponse, unreported, graceExpired, absent>>
 
 \* `finishCall` with a report the agent has to act on: the programmer's input,
 \* or a step's.
 Return ==
     /\ call # NoCall
-    /\ (call = "other" \/ pending)
+    /\ (call = "stepOrEnd" \/ unreported)
     /\ call' = NoCall
-    /\ grace' = FALSE
-    /\ owes' = TRUE
-    /\ pending' = FALSE
-    /\ UNCHANGED <<idle, expired, quiet>>
+    /\ inGrace' = FALSE
+    /\ owesResponse' = TRUE
+    /\ unreported' = FALSE
+    /\ UNCHANGED <<timedOut, graceExpired, absent>>
 
 \* A message, an interrupt, an edit of the programmer's, a turn change: an
 \* interrupting event.
-Act ==
-    /\ ~pending
-    /\ pending' = TRUE
-    /\ UNCHANGED <<call, grace, owes, idle, expired, quiet>>
+Interrupt ==
+    /\ ~unreported
+    /\ unreported' = TRUE
+    /\ UNCHANGED <<call, inGrace, owesResponse, timedOut, graceExpired, absent>>
 
 \* listenGraceMs pass: the grace timer fires.
 Expire ==
-    /\ idle
-    /\ ~expired
-    /\ grace' = FALSE
-    /\ expired' = TRUE
-    /\ UNCHANGED <<call, owes, pending, idle, quiet>>
+    /\ timedOut
+    /\ ~graceExpired
+    /\ inGrace' = FALSE
+    /\ graceExpired' = TRUE
+    /\ UNCHANGED <<call, owesResponse, unreported, timedOut, absent>>
 
 \* absentMs pass with no call open: the panel says the agent isn't listening
 \* (#149), once any grace is over.
-GoQuiet ==
+GoAbsent ==
     /\ ShowAbsent
     /\ call = NoCall
-    /\ ~quiet
-    /\ quiet' = TRUE
-    /\ UNCHANGED <<call, grace, owes, pending, idle, expired>>
+    /\ ~absent
+    /\ absent' = TRUE
+    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, timedOut,
+                   graceExpired>>
 
 Next ==
     \/ \E kind \in Calls : Call(kind)
     \/ Read
-    \/ Refuse
-    \/ TimeOut
+    \/ FailRehearsal
+    \/ Timeout
     \/ Return
-    \/ Act
+    \/ Interrupt
     \/ Expire
-    \/ GoQuiet
+    \/ GoAbsent
 
 \* The grace timer and the quiet timer fire once armed, whether or not the
 \* agent calls again.
-Fairness == WF_vars(Expire) /\ WF_vars(GoQuiet)
+Fairness == WF_vars(Expire) /\ WF_vars(GoAbsent)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
 \* "Your move" never shows while the agent has something to act on.
-NoFalseYourMove == owes => (Status # "listening")
+NoFalseYourMove == owesResponse => (Status # "listening")
 
 \* After the programmer acts, "Your move" waits for the agent's next listen.
-NoYourMoveAfterAct == (pending /\ call = NoCall) => (Status # "listening")
+NoYourMoveAfterInterrupt ==
+    (unreported /\ call = NoCall) => (Status # "listening")
 
 \* A step or an end call is the agent at work.
-NoYourMoveInOtherCall == (call = "other") => (Status = "thinking")
+NoYourMoveInOtherCall == (call = "stepOrEnd") => (Status = "thinking")
 
 \* Between a listen that timed out empty and the agent's next call, the status
 \* stays "listening" until the grace expires or the programmer acts.
-NoFlicker == (idle /\ ~expired /\ ~pending) => (Status = "listening")
+NoFlicker == (timedOut /\ ~graceExpired
+              /\ ~unreported) => (Status = "listening")
 
 \* The grace ends, whether or not the agent calls again. Code whose grace never
 \* ended would fail it, so it says something must happen.
-GraceEnds == grace ~> ~grace
+GraceEnds == inGrace ~> ~inGrace
 
 \* "Agent isn't listening" shows only while no call is open (#149).
 AbsentWithoutCall == (Status = "absent") => (call = NoCall)

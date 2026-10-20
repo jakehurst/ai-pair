@@ -2,27 +2,26 @@
 (******************************************************************************)
 (* How planTyping in packages/core/src/typing.ts splits text into chunks,     *)
 (* each inserted in one edit, checked over every small text. Delays aren't    *)
-(* modeled: only the splitting. Characters are "x" (any other), "s" (a space  *)
-(* or tab) and "n" (a line feed). Typing in #19: the chunks of a plan         *)
-(* concatenate to the input text.                                             *)
+(* modeled: only the splitting. Characters are Letter, Space, and LineFeed,   *)
+(* named in PairDefs. Typing in #19: the chunks of a plan concatenate to the  *)
+(* input text.                                                                *)
 (******************************************************************************)
-EXTENDS Naturals, Sequences
+EXTENDS Naturals, Sequences, PairDefs
 
 CONSTANTS
-    MaxLen  \* the longest text the check covers
+    MaxChars  \* the longest text the check covers
 
-ASSUME AssumeMaxLen == MaxLen \in Nat
+ASSUME AssumeMaxChars == MaxChars \in Nat
 
 --------------------------------------------------------------------------------
 
-\* The characters: "x" for any other, "s" for a space or tab, "n" for a line
-\* feed.
-Chars == {"x", "s", "n"}
+\* The characters: any other, a space or tab, and a line feed.
+Chars == {Letter, Space, LineFeed}
 
-\* Every text up to MaxLen characters.
-Texts == UNION {[1..m -> Chars] : m \in 0..MaxLen}
+\* Every text up to MaxChars characters.
+Texts == Seqs(Chars, MaxChars)
 
-AllSpaces(c) == \A i \in 1..Len(c) : c[i] = "s"
+AllSpaces(c) == \A i \in 1..Len(c) : c[i] = Space
 
 \* `cs` without its first `n` characters.
 Drop(cs, n) == SubSeq(cs, n + 1, Len(cs))
@@ -32,26 +31,27 @@ Drop(cs, n) == SubSeq(cs, n + 1, Len(cs))
 IndentOf(cs) ==
     LET n == CHOOSE k \in 0..Len(cs) :
                  /\ AllSpaces(SubSeq(cs, 1, k))
-                 /\ (k = Len(cs) \/ cs[k + 1] # "s")
+                 /\ (k = Len(cs) \/ cs[k + 1] # Space)
     IN  SubSeq(cs, 1, n)
 
 \* The loop: a line feed goes with the indentation after it; anything else
 \* goes alone. A function over the finite set Texts (6.16); each step recurs
 \* on a shorter text, so it ends.
-Loop[cs \in Texts] ==
+Chunks[cs \in Texts] ==
     IF cs = <<>>
     THEN <<>>
-    ELSE IF Head(cs) = "n"
-         THEN LET ind == IndentOf(Tail(cs))
-              IN  <<<<"n">> \o ind>> \o Loop[Drop(Tail(cs), Len(ind))]
-         ELSE <<<<Head(cs)>>>> \o Loop[Tail(cs)]
+    ELSE IF Head(cs) = LineFeed
+         THEN LET indent == IndentOf(Tail(cs))
+              IN  <<<<LineFeed>> \o indent>> \o Chunks[Drop(Tail(cs),
+                                                            Len(indent))]
+         ELSE <<<<Head(cs)>>>> \o Chunks[Tail(cs)]
 
 \* With atLineStart, indentation at the very start is one chunk first.
 Plan(cs, atLineStart) ==
-    LET ind == IndentOf(cs)
-    IN  IF atLineStart /\ ind # <<>>
-        THEN <<ind>> \o Loop[Drop(cs, Len(ind))]
-        ELSE Loop[cs]
+    LET indent == IndentOf(cs)
+    IN  IF atLineStart /\ indent # <<>>
+        THEN <<indent>> \o Chunks[Drop(cs, Len(indent))]
+        ELSE Chunks[cs]
 
 \* The chunks joined into one text. An operator, not a function: a sequence
 \* of chunks has no finite set to be a function's domain (6.16). Each call is
@@ -73,8 +73,8 @@ ChunksAreUnits ==
     \A t \in Texts, s \in BOOLEAN :
         LET p == Plan(t, s)
         IN  \A i \in 1..Len(p) :
-                \/ Len(p[i]) = 1 /\ p[i][1] # "n"
-                \/ p[i][1] = "n" /\ AllSpaces(Tail(p[i]))
+                \/ Len(p[i]) = 1 /\ p[i][1] # LineFeed
+                \/ p[i][1] = LineFeed /\ AllSpaces(Tail(p[i]))
                 \/ i = 1 /\ s /\ p[i] # <<>> /\ AllSpaces(p[i])
 
 ASSUME AssumeConcatenatesToText == ConcatenatesToText

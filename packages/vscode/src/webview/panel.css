@@ -4,7 +4,7 @@
  * Colors come only from the VS Code theme, so the panel matches any theme.
  *
  * The script shows state by setting classes, and the rules here decide what each looks like.
- * On <body>: active (a session is on), paused, user-turn (the programmer has the keyboard), and
+ * On <body>: active (a session is on), paused, programmer-turn (the programmer has the keyboard), and
  * calibrating. VS Code adds vscode-high-contrast or vscode-high-contrast-light to <body> too.
  */
 
@@ -271,8 +271,8 @@ button:focus-visible {
 }
 
 /* In the programmer's turn, nothing plays, so pause and interrupt are hidden. */
-.user-turn .pause-toggle,
-.user-turn .interrupt {
+.programmer-turn .pause-toggle,
+.programmer-turn .interrupt {
   display: none;
 }
 
@@ -281,7 +281,7 @@ button:focus-visible {
   display: none;
 }
 
-.user-turn .turn-label {
+.programmer-turn .turn-label {
   display: inline;
 }
 

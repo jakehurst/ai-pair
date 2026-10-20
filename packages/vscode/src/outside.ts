@@ -26,12 +26,12 @@ export class OutsideChanges {
     private readonly redraw: (files: string[]) => void,
   ) {}
 
-  /** Records that VS Code wrote `text` to the file: a document saved, or the extension creating the file (specs/Outside.tla, `NotifySave`, `Create`). */
+  /** Records that VS Code wrote `text` to the file: a document saved, or the extension creating the file (specs/Outside.tla, `NotifySave`, `Show`). */
   saved(file: string, text: string): void {
     this.known.set(file, text);
   }
 
-  /** Takes a write the file watcher reported. It's decided once the group settles (specs/Outside.tla, `Report`). */
+  /** Takes a write the file watcher reported. It's decided once the group settles (specs/Outside.tla, `WatcherReports`). */
   reported(file: string): void {
     if (!this.group.includes(file)) this.group.push(file);
     clearTimeout(this.timer);
@@ -40,7 +40,7 @@ export class OutsideChanges {
     }, timings.groupMs);
   }
 
-  /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */
+  /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `OpenDocument`). */
   seen(file: string, text: string): void {
     this.known.set(file, text);
     if (this.marked.delete(file)) this.redraw([file]);
@@ -55,7 +55,7 @@ export class OutsideChanges {
 
   /**
    * Decides a group: a file written outside the protocol is one that differs from what we know of
-   * it. The watcher reports saves too, late, and may report several writes as one. specs/Outside.tla, `Report`.
+   * it. The watcher reports saves too, late, and may report several writes as one. specs/Outside.tla, `WatcherReports`.
    */
   private settle(): Promise<void> {
     const files = this.group;

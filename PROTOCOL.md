@@ -517,12 +517,12 @@ type Report = {
     code?: Code               // how the code would read then
   }
   events: Event[]             // since the last report, in order
-  turn: "agent" | "user"
+  turn: "agent" | "programmer"
   cursor?: Code               // only when it isn't where the agent last saw it
   waiting?: true              // returned due to MAX_BLOCK
   repeated?: true             // part of it may repeat a report the agent saw: a call it canceled had returned (#67)
   resumed?: true              // start only: it resumed a suspended session (#25)
-  paused?: ("user" | "reply" | "away" | "calibrate")[]  // playback is paused, for these reasons (#149)
+  paused?: ("programmer" | "reply" | "away" | "calibrate")[]  // playback is paused, for these reasons (#149)
 }
 
 type BatchResult = {
@@ -564,7 +564,7 @@ type Event =
   | { kind: "message", text: string, selection?: Excerpt }
   | { kind: "edit", file: string, diff: string, by: "programmer" | "other", omitted?: number }
   | { kind: "interrupt" }
-  | { kind: "turn", to: "agent" | "user", message?: string, selection?: Excerpt }
+  | { kind: "turn", to: "agent" | "programmer", message?: string, selection?: Excerpt }
   | { kind: "end" }
 
 type Excerpt = {              // code the programmer had selected
@@ -609,7 +609,7 @@ Pause is not an event; see [Pause and follow mode](#pause-and-follow-mode).
 Turns change only explicitly.
 
 **Programmer takes the turn** ("My turn" button). This interrupts playback. The
-agent receives `{ kind: "turn", to: "user" }`.
+agent receives `{ kind: "turn", to: "programmer" }`.
 
 **During the programmer's turn**, the agent is the navigator:
 

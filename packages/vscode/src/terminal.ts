@@ -88,7 +88,7 @@ export class PairTerminals implements vscode.Disposable {
 
   constructor() {
     this.disposables = [
-      // specs/Terminals.tla, `Close`: a terminal the programmer closes is forgotten.
+      // specs/Terminals.tla, `CloseTerminal`: a terminal the programmer closes is forgotten.
       vscode.window.onDidCloseTerminal((t) => {
         const i = this.owned.findIndex((o) => o.terminal === t);
         if (i !== -1) this.owned.splice(i, 1);
@@ -119,7 +119,7 @@ export class PairTerminals implements vscode.Disposable {
     // listeners below are in place before it can fire.
     const execution = integration.executeCommand(command);
 
-    // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`Close`), and the terminal is free.
+    // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`CloseTerminal`), and the terminal is free.
     let exitCode: number | undefined;
     const ended = new Promise<void>((resolve) => {
       const listeners: vscode.Disposable[] = [];
@@ -159,7 +159,7 @@ export class PairTerminals implements vscode.Disposable {
     return outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended });
   }
 
-  // specs/Terminals.tla, `Start`: a terminal that isn't busy, whose shell is alive (`Exit`), in the directory, else a new one.
+  // specs/Terminals.tla, `Acquire`: a terminal that isn't busy, whose shell is alive (`Exit`), in the directory, else a new one.
   private acquire(cwd: string): Owned {
     const idle = this.owned.find((o) => {
       const at = o.terminal.shellIntegration?.cwd?.fsPath ?? o.cwd;

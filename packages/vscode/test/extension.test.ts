@@ -506,7 +506,7 @@ describe('the commands', () => {
     expect(h.controller.userInterrupt).toHaveBeenCalledOnce();
     command('aiPair.toggleTurn');
     expect(h.controller.takeTurn).toHaveBeenCalledOnce();
-    h.controller.turn = 'user';
+    h.controller.turn = 'programmer';
     command('aiPair.toggleTurn');
     expect(h.controller.handBack).toHaveBeenCalledOnce();
     command('aiPair.endSession');

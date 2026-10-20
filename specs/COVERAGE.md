@@ -21,7 +21,7 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller` |
-| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `Deliver`) |
+| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Interrupt`), `Actions` (`Interrupt`) |
@@ -29,11 +29,11 @@ Code goes without a spec for one of these reasons:
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
-| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
+| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`) |
 | `confirm`, `decideRun` | `RunBox` (`Go`, `Decline`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
 | `resumeSession`, `open`, `saved`, `revive`, `isSuspended`, `onChange` | `Resume` |
-| `textOrMissing` | `FileText` (`MissingFile`) |
+| `textOrMissing` | `FileText` (`MissingIsReported`) |
 | `state`, `startGrace`, `endGrace`, `startQuiet`, `endQuiet`, and the grace and the quiet in `serialize`, `read`, `block`, `finishCall`, and `close` | `ListenGrace` |
 | `describeReport`, `cancelled`, `isRecorded`, `pendingEdit` | Pure, Format |
 | `render`, `cursorView` | Format: what the editor and panel draw |
@@ -72,7 +72,7 @@ Code goes without a spec for one of these reasons:
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |
 | | `readingTime` | Pure |
-| `diff.ts` | `lineChanges` | `Reload` (`Refine`) |
+| `diff.ts` | `lineChanges` | `Reload` (`SplitRuns`) |
 | | `fileDiff` | Format |
 | `text.ts`, `timing.ts` | all | Pure |
 | `ports.ts`, `config.ts`, `paths.ts`, `index.ts` | | Types; `config.ts` also holds the defaults and `TEST_TIMEOUTS` |
@@ -128,7 +128,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
-| | `history`, `restoreHistory`, `onPost` | `Resume` (`Save`, `Reload`) |
+| | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
@@ -149,10 +149,10 @@ Code goes without a spec for one of these reasons:
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
-| `setup.ts` | `claudeStarter` | `Start` (`Answer`, `Click`, `Exit`) |
+| `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |
-| `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
-| | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`Stored`) |
+| `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Store`, `ReloadWindow`) |
+| | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`ApplyRate`) |
 | | asking the panel again after Set Up Agent | `Start` (`FlipSetUp`) |
 | | the rest | Glue |
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |

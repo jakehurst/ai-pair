@@ -137,7 +137,7 @@ interface Call {
 
 /**
  * Returns whether an event interrupts. Everything does, except changes the programmer didn't make to files no batch
- * is going to edit. An event it holds for is `Act` in specs/ListenGrace.tla.
+ * is going to edit. An event it holds for is `Interrupt` in specs/ListenGrace.tla.
  */
 function interrupting(e: PendingEvent): boolean {
   return e.kind !== 'edit' || e.by === 'programmer' || e.interrupted === true;
@@ -153,7 +153,7 @@ function pendingEdit(session: Session, file: string): RecordedEdit | undefined {
   return session.events.find((e): e is RecordedEdit => isRecorded(e) && e.file === file);
 }
 
-/** Returns whether a call can return its report now: specs/Serialize.tla, `Finish`. */
+/** Returns whether a call can return its report now: specs/Serialize.tla, `Return`. */
 function callReady(session: Session, call: Call): boolean {
   switch (call.kind) {
     case 'step':
@@ -209,7 +209,7 @@ export class Controller {
   private call: Call | undefined = undefined;
   /** After a `listen` that timed out empty, the status stays "listening" until this fires (specs/ListenGrace.tla). */
   private grace: ReturnType<typeof setTimeout> | undefined = undefined;
-  /** Armed while no call is open; when it fires, the status is "absent" (specs/ListenGrace.tla, `GoQuiet`, #149). */
+  /** Armed while no call is open; when it fires, the status is "absent" (specs/ListenGrace.tla, `GoAbsent`, #149). */
   private quiet: ReturnType<typeof setTimeout> | undefined = undefined;
   private absent = false;
   /** Tool calls that have arrived and not settled: the quiet starts when the last one does. */
@@ -328,7 +328,7 @@ export class Controller {
 
   /**
    * Returns the session as the window saves it in the workspace's storage, to bring it back suspended after a
-   * reload (#25, specs/Resume.tla, `Save`); none once it has ended. Edits aren't kept: their diffs need the
+   * reload (#25, specs/Resume.tla, `Store`); none once it has ended. Edits aren't kept: their diffs need the
    * text from before them, and the agent reads its files again when it resumes.
    */
   get saved(): SavedSession | undefined {
@@ -361,7 +361,7 @@ export class Controller {
     this.trace?.('session revived after a reload, suspended');
     session.finished = [...saved.finished];
     session.events = [...saved.events];
-    // specs/Resume.tla, `Reload`: the replayed history may end with the session live (#138).
+    // specs/Resume.tla, `ReloadWindow`: the replayed history may end with the session live (#138).
     this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.render();
   }
@@ -381,7 +381,7 @@ export class Controller {
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
       // (specs/Controller.tla: `FailRehearsal`, else `PassRehearsal`).
       const current = rehearsal && !session.stale && !session.ended;
-      // specs/Serialize.tla: `Reject` answers with the rejection; `Rehearse` queues the batch, or discards it.
+      // specs/Serialize.tla: `FailRehearsal` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current === true && rehearsal.failed !== undefined) return this.rejectBatch(session, rehearsal.failed, rehearsal);
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
@@ -414,7 +414,7 @@ export class Controller {
   /** Reads a file. Not serialized like the other tools: `read` "does not block and does not deliver events" (PROTOCOL.md). */
   async read(file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
     const session = this.requireSession();
-    // `Read` and `GoQuiet` in specs/ListenGrace.tla: a read is a call too, settled at once; it ends the grace (#194).
+    // `Read` and `GoAbsent` in specs/ListenGrace.tla: a read is a call too, settled at once; it ends the grace (#194).
     if (this.grace !== undefined) {
       this.endGrace();
       this.render();
@@ -498,7 +498,7 @@ export class Controller {
     const session = this.activeSession();
     if (!session) return;
     session.events.push(selection ? { kind: 'message', text, selection: this.excerpt(session, selection) } : { kind: 'message', text });
-    this.panel.post({ type: 'user', text, ref: selection && this.ref(selection) });
+    this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection) });
     this.interrupt(session);
     this.update();
   }
@@ -522,7 +522,7 @@ export class Controller {
       this.interrupt(session);
     } else {
       // Interrupting nothing (specs/Controller.tla, `EditQuietly`). Typing again: the pause the timer marked is
-      // over, so wait for the next (specs/Navigator.tla, `Edit`).
+      // over, so wait for the next (specs/Navigator.tla, `EditAsProgrammer`).
       session.navigatorReady = false;
       clearTimeout(session.navigatorTimer);
       session.navigatorTimer = setTimeout(() => {
@@ -592,11 +592,11 @@ export class Controller {
 
   takeTurn(): void {
     const session = this.activeSession();
-    if (!session || session.scene.turn === 'user') return;
-    session.scene.turn = 'user';
+    if (!session || session.scene.turn === 'programmer') return;
+    session.scene.turn = 'programmer';
     session.scene.focus = 'cursor';
-    session.events.push({ kind: 'turn', to: 'user' });
-    this.panel.post({ type: 'turn', to: 'user' });
+    session.events.push({ kind: 'turn', to: 'programmer' });
+    this.panel.post({ type: 'turn', to: 'programmer' });
     // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(session);
     this.update();
@@ -624,14 +624,14 @@ export class Controller {
     if (session.suspended) {
       // No agent is there to take a final report: it's over now (specs/Bridge.tla, `EndSuspended`).
       this.close(session);
-      this.panel.post({ type: 'session', active: false, reason: 'user' });
+      this.panel.post({ type: 'session', active: false, reason: 'programmer' });
       return;
     }
-    // `EndSession` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
+    // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
     session.ended = true;
     session.events.push({ kind: 'end' });
     this.interrupt(session);
-    this.panel.post({ type: 'session', active: false, reason: 'user' });
+    this.panel.post({ type: 'session', active: false, reason: 'programmer' });
     this.update();
   }
 
@@ -661,7 +661,7 @@ export class Controller {
   }
 
   /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
-  pause(reason: PauseReason = 'user'): void {
+  pause(reason: PauseReason = 'programmer'): void {
     if (!this.pauseReasons.has(reason)) this.trace?.(`pause ${reason}`);
     this.pauseReasons.add(reason);
     this.session?.timeline.pause();
@@ -807,7 +807,7 @@ export class Controller {
     const run = this.chain.then(guarded, guarded);
     // The chain carries on past a call that failed; its caller got the rejection.
     this.chain = run.catch(() => {});
-    // `GoQuiet` in specs/ListenGrace.tla: once the last open call settles, no call is open until the agent makes the next.
+    // `GoAbsent` in specs/ListenGrace.tla: once the last open call settles, no call is open until the agent makes the next.
     const settled = () => {
       this.openCalls--;
       if (this.openCalls === 0 && this.session) this.startQuiet();
@@ -870,13 +870,13 @@ export class Controller {
         ...opts,
         resolve,
         reject,
-        // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `TimeOut`.
+        // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `Timeout`.
         timer: setTimeout(() => {
           this.finishCall(call, /* timedOut= */ true);
         }, this.config.maxBlockMs),
       };
       this.call = call;
-      // specs/Serialize.tla, `Abort`: the listener releases the call only while it is this.call.
+      // specs/Serialize.tla, `Cancel`: the listener releases the call only while it is this.call.
       // `Cancel` in specs/Controller.tla: a blocked call is released at once.
       signal?.addEventListener('abort', () => {
         if (this.call !== call) return;
@@ -898,11 +898,11 @@ export class Controller {
 
   private pump(): void {
     const call = this.call;
-    // specs/Serialize.tla, `Finish`.
+    // specs/Serialize.tla, `Return`.
     if (call && this.ready(call, call.session)) this.finishCall(call, /* timedOut= */ false);
   }
 
-  /** Finishes the open call with a report: `Return` in specs/ListenGrace.tla, or `TimeOut` for a listen that comes back with nothing to act on. */
+  /** Finishes the open call with a report: `Return` in specs/ListenGrace.tla, or `Timeout` for a listen that comes back with nothing to act on. */
   private finishCall(call: Call, timedOut: boolean): void {
     // specs/Serialize.tla, `Commit`.
     this.call = undefined;
@@ -913,26 +913,26 @@ export class Controller {
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
     const closing = (session.ended && session.held.length === 0) || call.kind === 'end';
     if (closing) {
-      // specs/Bridge.tla, `CloseEnded`, or `CallEnd` for the agent's `end`; `this.closed` is `recent`.
+      // specs/Bridge.tla, `CloseEnded`, or `EndByAgent` for the agent's `end`; `this.closed` is `restorable`.
       this.close(session);
       this.closed = session;
       if (call.kind === 'end' && !session.ended) {
         this.panel.post({ type: 'session', active: false, reason: 'agent', summary: call.summary });
       }
     }
-    // `TimeOut` in specs/ListenGrace.tla: nothing came back for the agent to act on.
+    // `Timeout` in specs/ListenGrace.tla: nothing came back for the agent to act on.
     const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected;
     if (call.kind === 'listen' && report.waiting && empty) this.startGrace();
     this.render();
     this.trace?.(`report to ${call.kind}: ${describeReport(report)}`);
-    // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
-    // `Answer` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
+    // specs/Serialize.tla, `HandBack`: the report is handed back after the commit.
+    // `Deliver` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
     void this.withCursor(session, report).then(call.resolve, () => {
       call.resolve(report);
     });
   }
 
-  /** Starts the grace: the agent is only waiting, so "listening" stays a while (`TimeOut` and `Expire` in specs/ListenGrace.tla). */
+  /** Starts the grace: the agent is only waiting, so "listening" stays a while (`Timeout` and `Expire` in specs/ListenGrace.tla). */
   private startGrace(): void {
     this.endGrace();
     this.grace = setTimeout(() => {
@@ -941,13 +941,13 @@ export class Controller {
     }, this.config.listenGraceMs);
   }
 
-  /** Ends the grace: any call does (`Call`, `Read`, and `Refuse` in specs/ListenGrace.tla, #194), and closing the session. */
+  /** Ends the grace: any call does (`Call`, `Read`, and `FailRehearsal` in specs/ListenGrace.tla, #194), and closing the session. */
   private endGrace(): void {
     if (this.grace) clearTimeout(this.grace);
     this.grace = undefined;
   }
 
-  /** Starts the quiet: with no call open for absentMs, the agent isn't listening (`GoQuiet` in specs/ListenGrace.tla, #149). */
+  /** Starts the quiet: with no call open for absentMs, the agent isn't listening (`GoAbsent` in specs/ListenGrace.tla, #149). */
   private startQuiet(): void {
     this.endQuiet();
     this.quiet = setTimeout(() => {
@@ -1002,7 +1002,7 @@ export class Controller {
   private snapshot(session: Session, waiting: boolean, submitted?: Batch): Report {
     const batches = session.finished.toSorted((a, b) => a.id - b.id);
     // The agent planned against where these would have ended; the cursor is where they stopped (#112,
-    // specs/Anchor.tla, `Discard`; a batch that completed is `Complete`).
+    // specs/Anchor.tla, `StopShort`; a batch that completed is `Complete`).
     if (batches.some((b) => b.status !== 'completed')) session.anchorNeeded = true;
     const events: Event[] = [];
     for (const e of session.events) {
@@ -1070,8 +1070,8 @@ export class Controller {
 
   /**
    * Stops playback and discards everything queued behind it (specs/Controller.tla: `Interrupted`, in `Interrupt` and
-   * `EndSession`; specs/Actions.tla, `Interrupt`). A batch already playing plays on and may complete
-   * (specs/Rehearsal.tla, `Interrupted`, #151).
+   * `EndByProgrammer`; specs/Actions.tla, `Interrupt`). A batch already playing plays on and may complete
+   * (specs/Rehearsal.tla, `QueuesAfterInterrupt`, #151).
    */
   private interrupt(session: Session): void {
     session.stale = true;
@@ -1102,7 +1102,7 @@ export class Controller {
       while (this.session === session) {
         const batch = session.queue[0];
         if (!batch) break;
-        // specs/Controller.tla: `Play`, then `Finish` once it has played.
+        // specs/Controller.tla: `Play`, then `Complete` once it has played.
         this.startHead(session);
         this.render();
         const { result, sightings } = await session.player.play(batch.id, batch.actions);
@@ -1113,7 +1113,7 @@ export class Controller {
         for (const sighting of sightings) {
           this.saw(session, session.lines, sighting);
         }
-        // specs/Serialize.tla, `Play`: batches finish in queue order.
+        // specs/Serialize.tla, `Played`: batches finish in queue order.
         batch.state = 'done';
         batch.result = result;
         this.trace?.(`batch ${batch.id} ${result.status}`);
@@ -1130,7 +1130,7 @@ export class Controller {
     }
   }
 
-  /** Starts the next batch, with the timeline reset: specs/Turns.tla, `Begin`. */
+  /** Starts the next batch, with the timeline reset: specs/Turns.tla, `StartHead`. */
   private startHead(session: Session): void {
     const head = session.queue[0];
     if (head?.state !== 'queued') return;
@@ -1168,7 +1168,7 @@ export class Controller {
 
   private state(): AgentState {
     const session = this.session;
-    if (!session || session.scene.turn === 'user') return 'navigator';
+    if (!session || session.scene.turn === 'programmer') return 'navigator';
     if (this.pauseReasons.size > 0) return 'paused';
     if (session.queue.length > 0) return session.player.reading ? 'read' : session.player.commandRunning ? 'running' : 'typing';
     // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace, then "absent" once quiet.

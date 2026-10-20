@@ -24,7 +24,7 @@ ASSUME AssumeCheckInterrupt == CheckInterrupt \in BOOLEAN
 StartOffset == 5
 
 \* What a delete that is done did.
-Outcomes == {"deleted", "interrupted"}
+DeleteOutcomes == {"deleted", "interrupted"}
 
 \* No offset: the delete has copied none, or removed no text. Any value that
 \* is not an offset will do, so the config makes it a model value (6.20).
@@ -32,54 +32,58 @@ NoOffset == CHOOSE v : v \notin Nat
 
 \* No outcome: the delete is not done. Any value that is not an outcome will
 \* do, so the config makes it a model value (6.20).
-NoOutcome == CHOOSE v : v \notin Outcomes
+NoDeleteOutcome == CHOOSE v : v \notin DeleteOutcomes
 
 VARIABLES
-    phase,       \* the delete: "before", "awaiting" (show, getText), or "done"
-    target,      \* where the selected text starts now
-    selection,   \* s.selection's start: moved by every edit, as `transform`
-                 \* does
-    copy,        \* the start the delete copied before awaiting, or NoOffset
-    interrupted, \* the timeline was interrupted
-    edits,       \* how many edits the programmer has made
-    outcome,     \* what the delete did: an outcome, or NoOutcome
-    deletedAt    \* where the delete removed text, or NoOffset
+    phase,             \* the delete: "before", "awaiting" (show, getText), or
+                       \* "done"
+    selectedTextStart, \* where the selected text starts now
+    selectionStart,    \* s.selection's start: moved by every edit, as
+                       \* `transform` does
+    copiedStart,       \* the start the delete copied before awaiting, or
+                       \* NoOffset
+    interrupted,       \* the timeline was interrupted
+    edits,             \* how many edits the programmer has made
+    outcome,           \* what the delete did: an outcome, or NoDeleteOutcome
+    deletedAt          \* where the delete removed text, or NoOffset
 
 vars ==
-    <<phase, target, selection, copy, interrupted, edits, outcome, deletedAt>>
+    <<phase, selectedTextStart, selectionStart, copiedStart, interrupted,
+      edits, outcome, deletedAt>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
     /\ phase \in {"before", "awaiting", "done"}
-    /\ target \in Nat
-    /\ selection \in Nat
-    /\ copy \in {NoOffset} \cup Nat
+    /\ selectedTextStart \in Nat
+    /\ selectionStart \in Nat
+    /\ copiedStart \in {NoOffset} \cup Nat
     /\ interrupted \in BOOLEAN
     /\ edits \in Nat
-    /\ outcome \in Outcomes \cup {NoOutcome}
+    /\ outcome \in DeleteOutcomes \cup {NoDeleteOutcome}
     /\ deletedAt \in {NoOffset} \cup Nat
 
 --------------------------------------------------------------------------------
 
 Init ==
     /\ phase = "before"
-    /\ target = StartOffset
-    /\ selection = StartOffset
-    /\ copy = NoOffset
+    /\ selectedTextStart = StartOffset
+    /\ selectionStart = StartOffset
+    /\ copiedStart = NoOffset
     /\ interrupted = FALSE
     /\ edits = 0
-    /\ outcome = NoOutcome
+    /\ outcome = NoDeleteOutcome
     /\ deletedAt = NoOffset
 
 \* The delete starts and awaits show() and getText(). It copies the
 \* selection's start first, which only the code before #49 then used.
-Begin ==
+StartDelete ==
     /\ phase = "before"
     /\ phase' = "awaiting"
-    /\ copy' = selection
-    /\ UNCHANGED <<target, selection, interrupted, edits, outcome, deletedAt>>
+    /\ copiedStart' = selectionStart
+    /\ UNCHANGED <<selectedTextStart, selectionStart, interrupted, edits,
+                   outcome, deletedAt>>
 
 \* The awaits return; the delete removes text, or stops.
 Finish ==
@@ -89,25 +93,28 @@ Finish ==
        THEN /\ outcome' = "interrupted"
             /\ UNCHANGED deletedAt
        ELSE /\ outcome' = "deleted"
-            /\ deletedAt' = IF ReadAfterAwait THEN selection ELSE copy
-    /\ UNCHANGED <<target, selection, copy, interrupted, edits>>
+            /\ deletedAt' = IF ReadAfterAwait THEN selectionStart
+                            ELSE copiedStart
+    /\ UNCHANGED <<selectedTextStart, selectionStart, copiedStart, interrupted,
+                   edits>>
 
 \* The programmer types in front of the selected text: it moves, and the
 \* selection with it.
 TypeBefore ==
     /\ phase # "done"
-    /\ target' = target + 1
-    /\ selection' = selection + 1
+    /\ selectedTextStart' = selectedTextStart + 1
+    /\ selectionStart' = selectionStart + 1
     /\ interrupted' = TRUE
     /\ edits' = edits + 1
-    /\ UNCHANGED <<phase, copy, outcome, deletedAt>>
+    /\ UNCHANGED <<phase, copiedStart, outcome, deletedAt>>
 
 \* The programmer types behind the selected text: nothing moves.
 TypeAfter ==
     /\ phase # "done"
     /\ interrupted' = TRUE
     /\ edits' = edits + 1
-    /\ UNCHANGED <<phase, target, selection, copy, outcome, deletedAt>>
+    /\ UNCHANGED <<phase, selectedTextStart, selectionStart, copiedStart,
+                   outcome, deletedAt>>
 
 \* The delete is done, and the run ends, by design (6.13).
 Finished ==
@@ -115,7 +122,7 @@ Finished ==
     /\ UNCHANGED vars
 
 Next ==
-    \/ Begin
+    \/ StartDelete
     \/ Finish
     \/ TypeBefore
     \/ TypeAfter
@@ -123,7 +130,7 @@ Next ==
 
 \* The delete goes on through its awaits; edits come when they do.
 Fairness ==
-    /\ WF_vars(Begin)
+    /\ WF_vars(StartDelete)
     /\ WF_vars(Finish)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
@@ -131,14 +138,14 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 --------------------------------------------------------------------------------
 
 \* A delete removes the text that is selected.
-DeletesTheSelection == (outcome = "deleted") => (deletedAt = target)
+DeletesTheSelection == (outcome = "deleted") => (deletedAt = selectedTextStart)
 
 \* An edit by the programmer before the delete takes effect stops it.
 EditInterrupts == (phase = "done" /\ interrupted) => (outcome = "interrupted")
 
 \* A delete ends: it removes text, or stops. A delete that hung at its awaits
 \* would fail it, so it says something must happen.
-DeleteEnds == (phase = "before") ~> (outcome # NoOutcome)
+DeleteEnds == (phase = "before") ~> (outcome # NoDeleteOutcome)
 
 \* Edits run out only so that the model is finite (6.8). It prunes exactly the
 \* states a guard `edits < MaxEdits` on TypeBefore and TypeAfter never

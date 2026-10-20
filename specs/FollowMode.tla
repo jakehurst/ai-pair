@@ -6,10 +6,10 @@
 (* it moves the agent cursor there. A change of active editor outside the     *)
 (* self-navigation window, away from what the view follows, pauses playback   *)
 (* (`pause("away")`) until the programmer resumes. The model makes one move,  *)
-(* from file "a" to file "b", and ends once the programmer has looked away    *)
-(* after it.                                                                  *)
+(* from the source file to the destination file, and ends once the programmer *)
+(* has looked away after it.                                                  *)
 (******************************************************************************)
-EXTENDS Naturals
+EXTENDS Naturals, PairDefs
 
 CONSTANTS
     HoldWhileShowing    \* TRUE: the window stays open until showTextDocument
@@ -17,108 +17,108 @@ CONSTANTS
 
 ASSUME AssumeHoldWhileShowing == HoldWhileShowing \in BOOLEAN
 
-\* The files: where the agent cursor starts, and where it moves.
-Files == {"a", "b"}
-
 VARIABLES
-    active,   \* the file in the active editor
-    target,   \* the file of what the view follows (the agent cursor)
-    window,   \* the self-navigation window: "closed", "open", or "held" (open
-              \* until show resolves)
-    show,     \* our show("b"): "none" (not started), "awaiting"
-              \* (openTextDocument and showTextDocument), "event" (the change
-              \* is queued), or "done"
-    paused,   \* playback paused as `away`
-    looked    \* the programmer looked away themselves
+    activeFile,           \* the file in the active editor
+    target,               \* the file of what the view follows (the agent
+                          \* cursor)
+    selfNavigationWindow, \* the self-navigation window: "closed", "open", or
+                          \* "heldOpen" (open until show resolves)
+    showCall,             \* our show("destinationFile"): "idle" (not started),
+                          \* "awaiting" (openTextDocument and showTextDocument),
+                          \* "eventQueued" (the change is queued), or
+                          \* "eventHandled"
+    awayPause,            \* playback paused as `away`
+    lookedAway            \* the programmer looked away themselves
 
-vars == <<active, target, window, show, paused, looked>>
+vars == <<activeFile, target, selfNavigationWindow, showCall, awayPause,
+          lookedAway>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ active \in Files
+    /\ activeFile \in Files
     /\ target \in Files
-    /\ window \in {"closed", "open", "held"}
-    /\ show \in {"none", "awaiting", "event", "done"}
-    /\ paused \in BOOLEAN
-    /\ looked \in BOOLEAN
-
-\* The file that is not f.
-Other(f) == IF f = "a" THEN "b" ELSE "a"
+    /\ selfNavigationWindow \in {"closed", "open", "heldOpen"}
+    /\ showCall \in {"idle", "awaiting", "eventQueued", "eventHandled"}
+    /\ awayPause \in BOOLEAN
+    /\ lookedAway \in BOOLEAN
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ active = "a"
-    /\ target = "a"
-    /\ window = "closed"
-    /\ show = "none"
-    /\ paused = FALSE
-    /\ looked = FALSE
+    /\ activeFile = "sourceFile"
+    /\ target = "sourceFile"
+    /\ selfNavigationWindow = "closed"
+    /\ showCall = "idle"
+    /\ awayPause = FALSE
+    /\ lookedAway = FALSE
 
-\* The move to b: show("b") calls selfNav(), then awaits.
+\* The move to the destination file: show("destinationFile")
+\* calls selfNav(), then awaits.
 StartShow ==
-    /\ show = "none"
-    /\ window' = IF HoldWhileShowing THEN "held" ELSE "open"
-    /\ show' = "awaiting"
-    /\ UNCHANGED <<active, target, paused, looked>>
+    /\ showCall = "idle"
+    /\ selfNavigationWindow' = IF HoldWhileShowing THEN "heldOpen" ELSE "open"
+    /\ showCall' = "awaiting"
+    /\ UNCHANGED <<activeFile, target, awayPause, lookedAway>>
 
 \* timings.selfNavMs passes. A held window doesn't expire.
-Expire ==
-    /\ window = "open"
-    /\ window' = "closed"
-    /\ UNCHANGED <<active, target, show, paused, looked>>
+WindowExpires ==
+    /\ selfNavigationWindow = "open"
+    /\ selfNavigationWindow' = "closed"
+    /\ UNCHANGED <<activeFile, target, showCall, awayPause, lookedAway>>
 
-\* VS Code shows b: the active editor changes, and its event is queued before
-\* the call's reply.
+\* VS Code shows the destination file: the active editor changes, and its
+\* event is queued before the call's reply.
 ShowFile ==
-    /\ show = "awaiting"
-    /\ active' = "b"
-    /\ show' = "event"
-    /\ UNCHANGED <<target, window, paused, looked>>
+    /\ showCall = "awaiting"
+    /\ activeFile' = "destinationFile"
+    /\ showCall' = "eventQueued"
+    /\ UNCHANGED <<target, selfNavigationWindow, awayPause, lookedAway>>
 
 \* onActiveEditor: inside the window, the change is ignored; outside it, a
 \* change away from the target pauses.
-Handle ==
-    /\ show = "event"
-    /\ show' = "done"
-    /\ paused' = (paused \/ (window = "closed" /\ active # target))
-    /\ UNCHANGED <<active, target, window, looked>>
+HandleEditorChange ==
+    /\ showCall = "eventQueued"
+    /\ showCall' = "eventHandled"
+    /\ awayPause' = (awayPause \/ (selfNavigationWindow = "closed"
+                                   /\ activeFile # target))
+    /\ UNCHANGED <<activeFile, target, selfNavigationWindow, lookedAway>>
 
 \* showTextDocument resolves: a held window gets its timings.selfNavMs from
-\* now; the player then moves the cursor to b.
-Resolve ==
-    /\ show = "done"
-    /\ target = "a"
-    /\ target' = "b"
-    /\ window' = IF window = "held" THEN "open" ELSE window
-    /\ UNCHANGED <<active, show, paused, looked>>
+\* now; the player then moves the cursor to the destination file.
+ShowResolves ==
+    /\ showCall = "eventHandled"
+    /\ target = "sourceFile"
+    /\ target' = "destinationFile"
+    /\ selfNavigationWindow' = IF selfNavigationWindow = "heldOpen"
+                               THEN "open" ELSE selfNavigationWindow
+    /\ UNCHANGED <<activeFile, showCall, awayPause, lookedAway>>
 
 \* The programmer switches to another file themselves: pausing then is right.
 LookAway ==
-    /\ window = "closed"
-    /\ show \in {"none", "done"}
-    /\ active = target
-    /\ active' = Other(target)
-    /\ paused' = TRUE
-    /\ looked' = TRUE
-    /\ UNCHANGED <<target, window, show>>
+    /\ selfNavigationWindow = "closed"
+    /\ showCall \in {"idle", "eventHandled"}
+    /\ activeFile = target
+    /\ activeFile' = "otherFile"
+    /\ awayPause' = TRUE
+    /\ lookedAway' = TRUE
+    /\ UNCHANGED <<target, selfNavigationWindow, showCall>>
 
 \* The move is done and the programmer has looked away from it: the model has
 \* nothing more to do, and ends here by design (6.13).
 Finished ==
-    /\ target = "b"
-    /\ window = "closed"
-    /\ active # target
+    /\ target = "destinationFile"
+    /\ selfNavigationWindow = "closed"
+    /\ activeFile # target
     /\ UNCHANGED vars
 
 Next ==
     \/ StartShow
-    \/ Expire
+    \/ WindowExpires
     \/ ShowFile
-    \/ Handle
-    \/ Resolve
+    \/ HandleEditorChange
+    \/ ShowResolves
     \/ LookAway
     \/ Finished
 
@@ -126,22 +126,22 @@ Next ==
 Fairness ==
     /\ WF_vars(StartShow)
     /\ WF_vars(ShowFile)
-    /\ WF_vars(Handle)
-    /\ WF_vars(Resolve)
+    /\ WF_vars(HandleEditorChange)
+    /\ WF_vars(ShowResolves)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
 --------------------------------------------------------------------------------
 
 \* Playback is paused as `away` only when the programmer looked away.
-NoPauseFromOurOwnShow == paused => looked
+NoPauseFromOurOwnShow == awayPause => lookedAway
 
 \* The programmer looking away pauses playback. Code that never paused would
 \* fail it, so it says something must happen.
-LookAwayPauses == looked => paused
+LookAwayPauses == lookedAway => awayPause
 
-\* Our move to b ends with the agent cursor there, however the programmer
-\* looks. Code whose show never resolved would fail it.
-MoveEnds == <>(target = "b")
+\* Our move to the destination file ends with the agent cursor there, however
+\* the programmer looks. Code whose show never resolved would fail it.
+MoveEnds == <>(target = "destinationFile")
 
 ================================================================================

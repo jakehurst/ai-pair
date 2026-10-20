@@ -169,7 +169,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     );
     switch (message.type) {
       case 'ready':
-        // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
+        // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');
         this.send({ type: 'replay', events: this.log });
         this.showSpeed(this.speed.get());
@@ -188,7 +188,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'reply':
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
-        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
+        // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
         if (this.wiring.calibration().reply(message.text)) {
           // The box is empty now, and the page posts no `draft` for it: specs/Draft.tla, `SendToCalibration` (#191).
@@ -199,7 +199,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;
       case 'draft':
-        // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
+        // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).
         if (message.empty) {
           controller.resume('reply');
         } else {
@@ -218,7 +218,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'turn':
         controller.resume();
-        if (controller.turn === 'user') {
+        if (controller.turn === 'programmer') {
           controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
         } else {
           controller.takeTurn();
@@ -243,8 +243,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (PANEL_COMMANDS.has(message.command)) void vscode.commands.executeCommand(message.command);
         return;
       case 'start':
-        // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
-        // note (Settles).
+        // specs/Start.tla, `Click`: one run per click. `AgentExits`: the agent is done, and the page drops its
+        // note (NoteGoes).
         void this.wiring.starter.start().then(() => {
           this.send({ type: 'startEnded' });
         });

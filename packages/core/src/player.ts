@@ -278,7 +278,7 @@ export class Player {
     let effect = false;
     // specs/Actions.tla: `perform` takes an action's steps (`Proceed`, `TakeEffect`), and each pass after it is `FinishAction`.
     for (const [i, action] of actions.entries()) {
-      // specs/Turns.tla, `Start`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
+      // specs/Turns.tla, `Perform`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect);
       let outcome: Outcome;
       try {
@@ -336,13 +336,13 @@ export class Player {
         `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order.`,
       );
     }
-    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Reject`.
+    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Stop`.
     const named = this.names(action, playing);
     if (typeof named === 'object') return named;
     const fields = fieldsProblem(action);
     if (fields !== undefined) return fail('invalid_action', fields);
-    // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
-    if (scene.turn === 'user' && !('say' in action) && !('point' in action)) {
+    // specs/Turns.tla, `Perform`: in the programmer's turn, only `say` and `point`.
+    if (scene.turn === 'programmer' && !('say' in action) && !('point' in action)) {
       return fail('not_your_turn', "During the programmer's turn, only `say` and `point` are allowed.");
     }
     // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
@@ -390,7 +390,7 @@ export class Player {
       const file = this.fileOf(move, playing);
       if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: 'interrupted' };
-      // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
+      // specs/FollowMode.tla, `ShowResolves`: the cursor moves to the file only once `show` resolves.
       await editor.show(file);
       const at = move.at;
       const where = await this.locate(file, 'move', move.line, at === undefined ? undefined : (text) => spotCandidates(text, at));
@@ -449,7 +449,7 @@ export class Player {
     if ('delete' in action) {
       if (!scene.cursor || !scene.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
       const { file } = scene.cursor;
-      // specs/Player.tla, `Begin`: the delete awaits show() and getText().
+      // specs/Player.tla, `StartDelete`: the delete awaits show() and getText().
       await editor.show(file);
       this.stage.lines.of(file, await editor.getText(file));
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and

@@ -236,7 +236,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         viewColumn: vscode.window.activeTextEditor?.viewColumn,
       });
     } finally {
-      // specs/FollowMode.tla, `Resolve`: the held window gets its `selfNavMs` from now (`Expire`).
+      // specs/FollowMode.tla, `ShowResolves`: the held window gets its `selfNavMs` from now (`WindowExpires`).
       this.showing--;
       this.selfNav();
     }
@@ -247,7 +247,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     const entry: OwnEdit = { offset, deleteLength, text };
     const pending = this.own.get(file) ?? [];
     this.own.set(file, pending);
-    // specs/EditorAdapter.tla, `Edit`: the entry is in `own` before VS Code applies the edit.
+    // specs/EditorAdapter.tla, `EditAsAgent`: the entry is in `own` before VS Code applies the edit.
     pending.push(entry);
     try {
       if (editor) {
@@ -318,7 +318,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   reveal(): void {
-    // specs/Scroll.tla, `Return`: a pause ends in `resume`, which reveals the target.
+    // specs/Scroll.tla, `Follow`: a pause ends in `resume`, which reveals the target.
     const target = this.target();
     if (target) {
       void this.show(target.file).then(() => {
@@ -432,7 +432,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   private onActiveEditor(editor: vscode.TextEditor | undefined): void {
     // specs/PointFocus.tla: away from the target is `LookAway`; no editor at all (`CloseTab`) pauses nothing.
-    // specs/FollowMode.tla, `Handle`: a change during our own navigation pauses nothing; one later is `LookAway`.
+    // specs/FollowMode.tla, `HandleEditorChange`: a change during our own navigation pauses nothing; one later is `LookAway`.
     if (editor?.document.uri.scheme === 'file') this.onSelectionChange(editor);
     const target = this.target();
     if (!editor || this.navigating() || !target || !FOLLOWING.has(this.state)) return;
@@ -663,7 +663,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
    * Returns the document for a file, as the session takes it (#88, #89). One with unsaved changes is the
    * programmer's text, whether its file still exists or not. Otherwise the file on disk decides:
    * VS Code keeps a document after its file is deleted, with the text it had, so a file that isn't
-   * on disk is `MissingFile`, whatever document there is. specs/FileText.tla, `GetText`.
+   * on disk is `NoSuchFile`, whatever document there is. specs/FileText.tla, `GetText`.
    */
   private async document(file: string): Promise<vscode.TextDocument> {
     const doc = this.openDocument(file);
