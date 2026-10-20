@@ -45,7 +45,7 @@ Last updated: integration, 2026-10-20.
 | `packages/core/test/places.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -70,18 +70,18 @@ Last updated: integration, 2026-10-20.
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/render.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/server.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/scripts/icon/Package.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 99.3% R 93.3% F 100.0% | - | - |
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
-| `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.1% R 98.2% F 97.9% | - | - |
+| `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.2% R 98.3% F 98.0% | - | - |
 | `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.1% B 66.7% F 87.2% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 71.7% B 88.9% F 50.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
@@ -105,38 +105,38 @@ Last updated: integration, 2026-10-20.
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
-| `scripts/check_ascii.test.ts` | TypeScript | test | test | test | - | - | test |
+| `scripts/check_ascii.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/check_ascii.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/coverage_report.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `scripts/coverage_report.test.ts` | TypeScript | test | test | test | - | - | test |
+| `scripts/coverage_report.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
+| `scripts/coverage_report.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/coverage_report.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/coverage_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/coverage_swift.sh` | Shell | - | - | - | - | - | - |
 | `scripts/lint_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/lint_tla.test.ts` | TypeScript | test | test | test | test | test | test |
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/lint_web.test.ts` | TypeScript | test | test | test | - | - | test |
+| `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/release.test.ts` | TypeScript | test | test | test | - | - | test |
+| `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
 | `specs/ActionValidation.cfg` | TLC config | - | - | - | - | - | - |

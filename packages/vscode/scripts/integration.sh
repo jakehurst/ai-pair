@@ -26,8 +26,14 @@ readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
-# The run's workspace, user data, extensions, and home go when it ends (#176).
-trap 'rm -rf "${TMP}"' EXIT
+# Code's temporary files, its sockets among them, and the test's: Code and the
+# extension host take them as TMPDIR. A socket's path must fit in 104
+# characters, so this folder is short.
+TMP_FILES="$(mktemp -d /tmp/ai-pair.XXXXXX)"
+readonly TMP_FILES
+# The run's workspace, user data, extensions, home, and temporary files go when
+# it ends, passed or failed (#176).
+trap 'rm -rf "${TMP}" "${TMP_FILES}"' EXIT
 mkdir -p "${TMP}/workspace"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
 export AI_PAIR_HOME="${TMP}/home"
@@ -50,8 +56,9 @@ unset ELECTRON_RUN_AS_NODE
 # OpenCode's go to the run's folder, by the variables they honor, and only the
 # system's programs are on the PATH, so no agent's CLI is found. HOME stays:
 # on macOS, Code finds its keychain by it (#176).
-CLAUDE_CONFIG_DIR="${TMP}/agents/claude" CODEX_HOME="${TMP}/agents/codex" \
-  XDG_CONFIG_HOME="${TMP}/agents/xdg" PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
+TMPDIR="${TMP_FILES}" CLAUDE_CONFIG_DIR="${TMP}/agents/claude" \
+  CODEX_HOME="${TMP}/agents/codex" XDG_CONFIG_HOME="${TMP}/agents/xdg" \
+  PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
   "${CODE}" "${CODE_ARGS[@]}" \
   --user-data-dir="${TMP}/user" \
   --extensions-dir="${TMP}/extensions" \

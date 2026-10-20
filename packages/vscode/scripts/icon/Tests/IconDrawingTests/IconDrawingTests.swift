@@ -95,6 +95,9 @@ final class ShippedIconTests: XCTestCase {
   func testWritesBothFiles() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    addTeardownBlock {
+      try FileManager.default.removeItem(at: directory)
+    }
     let png = directory.appendingPathComponent("icon.png").path
     let svg = directory.appendingPathComponent("icon.svg").path
     try writePNG(to: png, size: 64)
