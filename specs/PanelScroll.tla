@@ -8,27 +8,31 @@
 EXTENDS Naturals, Sequences
 
 CONSTANTS
-    MaxEntries,     \* how many entries the model adds
+    MaxEvents,     \* how many entries the model adds
     ScrollOn        \* which entries scroll the history to its top: "none",
                     \* "you", or "all"
 
-ASSUME AssumeMaxEntries == MaxEntries \in Nat
+ASSUME AssumeMaxEvents == MaxEvents \in Nat
 ASSUME AssumeScrollOn == ScrollOn \in {"none", "you", "all"}
+
+\* The events the view reacts to: an entry added, the You marker, a scroll.
+EventKinds == {"entry", "you", "scroll"}
 
 \* No entry, and no event yet. Any value that is not a time, and not an event,
 \* will do, so the config makes each a model value (6.20).
 NoEntry == CHOOSE v : v \notin Nat
-NoEvent == CHOOSE v : v \notin {"entry", "you", "scroll"}
+NoEvent == CHOOSE v : v \notin EventKinds
 
 VARIABLES
     time,     \* the time of the last entry: 1, 2, 3, ...
     history,  \* the history, top first: the times of its entries
-    above,    \* how many entries are scrolled out of view, above the view
-    last,     \* the last event: "entry", "you", "scroll", or NoEvent
-    before    \* the entry at the view's top before the last event, or NoEntry
-              \* if the view was at the top
+    entriesAboveView,    \* how many entries are scrolled out of view, above the
+                         \* view
+    lastEvent,    \* the last event: "entry", "you", "scroll", or NoEvent
+    topBefore \* the entry at the view's top before the last event, or
+              \* NoEntry if the view was at the top
 
-vars == <<time, history, above, last, before>>
+vars == <<time, history, entriesAboveView, lastEvent, topBefore>>
 
 --------------------------------------------------------------------------------
 
@@ -36,21 +40,22 @@ vars == <<time, history, above, last, before>>
 TypeOK ==
     /\ time \in Nat
     /\ history \in Seq(Nat \ {0})
-    /\ above \in Nat
-    /\ last \in {"entry", "you", "scroll", NoEvent}
-    /\ before \in (Nat \ {0}) \cup {NoEntry}
+    /\ entriesAboveView \in Nat
+    /\ lastEvent \in {"entry", "you", "scroll", NoEvent}
+    /\ topBefore \in (Nat \ {0}) \cup {NoEntry}
 
 \* The entry at the view's top, or NoEntry for an empty history.
-ViewTop == IF above < Len(history) THEN history[above + 1] ELSE NoEntry
+ViewTop == IF entriesAboveView < Len(history)
+           THEN history[entriesAboveView + 1] ELSE NoEntry
 
 --------------------------------------------------------------------------------
 
 Init ==
     /\ time = 0
     /\ history = <<>>
-    /\ above = 0
-    /\ last = NoEvent
-    /\ before = NoEntry
+    /\ entriesAboveView = 0
+    /\ lastEvent = NoEvent
+    /\ topBefore = NoEntry
 
 \* An entry goes in at the top. Scrolled down, anchoring keeps the same entry at
 \* the view's top. At the top, a browser may show the new entry or keep the old
@@ -59,14 +64,14 @@ Prepend(kind) ==
     /\ time' = time + 1
     /\ history' = <<time + 1>> \o history
     /\ IF ScrollOn = "all" \/ (ScrollOn = "you" /\ kind = "you")
-       THEN above' = 0
+       THEN entriesAboveView' = 0
        ELSE IF history = <<>>
-            THEN above' = 0
-            ELSE IF above > 0
-                 THEN above' = above + 1
-                 ELSE above' \in {0, 1}
-    /\ last' = kind
-    /\ before' = IF above > 0 THEN ViewTop ELSE NoEntry
+            THEN entriesAboveView' = 0
+            ELSE IF entriesAboveView > 0
+                 THEN entriesAboveView' = entriesAboveView + 1
+                 ELSE entriesAboveView' \in {0, 1}
+    /\ lastEvent' = kind
+    /\ topBefore' = IF entriesAboveView > 0 THEN ViewTop ELSE NoEntry
 
 \* The agent's message filed, a run, a divider, a change outside the editor:
 \* add.
@@ -78,9 +83,9 @@ AddYours == Prepend("you")
 \* The programmer scrolls the history.
 Scroll ==
     /\ history # <<>>
-    /\ above' \in 0..(Len(history) - 1)
-    /\ last' = "scroll"
-    /\ before' = NoEntry
+    /\ entriesAboveView' \in 0..(Len(history) - 1)
+    /\ lastEvent' = "scroll"
+    /\ topBefore' = NoEntry
     /\ UNCHANGED <<time, history>>
 
 Next ==
@@ -93,16 +98,17 @@ Spec == Init /\ [][Next]_vars
 --------------------------------------------------------------------------------
 
 \* The view starts at an entry, or at the top of an empty history.
-InRange == above = 0 \/ above < Len(history)
+ViewAtEntry == entriesAboveView = 0 \/ entriesAboveView < Len(history)
 
 \* The programmer's message is in view as soon as it is in the history. A panel
 \* that never scrolled would fail it, so it says something must happen.
-YoursInView == (last = "you") => (above = 0)
+YoursInView == (lastEvent = "you") => (entriesAboveView = 0)
 
 \* An entry from the agent keeps the programmer's place in the history.
-KeepsPlace == (last = "entry" /\ before # NoEntry) => (ViewTop = before)
+KeepsPlace == (lastEvent = "entry"
+               /\ topBefore # NoEntry) => (ViewTop = topBefore)
 
 \* Entries run out only so that the model is finite (6.8).
-Constraint == time <= MaxEntries
+Constraint == time <= MaxEvents
 
 ================================================================================

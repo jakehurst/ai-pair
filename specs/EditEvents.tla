@@ -12,74 +12,75 @@
 EXTENDS Naturals
 
 CONSTANTS
-    MaxSteps,       \* how many edits the model makes
+    MaxEdits,       \* how many edits the model makes
     KeepInterrupts  \* TRUE: an interrupting edit is reported even with no net
                     \* change
 
-ASSUME AssumeMaxSteps == MaxSteps \in Nat
+ASSUME AssumeMaxEdits == MaxEdits \in Nat
 ASSUME AssumeKeepInterrupts == KeepInterrupts \in BOOLEAN
 
 \* The file's texts, as numbers.
-Texts == 0..2
+Contents == 0..2
 
 \* No baseline. Any value that is not a text will do, so the config makes it a
 \* model value (6.20).
-NoText == CHOOSE v : v \notin Texts
+NoText == CHOOSE v : v \notin Contents
 
 VARIABLES
-    text,       \* the file's text
-    base,       \* the event's `before`: the text at the first edit since
-                \* the last report, or NoText
-    prog,       \* the pending event is the programmer's (`by`)
-    intr,       \* the pending event interrupts: the programmer's, or marked
-                \* `interrupted`
-    discarded,  \* batches were discarded for an edit since the last report
-    last,       \* the last report: taken, with an event, the programmer's, a
-                \* net change, batches discarded, a file edited
-    steps       \* edits made so far
+    text,         \* the file's text
+    baseline,     \* the event's `before`: the text at the first edit since
+                  \* the last report, or NoText
+    byProgrammer, \* the pending event is the programmer's (`by`)
+    interrupts,   \* the pending event interrupts: the programmer's, or marked
+                  \* `interrupted`
+    discarded,    \* batches were discarded for an edit since the last report
+    report,       \* the last report: taken, with an event, the programmer's, a
+                  \* net change, batches discarded, a file edited
+    edits         \* edits made so far
 
-vars == <<text, base, prog, intr, discarded, last, steps>>
+vars == <<text, baseline, byProgrammer, interrupts, discarded, report, edits>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ text \in Texts
-    /\ base \in Texts \cup {NoText}
-    /\ prog \in BOOLEAN
-    /\ intr \in BOOLEAN
+    /\ text \in Contents
+    /\ baseline \in Contents \cup {NoText}
+    /\ byProgrammer \in BOOLEAN
+    /\ interrupts \in BOOLEAN
     /\ discarded \in BOOLEAN
-    /\ last \in [taken : BOOLEAN, event : BOOLEAN, prog : BOOLEAN,
-                 net : BOOLEAN, discarded : BOOLEAN, edited : BOOLEAN]
-    /\ steps \in Nat
+    /\ report \in [taken : BOOLEAN, event : BOOLEAN, byProgrammer : BOOLEAN,
+                 netChange : BOOLEAN, discarded : BOOLEAN, edited : BOOLEAN]
+    /\ edits \in Nat
 
 \* No report yet.
 NoReport ==
-    [taken |-> FALSE, event |-> FALSE, prog |-> FALSE, net |-> FALSE,
+    [taken |-> FALSE, event |-> FALSE, byProgrammer |-> FALSE,
+     netChange |-> FALSE,
      discarded |-> FALSE, edited |-> FALSE]
 
 \* recordEdit: the first edit since the report sets the baseline and the
 \* event.
-Record(t, byProgrammer, interrupts) ==
+Record(t, asProgrammer, interrupting) ==
     /\ t # text
     /\ text' = t
-    /\ base' = IF base = NoText THEN text ELSE base
-    /\ prog' = (prog \/ byProgrammer)
-    /\ intr' = (intr \/ interrupts)
-    /\ discarded' = (discarded \/ interrupts)
-    /\ steps' = steps + 1
-    /\ UNCHANGED last
+    /\ baseline' = IF baseline = NoText THEN text ELSE baseline
+    /\ byProgrammer' = (byProgrammer \/ asProgrammer)
+    /\ interrupts' = (interrupts \/ interrupting)
+    /\ discarded' = (discarded \/ interrupting)
+    /\ edits' = edits + 1
+    /\ UNCHANGED report
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ text \in Texts
-    /\ base = NoText
-    /\ prog = FALSE
-    /\ intr = FALSE
+    /\ text \in Contents
+    /\ baseline = NoText
+    /\ byProgrammer = FALSE
+    /\ interrupts = FALSE
     /\ discarded = FALSE
-    /\ last = NoReport
-    /\ steps = 0
+    /\ report = NoReport
+    /\ edits = 0
 
 \* userEdit in the agent's turn: it interrupts.
 EditAsProgrammer(t) == Record(t, TRUE, TRUE)
@@ -90,20 +91,21 @@ EditAsOther(t, planned) == Record(t, FALSE, planned)
 \* snapshot: the event, unless the file is as it was; with KeepInterrupts, an
 \* interrupting one stays.
 Report ==
-    /\ base # NoText
-    /\ base' = NoText
-    /\ prog' = FALSE
-    /\ intr' = FALSE
+    /\ baseline # NoText
+    /\ baseline' = NoText
+    /\ byProgrammer' = FALSE
+    /\ interrupts' = FALSE
     /\ discarded' = FALSE
-    /\ LET net == text # base
-           event == net \/ (KeepInterrupts /\ intr)
-       IN  last' = [taken |-> TRUE, event |-> event, prog |-> prog,
-                    net |-> net, discarded |-> discarded, edited |-> TRUE]
-    /\ UNCHANGED <<text, steps>>
+    /\ LET netChange == text # baseline
+           event == netChange \/ (KeepInterrupts /\ interrupts)
+       IN  report' = [taken |-> TRUE, event |-> event,
+                     byProgrammer |-> byProgrammer, netChange |-> netChange,
+                     discarded |-> discarded, edited |-> TRUE]
+    /\ UNCHANGED <<text, edits>>
 
 Next ==
-    \/ \E t \in Texts : EditAsProgrammer(t)
-    \/ \E t \in Texts, planned \in BOOLEAN : EditAsOther(t, planned)
+    \/ \E t \in Contents : EditAsProgrammer(t)
+    \/ \E t \in Contents, planned \in BOOLEAN : EditAsOther(t, planned)
     \/ Report
 
 Spec == Init /\ [][Next]_vars
@@ -111,13 +113,13 @@ Spec == Init /\ [][Next]_vars
 --------------------------------------------------------------------------------
 
 \* A change that remains is reported: something must happen.
-NetReported == (last.taken /\ last.net) => last.event
+NetReported == (report.taken /\ report.netChange) => report.event
 
 \* Batches discarded for an edit come with the edit that discarded them, so
 \* the agent knows why.
-Explained == (last.taken /\ last.discarded) => last.event
+Explained == (report.taken /\ report.discarded) => report.event
 
 \* Edits run out only so that the model is finite (6.8).
-Constraint == steps <= MaxSteps
+Constraint == edits <= MaxEdits
 
 ================================================================================

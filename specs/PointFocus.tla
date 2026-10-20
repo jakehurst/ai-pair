@@ -11,7 +11,7 @@
 (* leaving the one they had switched to; with RevealOnReply = FALSE, a reply  *)
 (* moves no view.                                                             *)
 (******************************************************************************)
-EXTENDS Naturals
+EXTENDS Naturals, PairDefs
 
 CONSTANTS
     DropStaleFocus, \* TRUE: a reply after a look-away moves the focus from the
@@ -24,43 +24,39 @@ ASSUME AssumeDropStaleFocus == DropStaleFocus \in BOOLEAN
 ASSUME AssumeRevealOnReply == RevealOnReply \in BOOLEAN
 ASSUME AssumeMaxReplies == MaxReplies \in Nat
 
-\* The files: the cursor's, the pointed one, and any other.
-Files == {"a", "b", "other"}
-
-\* No file: no cursor before the first move, no point, or no editor open. Any
-\* value that is not a file will do, so the config makes it a model value
-\* (6.20).
-NoFile == CHOOSE v : v \notin Files
-
 VARIABLES
-    cursor,   \* the agent cursor's file: "a", or NoFile before the first move
-    point,    \* the pointed code's file: "b", or NoFile
-    focus,    \* what the view follows: "cursor", or "point"
-    active,   \* the file in the active editor: "a", "b", "other", or NoFile
-              \* (no editor open)
-    looked,   \* the programmer looked away from what the view follows: the
-              \* away pause holds
-    stale,    \* a reply just revealed a point the programmer had looked away
-              \* from
-    replies,  \* replies so far
-    jumped,   \* the last step was a reply that changed the active editor
-    acted     \* the last step was a cursor action
+    cursor,     \* the agent cursor's file: "sourceFile", or NoFile before the
+                \* first move
+    point,      \* the pointed code's file: "destinationFile", or NoFile
+    focus,      \* what the view follows: "cursor", or "point"
+    activeFile,     \* the file in the active editor: "sourceFile",
+                \* "destinationFile", "otherFile", or NoFile (no editor open)
+    awayPause,  \* the programmer looked away from what the view follows: the
+                \* away pause holds
+    stalePointRevealed,    \* a reply just revealed a point the programmer had
+                           \* looked away
+                \* from
+    replies,    \* replies so far
+    replyMovedEditor,     \* the last step was a reply that changed the active
+                          \* editor
+    cursorActed       \* the last step was a cursor action
 
-vars == <<cursor, point, focus, active, looked, stale, replies, jumped, acted>>
+vars == <<cursor, point, focus, activeFile, awayPause, stalePointRevealed,
+          replies, replyMovedEditor, cursorActed>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ cursor \in {"a", NoFile}
-    /\ point \in {"b", NoFile}
+    /\ cursor \in {"sourceFile", NoFile}
+    /\ point \in {"destinationFile", NoFile}
     /\ focus \in {"cursor", "point"}
-    /\ active \in Files \cup {NoFile}
-    /\ looked \in BOOLEAN
-    /\ stale \in BOOLEAN
+    /\ activeFile \in Files \cup {NoFile}
+    /\ awayPause \in BOOLEAN
+    /\ stalePointRevealed \in BOOLEAN
     /\ replies \in Nat
-    /\ jumped \in BOOLEAN
-    /\ acted \in BOOLEAN
+    /\ replyMovedEditor \in BOOLEAN
+    /\ cursorActed \in BOOLEAN
 
 \* The file the view follows.
 Target == IF focus = "point" THEN point ELSE cursor
@@ -68,91 +64,95 @@ Target == IF focus = "point" THEN point ELSE cursor
 \* The focus after a resume: a point the programmer looked away from is
 \* dropped first, with DropStaleFocus (issue 109).
 ResumedFocus ==
-    IF DropStaleFocus /\ looked /\ focus = "point" THEN "cursor" ELSE focus
+    IF DropStaleFocus /\ awayPause /\ focus = "point" THEN "cursor" ELSE focus
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ cursor \in {"a", NoFile}
+    /\ cursor \in {"sourceFile", NoFile}
     /\ point = NoFile
     /\ focus = "cursor"
-    /\ active = IF cursor = "a" THEN "a" ELSE "other"
-    /\ looked = FALSE
-    /\ stale = FALSE
+    /\ activeFile = IF cursor = "sourceFile" THEN "sourceFile" ELSE "otherFile"
+    /\ awayPause = FALSE
+    /\ stalePointRevealed = FALSE
     /\ replies = 0
-    /\ jumped = FALSE
-    /\ acted = FALSE
+    /\ replyMovedEditor = FALSE
+    /\ cursorActed = FALSE
 
 \* A point action: the view goes to the pointed file and follows it.
 Point ==
-    /\ ~looked
-    /\ point' = "b"
+    /\ ~awayPause
+    /\ point' = "destinationFile"
     /\ focus' = "point"
-    /\ active' = "b"
-    /\ jumped' = FALSE
-    /\ acted' = FALSE
-    /\ UNCHANGED <<cursor, looked, stale, replies>>
+    /\ activeFile' = "destinationFile"
+    /\ replyMovedEditor' = FALSE
+    /\ cursorActed' = FALSE
+    /\ UNCHANGED <<cursor, awayPause, stalePointRevealed, replies>>
 
 \* A cursor action, a move or an edit: the view comes back to the cursor and
 \* follows it.
 ActAtCursor ==
-    /\ ~looked
-    /\ cursor' = "a"
+    /\ ~awayPause
+    /\ cursor' = "sourceFile"
     /\ focus' = "cursor"
-    /\ active' = "a"
-    /\ jumped' = FALSE
-    /\ acted' = TRUE
-    /\ UNCHANGED <<point, looked, stale, replies>>
+    /\ activeFile' = "sourceFile"
+    /\ replyMovedEditor' = FALSE
+    /\ cursorActed' = TRUE
+    /\ UNCHANGED <<point, awayPause, stalePointRevealed, replies>>
 
 \* The programmer switches to another editor: away from the target, playback
 \* pauses.
 LookAway ==
-    /\ ~looked
+    /\ ~awayPause
     /\ Target # NoFile
-    /\ active' = "other"
-    /\ looked' = TRUE
-    /\ jumped' = FALSE
-    /\ acted' = FALSE
-    /\ UNCHANGED <<cursor, point, focus, stale, replies>>
+    /\ activeFile' = "otherFile"
+    /\ awayPause' = TRUE
+    /\ replyMovedEditor' = FALSE
+    /\ cursorActed' = FALSE
+    /\ UNCHANGED <<cursor, point, focus, stalePointRevealed, replies>>
 
 \* The programmer closes the target's tab, or every tab: no editor is active,
 \* and nothing pauses.
 CloseTab ==
-    /\ active # NoFile
-    /\ active' = NoFile
-    /\ jumped' = FALSE
-    /\ acted' = FALSE
-    /\ UNCHANGED <<cursor, point, focus, looked, stale, replies>>
+    /\ activeFile # NoFile
+    /\ activeFile' = NoFile
+    /\ replyMovedEditor' = FALSE
+    /\ cursorActed' = FALSE
+    /\ UNCHANGED <<cursor, point, focus, awayPause, stalePointRevealed,
+                   replies>>
 
 \* A reply: resume with no reason. A typed reply always gets here with a pause
 \* to lift, its draft's, so before the fix for issue 125 every reply revealed
 \* the target; with it, the view stays where the programmer left it. A point
 \* the programmer looked away from is dropped first (issue 109).
-Reply ==
+SendReply ==
     LET revealed == IF ResumedFocus = "point" THEN point ELSE cursor
-        shown == IF RevealOnReply /\ revealed # NoFile THEN revealed ELSE active
+        shown == IF RevealOnReply /\ revealed # NoFile THEN revealed
+                 ELSE activeFile
     IN  /\ focus' = ResumedFocus
-        /\ active' = shown
-        /\ looked' = FALSE
-        /\ stale' =
-               (RevealOnReply /\ looked /\ revealed = point /\ point # NoFile)
+        /\ activeFile' = shown
+        /\ awayPause' = FALSE
+        /\ stalePointRevealed' =
+               (RevealOnReply /\ awayPause
+                  /\ revealed = point /\ point # NoFile)
         /\ replies' = replies + 1
-        /\ jumped' = (shown # active)
-        /\ acted' = FALSE
+        /\ replyMovedEditor' = (shown # activeFile)
+        /\ cursorActed' = FALSE
         /\ UNCHANGED <<cursor, point>>
 
 \* The Resume button: resume with no reason, which reveals the target, as
 \* documented. A point the programmer looked away from is dropped first (issue
 \* 109).
-Resume ==
+ResumeAll ==
     LET revealed == IF ResumedFocus = "point" THEN point ELSE cursor
     IN  /\ focus' = ResumedFocus
-        /\ active' = IF revealed # NoFile THEN revealed ELSE active
-        /\ looked' = FALSE
-        /\ stale' = (looked /\ revealed = point /\ point # NoFile)
+        /\ activeFile' = IF revealed # NoFile THEN revealed ELSE activeFile
+        /\ awayPause' = FALSE
+        /\ stalePointRevealed' = (awayPause /\ revealed = point
+                                  /\ point # NoFile)
         /\ replies' = replies + 1
-        /\ jumped' = FALSE
-        /\ acted' = FALSE
+        /\ replyMovedEditor' = FALSE
+        /\ cursorActed' = FALSE
         /\ UNCHANGED <<cursor, point>>
 
 Next ==
@@ -160,23 +160,23 @@ Next ==
     \/ ActAtCursor
     \/ LookAway
     \/ CloseTab
-    \/ Reply
-    \/ Resume
+    \/ SendReply
+    \/ ResumeAll
 
 Spec == Init /\ [][Next]_vars
 
 --------------------------------------------------------------------------------
 
 \* A reply never brings back a point the programmer had looked away from.
-NoStaleReveal == ~stale
+NoStaleReveal == ~stalePointRevealed
 
 \* A reply leaves the active editor as the programmer left it (issue 125).
-ReplyKeepsView == ~jumped
+ReplyKeepsView == ~replyMovedEditor
 
 \* Right after a cursor action, the cursor's file is the active editor: the
 \* view comes back once the agent works. Code that never showed it would fail
 \* it, so it says something must happen.
-CursorShown == acted => (active = cursor)
+CursorShown == cursorActed => (activeFile = cursor)
 
 \* Replies and Resumes run out only so that the model is finite (6.8).
 Constraint == replies <= MaxReplies

@@ -278,7 +278,7 @@ describe('claudeStarter', () => {
     }
   });
 
-  it('RunsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start', () => {
+  it('StartsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start', () => {
     fakes.programs.set('claude', '/home/me/.local/bin/claude');
     void starter().start();
     expect(fakes.terminals.map((terminal) => terminal.options)).toEqual([
@@ -301,7 +301,7 @@ describe('claudeStarter', () => {
     expect(fakes.terminals).toHaveLength(2);
   });
 
-  it("Settles: resolves a start once its agent's terminal closes, a refused start with it, and one that runs nothing at once", async () => {
+  it("NoteGoes: resolves a start once its agent's terminal closes, a refused start with it, and one that runs nothing at once", async () => {
     const started = starter();
     await started.start();
     fakes.programs.set('claude', '/home/me/.local/bin/claude');

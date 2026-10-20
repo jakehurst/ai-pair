@@ -14,91 +14,92 @@ CONSTANTS
 ASSUME AssumeClearOnEnd == ClearOnEnd \in BOOLEAN
 
 VARIABLES
-    run,     \* the player: "saving", "confirming", "running", "over"
-    box,     \* the page's box: "off", "confirm", "running"
-    active   \* the session is active in the page
+    playerPhase,  \* the player: "saving", "confirming", "running", "over"
+    boxShows,     \* the page's box: "cleared", "confirm", "running"
+    sessionLive     \* the session is live in the page
 
-vars == <<run, box, active>>
+vars == <<playerPhase, boxShows, sessionLive>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ run \in {"saving", "confirming", "running", "over"}
-    /\ box \in {"off", "confirm", "running"}
-    /\ active \in BOOLEAN
+    /\ playerPhase \in {"saving", "confirming", "running", "over"}
+    /\ boxShows \in {"cleared", "confirm", "running"}
+    /\ sessionLive \in BOOLEAN
 
 \* What the page does with a `run` event of `phase`.
-Show(phase) ==
-    IF phase \in {"confirm", "running"}
-    THEN box' = phase
+Show(p) ==
+    IF p \in {"confirm", "running"}
+    THEN boxShows' = p
     ELSE IF ClearOnEnd
-         THEN box' = "off"
-         ELSE UNCHANGED box
+         THEN boxShows' = "cleared"
+         ELSE UNCHANGED boxShows
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ run = "saving"
-    /\ box = "off"
-    /\ active = TRUE
+    /\ playerPhase = "saving"
+    /\ boxShows = "cleared"
+    /\ sessionLive = TRUE
 
 \* After `save`, with confirmation on: post confirm.
 SaveAndConfirm ==
-    /\ run = "saving"
-    /\ run' = "confirming"
+    /\ playerPhase = "saving"
+    /\ playerPhase' = "confirming"
     /\ Show("confirm")
-    /\ UNCHANGED active
+    /\ UNCHANGED sessionLive
 
 \* After `save`, with confirmation off: post running.
 SaveAndRun ==
-    /\ run = "saving"
-    /\ run' = "running"
+    /\ playerPhase = "saving"
+    /\ playerPhase' = "running"
     /\ Show("running")
-    /\ UNCHANGED active
+    /\ UNCHANGED sessionLive
 
 \* A failed save returns before posting anything.
 FailSave ==
-    /\ run = "saving"
-    /\ run' = "over"
-    /\ UNCHANGED <<box, active>>
+    /\ playerPhase = "saving"
+    /\ playerPhase' = "over"
+    /\ UNCHANGED <<boxShows, sessionLive>>
 
 \* `confirm` resolves with go: post running.
 Go ==
-    /\ run = "confirming"
-    /\ run' = "running"
+    /\ playerPhase = "confirming"
+    /\ playerPhase' = "running"
     /\ Show("running")
-    /\ UNCHANGED active
+    /\ UNCHANGED sessionLive
 
 \* `confirm` resolves with skip, or an interrupt: post declined.
 Decline ==
-    /\ run = "confirming"
-    /\ run' = "over"
+    /\ playerPhase = "confirming"
+    /\ playerPhase' = "over"
     /\ Show("declined")
-    /\ UNCHANGED active
+    /\ UNCHANGED sessionLive
 
 \* The command: done or background when it ran, declined when it never
-\* started or threw.
+\* started or threw. A background command's later `exited` post finds the box
+\* off, so the spec stops at the first post.
 FinishCommand ==
-    /\ run = "running"
-    /\ run' = "over"
-    /\ \E phase \in {"done", "background", "declined"} : Show(phase)
-    /\ UNCHANGED active
+    /\ playerPhase = "running"
+    /\ playerPhase' = "over"
+    /\ \E p \in {"done", "background", "declined"} : Show(p)
+    /\ UNCHANGED sessionLive
 
 \* The session ends while the run is in any state: `setActive(false)` clears
 \* the box; the player's run is interrupted (close() interrupts the timeline)
 \* and posts its phase, which then finds it off.
 EndSession ==
-    /\ active
-    /\ box' = "off"
-    /\ active' = FALSE
-    /\ UNCHANGED run
+    /\ sessionLive
+    /\ boxShows' = "cleared"
+    /\ sessionLive' = FALSE
+    /\ UNCHANGED playerPhase
 
 \* The run is over and the session has ended: nothing more happens, by
 \* design (6.13).
 Finished ==
-    /\ run = "over"
-    /\ ~active
+    /\ playerPhase = "over"
+    /\ ~sessionLive
     /\ UNCHANGED vars
 
 Next ==
@@ -128,10 +129,10 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 
 \* The box shows a command only while it waits for that.
 BoxMatches ==
-    /\ (box = "confirm") => (run = "confirming")
-    /\ (box = "running") => (run = "running")
+    /\ (boxShows = "confirm") => (playerPhase = "confirming")
+    /\ (boxShows = "running") => (playerPhase = "running")
 
 \* Once the run is over, the box clears: something must happen.
-Clears == <>[](box = "off")
+Clears == <>[](boxShows = "cleared")
 
 ================================================================================

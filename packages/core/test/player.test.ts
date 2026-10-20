@@ -422,7 +422,7 @@ describe('actions the player refuses', () => {
   });
 
   it("Start: allows only say and point during the programmer's turn", async () => {
-    const h = harness({ files: { 'a.ts': 'x\n' }, scene: { turn: 'user' } });
+    const h = harness({ files: { 'a.ts': 'x\n' }, scene: { turn: 'programmer' } });
     expect((await played(h, [moveTo(1)])).result.error).toEqual({
       kind: 'not_your_turn',
       message: "During the programmer's turn, only `say` and `point` are allowed.",
@@ -735,7 +735,7 @@ describe('point', () => {
   });
 
   it("points without showing the file or moving the view in the programmer's turn", async () => {
-    const h = harness({ files: { 'a.ts': 'x' }, scene: { turn: 'user' } });
+    const h = harness({ files: { 'a.ts': 'x' }, scene: { turn: 'programmer' } });
     vi.mocked(resolveSpan).mockReturnValue({ ok: true, range: { start: 0, end: 1 } });
     await played(h, [{ point: { file: 'a.ts', line: 1, text: 'x' } }]);
     expect(h.scene.focus).toBe('cursor');

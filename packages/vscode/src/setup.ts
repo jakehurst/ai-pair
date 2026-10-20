@@ -131,7 +131,7 @@ export function claudeStarter(
   }
   return {
     available() {
-      // specs/Start.tla, `Answer`: Claude Code set up for the pair server, its CLI here, a folder open.
+      // specs/Start.tla, `AnswerCheck`: Claude Code set up for the pair server, its CLI here, a folder open.
       const claude = AGENTS.find((a) => a.id === 'claude');
       return Promise.resolve(claude?.isSetUp(h, launcher) === true && cli() !== undefined && folders().length > 0);
     },

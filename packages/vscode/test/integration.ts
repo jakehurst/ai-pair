@@ -730,7 +730,7 @@ export async function run(): Promise<void> {
   controller.setSpeed(1);
   await controller.end();
   await ai.update('confirmCommands', undefined, vscode.ConfigurationTarget.Global);
-  console.log(`Settles: a scroll a command cut short went on to line 250: ${shown.join(', ')}`);
+  console.log(`ComesInView: a scroll a command cut short went on to line 250: ${shown.join(', ')}`);
 
   // The follow scroll's glide takes its time from the playback speed (#123): at `slow`, a glide of
   // LONG_GLIDE_MS takes a second, part way at `sampleMs`; at `fast` it takes 100 ms, done by then.
@@ -812,10 +812,10 @@ export async function run(): Promise<void> {
   controller.setReadingSpeed(1);
   await controller.step([{ say: Array.from({ length: 10 }, (_, i) => `word${i}`).join(' ') }]);
   await sleep(200);
-  controller.pause('user');
+  controller.pause('programmer');
   await sleep(1000);
   assert.equal(controller.isPaused, true);
-  controller.resume('user');
+  controller.resume('programmer');
   assert.deepEqual(
     (await controller.step([])).batches.map((b) => b.status),
     ['completed'],

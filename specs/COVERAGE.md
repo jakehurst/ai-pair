@@ -29,11 +29,11 @@ Code goes without a spec for one of these reasons:
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
-| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`Begin`) |
+| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`) |
 | `confirm`, `decideRun` | `RunBox` (`Go`, `Decline`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
 | `resumeSession`, `open`, `saved`, `revive`, `isSuspended`, `onChange` | `Resume` |
-| `textOrMissing` | `FileText` (`MissingFile`) |
+| `textOrMissing` | `FileText` (`MissingIsReported`) |
 | `state`, `startGrace`, `endGrace`, `startQuiet`, `endQuiet`, and the grace and the quiet in `serialize`, `read`, `block`, `finishCall`, and `close` | `ListenGrace` |
 | `describeReport`, `cancelled`, `isRecorded`, `pendingEdit` | Pure, Format |
 | `render`, `cursorView` | Format: what the editor and panel draw |
@@ -72,7 +72,7 @@ Code goes without a spec for one of these reasons:
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |
 | | `readingTime` | Pure |
-| `diff.ts` | `lineChanges` | `Reload` (`Refine`) |
+| `diff.ts` | `lineChanges` | `Reload` (`SplitRuns`) |
 | | `fileDiff` | Format |
 | `text.ts`, `timing.ts` | all | Pure |
 | `ports.ts`, `config.ts`, `paths.ts`, `index.ts` | | Types; `config.ts` also holds the defaults and `TEST_TIMEOUTS` |
@@ -149,10 +149,10 @@ Code goes without a spec for one of these reasons:
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
-| `setup.ts` | `claudeStarter` | `Start` (`Answer`, `Click`, `Exit`) |
+| `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Save`, `Reload`) |
-| | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`Stored`) |
+| | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`ApplyRate`) |
 | | asking the panel again after Set Up Agent | `Start` (`FlipSetUp`) |
 | | the rest | Glue |
 | `demo.ts` | all | Glue: plays a script through the controller's public calls |

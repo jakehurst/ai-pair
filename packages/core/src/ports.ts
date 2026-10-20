@@ -98,11 +98,11 @@ export type PlayerEditor = Omit<EditorPort, 'isDirty' | 'renderCursor' | 'reveal
 export type PanelEvent =
   /** `rules`: the project guides the agent was given (#23). */
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true }
-  | { type: 'session'; active: false; reason: 'agent' | 'user' | 'disconnected'; summary?: string }
+  | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string }
   | { type: 'say'; text: string }
   | { type: 'reading'; ms: number }
   | { type: 'state'; state: AgentState; turn: Turn; paused: boolean }
-  | { type: 'user'; text: string; ref?: Ref }
+  | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }
   | { type: 'interrupt' }
   | { type: 'point'; file: string; line: number }

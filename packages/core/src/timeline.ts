@@ -10,7 +10,7 @@ export const instant: Pacing = {
   signal: new AbortController().signal,
 };
 
-interface Pending {
+interface Sleep {
   remaining: number;
   startedAt: number;
   timer?: ReturnType<typeof setTimeout>;
@@ -20,7 +20,7 @@ interface Pending {
 /** The clock playback runs on: sleeps that a pause holds and an interrupt cuts short. */
 export class Timeline {
   private interrupted = false;
-  private pending: Pending | undefined = undefined;
+  private sleeping: Sleep | undefined = undefined;
   private abort = new AbortController();
 
   constructor(private paused: boolean) {}
@@ -44,16 +44,16 @@ export class Timeline {
   sleep(ms: number): Promise<boolean> {
     if (this.interrupted) return Promise.resolve(false);
     return new Promise((resolve) => {
-      this.pending = { remaining: Math.max(0, ms), startedAt: 0, resolve };
-      if (!this.paused) this.arm(this.pending);
+      this.sleeping = { remaining: Math.max(0, ms), startedAt: 0, resolve };
+      if (!this.paused) this.arm(this.sleeping);
     });
   }
 
-  /** Stops the pending sleep's timer, keeping what is left (specs/Timeline.tla, `Pause`). */
+  /** Stops the sleep's timer, keeping what is left (specs/Timeline.tla, `Pause`). */
   pause(): void {
     if (this.paused) return;
     this.paused = true;
-    const p = this.pending;
+    const p = this.sleeping;
     if (p?.timer !== undefined) {
       clearTimeout(p.timer);
       p.timer = undefined;
@@ -61,30 +61,30 @@ export class Timeline {
     }
   }
 
-  /** Starts the pending sleep's timer again (specs/Timeline.tla, `Resume`, once no pause reason is left). */
+  /** Starts the sleep's timer again (specs/Timeline.tla, `Resume`, once no pause reason is left). */
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
-    // A paused sleep has no timer (`NoTimerWhilePaused`), so a pending one is waiting, and is armed again.
-    if (this.pending) this.arm(this.pending);
+    // A paused sleep has no timer (`NoTimerWhilePaused`), so a sleep is waiting, and is armed again.
+    if (this.sleeping) this.arm(this.sleeping);
   }
 
-  /** Resolves the pending sleep `false`, and later ones too until `reset` (specs/Timeline.tla, `Interrupt`). */
+  /** Resolves the sleep `false`, and later ones too until `reset` (specs/Timeline.tla, `Interrupt`). */
   interrupt(): void {
     this.interrupted = true;
     this.abort.abort();
-    const p = this.pending;
+    const p = this.sleeping;
     if (!p) return;
     clearTimeout(p.timer);
-    this.pending = undefined;
+    this.sleeping = undefined;
     p.resolve(false);
   }
 
-  private arm(p: Pending): void {
+  private arm(p: Sleep): void {
     p.startedAt = Date.now();
     // specs/Timeline.tla, `Fire`: the sleep resolves `true`.
     p.timer = setTimeout(() => {
-      if (this.pending === p) this.pending = undefined;
+      if (this.sleeping === p) this.sleeping = undefined;
       p.resolve(true);
     }, p.remaining);
   }

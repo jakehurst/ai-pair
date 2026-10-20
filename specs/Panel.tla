@@ -19,76 +19,80 @@ NoMessage == CHOOSE v : v \notin Nat
 
 VARIABLES
     time,     \* the time of the last event
-    band,     \* the agent's current message, shown in the band, or NoMessage
-    flag,     \* Fix 1: the current message is already in the history
-    added,    \* Fix 2: how many entries were added while the current message
+    currentMessage,     \* the agent's current message, shown in the band, or
+                        \* NoMessage
+    messageFiled,     \* Fix 1: the current message is already in the history
+    entriesSinceMessage,    \* Fix 2: how many entries were added while the
+                            \* current message
               \* was current
     history   \* the history, top first: the times of its entries
 
-vars == <<time, band, flag, added, history>>
+vars == <<time, currentMessage, messageFiled, entriesSinceMessage, history>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
     /\ time \in Nat
-    /\ band \in (Nat \ {0}) \cup {NoMessage}
-    /\ flag \in BOOLEAN
-    /\ added \in Nat
+    /\ currentMessage \in (Nat \ {0}) \cup {NoMessage}
+    /\ messageFiled \in BOOLEAN
+    /\ entriesSinceMessage \in Nat
     /\ history \in Seq(Nat \ {0})
 
 \* `s` with `x` inserted after its first `n` elements.
 InsertAfter(s, n, x) == SubSeq(s, 1, n) \o <<x>> \o SubSeq(s, n + 1, Len(s))
 
 \* The history once the band's message is filed into it, under each fix.
-Flushed ==
-    CASE band = NoMessage -> history
-      [] Fix = 1 /\ flag -> history
-      [] Fix = 2 -> InsertAfter(history, added, band)
-      [] OTHER -> <<band>> \o history
+WithMessageFiled ==
+    CASE currentMessage = NoMessage -> history
+      [] Fix = 1 /\ messageFiled -> history
+      [] Fix = 2 -> InsertAfter(history, entriesSinceMessage, currentMessage)
+      [] OTHER -> <<currentMessage>> \o history
 
 --------------------------------------------------------------------------------
 
 Init ==
     /\ time = 0
-    /\ band = NoMessage
-    /\ flag = FALSE
-    /\ added = 0
+    /\ currentMessage = NoMessage
+    /\ messageFiled = FALSE
+    /\ entriesSinceMessage = 0
     /\ history = <<>>
 
 \* setNow: the agent's message replaces the one in the band, which is filed.
 Say ==
     /\ time' = time + 1
-    /\ band' = time + 1
-    /\ flag' = FALSE
-    /\ added' = 0
-    /\ history' = Flushed
+    /\ currentMessage' = time + 1
+    /\ messageFiled' = FALSE
+    /\ entriesSinceMessage' = 0
+    /\ history' = WithMessageFiled
 
 \* add(): an entry, such as the programmer's message, a run, or a divider,
 \* goes on top; under Fix 1 the band's message is filed first.
 AddEntry ==
     /\ time' = time + 1
-    /\ flag' = (Fix = 1 /\ band # NoMessage)
-    /\ added' = IF Fix = 2 THEN added + 1 ELSE added
-    /\ history' = <<time + 1>> \o (IF Fix = 1 THEN Flushed ELSE history)
-    /\ UNCHANGED band
+    /\ messageFiled' = (Fix = 1 /\ currentMessage # NoMessage)
+    /\ entriesSinceMessage' = IF Fix = 2 THEN entriesSinceMessage + 1
+                              ELSE entriesSinceMessage
+    /\ history' = <<time + 1>> \o (IF Fix = 1 THEN WithMessageFiled
+                                   ELSE history)
+    /\ UNCHANGED currentMessage
 
 \* A session starts or ends: its divider goes on top of the filed band, and
 \* the band empties.
 ChangeSession ==
     /\ time' = time + 1
-    /\ band' = NoMessage
-    /\ flag' = FALSE
-    /\ added' = 0
-    /\ history' = <<time + 1>> \o Flushed
+    /\ currentMessage' = NoMessage
+    /\ messageFiled' = FALSE
+    /\ entriesSinceMessage' = 0
+    /\ history' = <<time + 1>> \o WithMessageFiled
 
 \* A `session` event repeating a suspension the page already shows (#138):
 \* the band is filed and empties, and no divider is added.
 RepeatSession ==
-    /\ band' = NoMessage
-    /\ flag' = FALSE
-    /\ added' = 0
-    /\ history' = Flushed
+    /\ currentMessage' = NoMessage
+    /\ messageFiled' = FALSE
+    /\ entriesSinceMessage' = 0
+    /\ history' = WithMessageFiled
     /\ UNCHANGED time
 
 Next ==
@@ -108,7 +112,7 @@ NewestFirst == \A i \in 1..(Len(history) - 1) : history[i] > history[i + 1]
 \* would lose them, so this says something must happen.
 NoneLost ==
     \A k \in 1..time :
-        \/ k = band
+        \/ k = currentMessage
         \/ \E i \in 1..Len(history) : history[i] = k
 
 \* No entry is in the history twice.

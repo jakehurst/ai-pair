@@ -8,10 +8,9 @@
 (* it. The batch's actions are any sequence of actions, each with or without  *)
 (* `file`.                                                                    *)
 (******************************************************************************)
-EXTENDS Naturals
+EXTENDS Naturals, PairDefs
 
 CONSTANTS
-    Files,           \* the files
     MaxActions,      \* how many actions the model plays in a batch
     FallBackToNamed, \* TRUE: an action without `file` looks in the file its
                      \* batch named
@@ -22,115 +21,114 @@ ASSUME AssumeMaxActions == MaxActions \in Nat
 ASSUME AssumeFallBackToNamed == FallBackToNamed \in BOOLEAN
 ASSUME AssumeCursorInNamed == CursorInNamed \in BOOLEAN
 
-\* No file: no cursor before the first move, no file named, no `file` given,
-\* or no file acted in. Any value that is not a file will do, so the config
-\* makes it a model value (6.20).
-NoFile == CHOOSE v : v \notin Files
-
-\* The kinds of action.
-Kinds == {"move", "select", "point", "type", "delete", "say"}
-
 \* The kinds of action that name a file, when given one.
-Names == {"move", "select", "point"}
+NamingKinds == {"move", "select", "point"}
 
 VARIABLES
-    cursor,   \* the agent's cursor's file, or NoFile: kept from batch to batch
-    named,    \* the file the batch named, or NoFile (playing.named)
+    cursorFile,   \* the agent's cursor's file, or NoFile: kept from batch to
+                  \* batch
+    namedFile,    \* the file the batch named, or NoFile (playing.named)
     edited,   \* the batch has edited (playing.edited)
-    played,   \* actions played in this batch
-    stopped,  \* the batch was rejected at an action
+    actionsPlayed,   \* actions played in this batch
+    rejected,  \* the batch was rejected at an action
     actedIn   \* the file the last action acted in, or NoFile
 
-vars == <<cursor, named, edited, played, stopped, actedIn>>
+vars == <<cursorFile, namedFile, edited, actionsPlayed, rejected, actedIn>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ cursor \in Files \cup {NoFile}
-    /\ named \in Files \cup {NoFile}
+    /\ cursorFile \in Files \cup {NoFile}
+    /\ namedFile \in Files \cup {NoFile}
     /\ edited \in BOOLEAN
-    /\ played \in Nat
-    /\ stopped \in BOOLEAN
+    /\ actionsPlayed \in Nat
+    /\ rejected \in BOOLEAN
     /\ actedIn \in Files \cup {NoFile}
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ cursor \in Files \cup {NoFile}
-    /\ named = NoFile
+    /\ cursorFile \in Files \cup {NoFile}
+    /\ namedFile = NoFile
     /\ edited = FALSE
-    /\ played = 0
-    /\ stopped = FALSE
+    /\ actionsPlayed = 0
+    /\ rejected = FALSE
     /\ actedIn = NoFile
 
 \* The action fails, and the batch stops at it.
-Reject ==
-    /\ stopped' = TRUE
+Stop ==
+    /\ rejected' = TRUE
     /\ actedIn' = NoFile
-    /\ UNCHANGED <<cursor, named, edited>>
+    /\ UNCHANGED <<cursorFile, namedFile, edited>>
 
-\* A `say`: it acts in no file.
+\* A `say` or `run`: it acts in no file.
 Say ==
     /\ actedIn' = NoFile
-    /\ UNCHANGED <<cursor, named, edited, stopped>>
+    /\ UNCHANGED <<cursorFile, namedFile, edited, rejected>>
 
-\* A `move`, `select` or `point` in the file it looks in, `looks`, with the
-\* batch's file now `n`; with no file to look in, no_cursor rejects it. Only
+\* A `move`, `select` or `point` in the file it looks in, `looksIn`, with the
+\* batch's file now `namedAfter`; with no file to look in, no_cursor rejects it.
+\* Only
 \* `move` and `select` move the cursor there.
-ActInFile(kind, n, looks) ==
-    IF looks = NoFile
-    THEN Reject
-    ELSE /\ cursor' = IF kind = "point" THEN cursor ELSE looks
-         /\ named' = n
-         /\ actedIn' = looks
-         /\ UNCHANGED <<edited, stopped>>
+ActInFile(kind, namedAfter, looksIn) ==
+    IF looksIn = NoFile
+    THEN Stop
+    ELSE /\ cursorFile' = IF kind = "point" THEN cursorFile ELSE looksIn
+         /\ namedFile' = namedAfter
+         /\ actedIn' = looksIn
+         /\ UNCHANGED <<edited, rejected>>
 
-\* A `type` or `delete` at the cursor, with the batch's file `n`: rejected
-\* with no cursor, and, with CursorInNamed, with the cursor outside the file
-\* the batch named.
-ActAtCursor(n) ==
-    IF cursor = NoFile \/ (CursorInNamed /\ n # NoFile /\ cursor # n)
-    THEN Reject
-    ELSE /\ named' = n
+\* A `type`, `type_fast`, or `delete` at the cursor, with the batch's file
+\* `namedAfter`:
+\* rejected with no cursor, and, with CursorInNamed, with the cursor outside
+\* the file the batch named.
+ActAtCursor(namedAfter) ==
+    IF cursorFile = NoFile \/ (CursorInNamed /\ namedAfter # NoFile
+                               /\ cursorFile # namedAfter)
+    THEN Stop
+    ELSE /\ namedFile' = namedAfter
          /\ edited' = TRUE
-         /\ actedIn' = cursor
-         /\ UNCHANGED <<cursor, stopped>>
+         /\ actedIn' = cursorFile
+         /\ UNCHANGED <<cursorFile, rejected>>
 
 \* One action of the batch, of kind `kind`, with `file`, or NoFile for none
 \* given. It is rejected when it names a second file, or names the batch's
-\* file after its first edit. `n` is the batch's file after it, and `looks` is
+\* file after its first edit. `namedAfter` is the batch's file after it, and
+\* `looksIn` is
 \* fileOf: the file given, else the named one (with FallBackToNamed), else
-\* the cursor's. CASE's OTHER arm is `type` and `delete`.
+\* the cursor's. CASE's OTHER arm is `type`, `type_fast`, and `delete`.
 Act(kind, file) ==
-    LET naming == kind \in Names /\ file # NoFile
-        n == IF naming THEN file ELSE named
-        looks == IF file # NoFile
+    LET naming == kind \in NamingKinds /\ file # NoFile
+        namedAfter == IF naming THEN file ELSE namedFile
+        looksIn == IF file # NoFile
                  THEN file
-                 ELSE IF FallBackToNamed /\ n # NoFile THEN n ELSE cursor
-    IN  /\ ~stopped
-        /\ played' = played + 1
-        /\ IF naming /\ named # NoFile /\ file # named
-           THEN Reject
-           ELSE IF naming /\ named = NoFile /\ edited
-                THEN Reject
-                ELSE CASE kind = "say" -> Say
-                       [] kind \in Names -> ActInFile(kind, n, looks)
-                       [] OTHER -> ActAtCursor(n)
+                 ELSE IF FallBackToNamed /\ namedAfter # NoFile
+                      THEN namedAfter ELSE cursorFile
+    IN  /\ ~rejected
+        /\ actionsPlayed' = actionsPlayed + 1
+        /\ IF naming /\ namedFile # NoFile /\ file # namedFile
+           THEN Stop
+           ELSE IF naming /\ namedFile = NoFile /\ edited
+                THEN Stop
+                ELSE CASE kind \in {"say", "run"} -> Say
+                       [] kind \in NamingKinds -> ActInFile(kind, namedAfter,
+                                                            looksIn)
+                       [] OTHER -> ActAtCursor(namedAfter)
 
 \* The batch ends (played through, or rejected) and the next starts, with the
 \* cursor where it is.
 EndBatch ==
-    /\ played > 0
-    /\ named' = NoFile
+    /\ actionsPlayed > 0
+    /\ namedFile' = NoFile
     /\ edited' = FALSE
-    /\ played' = 0
-    /\ stopped' = FALSE
+    /\ actionsPlayed' = 0
+    /\ rejected' = FALSE
     /\ actedIn' = NoFile
-    /\ UNCHANGED cursor
+    /\ UNCHANGED cursorFile
 
 Next ==
-    \/ \E k \in Kinds, f \in Files \cup {NoFile} : Act(k, f)
+    \/ \E k \in ActionKinds, f \in Files \cup {NoFile} : Act(k, f)
     \/ EndBatch
 
 Spec == Init /\ [][Next]_vars
@@ -138,19 +136,21 @@ Spec == Init /\ [][Next]_vars
 --------------------------------------------------------------------------------
 
 \* An action acts in the file its batch named, once it named one.
-ActsInNamedFile == (actedIn # NoFile /\ named # NoFile) => (actedIn = named)
+ActsInNamedFile == (actedIn # NoFile
+                    /\ namedFile # NoFile) => (actedIn = namedFile)
 
-\* A `type` or `delete` with the cursor in the batch's file, or in a batch
-\* that named none, edits there. Code that rejected every edit would fail
-\* it, so it says something must happen.
+\* A `type`, `type_fast`, or `delete` with the cursor in the batch's file, or
+\* in a batch that named none, edits there. Code that rejected every edit
+\* would fail it, so it says something must happen.
 EditAtCursorProp ==
-    [][\A k \in {"type", "delete"} :
-           (Act(k, NoFile) /\ cursor # NoFile /\ named \in {cursor, NoFile})
-               => (~stopped' /\ edited' /\ actedIn' = cursor)]_vars
+    [][\A k \in {"type", "type_fast", "delete"} :
+           (Act(k, NoFile) /\ cursorFile # NoFile /\ namedFile \in {cursorFile,
+                                                                    NoFile})
+               => (~rejected' /\ edited' /\ actedIn' = cursorFile)]_vars
 
 \* Batches run out of actions only so that the model is finite (6.8). It
 \* prunes exactly the states a guard `played < MaxActions` on Act never
 \* reached.
-Constraint == played <= MaxActions
+Constraint == actionsPlayed <= MaxActions
 
 ================================================================================

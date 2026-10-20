@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-10-19.
+Last updated: tla, 2026-10-20.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -161,7 +161,7 @@ Last updated: tla, 2026-10-19.
 | `specs/EditEvents.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/EditEvents.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/EditorAdapter.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/EditorAdapter.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/EditorAdapter.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/FileText.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FileText.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/FollowMode.cfg` | TLC config | - | - | - | - | - | - |
@@ -174,6 +174,7 @@ Last updated: tla, 2026-10-19.
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Outside.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |

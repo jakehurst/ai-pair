@@ -15,11 +15,11 @@ EXTENDS Naturals
 
 CONSTANTS
     NumLines,   \* how many lines the file has
-    Refine      \* TRUE: each run of changed lines is its own change
+    SplitRuns      \* TRUE: each run of changed lines is its own change
                 \* (diffLines within VS Code's change)
 
 ASSUME AssumeNumLines == NumLines \in Nat \ {0}
-ASSUME AssumeRefine == Refine \in BOOLEAN
+ASSUME AssumeRefine == SplitRuns \in BOOLEAN
 
 \* The file's lines.
 Lines == 1..NumLines
@@ -35,26 +35,26 @@ NewLine(l) == 1000 + l
 \* All of each.
 OldIds == {OldId(l) : l \in Lines}
 FreshIds == {FreshId(l) : l \in Lines}
-NewLines == {NewLine(l) : l \in Lines}
+Replacements == {NewLine(l) : l \in Lines}
 
 VARIABLES
     ghosts,  \* which line each line really is; a changed line is a new one
     ids,     \* the editor's LineIds for the lines
-    sel,     \* the line the agent's selection is on
-    orig,    \* the line it was on before the reload
+    selectionLine,     \* the line the agent's selection is on
+    selectionBefore,    \* the line it was on before the reload
     reloaded \* the disk change happened
 
-vars == <<ghosts, ids, sel, orig, reloaded>>
+vars == <<ghosts, ids, selectionLine, selectionBefore, reloaded>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold. A selection inside a change at the last
 \* line ends up after it, one past the last line.
 TypeOK ==
-    /\ ghosts \in [Lines -> Lines \cup NewLines]
+    /\ ghosts \in [Lines -> Lines \cup Replacements]
     /\ ids \in [Lines -> OldIds \cup FreshIds]
-    /\ sel \in 1..(NumLines + 1)
-    /\ orig \in Lines
+    /\ selectionLine \in 1..(NumLines + 1)
+    /\ selectionBefore \in Lines
     /\ reloaded \in BOOLEAN
 
 \* The changes recordEdit is given, as ranges of lines, when `changed` are the
@@ -85,22 +85,24 @@ After(l, cs) == (CHOOSE r \in cs : r.from <= l /\ l <= r.to).to + 1
 Init ==
     /\ ghosts = [l \in Lines |-> l]
     /\ ids = [l \in Lines |-> OldId(l)]
-    /\ sel \in Lines
-    /\ orig = sel
+    /\ selectionLine \in Lines
+    /\ selectionBefore = selectionLine
     /\ reloaded = FALSE
 
 \* The file changes on disk, `changed` being its changed lines, and VS Code
 \* reports the change, coarse or split into runs.
 Reload(changed) ==
-    LET cs == IF Refine THEN Runs(changed) ELSE Coarse(changed)
+    LET cs == IF SplitRuns THEN Runs(changed) ELSE Coarse(changed)
     IN  /\ ~reloaded
         /\ ghosts' =
            [l \in Lines |-> IF l \in changed THEN NewLine(l) ELSE ghosts[l]]
         /\ ids' =
            [l \in Lines |-> IF InChange(l, cs) THEN FreshId(l) ELSE ids[l]]
-        /\ sel' = IF InChange(sel, cs) THEN After(sel, cs) ELSE sel
+        /\ selectionLine' = IF InChange(selectionLine, cs)
+                        THEN After(selectionLine, cs)
+                        ELSE selectionLine
         /\ reloaded' = TRUE
-        /\ UNCHANGED orig
+        /\ UNCHANGED selectionBefore
 
 \* The run ends after its one reload, by design (6.13).
 Finished ==
@@ -116,7 +118,8 @@ Spec == Init /\ [][Next]_vars
 --------------------------------------------------------------------------------
 
 \* A selection on a line that didn't change stays on it.
-SelectionStays == (ghosts[orig] = orig) => (sel = orig)
+SelectionStays == (ghosts[selectionBefore] = selectionBefore)
+    => (selectionLine = selectionBefore)
 
 \* For precision: a line that didn't change keeps its identity, so its
 \* number is still known.

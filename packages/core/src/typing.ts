@@ -49,7 +49,7 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
     }
   }
 
-  // specs/Typing.tla, `Loop`.
+  // specs/Typing.tla, `Chunks`.
   for (let ch = chars[at]; ch !== undefined; ch = chars[at]) {
     at++;
     const wordStart = previous !== undefined && !WORD.test(previous) && WORD.test(ch);

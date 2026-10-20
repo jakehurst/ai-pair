@@ -209,7 +209,7 @@ export class Controller {
   private call: Call | undefined = undefined;
   /** After a `listen` that timed out empty, the status stays "listening" until this fires (specs/ListenGrace.tla). */
   private grace: ReturnType<typeof setTimeout> | undefined = undefined;
-  /** Armed while no call is open; when it fires, the status is "absent" (specs/ListenGrace.tla, `GoQuiet`, #149). */
+  /** Armed while no call is open; when it fires, the status is "absent" (specs/ListenGrace.tla, `GoAbsent`, #149). */
   private quiet: ReturnType<typeof setTimeout> | undefined = undefined;
   private absent = false;
   /** Tool calls that have arrived and not settled: the quiet starts when the last one does. */
@@ -361,7 +361,7 @@ export class Controller {
     this.trace?.('session revived after a reload, suspended');
     session.finished = [...saved.finished];
     session.events = [...saved.events];
-    // specs/Resume.tla, `Reload`: the replayed history may end with the session live (#138).
+    // specs/Resume.tla, `ReloadWindow`: the replayed history may end with the session live (#138).
     this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.render();
   }
@@ -498,7 +498,7 @@ export class Controller {
     const session = this.activeSession();
     if (!session) return;
     session.events.push(selection ? { kind: 'message', text, selection: this.excerpt(session, selection) } : { kind: 'message', text });
-    this.panel.post({ type: 'user', text, ref: selection && this.ref(selection) });
+    this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection) });
     this.interrupt(session);
     this.update();
   }
@@ -592,11 +592,11 @@ export class Controller {
 
   takeTurn(): void {
     const session = this.activeSession();
-    if (!session || session.scene.turn === 'user') return;
-    session.scene.turn = 'user';
+    if (!session || session.scene.turn === 'programmer') return;
+    session.scene.turn = 'programmer';
     session.scene.focus = 'cursor';
-    session.events.push({ kind: 'turn', to: 'user' });
-    this.panel.post({ type: 'turn', to: 'user' });
+    session.events.push({ kind: 'turn', to: 'programmer' });
+    this.panel.post({ type: 'turn', to: 'programmer' });
     // specs/Turns.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
     this.interrupt(session);
     this.update();
@@ -624,14 +624,14 @@ export class Controller {
     if (session.suspended) {
       // No agent is there to take a final report: it's over now (specs/Bridge.tla, `EndSuspended`).
       this.close(session);
-      this.panel.post({ type: 'session', active: false, reason: 'user' });
+      this.panel.post({ type: 'session', active: false, reason: 'programmer' });
       return;
     }
     // `EndSession` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
     session.ended = true;
     session.events.push({ kind: 'end' });
     this.interrupt(session);
-    this.panel.post({ type: 'session', active: false, reason: 'user' });
+    this.panel.post({ type: 'session', active: false, reason: 'programmer' });
     this.update();
   }
 
@@ -661,7 +661,7 @@ export class Controller {
   }
 
   /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
-  pause(reason: PauseReason = 'user'): void {
+  pause(reason: PauseReason = 'programmer'): void {
     if (!this.pauseReasons.has(reason)) this.trace?.(`pause ${reason}`);
     this.pauseReasons.add(reason);
     this.session?.timeline.pause();
@@ -870,7 +870,7 @@ export class Controller {
         ...opts,
         resolve,
         reject,
-        // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `TimeOut`.
+        // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `Timeout`.
         timer: setTimeout(() => {
           this.finishCall(call, /* timedOut= */ true);
         }, this.config.maxBlockMs),
@@ -925,7 +925,7 @@ export class Controller {
     if (call.kind === 'listen' && report.waiting && empty) this.startGrace();
     this.render();
     this.trace?.(`report to ${call.kind}: ${describeReport(report)}`);
-    // specs/Serialize.tla, `Resolve`: the report is handed back after the commit.
+    // specs/Serialize.tla, `HandBack`: the report is handed back after the commit.
     // `Answer` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
     void this.withCursor(session, report).then(call.resolve, () => {
       call.resolve(report);
@@ -1002,7 +1002,7 @@ export class Controller {
   private snapshot(session: Session, waiting: boolean, submitted?: Batch): Report {
     const batches = session.finished.toSorted((a, b) => a.id - b.id);
     // The agent planned against where these would have ended; the cursor is where they stopped (#112,
-    // specs/Anchor.tla, `Discard`; a batch that completed is `Complete`).
+    // specs/Anchor.tla, `StopShort`; a batch that completed is `Complete`).
     if (batches.some((b) => b.status !== 'completed')) session.anchorNeeded = true;
     const events: Event[] = [];
     for (const e of session.events) {
@@ -1130,7 +1130,7 @@ export class Controller {
     }
   }
 
-  /** Starts the next batch, with the timeline reset: specs/Turns.tla, `Begin`. */
+  /** Starts the next batch, with the timeline reset: specs/Turns.tla, `StartHead`. */
   private startHead(session: Session): void {
     const head = session.queue[0];
     if (head?.state !== 'queued') return;
@@ -1168,7 +1168,7 @@ export class Controller {
 
   private state(): AgentState {
     const session = this.session;
-    if (!session || session.scene.turn === 'user') return 'navigator';
+    if (!session || session.scene.turn === 'programmer') return 'navigator';
     if (this.pauseReasons.size > 0) return 'paused';
     if (session.queue.length > 0) return session.player.reading ? 'read' : session.player.commandRunning ? 'running' : 'typing';
     // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace, then "absent" once quiet.

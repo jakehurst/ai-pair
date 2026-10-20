@@ -467,7 +467,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   await assert.rejects(controller.read('folder'));
   // The turn's toggle, as the command and the panel's button give it (specs/Turns.tla, `ChangeTurn`).
   await vscode.commands.executeCommand('aiPair.toggleTurn');
-  assert.equal(controller.turn, 'user');
+  assert.equal(controller.turn, 'programmer');
   controller.takeTurn();
   await controller.listen();
   await vscode.commands.executeCommand('aiPair.toggleTurn');
@@ -479,12 +479,12 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
 
   // Pauses: a report while paused says why; one reason of two resumed leaves it paused; a point the programmer
   // looked away from stops being what the view follows (specs/PointFocus.tla).
-  controller.pause('user');
+  controller.pause('programmer');
   controller.pause('away');
   controller.userInterrupt();
   const paused = await controller.listen();
-  assert.deepEqual(paused.paused?.toSorted(), ['away', 'user']);
-  controller.resume('user');
+  assert.deepEqual(paused.paused?.toSorted(), ['away', 'programmer']);
+  controller.resume('programmer');
   assert.equal(controller.isPaused, true);
   controller.resume();
   await controller.read('paths.txt');

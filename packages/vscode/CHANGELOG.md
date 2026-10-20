@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+-   The programmer is `programmer` on the wire, never `user`: the turn
+    (`turn`, and the `turn` event's `to`) and the Pause button's pause reason,
+    in reports, the panel's messages, and `PROTOCOL.md`, as the edit event's
+    `by` already said (#197).
+-   The TLA+ specs mean one thing by each word across modules, with the shared
+    vocabulary in `specs/PairDefs.tla`; `specs/CHANGES.md` lists every rename
+    (#197).
+
 ## 0.7.9
 
 -   The TLA+ specs, their README and COVERAGE tables, and the spec comments in

@@ -40,7 +40,7 @@ export class OutsideChanges {
     }, timings.groupMs);
   }
 
-  /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `Open`). */
+  /** Records that the programmer opened the file, or its diff, and saw `text`: the mark clears (specs/Outside.tla, `OpenDocument`). */
   seen(file: string, text: string): void {
     this.known.set(file, text);
     if (this.marked.delete(file)) this.redraw([file]);

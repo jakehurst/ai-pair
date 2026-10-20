@@ -23,7 +23,8 @@ CONSTANTS
                      \* turn)
     NumQuietEdits,   \* how many edits the programmer makes in their turn,
                      \* which interrupt nothing
-    RestoreRejected, \* TRUE: restore() puts back a report's `rejected` too
+    RestoreRejected, \* TRUE: restore() puts back a report's `reportRejection`
+                     \* too
     WaitForReturn,   \* TRUE: the relay sends a call only once every canceled
                      \* call has settled
     RestoreEnded,    \* TRUE: restore() works on a session the programmer ended
@@ -44,16 +45,16 @@ ASSUME AssumeMaxCancels == MaxCancels \in Nat
 ASSUME AssumeMarkHeld == MarkHeld \in BOOLEAN
 ASSUME AssumeDrainHeld == DrainHeld \in BOOLEAN
 
-Batches == 1..NumBatches
+BatchIds == 1..NumBatches
 
-Events == 1..NumEvents
+EventIds == 1..NumEvents
 
 QuietEdits == 1..NumQuietEdits
 
 \* No batch: a call that submitted none, a report that carries no rejection.
 \* Any value that is not a batch will do, so the config makes it a model value
 \* (6.20).
-NoBatch == CHOOSE v : v \notin Batches
+NoBatch == CHOOSE v : v \notin BatchIds
 
 \* A batch's states. "answered": in the last report the agent took, which a
 \* cancel arriving after it hands back.
@@ -72,14 +73,14 @@ VARIABLES
     endState,        \* the programmer ending the session: an event's state
     batchDeliveries, \* how many times each batch has reached the agent
     eventDeliveries, \* how many times each event has reached the agent
-    call,            \* the agent's call: "idle", "rehearsing", "blocked", or
-                     \* "answering"
+    phase,           \* the agent's call: "idle", "rehearsing", "blocked", or
+                     \* "committed"
     callBatch,       \* the batch the current step submitted, or NoBatch
     canceled,        \* whether the agent canceled the current call
     cancels,         \* how many calls the agent has canceled
-    rejected,        \* the batch whose rejection the answering report
+    reportRejection,        \* the batch whose rejection the committed report
                      \* carries, or NoBatch
-    returned,        \* the batch whose rejection the returning report
+    returningRejection,        \* the batch whose rejection the returning report
                      \* carries, or NoBatch
     stale,           \* s.stale: an unreported interruption; new batches are
                      \* discarded
@@ -90,18 +91,20 @@ VARIABLES
     knownBatches,    \* each batch: the batches the agent had been told about
                      \* when it submitted it
     knownEvents,     \* each batch: the events the agent had been told about
-    knownQuiet,      \* each batch: the programmer's quiet edits the agent had
+    knownQuietEdits,      \* each batch: the programmer's quiet edits the agent
+                          \* had
                      \* been told about
     ended,           \* the programmer ended the session (s.ended)
     closed,          \* close(): this.session is null; the agent's calls fail
                      \* with no_session
-    quietState,      \* each edit the programmer makes in their turn: an
+    quietEditState,      \* each edit the programmer makes in their turn: an
                      \* event's state
-    quietDeliveries, \* how many times each quiet edit has reached the agent
-    turn,            \* s.scene.turn: "agent" or "user"
-    lastRejected,    \* the batch whose rejection the last report the agent
+    quietEditDeliveries, \* how many times each quiet edit has reached the agent
+    turn,            \* s.scene.turn: "agent" or "programmer"
+    lastRejection,    \* the batch whose rejection the last report the agent
                      \* took carried, or NoBatch
-    repeat,          \* the returning report was handed back after the agent
+    returnedAfterTaken,          \* the returning report was handed back after
+                                 \* the agent
                      \* took it (#67)
     mayRepeat,       \* s.mayRepeat: the next report is marked as one that may
                      \* repeat an earlier one
@@ -109,46 +112,48 @@ VARIABLES
                      \* marked as a repeat
 
 vars ==
-    <<batchState, eventState, endState, batchDeliveries, eventDeliveries, call,
-      callBatch, canceled, cancels, rejected, returned, stale, held, completed,
-      knownBatches, knownEvents, knownQuiet, ended, closed, quietState,
-      quietDeliveries, turn, lastRejected, repeat, mayRepeat, unmarkedRepeat>>
+    <<batchState, eventState, endState, batchDeliveries, eventDeliveries, phase,
+      callBatch, canceled, cancels, reportRejection, returningRejection, stale,
+      held, completed, knownBatches, knownEvents, knownQuietEdits, ended,
+      closed, quietEditState, quietEditDeliveries, turn, lastRejection,
+      returnedAfterTaken, mayRepeat, unmarkedRepeat>>
 
 \* What the agent was told when it submitted each batch.
-toldVars == <<completed, knownBatches, knownEvents, knownQuiet>>
+toldVars == <<completed, knownBatches, knownEvents, knownQuietEdits>>
 
 \* What most actions leave alone.
 keptVars ==
-    <<quietDeliveries, turn, lastRejected, repeat, mayRepeat, unmarkedRepeat>>
+    <<quietEditDeliveries, turn, lastRejection, returnedAfterTaken, mayRepeat,
+      unmarkedRepeat>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
-    /\ batchState \in [Batches -> BatchStates]
-    /\ eventState \in [Events -> EventStates]
+    /\ batchState \in [BatchIds -> BatchStates]
+    /\ eventState \in [EventIds -> EventStates]
     /\ endState \in EventStates
-    /\ batchDeliveries \in [Batches -> Nat]
-    /\ eventDeliveries \in [Events -> Nat]
-    /\ call \in {"idle", "rehearsing", "blocked", "answering"}
-    /\ callBatch \in Batches \cup {NoBatch}
+    /\ batchDeliveries \in [BatchIds -> Nat]
+    /\ eventDeliveries \in [EventIds -> Nat]
+    /\ phase \in {"idle", "rehearsing", "blocked", "committed"}
+    /\ callBatch \in BatchIds \cup {NoBatch}
     /\ canceled \in BOOLEAN
     /\ cancels \in Nat
-    /\ rejected \in Batches \cup {NoBatch}
-    /\ returned \in Batches \cup {NoBatch}
+    /\ reportRejection \in BatchIds \cup {NoBatch}
+    /\ returningRejection \in BatchIds \cup {NoBatch}
     /\ stale \in BOOLEAN
-    /\ held \subseteq [batch : Batches, repeat : BOOLEAN]
-    /\ completed \in [Batches -> BOOLEAN]
-    /\ knownBatches \in [Batches -> SUBSET Batches]
-    /\ knownEvents \in [Batches -> SUBSET Events]
-    /\ knownQuiet \in [Batches -> SUBSET QuietEdits]
+    /\ held \subseteq [batch : BatchIds, returnedAfterTaken : BOOLEAN]
+    /\ completed \in [BatchIds -> BOOLEAN]
+    /\ knownBatches \in [BatchIds -> SUBSET BatchIds]
+    /\ knownEvents \in [BatchIds -> SUBSET EventIds]
+    /\ knownQuietEdits \in [BatchIds -> SUBSET QuietEdits]
     /\ ended \in BOOLEAN
     /\ closed \in BOOLEAN
-    /\ quietState \in [QuietEdits -> EventStates]
-    /\ quietDeliveries \in [QuietEdits -> Nat]
-    /\ turn \in {"agent", "user"}
-    /\ lastRejected \in Batches \cup {NoBatch}
-    /\ repeat \in BOOLEAN
+    /\ quietEditState \in [QuietEdits -> EventStates]
+    /\ quietEditDeliveries \in [QuietEdits -> Nat]
+    /\ turn \in {"agent", "programmer"}
+    /\ lastRejection \in BatchIds \cup {NoBatch}
+    /\ returnedAfterTaken \in BOOLEAN
     /\ mayRepeat \in BOOLEAN
     /\ unmarkedRepeat \in BOOLEAN
 
@@ -182,159 +187,163 @@ Counted(count, state) ==
         IF state[x] = "inReport" THEN count[x] + 1 ELSE count[x]]
 
 \* The item reached the agent, in the last report or one before it.
-Got(x) == x \in {"answered", "delivered"}
+HasReached(x) == x \in {"answered", "delivered"}
 
 \* A canceled call's report is on its way back.
 Returning ==
-    \/ \E b \in Batches : batchState[b] = "returning"
-    \/ \E e \in Events : eventState[e] = "returning"
+    \/ \E b \in BatchIds : batchState[b] = "returning"
+    \/ \E e \in EventIds : eventState[e] = "returning"
     \/ endState = "returning"
-    \/ \E q \in QuietEdits : quietState[q] = "returning"
+    \/ \E q \in QuietEdits : quietEditState[q] = "returning"
 
 \* The relay holds the agent's call while a canceled call's report is on its
 \* way back.
 Sendable == ~WaitForReturn \/ ~Returning
 
 \* The report carries something the agent already had.
-Again ==
-    \/ \E b \in Batches : batchState[b] = "inReport" /\ batchDeliveries[b] > 0
-    \/ \E e \in Events : eventState[e] = "inReport" /\ eventDeliveries[e] > 0
+CarriesRepeat ==
+    \/ \E b \in BatchIds : batchState[b] = "inReport" /\ batchDeliveries[b] > 0
+    \/ \E e \in EventIds : eventState[e] = "inReport" /\ eventDeliveries[e] > 0
     \/ \E q \in QuietEdits :
-           quietState[q] = "inReport" /\ quietDeliveries[q] > 0
+           quietEditState[q] = "inReport" /\ quietEditDeliveries[q] > 0
 
 \* The rejections a report can hand out: any one held, or none.
 HeldOrNone ==
     IF held = {}
-    THEN {[batch |-> NoBatch, repeat |-> FALSE]}
+    THEN {[batch |-> NoBatch, returnedAfterTaken |-> FALSE]}
     ELSE held
 
 \* What the agent has to plan around in the returning report: an event, a
 \* batch that didn't complete, a rejection.
 ReturningNews ==
-    \/ returned # NoBatch
+    \/ returningRejection # NoBatch
     \/ endState = "returning"
-    \/ \E e \in Events : eventState[e] = "returning"
-    \/ \E b \in Batches : batchState[b] = "returning" /\ ~completed[b]
-    \/ \E q \in QuietEdits : quietState[q] = "returning"
+    \/ \E e \in EventIds : eventState[e] = "returning"
+    \/ \E b \in BatchIds : batchState[b] = "returning" /\ ~completed[b]
+    \/ \E q \in QuietEdits : quietEditState[q] = "returning"
 
 \* What restore() puts back for batch b of the returning report: its result
 \* to report again, or its rejection, held with RestoreRejected and lost
 \* without it.
 Restored(b) ==
-    IF b # returned
+    IF b # returningRejection
     THEN "unreported"
     ELSE IF RestoreRejected THEN "held" ELSE "lost"
 
 --------------------------------------------------------------------------------
 
 Init ==
-    /\ batchState = [b \in Batches |-> "new"]
-    /\ eventState = [e \in Events |-> "new"]
+    /\ batchState = [b \in BatchIds |-> "new"]
+    /\ eventState = [e \in EventIds |-> "new"]
     /\ endState = "new"
-    /\ batchDeliveries = [b \in Batches |-> 0]
-    /\ eventDeliveries = [e \in Events |-> 0]
-    /\ call = "idle"
+    /\ batchDeliveries = [b \in BatchIds |-> 0]
+    /\ eventDeliveries = [e \in EventIds |-> 0]
+    /\ phase = "idle"
     /\ callBatch = NoBatch
     /\ canceled = FALSE
     /\ cancels = 0
-    /\ rejected = NoBatch
-    /\ returned = NoBatch
+    /\ reportRejection = NoBatch
+    /\ returningRejection = NoBatch
     /\ stale = FALSE
     /\ held = {}
-    /\ completed = [b \in Batches |-> FALSE]
-    /\ knownBatches = [b \in Batches |-> {}]
-    /\ knownEvents = [b \in Batches |-> {}]
-    /\ knownQuiet = [b \in Batches |-> {}]
+    /\ completed = [b \in BatchIds |-> FALSE]
+    /\ knownBatches = [b \in BatchIds |-> {}]
+    /\ knownEvents = [b \in BatchIds |-> {}]
+    /\ knownQuietEdits = [b \in BatchIds |-> {}]
     /\ ended = FALSE
     /\ closed = FALSE
-    /\ quietState = [q \in QuietEdits |-> "new"]
-    /\ quietDeliveries = [q \in QuietEdits |-> 0]
+    /\ quietEditState = [q \in QuietEdits |-> "new"]
+    /\ quietEditDeliveries = [q \in QuietEdits |-> 0]
     /\ turn = "agent"
-    /\ lastRejected = NoBatch
-    /\ repeat = FALSE
+    /\ lastRejection = NoBatch
+    /\ returnedAfterTaken = FALSE
     /\ mayRepeat = FALSE
     /\ unmarkedRepeat = FALSE
 
 \* `step` with a batch, the next one, in the agent's turn: it is rehearsed,
 \* knowing what has reached the agent.
 Submit(b) ==
-    /\ call = "idle"
+    /\ phase = "idle"
     /\ turn = "agent"
     /\ ~closed
     /\ Sendable
     /\ batchState[b] = "new"
     /\ \A c \in 1..(b - 1) : batchState[c] # "new"
     /\ batchState' = [batchState EXCEPT ![b] = "rehearsing"]
-    /\ call' = "rehearsing"
+    /\ phase' = "rehearsing"
     /\ callBatch' = b
     /\ canceled' = FALSE
     /\ knownBatches' = [knownBatches EXCEPT ![b] = Reached(batchDeliveries)]
     /\ knownEvents' = [knownEvents EXCEPT ![b] = Reached(eventDeliveries)]
-    /\ knownQuiet' = [knownQuiet EXCEPT ![b] = Reached(quietDeliveries)]
+    /\ knownQuietEdits' =
+           [knownQuietEdits EXCEPT ![b] = Reached(quietEditDeliveries)]
     /\ UNCHANGED <<eventState, endState, batchDeliveries, eventDeliveries,
-                   cancels, rejected, returned, stale, held, completed, ended,
-                   closed, quietState, keptVars>>
+                   cancels, reportRejection, returningRejection, stale, held,
+                   completed, ended, closed, quietEditState, keptVars>>
 
 \* `listen`: the call blocks until there is something to report.
 Listen ==
-    /\ call = "idle"
+    /\ phase = "idle"
     /\ ~closed
     /\ Sendable
-    /\ call' = "blocked"
+    /\ phase' = "blocked"
     /\ callBatch' = NoBatch
     /\ canceled' = FALSE
     /\ UNCHANGED <<batchState, eventState, endState, batchDeliveries,
-                   eventDeliveries, cancels, rejected, returned, stale, held,
-                   toldVars, ended, closed, quietState, keptVars>>
+                   eventDeliveries, cancels, reportRejection,
+                   returningRejection, stale, held, toldVars, ended, closed,
+                   quietEditState, keptVars>>
 
 \* rejectBatch(): the rehearsal fails, and the call answers at once with the
 \* rejection and everything unreported.
 FailRehearsal ==
-    /\ call = "rehearsing"
+    /\ phase = "rehearsing"
     /\ ~stale
     /\ ~ended
     /\ batchState' =
            [Moved(batchState, "unreported", "inReport") EXCEPT
                ![callBatch] = "inReport"]
     /\ eventState' = Moved(eventState, "unreported", "inReport")
-    /\ call' = "answering"
-    /\ rejected' = callBatch
-    /\ quietState' = Moved(quietState, "unreported", "inReport")
+    /\ phase' = "committed"
+    /\ reportRejection' = callBatch
+    /\ quietEditState' = Moved(quietEditState, "unreported", "inReport")
     /\ UNCHANGED <<endState, batchDeliveries, eventDeliveries, callBatch,
-                   canceled, cancels, returned, stale, held, toldVars, ended,
-                   closed, keptVars>>
+                   canceled, cancels, returningRejection, stale, held, toldVars,
+                   ended, closed, keptVars>>
 
 \* The rehearsal passes: the batch is queued, or discarded when `stale` or
 \* ended, then block(); a call canceled meanwhile does not block.
 PassRehearsal ==
-    /\ call = "rehearsing"
+    /\ phase = "rehearsing"
     /\ batchState' =
            [batchState EXCEPT
                ![callBatch] = IF stale \/ ended THEN "unreported" ELSE "queued"]
-    /\ call' = IF canceled THEN "idle" ELSE "blocked"
+    /\ phase' = IF canceled THEN "idle" ELSE "blocked"
     /\ UNCHANGED <<eventState, endState, batchDeliveries, eventDeliveries,
-                   callBatch, canceled, cancels, rejected, returned, stale,
-                   held, toldVars, ended, closed, quietState, keptVars>>
+                   callBatch, canceled, cancels, reportRejection,
+                   returningRejection, stale, held, toldVars, ended, closed,
+                   quietEditState, keptVars>>
 
 \* run(): the first batch queued starts playing, once none plays.
 Play(b) ==
     /\ batchState[b] = "queued"
-    /\ \A c \in Batches : batchState[c] # "playing"
+    /\ \A c \in BatchIds : batchState[c] # "playing"
     /\ \A c \in 1..(b - 1) : batchState[c] # "queued"
     /\ batchState' = [batchState EXCEPT ![b] = "playing"]
     /\ UNCHANGED <<eventState, endState, batchDeliveries, eventDeliveries,
-                   call, callBatch, canceled, cancels, rejected, returned,
-                   stale, held, toldVars, ended, closed, quietState, keptVars>>
+                   phase, callBatch, canceled, cancels, reportRejection,
+                   returningRejection, stale, held, toldVars, ended, closed,
+                   quietEditState, keptVars>>
 
 \* run(): the playing batch plays to the end, to be reported.
-Finish(b) ==
+Complete(b) ==
     /\ batchState[b] = "playing"
     /\ batchState' = [batchState EXCEPT ![b] = "unreported"]
     /\ completed' = [completed EXCEPT ![b] = TRUE]
     /\ UNCHANGED <<eventState, endState, batchDeliveries, eventDeliveries,
-                   call, callBatch, canceled, cancels, rejected, returned,
-                   stale, held, knownBatches, knownEvents, knownQuiet, ended,
-                   closed, quietState, keptVars>>
+                   phase, callBatch, canceled, cancels, reportRejection,
+                   returningRejection, stale, held, knownBatches, knownEvents,
+                   knownQuietEdits, ended, closed, quietEditState, keptVars>>
 
 \* An interrupting event: a message, an interrupt, an edit in the agent's
 \* turn, or a turn change, which may leave the turn either way. Once the
@@ -345,147 +354,153 @@ Interrupt(e) ==
     /\ batchState' = Interrupted(batchState)
     /\ eventState' = [eventState EXCEPT ![e] = "unreported"]
     /\ stale' = TRUE
-    /\ turn' \in {"agent", "user"}
-    /\ UNCHANGED <<endState, batchDeliveries, eventDeliveries, call, callBatch,
-                   canceled, cancels, rejected, returned, held, toldVars,
-                   ended, closed, quietState, quietDeliveries, lastRejected,
-                   repeat, mayRepeat, unmarkedRepeat>>
+    /\ turn' \in {"agent", "programmer"}
+    /\ UNCHANGED <<endState, batchDeliveries, eventDeliveries, phase, callBatch,
+                   canceled, cancels, reportRejection, returningRejection, held,
+                   toldVars, ended, closed, quietEditState, quietEditDeliveries,
+                   lastRejection, returnedAfterTaken, mayRepeat,
+                   unmarkedRepeat>>
 
 \* The programmer edits during their turn: userEdit records it, and
 \* interrupts nothing.
 EditQuietly(q) ==
     /\ ~ended
-    /\ turn = "user"
-    /\ quietState[q] = "new"
-    /\ quietState' = [quietState EXCEPT ![q] = "unreported"]
+    /\ turn = "programmer"
+    /\ quietEditState[q] = "new"
+    /\ quietEditState' = [quietEditState EXCEPT ![q] = "unreported"]
     /\ UNCHANGED <<batchState, eventState, endState, batchDeliveries,
-                   eventDeliveries, call, callBatch, canceled, cancels,
-                   rejected, returned, stale, held, toldVars, ended, closed,
-                   keptVars>>
+                   eventDeliveries, phase, callBatch, canceled, cancels,
+                   reportRejection, returningRejection, stale, held, toldVars,
+                   ended, closed, keptVars>>
 
 \* endSession(): s.ended, the `end` event, interrupt().
-EndSession ==
+EndByProgrammer ==
     /\ ~ended
     /\ batchState' = Interrupted(batchState)
     /\ endState' = "unreported"
     /\ stale' = TRUE
     /\ ended' = TRUE
-    /\ UNCHANGED <<eventState, batchDeliveries, eventDeliveries, call,
-                   callBatch, canceled, cancels, rejected, returned, held,
-                   toldVars, closed, quietState, keptVars>>
+    /\ UNCHANGED <<eventState, batchDeliveries, eventDeliveries, phase,
+                   callBatch, canceled, cancels, reportRejection,
+                   returningRejection, held, toldVars, closed, quietEditState,
+                   keptVars>>
 
 \* finishCall -> snapshot: the report takes everything unreported and one held
 \* rejection, if any. With the session ended, close() too, once no rejection
 \* is held (DrainHeld).
 Commit ==
-    /\ call = "blocked"
+    /\ phase = "blocked"
     /\ \E h \in HeldOrNone :
            /\ batchState' =
-                  [b \in Batches |->
+                  [b \in BatchIds |->
                       IF batchState[b] = "unreported" \/ b = h.batch
                       THEN "inReport"
                       ELSE batchState[b]]
            /\ eventState' = Moved(eventState, "unreported", "inReport")
            /\ endState' = MovedOne(endState, "unreported", "inReport")
-           /\ call' = "answering"
-           /\ rejected' = h.batch
+           /\ phase' = "committed"
+           /\ reportRejection' = h.batch
            /\ stale' = ((held \ {h}) # {})
            /\ held' = held \ {h}
            /\ closed' =
                   (closed \/ (ended /\ (~DrainHeld \/ (held \ {h}) = {})))
-           /\ quietState' = Moved(quietState, "unreported", "inReport")
-           /\ mayRepeat' = (mayRepeat \/ (MarkHeld /\ h.repeat))
-           /\ UNCHANGED <<batchDeliveries, eventDeliveries, callBatch,
-                          canceled, cancels, returned, toldVars, ended,
-                          quietDeliveries, turn, lastRejected, repeat,
-                          unmarkedRepeat>>
+           /\ quietEditState' = Moved(quietEditState, "unreported", "inReport")
+           /\ mayRepeat' = (mayRepeat \/ (MarkHeld /\ h.returnedAfterTaken))
+           /\ UNCHANGED <<batchDeliveries, eventDeliveries, callBatch, canceled,
+                          cancels, returningRejection, toldVars, ended,
+                          quietEditDeliveries, turn, lastRejection,
+                          returnedAfterTaken, unmarkedRepeat>>
 
 \* The agent cancels its call: a blocked one at once, else once it answers.
 Cancel ==
-    /\ call \in {"rehearsing", "blocked", "answering"}
+    /\ phase \in {"rehearsing", "blocked", "committed"}
     /\ ~canceled
-    /\ call' = IF call = "blocked" THEN "idle" ELSE call
+    /\ phase' = IF phase = "blocked" THEN "idle" ELSE phase
     /\ canceled' = TRUE
     /\ cancels' = cancels + 1
     /\ UNCHANGED <<batchState, eventState, endState, batchDeliveries,
-                   eventDeliveries, callBatch, rejected, returned, stale, held,
-                   toldVars, ended, closed, quietState, keptVars>>
+                   eventDeliveries, callBatch, reportRejection,
+                   returningRejection, stale, held, toldVars, ended, closed,
+                   quietEditState, keptVars>>
 
 \* The report reaches the agent.
-Answer ==
-    /\ call = "answering"
+Deliver ==
+    /\ phase = "committed"
     /\ ~canceled
     /\ batchState' = Took(batchState)
     /\ eventState' = Took(eventState)
     /\ endState' = TookOne(endState)
     /\ batchDeliveries' = Counted(batchDeliveries, batchState)
     /\ eventDeliveries' = Counted(eventDeliveries, eventState)
-    /\ call' = "idle"
-    /\ rejected' = NoBatch
-    /\ quietState' = Took(quietState)
-    /\ quietDeliveries' = Counted(quietDeliveries, quietState)
-    /\ lastRejected' = rejected
+    /\ phase' = "idle"
+    /\ reportRejection' = NoBatch
+    /\ quietEditState' = Took(quietEditState)
+    /\ quietEditDeliveries' = Counted(quietEditDeliveries, quietEditState)
+    /\ lastRejection' = reportRejection
     /\ mayRepeat' = FALSE
-    /\ unmarkedRepeat' = (unmarkedRepeat \/ (~mayRepeat /\ Again))
-    /\ UNCHANGED <<callBatch, canceled, cancels, returned, stale, held,
-                   toldVars, ended, closed, turn, repeat>>
+    /\ unmarkedRepeat' = (unmarkedRepeat \/ (~mayRepeat /\ CarriesRepeat))
+    /\ UNCHANGED <<callBatch, canceled, cancels, returningRejection, stale,
+                   held, toldVars, ended, closed, turn, returnedAfterTaken>>
 
 \* The relay's `return`: the canceled call's report goes back to the editor,
-\* one at a time.
+\* one at a time: Wire's `Reply` sends it, for a call its `Abort` marked, and
+\* Bridge's `Restore` passes it on from the owner's socket.
 Bounce ==
-    /\ call = "answering"
+    /\ phase = "committed"
     /\ canceled
-    /\ returned = NoBatch
+    /\ returningRejection = NoBatch
     /\ ~Returning
     /\ batchState' = Moved(batchState, "inReport", "returning")
     /\ eventState' = Moved(eventState, "inReport", "returning")
     /\ endState' = MovedOne(endState, "inReport", "returning")
-    /\ call' = "idle"
-    /\ rejected' = NoBatch
-    /\ returned' = rejected
-    /\ quietState' = Moved(quietState, "inReport", "returning")
-    /\ repeat' = FALSE
+    /\ phase' = "idle"
+    /\ reportRejection' = NoBatch
+    /\ returningRejection' = reportRejection
+    /\ quietEditState' = Moved(quietEditState, "inReport", "returning")
+    /\ returnedAfterTaken' = FALSE
     /\ UNCHANGED <<batchDeliveries, eventDeliveries, callBatch, canceled,
                    cancels, stale, held, toldVars, ended, closed,
-                   quietDeliveries, turn, lastRejected, mayRepeat,
+                   quietEditDeliveries, turn, lastRejection, mayRepeat,
                    unmarkedRepeat>>
 
 \* The agent's cancel comes after it took the answer: its SDK still sends it,
 \* and the relay hands the report back, as one the agent may have seen
-\* (`mayRepeat`, #67).
+\* (`mayRepeat`, #67): Wire's `Abort` with HandBackAnswered.
 BounceLate ==
-    /\ call = "idle"
+    /\ phase = "idle"
     /\ ~Returning
-    /\ returned = NoBatch
-    /\ \/ \E b \in Batches : batchState[b] = "answered"
-       \/ \E e \in Events : eventState[e] = "answered"
+    /\ returningRejection = NoBatch
+    /\ \/ \E b \in BatchIds : batchState[b] = "answered"
+       \/ \E e \in EventIds : eventState[e] = "answered"
        \/ endState = "answered"
-       \/ \E q \in QuietEdits : quietState[q] = "answered"
+       \/ \E q \in QuietEdits : quietEditState[q] = "answered"
     /\ batchState' = Moved(batchState, "answered", "returning")
     /\ eventState' = Moved(eventState, "answered", "returning")
     /\ endState' = MovedOne(endState, "answered", "returning")
     /\ cancels' = cancels + 1
-    /\ returned' = lastRejected
-    /\ quietState' = Moved(quietState, "answered", "returning")
-    /\ lastRejected' = NoBatch
-    /\ repeat' = TRUE
-    /\ UNCHANGED <<batchDeliveries, eventDeliveries, call, callBatch,
-                   canceled, rejected, stale, held, toldVars, ended, closed,
-                   quietDeliveries, turn, mayRepeat, unmarkedRepeat>>
+    /\ returningRejection' = lastRejection
+    /\ quietEditState' = Moved(quietEditState, "answered", "returning")
+    /\ lastRejection' = NoBatch
+    /\ returnedAfterTaken' = TRUE
+    /\ UNCHANGED <<batchDeliveries, eventDeliveries, phase, callBatch, canceled,
+                   reportRejection, stale, held, toldVars, ended, closed,
+                   quietEditDeliveries, turn, mayRepeat, unmarkedRepeat>>
 
 \* restore(): dropped once the session is ended (activeSession() is null),
 \* unless RestoreEnded, which puts a closed session back so the next call takes
 \* the report. What the agent has to plan around makes the session stale.
+\* Bridge's `Restore` is the same `return`, for a session its last report
+\* closed.
 Restore ==
     /\ Returning
     /\ IF ended /\ ~RestoreEnded
        THEN /\ batchState' = Moved(batchState, "returning", "lost")
             /\ eventState' = Moved(eventState, "returning", "lost")
             /\ endState' = MovedOne(endState, "returning", "lost")
-            /\ quietState' = Moved(quietState, "returning", "lost")
+            /\ quietEditState' = Moved(quietEditState, "returning", "lost")
             /\ UNCHANGED <<stale, held, closed, mayRepeat>>
        ELSE /\ batchState' =
-                   [b \in Batches |->
+                   [b \in BatchIds |->
                        IF batchState[b] = "returning"
                        THEN Restored(b)
                        ELSE batchState[b]]
@@ -493,31 +508,33 @@ Restore ==
             /\ endState' = MovedOne(endState, "returning", "unreported")
             /\ stale' = (stale \/ ReturningNews)
             /\ held' =
-                   IF RestoreRejected /\ returned # NoBatch
-                   THEN held \cup {[batch |-> returned, repeat |-> repeat]}
+                   IF RestoreRejected /\ returningRejection # NoBatch
+                   THEN held \cup {[batch |-> returningRejection,
+                                    returnedAfterTaken |-> returnedAfterTaken]}
                    ELSE held
             /\ closed' = FALSE
-            /\ quietState' = Moved(quietState, "returning", "unreported")
-            /\ mayRepeat' = (mayRepeat \/ repeat)
-    /\ returned' = NoBatch
-    /\ repeat' = FALSE
-    /\ UNCHANGED <<batchDeliveries, eventDeliveries, call, callBatch, canceled,
-                   cancels, rejected, toldVars, ended, quietDeliveries, turn,
-                   lastRejected, unmarkedRepeat>>
+            /\ quietEditState' = Moved(quietEditState, "returning",
+                                       "unreported")
+            /\ mayRepeat' = (mayRepeat \/ returnedAfterTaken)
+    /\ returningRejection' = NoBatch
+    /\ returnedAfterTaken' = FALSE
+    /\ UNCHANGED <<batchDeliveries, eventDeliveries, phase, callBatch, canceled,
+                   cancels, reportRejection, toldVars, ended,
+                   quietEditDeliveries, turn, lastRejection, unmarkedRepeat>>
 
 Next ==
-    \/ \E b \in Batches : Submit(b)
+    \/ \E b \in BatchIds : Submit(b)
     \/ Listen
     \/ FailRehearsal
     \/ PassRehearsal
-    \/ \E b \in Batches : Play(b)
-    \/ \E b \in Batches : Finish(b)
-    \/ \E e \in Events : Interrupt(e)
+    \/ \E b \in BatchIds : Play(b)
+    \/ \E b \in BatchIds : Complete(b)
+    \/ \E e \in EventIds : Interrupt(e)
     \/ \E q \in QuietEdits : EditQuietly(q)
-    \/ EndSession
+    \/ EndByProgrammer
     \/ Commit
     \/ Cancel
-    \/ Answer
+    \/ Deliver
     \/ Bounce
     \/ BounceLate
     \/ Restore
@@ -529,9 +546,9 @@ Next ==
 Fairness ==
     /\ WF_vars(Listen)
     /\ WF_vars(FailRehearsal \/ PassRehearsal)
-    /\ \A b \in Batches : WF_vars(Play(b)) /\ WF_vars(Finish(b))
+    /\ \A b \in BatchIds : WF_vars(Play(b)) /\ WF_vars(Complete(b))
     /\ WF_vars(Commit)
-    /\ WF_vars(Answer)
+    /\ WF_vars(Deliver)
     /\ WF_vars(Bounce)
     /\ WF_vars(Restore)
 
@@ -550,16 +567,16 @@ HeldMeansStale == (held # {}) => stale
 \* A batch plays only if the agent had been told of every event before it
 \* plays, quiet ones too.
 PlaysKnowingEvents ==
-    \A b \in Batches :
+    \A b \in BatchIds :
         batchState[b] = "playing" =>
-            /\ \A e \in Events : eventState[e] # "new" => e \in knownEvents[b]
+            /\ \A e \in EventIds : eventState[e] # "new" => e \in knownEvents[b]
             /\ \A q \in QuietEdits :
-                   quietState[q] # "new" => q \in knownQuiet[b]
+                   quietEditState[q] # "new" => q \in knownQuietEdits[b]
 
 \* A batch plays only if every batch before it completed, or the agent was
 \* told it didn't.
 PlaysAfterCompleted ==
-    \A b \in Batches :
+    \A b \in BatchIds :
         batchState[b] = "playing" =>
             \A c \in 1..(b - 1) : completed[c] \/ c \in knownBatches[b]
 
@@ -567,24 +584,25 @@ PlaysAfterCompleted ==
 \* reported would fail it, so it says something must happen, as do the next
 \* two.
 BatchesDelivered ==
-    \A b \in Batches : (batchState[b] # "new") ~> Got(batchState[b])
+    \A b \in BatchIds : (batchState[b] # "new") ~> HasReached(batchState[b])
 
 \* Every interrupting event is eventually reported.
 EventsDelivered ==
-    \A e \in Events : (eventState[e] # "new") ~> Got(eventState[e])
+    \A e \in EventIds : (eventState[e] # "new") ~> HasReached(eventState[e])
 
 \* Every edit the programmer makes in their turn is eventually
 \* reported.
 QuietDelivered ==
-    \A q \in QuietEdits : (quietState[q] # "new") ~> Got(quietState[q])
+    \A q \in QuietEdits : (quietEditState[q] # "new")
+        ~> HasReached(quietEditState[q])
 
 \* A blocked call returns. `Commit` is enabled whenever a call is blocked,
 \* as the timer that block() sets for maxBlockMs ends it whether or not it is
 \* ready; only a cancel ends it otherwise.
-BlockedReturns == (call = "blocked") ~> (call # "blocked")
+BlockedReturns == (phase = "blocked") ~> (phase # "blocked")
 
 \* The programmer ending the session reaches the agent.
-EndDelivered == (endState # "new") ~> Got(endState)
+EndDelivered == (endState # "new") ~> HasReached(endState)
 
 \* Cancels run out only so that the model is finite (6.8). It prunes exactly
 \* the states a guard `cancels < MaxCancels` on Cancel and BounceLate never

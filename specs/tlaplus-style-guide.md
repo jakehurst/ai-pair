@@ -58,9 +58,10 @@
     7. [Invariant and property names](#57-invariant-and-property-names)
     8. [Bound variable names](#58-bound-variable-names)
     9. [Record field names](#59-record-field-names)
-    10. [Model values](#510-model-values)
-    11. [Reserved and conventional names](#511-reserved-and-conventional-names)
-    12. [User-definable operator symbols](#512-user-definable-operator-symbols)
+    10. [String values](#510-string-values)
+    11. [Model values](#511-model-values)
+    12. [Reserved and conventional names](#512-reserved-and-conventional-names)
+    13. [User-definable operator symbols](#513-user-definable-operator-symbols)
 6.  [Specification practices](#6-specification-practices)
     1.  [Always define TypeOK](#61-always-define-typeok)
     2.  [Init/Next/Spec pattern](#62-initnextspec-pattern)
@@ -789,7 +790,17 @@ forbidden.
 records always have a `type` field whose value is a string from a declared set
 of message types.
 
-### 5.10 Model values
+### 5.10 String values
+
+A string value is one lowercase word: `"idle"`, `"awaiting"`. A value that
+takes two or more words is **lowerCamelCase**, as a variable is:
+`"sourceFile"`, `"destinationFile"`, `"otherFile"` (decided 2026-10-19; the
+TLA+ references give no rule, and *SS* uses one-word strings only). A value is
+named for what it is, never for its position in its set: `"sourceFile"`, not
+`"a"`. A string never stands for an absent value ([section
+5.11](#511-model-values)).
+
+### 5.11 Model values
 
 Model values in `.cfg` files are **lowercase letter followed by digits** for
 anonymous members of a symmetry set (`p1, p2, p3`), or **UpperCamelCase** for
@@ -799,7 +810,7 @@ named `NoVal`, `Nil`, or `None`, is **defined** in the module with `CHOOSE`
 value of the same name in the `.cfg` ([section 8.4](#84-constants)), and is
 never spelled as a string literal.
 
-### 5.11 Reserved and conventional names
+### 5.12 Reserved and conventional names
 
 The following names are reserved for their conventional meaning and must not be
 reused for anything else:
@@ -817,7 +828,7 @@ reused for anything else:
 | `Constraint` | State constraint for TLC                           |
 | `View`     | View expression for TLC                              |
 
-### 5.12 User-definable operator symbols
+### 5.13 User-definable operator symbols
 
 TLA+ lets a module define its own infix operators (`a \prec b`, `s ++ t`,
 `x | y`), prefix operators (`-. a`), and postfix operators (`e^+`), drawn from

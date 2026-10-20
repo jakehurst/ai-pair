@@ -169,7 +169,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     );
     switch (message.type) {
       case 'ready':
-        // A new page has an empty draft (#69): specs/Draft.tla, `Ready`.
+        // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');
         this.send({ type: 'replay', events: this.log });
         this.showSpeed(this.speed.get());
@@ -199,7 +199,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;
       case 'draft':
-        // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `Type`, `Clear`).
+        // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).
         if (message.empty) {
           controller.resume('reply');
         } else {
@@ -218,7 +218,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'turn':
         controller.resume();
-        if (controller.turn === 'user') {
+        if (controller.turn === 'programmer') {
           controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
         } else {
           controller.takeTurn();

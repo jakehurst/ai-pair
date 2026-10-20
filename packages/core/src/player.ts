@@ -342,7 +342,7 @@ export class Player {
     const fields = fieldsProblem(action);
     if (fields !== undefined) return fail('invalid_action', fields);
     // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
-    if (scene.turn === 'user' && !('say' in action) && !('point' in action)) {
+    if (scene.turn === 'programmer' && !('say' in action) && !('point' in action)) {
       return fail('not_your_turn', "During the programmer's turn, only `say` and `point` are allowed.");
     }
     // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
@@ -390,7 +390,7 @@ export class Player {
       const file = this.fileOf(move, playing);
       if (file === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; give `file`.");
       if (!(await this.delay(timing.beforeMoveMs))) return { kind: 'interrupted' };
-      // specs/FollowMode.tla, `Resolve`: the cursor moves to the file only once `show` resolves.
+      // specs/FollowMode.tla, `ShowResolves`: the cursor moves to the file only once `show` resolves.
       await editor.show(file);
       const at = move.at;
       const where = await this.locate(file, 'move', move.line, at === undefined ? undefined : (text) => spotCandidates(text, at));
@@ -449,7 +449,7 @@ export class Player {
     if ('delete' in action) {
       if (!scene.cursor || !scene.selection) return fail('no_selection', 'Nothing is selected; `select` first.');
       const { file } = scene.cursor;
-      // specs/Player.tla, `Begin`: the delete awaits show() and getText().
+      // specs/Player.tla, `StartDelete`: the delete awaits show() and getText().
       await editor.show(file);
       this.stage.lines.of(file, await editor.getText(file));
       // A programmer's edit meanwhile interrupts, and moved the selection: stop before any effect, and

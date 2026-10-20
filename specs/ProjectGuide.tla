@@ -10,7 +10,7 @@
 (* doesn't ignore, outer first, never one above `root`, and none outside the  *)
 (* path from `root` to `cwd`.                                                 *)
 (******************************************************************************)
-EXTENDS Naturals, Sequences, FiniteSets
+EXTENDS Naturals, Sequences, FiniteSets, PairDefs
 
 CONSTANTS
     Names,      \* the directory names a path is made of
@@ -21,7 +21,7 @@ ASSUME AssumeMaxDepth == MaxDepth \in Nat
 --------------------------------------------------------------------------------
 
 \* Every path up to MaxDepth names deep.
-Paths == UNION {[1..n -> Names] : n \in 0..MaxDepth}
+Paths == Seqs(Names, MaxDepth)
 
 \* p is q or a directory above it.
 IsPrefix(p, q) == Len(p) <= Len(q) /\ SubSeq(q, 1, Len(p)) = p

@@ -187,7 +187,7 @@ export class Bridge {
       if (!message) return;
       trace?.(`socket ${socket} ${LEFT_ARROW} ${describe(message)}`);
       if (!authenticated) {
-        // specs/Wire.tla, `Reject`: a hello with the wrong token or protocol version is refused, and the socket closed.
+        // specs/Wire.tla, `RejectHello`: a hello with the wrong token or protocol version is refused, and the socket closed.
         if (message.type !== 'hello' || !this.tokenMatches(message.token)) {
           send({ type: 'rejected', reason: 'Authentication failed.' });
           ws.close();
@@ -235,7 +235,7 @@ export class Bridge {
 
     ws.on('close', () => {
       trace?.(`socket ${socket} closed`);
-      // specs/Bridge.tla, `Close`: the owner's socket gone, the session is suspended, or closed if it ended.
+      // specs/Bridge.tla, `CloseSocket`: the owner's socket gone, the session is suspended, or closed if it ended.
       for (const abort of calls.values()) {
         abort.abort();
       }

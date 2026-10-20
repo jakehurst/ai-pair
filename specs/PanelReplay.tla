@@ -11,12 +11,12 @@ EXTENDS Naturals, Sequences
 
 CONSTANTS
     MaxLog,         \* MAX_LOG, scaled down
-    MaxPosts,       \* how many events the model posts
+    MaxEvents,       \* how many events the model posts
     KeepSession     \* TRUE: cutting the log keeps its last `session` event
                     \* (the fix for #54)
 
 ASSUME AssumeMaxLog == MaxLog \in Nat \ {0}
-ASSUME AssumeMaxPosts == MaxPosts \in Nat
+ASSUME AssumeMaxEvents == MaxEvents \in Nat
 ASSUME AssumeKeepSession == KeepSession \in BOOLEAN
 
 \* The events: a session starting or ending, or anything else.
@@ -25,39 +25,40 @@ Events == SessionEvents \cup {"other"}
 
 \* No session event yet. Any value that is not a session event will do, so
 \* the config makes it a model value (6.20).
-NoSession == CHOOSE v : v \notin SessionEvents
+NoSessionEvent == CHOOSE v : v \notin SessionEvents
 
 VARIABLES
     log,     \* NarrationPanel.log
-    live,    \* the session state of a view that saw every event: the last
-             \* session event, or NoSession
+    liveViewSession,   \* the session state of a view that saw every event: the
+                       \* last
+             \* session event, or NoSessionEvent
     posts    \* events posted so far
 
-vars == <<log, live, posts>>
+vars == <<log, liveViewSession, posts>>
 
 --------------------------------------------------------------------------------
 
 \* The values each variable can hold.
 TypeOK ==
     /\ log \in Seq(Events)
-    /\ live \in SessionEvents \cup {NoSession}
+    /\ liveViewSession \in SessionEvents \cup {NoSessionEvent}
     /\ posts \in Nat
 
 IsSession(e) == e \in SessionEvents
 
-\* The last session event in `s`, or NoSession if it has none. CHOOSE takes
+\* The last session event in `s`, or NoSessionEvent if it has none. CHOOSE takes
 \* the largest index that holds one, and there is exactly one largest.
 LastSession(s) ==
     LET sessions == {i \in 1..Len(s) : IsSession(s[i])}
     IN  IF sessions = {}
-        THEN NoSession
+        THEN NoSessionEvent
         ELSE s[CHOOSE i \in sessions : \A j \in sessions : j <= i]
 
 --------------------------------------------------------------------------------
 
 Init ==
     /\ log = <<>>
-    /\ live = NoSession
+    /\ liveViewSession = NoSessionEvent
     /\ posts = 0
 
 \* post(): the event goes on the log, and the oldest are cut beyond MaxLog.
@@ -72,10 +73,10 @@ Post(e) ==
         dropped == SubSeq(appended, 1, Len(appended) - Len(cut))
         restore ==
             /\ KeepSession
-            /\ LastSession(cut) = NoSession
-            /\ LastSession(dropped) # NoSession
+            /\ LastSession(cut) = NoSessionEvent
+            /\ LastSession(dropped) # NoSessionEvent
     IN  /\ log' = IF restore THEN <<LastSession(dropped)>> \o cut ELSE cut
-        /\ live' = IF IsSession(e) THEN e ELSE live
+        /\ liveViewSession' = IF IsSession(e) THEN e ELSE liveViewSession
         /\ posts' = posts + 1
 
 Next == \E e \in Events : Post(e)
@@ -86,7 +87,7 @@ Spec == Init /\ [][Next]_vars
 
 \* A view created now replays the log: its session state is the log's
 \* last session event.
-ReplayShowsSession == LastSession(log) = live
+ReplayShowsSession == LastSession(log) = liveViewSession
 
 \* The log stays bounded: at most one event beyond MaxLog.
 Bounded == Len(log) <= MaxLog + 1
@@ -95,6 +96,6 @@ Bounded == Len(log) <= MaxLog + 1
 LogsPosts == posts > 0 => log # <<>>
 
 \* Posts run out only so that the model is finite (6.8).
-Constraint == posts <= MaxPosts
+Constraint == posts <= MaxEvents
 
 ================================================================================

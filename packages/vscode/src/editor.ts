@@ -236,7 +236,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         viewColumn: vscode.window.activeTextEditor?.viewColumn,
       });
     } finally {
-      // specs/FollowMode.tla, `Resolve`: the held window gets its `selfNavMs` from now (`Expire`).
+      // specs/FollowMode.tla, `ShowResolves`: the held window gets its `selfNavMs` from now (`Expire`).
       this.showing--;
       this.selfNav();
     }

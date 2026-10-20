@@ -165,7 +165,7 @@ function withEveryLink(): void {
   send({ type: 'selection', ref: { file: 'src/a.ts', line: 3, endLine: 4 } });
   send({ type: 'point', file: 'src/a.ts', line: 2 });
   send({ type: 'say', text: 'See `src/a.ts` and https://example.com/docs' });
-  send({ type: 'user', text: 'ok', ref: { file: 'src/a.ts', line: 5, endLine: 5 } });
+  send({ type: 'programmer', text: 'ok', ref: { file: 'src/a.ts', line: 5, endLine: 5 } });
   send({ type: 'say', text: 'Next.' });
 }
 
@@ -222,7 +222,7 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
   it('NewestFirst, NoneLost: puts a reply above the agent message it answers', () => {
     start();
     send({ type: 'say', text: 'A' });
-    send({ type: 'user', text: 'R' });
+    send({ type: 'programmer', text: 'R' });
     send({ type: 'say', text: 'B' });
     expect(history()).toEqual(['R', 'A', 'Session started']);
   });
@@ -230,7 +230,7 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
   it('NoDuplicates, NewestFirst: files the current message once, before anything added while it was current', () => {
     start();
     send({ type: 'say', text: 'A' });
-    send({ type: 'user', text: 'R' });
+    send({ type: 'programmer', text: 'R' });
     send({ type: 'interrupt' });
     send({ type: 'session', active: false, reason: 'agent' });
     expect(history()).toEqual(['The agent ended the session', 'You interrupted', 'R', 'A', 'Session started']);
@@ -281,10 +281,10 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     start();
     send({ type: 'say', text: 'A' });
     element('history').scrollTop = SCROLLED;
-    send({ type: 'user', text: 'R' });
+    send({ type: 'programmer', text: 'R' });
     expect(element('history').scrollTop).toBe(0);
     element('history').scrollTop = SCROLLED;
-    send({ type: 'turn', to: 'user', message: 'M' });
+    send({ type: 'turn', to: 'programmer', message: 'M' });
     expect(element('history').scrollTop).toBe(0);
   });
 
@@ -312,8 +312,8 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
 
   it('shows your reply with the code it was about, as a link that opens it, a range with a dash', () => {
     start();
-    send({ type: 'user', text: 'one line', ref: { file: 'src/a.ts', line: 5, endLine: 5 } });
-    send({ type: 'user', text: 'a range', ref: { file: 'src/a.ts', line: 3, endLine: 4 } });
+    send({ type: 'programmer', text: 'one line', ref: { file: 'src/a.ts', line: 5, endLine: 5 } });
+    send({ type: 'programmer', text: 'a range', ref: { file: 'src/a.ts', line: 3, endLine: 4 } });
     expect(history().slice(0, 2)).toEqual([`a rangesrc/a.ts:3${RANGE_DASH}4`, 'one linesrc/a.ts:5']);
     const ref = element('history').querySelector('.you a.ref');
     ok(ref);
@@ -323,17 +323,17 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
 
   it('files a change of turn, with the message and code that came with it, and sets the placeholder to match', () => {
     start();
-    send({ type: 'turn', to: 'user', message: 'M' });
+    send({ type: 'turn', to: 'programmer', message: 'M' });
     expect(replyBox().placeholder).toBe(`Ask the agent${ELLIPSIS}`);
     send({ type: 'turn', to: 'agent', ref: { file: 'b.ts', line: 1, endLine: 1 } });
     expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS}`);
-    send({ type: 'turn', to: 'user' });
+    send({ type: 'turn', to: 'programmer' });
     expect(history()).toEqual(['You took the turn', 'b.ts:1', 'You handed the turn back', 'M', 'You took the turn', 'Session started']);
   });
 
   it('says how the session ended, in the history and in the idle view, with its summary', () => {
     start();
-    send({ type: 'session', active: false, reason: 'user', summary: 'Fixed `src/a.ts`.' });
+    send({ type: 'session', active: false, reason: 'programmer', summary: 'Fixed `src/a.ts`.' });
     expect(text('idle-title')).toBe('Session ended');
     expect(element('idle-summary').querySelector('a.file')?.textContent).toBe('src/a.ts');
     expect(text('idle-text')).toBe('Ask your agent to pair again.');
@@ -380,9 +380,9 @@ describe('the band', () => {
 
   it('shows a pause and a change of turn on the buttons, their labels, and their tooltips', () => {
     start();
-    send({ type: 'state', state: 'paused', turn: 'user', paused: true });
+    send({ type: 'state', state: 'paused', turn: 'programmer', paused: true });
     expect(document.body.classList.contains('paused')).toBe(true);
-    expect(document.body.classList.contains('user-turn')).toBe(true);
+    expect(document.body.classList.contains('programmer-turn')).toBe(true);
     expect(element('pause').classList.contains('on')).toBe(true);
     expect(element('pause').getAttribute('aria-label')).toBe('Resume');
     expect(element('pause').dataset.tip).toBe('Resume (Space)');
@@ -391,7 +391,7 @@ describe('the band', () => {
     expect(element('turn').dataset.tip).toBe('Hand the turn back to the agent, with your reply if you typed one');
     send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
     expect(document.body.classList.contains('paused')).toBe(false);
-    expect(document.body.classList.contains('user-turn')).toBe(false);
+    expect(document.body.classList.contains('programmer-turn')).toBe(false);
     expect(element('pause').getAttribute('aria-label')).toBe('Pause');
     expect(element('pause').dataset.tip).toBe('Pause (Space)');
     expect(text('turn-label')).toBe('My turn');
@@ -465,7 +465,7 @@ describe('the band', () => {
 
     it('stops filling when the session ends, and does not start one replayed', () => {
       send({ type: 'reading', ms: READING_MS });
-      send({ type: 'session', active: false, reason: 'user' });
+      send({ type: 'session', active: false, reason: 'programmer' });
       vi.advanceTimersByTime(READING_MS);
       expect(element('dot').style.getPropertyValue('--progress')).toBe('0');
       send({
@@ -506,7 +506,7 @@ describe('the reading speed calibration (#109)', () => {
     send({ type: 'calibration', view: { phase: 'reading', title: 'Sample', text: 'one two' } });
     expect(text('passage-notice')).toBe('');
     expect(text('now-text')).toBe('Sample. Type x the moment you finish.');
-    send({ type: 'session', active: false, reason: 'user' });
+    send({ type: 'session', active: false, reason: 'programmer' });
     expect(replyBox().disabled).toBe(false);
     send({ type: 'calibration', view: { phase: 'idle' } });
     expect(text('now-text')).toBe('Calibration canceled; the reading speed is unchanged.');
@@ -543,7 +543,7 @@ describe('the run box (specs/RunBox.tla)', () => {
 
   it('Clears: the session ending clears the box', () => {
     runPhase('confirm');
-    send({ type: 'session', active: false, reason: 'user' });
+    send({ type: 'session', active: false, reason: 'programmer' });
     expect(boxShown()).toBe(false);
   });
 
@@ -672,7 +672,7 @@ describe('the controls', () => {
 
   it('takes the turn bare, and hands it back with the reply and the selection', () => {
     click(element('turn'));
-    send({ type: 'state', state: 'navigator', turn: 'user', paused: false });
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
     click(element('turn'));
     send({ type: 'selection', ref: { file: 'a.ts', line: 1, endLine: 1 } });
     typeReply('look');
@@ -696,9 +696,9 @@ describe('the controls', () => {
       element('end').dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true, [modifier]: true }));
     }
     press(element('end'), 'a');
-    send({ type: 'state', state: 'navigator', turn: 'user', paused: false });
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
     press(element('end'), ' ');
-    send({ type: 'session', active: false, reason: 'user' });
+    send({ type: 'session', active: false, reason: 'programmer' });
     press(element('end'), ' ');
     expect(posted()).toEqual([{ type: 'pause' }, { type: 'resume' }]);
   });
@@ -757,7 +757,7 @@ describe('the speed menus', () => {
     expect(document.activeElement).toBe(element(m.button));
     press(element('now-text'), 'Escape');
     click(element(m.button));
-    send({ type: 'session', active: false, reason: 'user' });
+    send({ type: 'session', active: false, reason: 'programmer' });
     expect(element(m.menu).hidden).toBe(true);
   });
 });
@@ -878,7 +878,7 @@ describe('the tooltips', () => {
     const rects = element('pause').getClientRects();
     rects.splice(0);
     vi.spyOn(element('pause'), 'getClientRects').mockReturnValue(rects);
-    send({ type: 'session', active: false, reason: 'user' });
+    send({ type: 'session', active: false, reason: 'programmer' });
     expect(tip()).toBeUndefined();
   });
 
@@ -954,7 +954,7 @@ describe('Start a session (specs/Start.tla, #107)', () => {
     expect(startHidden()).toBe(true);
   });
 
-  it('RunsAreClicks: posts start when the button is clicked', () => {
+  it('StartsAreClicks: posts start when the button is clicked', () => {
     send({ type: 'canStart', value: true });
     click(element('start'));
     expect(posted()).toContainEqual({ type: 'start' });
@@ -967,7 +967,7 @@ describe('Start a session (specs/Start.tla, #107)', () => {
     expect(noteHidden()).toBe(false);
   });
 
-  it('Settles: hides the starting note once the agent has exited, with no session', () => {
+  it('NoteGoes: hides the starting note once the agent has exited, with no session', () => {
     send({ type: 'canStart', value: true });
     click(element('start'));
     send({ type: 'startEnded' });
@@ -980,7 +980,7 @@ describe('Start a session (specs/Start.tla, #107)', () => {
       { type: 'session', active: true, resumed: true },
     ];
     for (const session of sessions) {
-      send({ type: 'session', active: false, reason: 'user' });
+      send({ type: 'session', active: false, reason: 'programmer' });
       send({ type: 'canStart', value: true });
       click(element('start'));
       expect(noteHidden()).toBe(false);

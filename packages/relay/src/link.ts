@@ -134,7 +134,7 @@ export class EditorLink {
     const { folder } = findWindows(folders, this.dir);
     if (folder !== this.folder) {
       this.folder = folder;
-      // specs/Wire.tla, `Close`: calls no longer go out on this socket; its close handler rejects its own.
+      // specs/Wire.tla, `CloseSocket`: calls no longer go out on this socket; its close handler rejects its own.
       this.connection?.ws.close();
       this.connection = undefined;
     }
@@ -213,10 +213,10 @@ export class EditorLink {
   }
 
   private connect(): Promise<Connection> {
-    // specs/Wire.tla, `Open` with CloseAfterShutdown: a closed link opens no socket.
+    // specs/Wire.tla, `OpenSocket` with CloseAfterShutdown: a closed link opens no socket.
     if (this.closed) return Promise.reject(new RelayError('no_editor', LINK_CLOSED));
     if (this.connection?.ws.readyState === WebSocket.OPEN) return Promise.resolve(this.connection);
-    // specs/Wire.tla, `Open`: with no socket open, one attempt at a time.
+    // specs/Wire.tla, `OpenSocket`: with no socket open, one attempt at a time.
     this.connecting ??= this.open().finally(() => {
       this.connecting = undefined;
     });
@@ -279,7 +279,7 @@ export class EditorLink {
           this.connection = connection;
           resolve(connection);
         } else if (message.type === 'rejected') {
-          // specs/Wire.tla, `Reject`: the editor refused the hello, and closes its end.
+          // specs/Wire.tla, `RejectHello`: the editor refused the hello, and closes its end.
           reject(new RelayError('no_editor', message.reason));
         } else if (message.type === 'result') {
           const call = settle(message.id);

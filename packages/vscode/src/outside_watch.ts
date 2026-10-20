@@ -47,7 +47,7 @@ export function watchOutside(
     if (uri.scheme === 'file' && controller.isActive && watched(uri.fsPath, folders())) outside.reported(uri.fsPath);
   }
   // Opening a file, or its diff (whose editor is the file's), is seeing it, marked or not: one
-  // written outside may be opened before its writes are decided (specs/Outside.tla, `Open`).
+  // written outside may be opened before its writes are decided (specs/Outside.tla, `OpenDocument`).
   async function opened(editorShown: vscode.TextEditor | undefined): Promise<void> {
     const file = editorShown?.document.uri;
     if (file?.scheme !== 'file' || !watched(file.fsPath, folders())) return;
