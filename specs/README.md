@@ -96,7 +96,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
-| `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 2`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 27,816 |
+| `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 20 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
@@ -735,8 +735,12 @@ constants switch fixes the model found before the code was reviewed against it.
 then page 1's `AnswerCheck` lands on page 2. Issue #192 numbered the questions:
 the model's `DropStale` had let any answer for the live page through, where the
 code posts only the latest question's; with that rule, TLC violates
-`LatestAnswer` in three steps: `FlipSetUp` asks again, its `AnswerCheck` lands,
-then the first question's `AnswerCheck` lands after it. The same issue moved
+`LatestAnswerProp` in three steps: `FlipSetUp` asks again, its `AnswerCheck`
+lands, then the first question's `AnswerCheck` lands after it. #200 made it an
+action property: as an invariant over the newest answer, it also counted an
+answer the page drops, so it failed on correct behavior once the bound allowed
+two asks in flight, which `MaxEnvironmentChanges = 2` had hidden; the bound is
+now 4. The same issue moved
 the CLI check to the ask, where `available()` reads it. `ReaskOnSetUp`: the
 page asked only as it loaded; with `FALSE`, TLC violates `ReaskedProp` in three
 steps: `AnswerCheck` (hidden), then `FlipSetUp` sets Claude Code up with
@@ -774,8 +778,8 @@ a mutation of a copy of the model, run in TLC and then reverted:
 | Mutation | Breaks |
 |---|---|
 | `Choose` sets a location outside `Locations` | `TypeOK` |
-| `DropStale = FALSE` | `OwnAnswer` and `LatestAnswer` |
-| `AnswerCheck` posts any answer for the live page, the model before #192 | `LatestAnswer` |
+| `DropStale = FALSE` | `OwnAnswer` and `LatestAnswerProp` |
+| `AnswerCheck` posts any answer for the live page, the model before #192 | `LatestAnswerProp` |
 | `ReaskOnSetUp = FALSE` | `ReaskedProp` |
 | `AnswerCheck`'s value ignores `cliAndFolder` | `GroundedProp` |
 | `AnswerCheck` reads `cliAndFolder` when it lands, not when asked | `GroundedProp` and `Offered` |
@@ -800,7 +804,7 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types, in `Starter`, `FromPanel`, and `ToPanel` |
 | `OwnAnswer` | `panel.test.ts`: OwnAnswer: drops the answer of a page replaced before it landed, so it cannot set its successor's button |
-| `LatestAnswer` | `panel.test.ts`: LatestAnswer: drops an earlier question's answer that lands after the reask's, on the same page |
+| `LatestAnswerProp` | `panel.test.ts`: LatestAnswerProp: drops an earlier question's answer that lands after the reask's, on the same page |
 | `GroundedProp` | `setup.test.ts`: GroundedProp: offers the button only once Claude Code is set up, its CLI is here, and a folder is open |
 | `StartsAreClicks` | `panel.test.ts`: StartsAreClicks: runs the starter once per start from the page; `webview/panel.test.ts`: StartsAreClicks: posts start when the button is clicked; `setup.test.ts`: StartsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one |
