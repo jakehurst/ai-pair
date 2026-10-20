@@ -20,6 +20,14 @@
 -   The relay's search for project guides stops only at the workspace
     folder, which always holds the working directory; the check for the
     file system's root, which no run reached, is removed.
+-   After an interrupt, the agent's next batch waits until the batch the
+    interrupt left playing has ended (#219). Before, a report while that batch
+    still played cleared the interrupt, so the next batch was planned from
+    where the playing batch was planned, without the programmer's edit, and a
+    line the agent had just read could be refused. A step discarded meanwhile
+    now reports once the playing batch ends, instead of at once.
+-   Once the agent's harness goes away, the relay tries no other window after
+    the one it was connecting to fails (#220).
 
 ## 0.8.0
 

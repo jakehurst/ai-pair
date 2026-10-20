@@ -759,6 +759,33 @@ describe('playing the queue', () => {
     finish({ status: 'interrupted' });
     expect((await report(listen)).batches).toEqual([{ id: 1, status: 'interrupted' }]);
   });
+
+  it('DiscardedWaits: reports a step discarded while an interrupted batch plays once that batch ends, then rehearses the next', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userInterrupt();
+    const discarded = h.controller.step(SAY);
+    expect(await pending(discarded)).toBe(true);
+    finish({ status: 'interrupted' });
+    expect((await report(discarded)).batches.map((b) => b.status)).toEqual(['interrupted', 'discarded']);
+    await report(h.controller.step(SAY));
+    expect(rehearse).toHaveBeenCalledTimes(2);
+  });
+
+  it('ReadIsStart, ReportedWhilePlaying: stays stale after a report while the batch an interrupt left plays, until it completes', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userInterrupt();
+    const timedOut = h.controller.step(SAY);
+    await settle(CONFIG.maxBlockMs);
+    expect(await report(timedOut)).toMatchObject({ batches: [{ id: 2, status: 'discarded' }], waiting: true });
+    finish();
+    await settle();
+    expect((await report(h.controller.step(SAY))).batches).toEqual([{ id: 1, status: 'completed' }]);
+    expect(rehearse).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('listen', () => {

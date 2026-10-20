@@ -61,7 +61,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
-| `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending and the socket closing at any point | holds | 2,562 |
+| `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
 | `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"` | holds | 42 |
@@ -85,7 +85,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,234 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
-| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxBatches = 2` batches, `MaxQueued = 2` queued | holds | 79,999 |
+| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 369 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
@@ -152,9 +152,10 @@ check at the top of `block()` (#1).
 | `FailRehearsal` | `rejectBatch`, or `rejectUnanchored` (#112): the call answers with the rejection at once; an abort meanwhile ends it with that, not `canceled` |
 | `Cancel` | the `AbortSignal` firing; its listener in `block()` runs only if attached, and checks `this.call === call` |
 | `Played` | the player finishing batches in queue order |
-| `Return`, `Timeout`, `Commit` | `finishCall` from `ready()`, true at once for an ended session, else where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call`, and reports on `call.session`, the session the call was made on |
+| `Return`, `Timeout`, `Commit` | `finishCall` from `ready()`, true at once for an ended session; an empty step, or one whose batch was discarded, once nothing is queued (#219); else where a step's batch is done or first in the queue (#150), or from the `maxBlockMs` timer; clears `this.call`, and reports on `call.session`, the session the call was made on |
 | `HandBack` | `withCursor(...).then(call.resolve)`: the report handed back after the commit |
 | `End` | `endSession`: `s.ended`, and `interrupt()` discarding every queued batch but the one playing; a step on a closed session refused by `requireSession()` |
+| `Interrupt` | `interrupt()`, for an edit, a turn, or a batch that did not complete: every queued batch discarded, the one playing plays on (#151) |
 | `CloseSocket` | the bridge's close handler: `abort()` on each of the socket's calls, then `disconnect()`, which closes an ended session (#174) |
 | `Finished` | every call settled: the agent makes no more calls |
 
@@ -173,6 +174,7 @@ with the deadlock check off, since TLC otherwise stops first at the deadlock:
 | the chain runs a call only after the calls before it were reported, as `this.chain.then(guarded)` with no rejection handler would | `ChainProgresses`, `CancelReleases` |
 | `CloseSocket` aborts only the blocked call | `NeverBlockedClosed` |
 | `Return` without its `ended` disjunct | `ReadyWhenEnded` |
+| `Return` lets a discarded step go as one whose batch is done, the code before #219 | `DiscardedWaits` |
 
 Every invariant and property names the test that proves the code obeys it; the
 test's title carries its name:
@@ -187,6 +189,7 @@ test's title carries its name:
 | `ChainProgresses` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report |
 | `NeverBlockedClosed` | `bridge.test.ts`: NeverBlockedClosed, CloseSocket: aborts a closed socket's calls, and suspends the session only when the socket owned it; `controller.test.ts`: NeverBlockedClosed, CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal |
 | `ReadyWhenEnded` | `controller.test.ts`: ReadyWhenEnded: stops playing a session that closed while a batch played |
+| `DiscardedWaits` | `controller.test.ts`: DiscardedWaits: reports a step discarded while an interrupted batch plays once that batch ends, then rehearses the next; `integration.ts`, in VS Code: the controller paths, where a step discarded during a batch's held last save waits for it |
 
 ### `Wire`: the relay's side of the WebSocket
 
@@ -204,7 +207,7 @@ earlier one (`RepeatsMarked`).
 
 | Spec | Code |
 |---|---|
-| `OpenSocket`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none |
+| `OpenSocket`, `Welcome` | `connect()` -> `open()` -> `openWindow()`, one attempt at a time; `welcome` sets `this.connection`, or after the link closed, closes the socket; a closed link opens none, and `open()` tries no other window once it closed (#220) |
 | `Request` | the agent's tool call reaching `call()`, which awaits `connect()` |
 | `AbortInClient`, `Abort` | the agent's client canceling; the relay handling `notifications/cancelled`: the abort listener in `call()`, which the SDK runs only while the call is unanswered, or for a request already answered, `handBack` with `mayRepeat` |
 | `Deliver` | the relay's answer reaching the client, which drops it after a cancel |
@@ -1439,23 +1442,33 @@ by others to a file the queue edits interrupts it (`OtherInterrupts`), and
 (`AdoptChecksText`). An interrupt discards the batches still queued, but one
 already playing plays on and may complete, as when a formatter changes the file
 on save (#151); `AdoptChecksText` keeps that batch's fork ids off the changed
-text. Until a report says the queue was interrupted (`stale`), no batch is
-rehearsed, and `read` shows the editor's text. Batches are queued, each
-rehearsed from the one before; the config bounds the queue. `ReadIsStart`: right
-after a read, the agent's next batch is checked against what it was shown.
-`ShareIds` is the fix for a bug this spec found: `followChange` gave a queued
-batch's fork its own id for a line a tool inserted, unlike the editor's id the
-agent was shown, so a line the agent had just read was refused. Now the fork
-drops its copy of the file's ids, and reads the editor's.
+text. The programmer's edit interrupts in the agent's turn and is never
+followed; a turn change interrupts too. Until a report says the queue was
+interrupted, and the batch the interrupt left playing has ended (`stale`), no
+batch is rehearsed, and `read` shows the editor's text. A report while that
+batch plays marks the interrupt reported (`staleReported`), and `stale` clears
+when it ends (`ReportWaitsForQueue`, the fix for #219: a report cleared `stale`
+at once, so the next batch was rehearsed from the playing batch's fork, which
+missed the programmer's edit, and a line just read was refused). Batches are
+queued, each rehearsed from the one before; the config bounds the queue.
+`ReadIsStart`: right after a read, the agent's next batch is checked against
+what it was shown. `ShareIds` is the fix for a bug this spec found:
+`followChange` gave a queued batch's fork its own id for a line a tool inserted,
+unlike the editor's id the agent was shown, so a line the agent had just read
+was refused. Now the fork drops its copy of the file's ids, and reads the
+editor's.
 
 | Spec | Code |
 |---|---|
 | `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), unless `stale`; else the editor's |
 | `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Origin`), the batch played in memory; while `stale`, the batch is discarded unrehearsed |
-| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a batch that does not complete (interrupted, discarded, or failed) is not adopted, and interrupts the queue |
+| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a batch that does not complete (interrupted, discarded, or failed), with its change made or not, is not adopted, and interrupts the queue |
+| `EndStale` | the player's loop: once the batch an interrupt left playing ends, an interrupt already reported is over (`staleReported`) |
 | `EditAsOther` | `otherEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file (`interrupt`: the batches still queued are discarded, one already playing plays on, and `stale` is set), else each rehearsal follows it (`followChange`) |
+| `EditAsProgrammer` | `userEdit`: the editor tracks the change; in the agent's turn it interrupts, whatever file it is in; never followed |
+| `ChangeTurn` | `takeTurn` and `handBack`, each interrupting the queue |
 | `Accept` | the rehearsal's `knows` in `unseen`: the id the agent was shown at a number is the id there where the rehearsal starts |
-| `Report` | the report's `snapshot` clearing `stale`; `ready()` holds the report until a batch interrupted while playing has finished |
+| `Report` | every `snapshot`: a step's, from `ready()` or its timer, `rejectBatch`'s, `rejectUnanchored`'s, and `resumeSession`'s, which forgets `seen`; it clears `stale` with the queue empty, and otherwise sets `staleReported` (#219) |
 
 Each invariant was proved to bite with a mutation of a copy of the model, run in
 TLC and then reverted:
@@ -1471,6 +1484,11 @@ TLC and then reverted:
 | `AdoptChecksText = FALSE`, with `OtherInterrupts = FALSE` | `OnePerLine` |
 | `AdoptChecksText = FALSE` alone | `OnePerLine`: a batch playing when a change by others interrupted the queue completes, and adopts its fork's ids for a text with a line more or fewer (#151) |
 | an interrupt discards the playing batch too, the spec before #151, with `AdoptChecksText = FALSE` | nothing: no batch then plays on a text other than its fork's, so that spec could not see what `AdoptChecksText` guards |
+| a programmer's edit in the agent's turn leaves the queue alone | `ReadIsStart` |
+| `FailPlay` adopts the fork's ids for a change it made | `OnePerLine` |
+| `Submit` queues an edit rehearsed in the programmer's turn | `ReadIsStart` |
+| `ReportWaitsForQueue = FALSE`, the code before #219 | `ReadIsStart` |
+| the player's loop does not end a reported interrupt (`EndStale` left out) | `ReportedWhilePlaying` |
 | `Submit` queues a batch while `stale` | nothing here: `Controller`'s `PlaysKnowingEvents` checks that no batch is queued before the agent knows of an interrupt |
 
 `OtherInterrupts = FALSE` alone does not break `AcceptedOnlyForThatLine`. With
@@ -1486,7 +1504,8 @@ Every invariant names the test that proves the code obeys it:
 | `AcceptedOnlyForThatLine` | `session.e2e.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
 | `IdsDistinct` | `lines.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
 | `OnePerLine` | `lines.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
-| `ReadIsStart` | `session.e2e.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a batch that edits no file plays (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits; `controller.test.ts`: ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it |
+| `ReadIsStart` | `session.e2e.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a batch that edits no file plays (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits; `controller.test.ts`: ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it; ReadIsStart, ReportedWhilePlaying: stays stale after a report while the batch an interrupt left plays, until it completes |
+| `ReportedWhilePlaying` | `controller.test.ts`: ReadIsStart, ReportedWhilePlaying: stays stale after a report while the batch an interrupt left plays, until it completes; `integration.ts`, in VS Code: the controller paths, where a report during a batch's held last save leaves the next step rehearsed once it completes |
 
 ### `Terminals`: running commands
 

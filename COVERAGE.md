@@ -33,7 +33,7 @@ Last updated: tla, 2026-10-20.
 | `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.4% F 100.0% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 92.6% F 100.0% | - | - | - | - |
+| `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 95.7% F 100.0% | - | - | - | - |
@@ -59,18 +59,18 @@ Last updated: tla, 2026-10-20.
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/relay/src/main.ts` | TypeScript | - | L 83.3% B 100.0% F 100.0% | - | - | - | - |
+| `packages/relay/src/main.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 67.4% B 52.2% F 69.2% | - | - | - | - |
-| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.1% B 83.0% F 88.9% | - | - | - | - |
-| `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 84.8% F 88.9% | - | - | - | - |
+| `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 50.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/render.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/server.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/test/timings.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -84,19 +84,19 @@ Last updated: tla, 2026-10-20.
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.1% B 66.7% F 87.2% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 71.7% B 88.9% F 50.0% | - | - | - | - |
-| `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 81.3% F 100.0% | - | - | - | - |
-| `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.4% B 90.2% F 97.9% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 92.8% B 92.7% F 83.3% | - | - | - | - |
+| `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
+| `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 90.7% F 97.9% | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 92.7% F 83.8% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 90.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.4% F 100.0% | - | - | - | - |
-| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.8% B 56.5% F 82.3% | - | - | - | - |
+| `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.8% B 58.7% F 83.3% | - | - | - | - |
 | `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_messages.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 84.2% F 83.3% | - | - | - | - |
-| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.4% B 98.1% F 92.3% | - | - | - | - |
-| `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
+| `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 115 of 115 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -119,7 +119,7 @@ Last updated: tla, 2026-10-20.
 | `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/timings.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -190,7 +190,7 @@ Last updated: tla, 2026-10-20.
 | `specs/ProjectGuide.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ProjectGuide.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Rehearsal.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Rehearsal.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/Rehearsal.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Reload.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Reload.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |
@@ -200,7 +200,7 @@ Last updated: tla, 2026-10-20.
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Serialize.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Serialize.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
+| `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |

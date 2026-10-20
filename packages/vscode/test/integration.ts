@@ -616,6 +616,8 @@ export async function run(): Promise<void> {
   fs.writeFileSync(file('unsaved-88.txt'), 'a\n');
   const unsaved = await vscode.workspace.openTextDocument(file('unsaved-88.txt'));
   await insertAsProgrammer(unsaved.uri, new vscode.Position(0, 1), 'b');
+  // The programmer's edit interrupts: its report comes first, or the move would be discarded unrehearsed.
+  assert.equal((await controller.listen()).events.at(-1)?.kind, 'edit');
   fs.unlinkSync(file('unsaved-88.txt'));
   assert.deepEqual((await controller.read('unsaved-88.txt')).lines, [{ number: 1, text: 'ab' }]);
   // A move to it shows the document as it is: no file is created over the programmer's text.
@@ -627,7 +629,7 @@ export async function run(): Promise<void> {
     ['completed'],
     JSON.stringify(keptPlayed),
   );
-  assert.equal(await buffer('unsaved-88.txt'), 'ab');
+  assert.equal(await buffer('unsaved-88.txt'), 'ab\n');
   assert.equal(fs.existsSync(file('unsaved-88.txt')), false);
   await unsaved.save();
   await controller.end();
@@ -1261,6 +1263,20 @@ export async function run(): Promise<void> {
   await sleep(500);
   greetedSlowly.at(-1)?.send(JSON.stringify({ type: 'welcome' }));
   await closing;
+  // The harness going away while the first window has not welcomed, which then drops the socket: the relay tries no
+  // other window (#220, specs/Wire.tla, `OpenSocket` with CloseAfterShutdown). The second is the same editor, which
+  // would be greeted again.
+  const secondFile = fakeWindow('second', [slowFolder], slowEditor.port, { lastFocused: 0 });
+  const dropping = await relayAgent(relayEnv(), outsider);
+  void dropping.callTool({ name: 'start', arguments: { task: 'dropping', cwd: slowFolder } }).catch(() => undefined);
+  await sleep(500);
+  const greetedBefore = greetedSlowly.length;
+  const dropClosing = dropping.close();
+  await sleep(500);
+  greetedSlowly.at(-1)?.close();
+  await dropClosing;
+  assert.equal(greetedSlowly.length, greetedBefore, 'the relay tried another window after it closed');
+  fs.rmSync(secondFile);
   fs.rmSync(slowFile);
   slowEditor.server.close();
   fs.rmSync(outsider, { recursive: true });

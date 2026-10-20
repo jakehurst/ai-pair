@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { CURSOR_MARKER, discoveryDir, type Action, type BatchStatus, type ErrorKind, type Report } from '@ai-pair/protocol';
-import { isSavedSession } from '@ai-pair/core';
+import { defaultConfig, isSavedSession } from '@ai-pair/core';
 import { EditorLink } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 
@@ -41,6 +41,12 @@ const AFTER_MARKER = 'bcdefghijk';
 
 /** When the interrupt is sent into a slow type: past the move before it and a few keys after the marker. */
 const INTO_TYPING_MS = 4800;
+
+/** A step's timer, short enough to fire while a batch's last save is held open. */
+const SHORT_BLOCK_MS = 200;
+
+/** How long a save participant holds a batch's last save open: under VS Code's 1500 ms for participants. */
+const SAVE_HOLD_MS = 1000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -531,6 +537,41 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   controller.userInterrupt();
   await controller.listen(late.signal);
   late.abort();
+
+  // An interrupt during a batch's last save, which a participant holds open, leaves it to complete. A step
+  // discarded meanwhile waits for it (#219, specs/Serialize.tla, `DiscardedWaits`); its timer fires first, and
+  // that report leaves the session stale until the batch completes (specs/Rehearsal.tla, `EndStale`), so the
+  // next step is rehearsed, not discarded.
+  await controller.read('paths.txt');
+  controller.setTimeouts({ maxBlockMs: SHORT_BLOCK_MS });
+  // Set by the participant, so the loop below sees it change.
+  const held: { discarded?: Promise<Report> } = {};
+  const holding = vscode.workspace.onWillSaveTextDocument((event) => {
+    if (held.discarded !== undefined) {
+      return;
+    }
+    controller.userInterrupt();
+    held.discarded = controller.step([{ say: 'Again.' }]);
+    event.waitUntil(sleep(SAVE_HOLD_MS));
+  });
+  await controller.step([{ move: { file: 'paths.txt', line: 2, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
+  for (let i = 0; i < DEMO_POLLS && held.discarded === undefined; i++) {
+    await sleep(POLL_MS);
+  }
+  holding.dispose();
+  assert.ok(held.discarded, 'the batch never saved');
+  const timedOut = await held.discarded;
+  controller.setTimeouts({ maxBlockMs: defaultConfig.maxBlockMs });
+  assert.equal(timedOut.waiting, true, JSON.stringify(timedOut));
+  assert.deepEqual(statuses(timedOut), ['discarded']);
+  // Still stale while the batch saves: a read shows the editor's text (specs/Rehearsal.tla, `Read`).
+  assert.equal((await controller.read('paths.txt')).lines[1]?.text, 'gamma!');
+  await sleep(SAVE_HOLD_MS);
+  const rehearsed = await controller.step([{ say: 'Now.' }]);
+  assert.deepEqual(statuses(rehearsed), ['completed']);
+  assert.ok(rehearsed.submitted, JSON.stringify(rehearsed));
+  await controller.step([]);
+  await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('paths.txt')));
 
   // A report the agent never took, put back after its session closed: the next call takes it, and closes the
   // session again (#60, specs/Controller.tla, `Restore`).

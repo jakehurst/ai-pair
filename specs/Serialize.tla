@@ -11,6 +11,11 @@
 (* can close, which closes an ended session, even while a step is rehearsed   *)
 (* (#174). The bridge aborts the socket's calls before disconnect(), so no    *)
 (* call blocks on a closed session, and ready() is true for an ended one.     *)
+(*                                                                            *)
+(* An interrupt discards the batches still queued, and a step on a stale      *)
+(* session discards its own. A discarded step reports once nothing is queued, *)
+(* as an empty step does, so its report comes after the batch the interrupt   *)
+(* left playing (#219).                                                       *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -29,8 +34,8 @@ CallIds == 1..NumCalls
 \* blocked in block(), committed to a report, or settled.
 Pcs == {"inChain", "rehearsing", "blocked", "committed", "settled"}
 
-\* A queued batch, and one played or discarded.
-QueueStates == {"queued", "done"}
+\* A queued batch, one played, and one discarded.
+QueueStates == {"queued", "done", "discarded"}
 
 \* How a call settles: canceled, with its report handed back, or refused by
 \* requireSession() with `no_session`.
@@ -153,7 +158,7 @@ Rehearse(i) ==
             /\ UNCHANGED settledAs
     /\ IF emptyStep[i]
        THEN UNCHANGED queueState
-       ELSE \E b \in IF ended THEN {"done"} ELSE QueueStates :
+       ELSE \E b \in IF ended THEN {"discarded"} ELSE {"queued", "discarded"} :
                 queueState' = [queueState EXCEPT ![i] = b]
     /\ UNCHANGED <<canceled, canceledAt, emptyStep, rehearsalFailed,
                    sessionVars>>
@@ -190,13 +195,14 @@ Played(i) ==
     /\ UNCHANGED <<pc, canceled, canceledAt, blockedCall, settledAs, emptyStep,
                    rehearsalFailed, sessionVars>>
 
-\* ready(): true for an ended session; else an empty step is ready once
-\* nothing is queued, any other once its batch is done or plays next (#150);
-\* then pump() calls finishCall on `call.session`.
+\* ready(): true for an ended session; else an empty step, or one whose
+\* batch was discarded (#219), is ready once nothing is queued, any other once
+\* its batch is done or plays next (#150); then pump() calls finishCall on
+\* `call.session`.
 Return(i) ==
     /\ pc[i] = "blocked"
     /\ \/ ended
-       \/ IF emptyStep[i]
+       \/ IF emptyStep[i] \/ queueState[i] = "discarded"
           THEN \A j \in CallIds : queueState[j] # "queued"
           ELSE queueState[i] = "done" \/ AtHead(i)
     /\ Commit(i)
@@ -224,11 +230,23 @@ End ==
     /\ queueState' =
            [i \in CallIds |->
                IF queueState[i] = "queued" /\ ~AtHead(i)
-               THEN "done"
+               THEN "discarded"
                ELSE queueState[i]]
     /\ closed' = (closed \/ gone)
     /\ UNCHANGED <<pc, canceled, canceledAt, blockedCall, settledAs, emptyStep,
                    rehearsalFailed, gone>>
+
+\* interrupt(), for an edit, a turn, or a batch that failed: every batch
+\* still queued is discarded; the one playing, at the head, plays on (#151).
+Interrupt ==
+    /\ \E i \in CallIds : queueState[i] = "queued" /\ ~AtHead(i)
+    /\ queueState' =
+           [i \in CallIds |->
+               IF queueState[i] = "queued" /\ ~AtHead(i)
+               THEN "discarded"
+               ELSE queueState[i]]
+    /\ UNCHANGED <<pc, canceled, canceledAt, blockedCall, settledAs, emptyStep,
+                   rehearsalFailed, sessionVars>>
 
 \* The agent's socket closes: the bridge aborts each of its calls not yet
 \* settled, a blocked one released at once as in Cancel, then disconnect()
@@ -267,6 +285,7 @@ Next ==
            \/ Timeout(i)
            \/ HandBack(i)
     \/ End
+    \/ Interrupt
     \/ CloseSocket
     \/ Finished
 
@@ -318,6 +337,16 @@ NeverBlockedClosed == \A i \in CallIds : (pc[i] = "blocked") => ~closed
 \* still plays.
 ReadyWhenEnded ==
     \A i \in CallIds : (pc[i] = "blocked" /\ ended) => ENABLED Return(i)
+
+\* #219: a step whose batch was discarded waits while a batch is queued, so
+\* its report does not tell the agent of an interrupt that batch still plays
+\* through.
+DiscardedWaits ==
+    \A i \in CallIds :
+        (/\ pc[i] = "blocked"
+         /\ queueState[i] = "discarded"
+         /\ ~ended
+         /\ \E j \in CallIds : queueState[j] = "queued") => ~ENABLED Return(i)
 
 \* A call waiting its turn in the serialize chain eventually settles. A
 \* chain that never ran a call would fail it, so it says something must
