@@ -5,9 +5,9 @@
 (* keeps its turn, cursor, directory, and history, in memory, and in the      *)
 (* workspace's storage for a reload. A `start` from its directory resumes it; *)
 (* a `start` from another directory ends it, and starts a new one. Otherwise  *)
-(* it waits until the programmer ends it from the panel. Each step saves the  *)
-(* session as it leaves it, where the code saves 200 ms after the last change *)
-(* and again as the window goes.                                              *)
+(* it waits until the programmer ends it from the panel, which closes it at   *)
+(* once. Each step saves the session as it leaves it, where the code saves    *)
+(* 200 ms after the last change and again as the window goes.                 *)
 (******************************************************************************)
 EXTENDS Naturals, PairDefs
 
@@ -86,10 +86,14 @@ Connect ==
     /\ connected' = TRUE
     /\ UNCHANGED <<session, id, directory, messageWaiting, shown, stored>>
 
-\* The agent's harness exits and the socket closes. A disconnect suspends the
-\* session: nothing ends it but the programmer, or another session.
+\* The agent's harness exits and the socket closes. A disconnect suspends an
+\* active session: nothing ends it but the programmer, or another session. It
+\* closes a session the programmer ended.
 Disconnect ==
-    LET newSession == IF session = "active" THEN "suspended" ELSE session
+    LET newSession ==
+            CASE session = "active" -> "suspended"
+              [] session = "ended" -> NoSession
+              [] OTHER -> session
         newShown == IF session = "active" THEN "suspended" ELSE shown
     IN  /\ connected
         /\ session' = newSession
@@ -136,14 +140,26 @@ Start(d) ==
         /\ Store("active", newId, d, newMessage, "live")
         /\ UNCHANGED connected
 
-\* The programmer ends the session from the panel, active or suspended.
+\* The programmer ends the session from the panel. An active one ends, and its
+\* agent's next call closes it; a suspended one has no agent to tell, so it
+\* closes at once.
 EndByProgrammer ==
-    /\ session \in {"active", "suspended"}
-    /\ session' = "ended"
-    /\ messageWaiting' = FALSE
-    /\ shown' = "off"
-    /\ Store("ended", id, directory, FALSE, "off")
-    /\ UNCHANGED <<id, directory, connected>>
+    LET newSession == IF session = "active" THEN "ended" ELSE NoSession
+    IN  /\ session \in {"active", "suspended"}
+        /\ session' = newSession
+        /\ messageWaiting' = FALSE
+        /\ shown' = "off"
+        /\ Store(newSession, id, directory, FALSE, "off")
+        /\ UNCHANGED <<id, directory, connected>>
+
+\* The agent's next call takes the ended session's last report, which closes
+\* it.
+CloseEnded ==
+    /\ connected
+    /\ session = "ended"
+    /\ session' = NoSession
+    /\ Store(NoSession, id, directory, messageWaiting, shown)
+    /\ UNCHANGED <<id, directory, connected, messageWaiting, shown>>
 
 \* The agent's `end`.
 EndByAgent ==
@@ -178,6 +194,7 @@ Next ==
     \/ ReloadWindow
     \/ \E d \in Directories : Start(d)
     \/ EndByProgrammer
+    \/ CloseEnded
     \/ EndByAgent
     \/ SendMessage
     \/ Report
@@ -199,6 +216,10 @@ SavedIsCurrent == stored = Snapshot(session, id, directory, messageWaiting,
 \* knowing (#138).
 ShownIsState == shown = Shows(session)
 
+\* A session the programmer ended waits only for its agent's last report: it
+\* always has an agent to take it, or it is closed.
+EndedHasAgent == (session = "ended") => connected
+
 \* A start from a suspended session's directory resumes that session: the
 \* same id.
 ResumesSameProp ==
@@ -206,11 +227,13 @@ ResumesSameProp ==
         /\ directory' = directory) =>
            (id' = id)]_vars
 
-\* A suspended session waits: it leaves that phase only to resume, to end by
-\* the programmer, or for a session from another directory.
+\* A suspended session waits: it leaves that phase only to resume, to close
+\* when the programmer ends it, or for a session from another directory. Only
+\* EndByProgrammer leaves it for no session, so the property names it: no
+\* state tells the programmer's end from a session lost some other way.
 WaitsProp ==
     [][(session = "suspended" /\ session' # "suspended") =>
-           \/ session' = "ended"
+           \/ EndByProgrammer
            \/ session' = "active" /\ (id' = id \/ directory' # directory)]_vars
 
 \* A message is dropped only with its session: not while it's suspended, nor

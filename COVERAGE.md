@@ -169,7 +169,7 @@ Last updated: tla, 2026-10-20.
 | `specs/LineIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LineIdentity.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/ListenGrace.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ListenGrace.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/ListenGrace.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
@@ -194,7 +194,7 @@ Last updated: tla, 2026-10-20.
 | `specs/Reload.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Reload.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Resume.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/Resume.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/RunBox.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RunBox.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
@@ -206,7 +206,7 @@ Last updated: tla, 2026-10-20.
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Terminals.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Timeline.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Timeline.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/Timeline.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/Turns.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Turns.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Typing.cfg` | TLC config | - | - | - | - | - | - |

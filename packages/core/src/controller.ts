@@ -166,6 +166,7 @@ function callReady(session: Session, call: Call): boolean {
       call.kind satisfies 'listen';
       if (session.held.length > 0) return true;
       if (session.finished.some((r) => r.status !== 'completed')) return true;
+      // A completed batch, or an edit that interrupts nothing, doesn't wake a listen (specs/ListenGrace.tla, `QuietNews`).
       if (session.queue.length > 0) return false;
       if (session.scene.turn === 'agent') return session.events.some(interrupting);
       // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
@@ -913,7 +914,8 @@ export class Controller {
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
     const closing = (session.ended && session.held.length === 0) || call.kind === 'end';
     if (closing) {
-      // specs/Bridge.tla, `CloseEnded`, or `EndByAgent` for the agent's `end`; `this.closed` is `restorable`.
+      // specs/Bridge.tla and specs/Resume.tla, `CloseEnded`, or `EndByAgent` for the agent's `end`; `this.closed` is
+      // `restorable`.
       this.close(session);
       this.closed = session;
       if (call.kind === 'end' && !session.ended) {
@@ -921,6 +923,7 @@ export class Controller {
       }
     }
     // `Timeout` in specs/ListenGrace.tla: nothing came back for the agent to act on.
+    // With batches or events to report, a listen that times out starts no grace (`TimeoutWithNews`).
     const empty = report.batches.length === 0 && report.events.length === 0 && !report.rejected;
     if (call.kind === 'listen' && report.waiting && empty) this.startGrace();
     this.render();

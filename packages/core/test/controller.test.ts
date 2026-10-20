@@ -467,7 +467,7 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'programmer' });
   });
 
-  it('rejects the open call when the agent disconnects, and closes at once a session the programmer ended', async () => {
+  it('EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended', async () => {
     const h = await started();
     const listen = h.controller.listen();
     const refused = expect(listen).rejects.toMatchObject({ code: 'no_session', message: 'Disconnected.' });
@@ -1310,7 +1310,7 @@ describe('the status in the panel', () => {
     expect(statuses(h).at(-1)).toBe('thinking');
   });
 
-  it('NoFalseYourMove: shows thinking when a listen times out with a batch to report', async () => {
+  it('NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report', async () => {
     const h = await started();
     await report(h.controller.step(SAY));
     await settle();

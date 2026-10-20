@@ -80,8 +80,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off | holds | 7,552 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
-| `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 62 |
-| `Timeline.cfg` | `MaxSleeps = 3` sleeps | holds | 176 |
+| `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
+| `Timeline.cfg` | `MaxSleeps = 3` sleeps, a second sleep while one is pending | holds | 656 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,234 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk | holds | 160 |
@@ -97,7 +97,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
-| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 20 |
+| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 40 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -570,6 +570,7 @@ away (`editor.ts`).
 | `Sleep`, `Fire` | `sleep(ms)` and its timer |
 | `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
+| `SleepAgain`, `FireReplaced` | `sleep(ms)` with a sleep pending, which no caller makes; the replaced sleep's timer in `arm`, which leaves `sleeping` alone (#174) |
 
 A pause lasts until a resume, as PROTOCOL.md says: looking back at the code
 doesn't end the `away` pause, and the agent isn't told about pauses.
@@ -584,6 +585,8 @@ in TLC and then reverted:
 | `Pause` leaves the timer running | `NoTimerWhilePaused` |
 | `Interrupt` resolves the pending sleep but keeps it pending | `ResolvedOnce` |
 | `Resume` never restarts a waiting sleep's timer | `ResumeContinues` |
+| `FireReplaced` clears the pending sleep, the code without its check | `LatestPending` |
+| `FireReplaced` leaves its sleep in `replaced` | `TypeOK` |
 
 Every invariant names the test that proves the code obeys it; the test's title
 carries the invariant's name:
@@ -594,14 +597,14 @@ carries the invariant's name:
 | `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone |
 | `NoTimerWhilePaused` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 | `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset`; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
+| `LatestPending` | `timeline.test.ts`: LatestPending: an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short |
 | `ResumeContinues` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 
-Two sleeps at once are outside the model: `Sleep` needs none pending, and the
-player awaits its sleeps one at a time. `sleep` does accept a second one, and
-the first's timer, running out, must leave the second pending, so an interrupt
-still cuts it short; `timeline.test.ts` checks that: an earlier sleep that runs
-out leaves the later sleep that replaced it pending, for an interrupt to cut
-short.
+Two sleeps at once: `sleep` accepts a second while one is pending, though no
+caller makes one, and the first's timer, running out, leaves the second pending,
+so an interrupt still cuts it short (`LatestPending`, #174). A replaced sleep's
+own timer keeps running through a pause, and an interrupt does not cut it short;
+no caller can reach either, since no caller makes a second sleep.
 
 ### `Anchor`: the cursor after a discarded batch
 
@@ -1107,21 +1110,23 @@ workspace's storage (`extension.ts`). A session whose agent disconnects, or that
 the window reloads with, is suspended, not ended, and waits until the programmer
 ends it or a `start` resumes it. Checked: a `start` from its directory resumes
 the same session (`ResumesSameProp`); it leaves the suspended state only to
-resume, end, or give way to a session from another directory (`WaitsProp`); the
-storage holds the session as it is (`SavedIsCurrent`); a message isn't lost
-while it waits, or across a reload (`NotLostProp`); a message the agent can be
-sent reaches it (`Arrives`); and the panel shows the session as it is
-(`ShownIsState`; #138: after a reload, the replayed history showed a suspended
-session as live). The spec saves with every change; the code saves 200 ms after
-the last one and again as the window goes, so a reload within 200 ms of a change
-relies on that last save.
+resume, end, or give way to a session from another directory (`WaitsProp`); a
+session the programmer ended has its agent to tell, or is closed
+(`EndedHasAgent`); the storage holds the session as it is (`SavedIsCurrent`); a
+message isn't lost while it waits, or across a reload (`NotLostProp`); a message
+the agent can be sent reaches it (`Arrives`); and the panel shows the session as
+it is (`ShownIsState`; #138: after a reload, the replayed history showed a
+suspended session as live). The spec saves with every change; the code saves 200
+ms after the last one and again as the window goes, so a reload within 200 ms of
+a change relies on that last save.
 
 | Spec | Code |
 |---|---|
-| `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended |
+| `Connect`, `Disconnect` | a relay's socket opening and closing; `disconnect()` suspends an active session, and closes one the programmer ended (no session) |
 | `ReloadWindow` | the window reloading: `activate` revives the saved session, suspended (`revive`), with the panel's history; `revive` posts the suspended event (`PostOnRevive`), and the page adds its divider only when the session goes between live and suspended |
 | `Start(d)` | `start`: a suspended session from `d` resumes (`resumeSession`); another directory ends it and starts a new one |
-| `EndByProgrammer`, `EndByAgent` | `endSession`, which closes a suspended session at once; the agent's `end` |
+| `EndByProgrammer`, `EndByAgent` | `endSession`: an active session is ended, a suspended one closed at once (no session); the agent's `end` |
+| `CloseEnded` | `finishCall` closing an ended session with its last report |
 | `SendMessage`, `Report` | `userMessage`, to an active or a suspended session; the next report, once the agent is back |
 | `Store` | `onChange` and `onPost`: the extension writes `stored` and the panel's history 200 ms after a change, and as the window goes |
 
@@ -1137,6 +1142,9 @@ model, run in TLC and then reverted:
 | `ReloadWindow` brings back no session, checked without `ShownIsState`, which fails first | `WaitsProp` |
 | `ReloadWindow` drops the pending message | `NotLostProp` |
 | `Spec` without `Fairness`, `WF_vars(Report)` | `Arrives` |
+| `EndByProgrammer` ends a suspended session as `"ended"`, the model before #200 | `EndedHasAgent` |
+| `Disconnect` leaves an ended session ended | `EndedHasAgent` |
+| a suspended session closed while connected by other than `EndByProgrammer` | `WaitsProp` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1146,6 +1154,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
+| `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
 | `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
 
 ### `Navigator`: the programmer's edits, reported when they pause
@@ -1203,8 +1212,9 @@ holds "thinking", "absent", and "listening".
 | `Status` | `state()` with the queue empty |
 | `Call` | a call that blocks arriving: `serialize` counting it in `openCalls`, ending the quiet with `endQuiet` and the grace with `endGrace`, then `block()`; `close` ends both |
 | `Read` | `read`: `endGrace`, and the quiet restarted at once |
-| `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, and the agent owes a response to the rejection |
+| `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, the agent owes a response to the rejection, and the report takes the events |
 | `Timeout` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
+| `QuietNews`, `TimeoutWithNews` | a batch completing, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
 | `Return` | `finishCall` with anything else |
 | `Interrupt` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
@@ -1224,6 +1234,8 @@ model, run in TLC and then reverted:
 | `ShowAbsent = FALSE`, the code before #149 | `AbsentShows` |
 | `EndOnAnyCall = FALSE`, the code before #194 | `NoFalseYourMove`: `Call("listen")`, `Timeout`, `FailRehearsal` |
 | `Call` leaves `absent` set, checked without `NoYourMoveInOtherCall`, which it breaks first | `AbsentWithoutCall` |
+| `TimeoutWithNews` starts the grace | `NoFalseYourMove` |
+| `Timeout` ignores `quietNews` | `NewsSkipsGraceProp` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1232,11 +1244,12 @@ Every invariant and property names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoFlicker` | `controller.test.ts`: NoFlicker, GraceEnds: keeps listening after a listen times out with nothing to report, until the grace runs out |
 | `GraceEnds` | `controller.test.ts`: NoFlicker, GraceEnds: keeps listening after a listen times out with nothing to report, until the grace runs out |
-| `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove: shows thinking when a listen times out with a batch to report; NoFalseYourMove: ends the grace when the agent reads, and when its step is refused at once (#194) |
+| `NoFalseYourMove` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report; NoFalseYourMove: ends the grace when the agent reads, and when its step is refused at once (#194) |
 | `NoYourMoveAfterInterrupt` | `controller.test.ts`: NoYourMoveAfterInterrupt, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace |
 | `NoYourMoveInOtherCall` | `controller.test.ts`: NoYourMoveAfterInterrupt, NoYourMoveInOtherCall: shows thinking when the programmer acts, or the agent calls, during the grace |
 | `AbsentWithoutCall` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `AbsentShows` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
+| `NewsSkipsGraceProp` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report. No test times a listen out with only an edit that interrupts nothing yet |
 
 ### `EditEvents`: an edit undone, in the report
 
