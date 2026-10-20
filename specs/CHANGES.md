@@ -1,83 +1,98 @@
 # Changes to the specs
 
-What changed in the TLA+ specs in `specs/` on 2026-10-19 and 2026-10-20,
-newest first, for the architecture documents and any reader of an older spec to
-be updated from. Each section names its pull request and issues;
-[`specs/README.md`](README.md) has every spec as it is now, with its mutations,
-the tests for each invariant, and the results.
+What changed in the TLA+ specs in `specs/` from 10f2b64 (2026-10-18) to
+fc8b717 (2026-10-20), described as one change, for the architecture documents
+and any reader of an older spec to be updated from. [`specs/README.md`](README.md)
+has every spec as it is now, with its mutations, the tests for each invariant,
+and the results.
 
-## Cross-spec gaps, and two bugs fixed spec first
+## Summary
 
-Pull request #221, issues #200, #219, and #220, 2026-10-20. An audit of every
-spec against the code, then a check of what falls between related specs: where
-the code takes a path a spec did not model, the spec gained it. Every new
-mutation is listed in the README with the invariant it breaks.
+-   Every term means one thing across the specs, every name says what it
+    holds, and a shared module, `PairDefs.tla`, holds the vocabulary that
+    several specs use.
+-   Nineteen specs model more of what the code does, from a full audit against
+    the code and a check of what falls between related specs.
+-   Four bugs are fixed spec first: TLC shows each one with the old design, and
+    passes with the fix. A fifth, in the relay, needed the code fixed only.
+-   TLC holds on every config.
+
+## Across the specs
+
+-   **One meaning per term.** A term names one thing in every spec; where two
+    specs used one word for two things, each got its own.
+-   **Names say what they hold.** A name of two or more words is
+    lowerCamelCase, a string value too, as section 5.10 of
+    [the style guide](tlaplus-style-guide.md) says; id sets are `Num*` and
+    bounds `Max*`; a spec's one process is `phase`; an action names its object
+    where a verb was shared (`CloseSocket`, `OpenDocument`).
+-   **An absent value is a model value**, never a string or a number:
+    `NoProblem`, `NoQuestion`, `NotAway`, `NoDocument`, `Throws`.
+-   **`PairDefs.tla`**, new, holds `ActionKinds`, `SessionPhases` and
+    `NoSession`, `Views`, `PageStates`, `Calls` and `NoCall`, `PauseReasons`,
+    `Files` and `NoFile`, and the letters `Letter`, `OtherLetter`, `Space`,
+    `LineFeed`, and `CarriageReturn`, with `Seqs`. The specs that use them
+    `EXTENDS` it.
+-   **The programmer is `programmer`, never `user`**, in the specs and on the
+    wire: the turn, the Pause button's reason, the code, the tests, and
+    `PROTOCOL.md` (version 0.8.0).
+-   **The files** in the specs that name them are `"sourceFile"`,
+    `"destinationFile"`, and `"otherFile"`: where the cursor is, where it goes,
+    and a file the programmer went to on their own.
+
+## What each spec models now
+
+Specs whose models did not change, only their names or comments, are left out.
 
 | Spec | What it models now | Properties | Distinct states |
 |---|---|---|---|
-| `Rehearsal` | The programmer's edits (`EditAsProgrammer`, interrupting in the agent's turn, never followed) and turn changes (`ChangeTurn`); a batch rehearsed in the programmer's turn queues no edit (`RehearsalTurn`); `FailPlay(made)` for any batch that does not complete, with its change made or not; every report as `Report`, which with a batch still playing sets `staleReported`, and `EndStale` clears `stale` when that batch ends (#219). New constants `MaxProgrammerEdits` and `ReportWaitsForQueue`, variables `turn`, `programmerEdits`, and `staleReported` | `ReportedWhilePlaying` (new) | 79,999 -> 6,721,044 |
-| `Serialize` | The programmer ending the session (`End`), the socket closing (`CloseSocket`), and an interrupt (`Interrupt`) at any point, with variables `ended`, `gone`, and `closed`; a call refused with `"noSession"`; a discarded batch (`"discarded"`), whose step waits until nothing is queued (#219) | `NeverBlockedClosed`, `ReadyWhenEnded`, `DiscardedWaits` (new) | 709 -> 3,646 |
-| `Start` | Two asks in flight; `newestAnswered` is gone | `LatestAnswer` became the action property `LatestAnswerProp`: only an answer the page shows counts | 27,816 -> 242,152 |
-| `Timeline` | A second sleep while one is pending (`SleepAgain`), and a replaced sleep's timer firing (`FireReplaced`) | `LatestPending` (new) | 176 -> 656 |
-| `ListenGrace` | News that wakes no listen (`QuietNews`), and a timeout with news to report (`TimeoutWithNews`) | `NewsSkipsGraceProp` (new) | 20 -> 40 |
-| `Resume` | The programmer ending a suspended session closes it at once, and an ended one closes on its agent's next call (`CloseEnded`) | `EndedHasAgent` (new); `WaitsProp` names `EndByProgrammer` | 62 -> 56 |
-| `EditorAdapter` | An edit VS Code refuses (`RejectEdit`, `ownEdit` `"rejected"`), and `create`'s save (`StartCreateSave`, `FinishCreateSave`, variable `creating`); fairness on `ResolveEdit` | `EditsEnd` (new) | 1,464 -> 3,195 |
+| `Actions` | `type_fast` in the step table | | 2,294, unchanged |
+| `Anchor` | A step refused as unanchored hands over a rejection `restore` held first (`DropsHeld = FALSE`, `RefuseUnanchored`, `Restore`, `TakeHeld`, variables `heldCount` and `rejectionLost`); a failed batch needs an anchor too, as an interrupted or discarded one does | `NoRejectionLost` (new) | 46 -> 113 |
+| `BatchFile` | Three files, from `PairDefs`; `run` and `type_fast` among its kinds; the selection a `delete` needs (variable `selected`, `no_selection`) | `EditAtCursorProp` covers `type_fast`, and asks a `delete` to have a selection | 121 -> 369 |
 | `Discovery` | A window that refuses the relay's hello (variable `refuses`); `open()` goes on to the next | `FindsOpen` asks only for a window that welcomes the relay | 217 -> 782; `Discovery_InPlace` 302 -> 1,106 |
-| `Outside` | The file's open document becoming the active editor again (`FocusDocument`) | | 564 -> 614 |
-| `FollowMode` | `show` returning early for a file already in a visible editor (`ShowVisible`, `showCall` `"visible"`, variable `destinationVisible`) | | 13 -> 19 |
-| `Scroll` | The programmer's turn as a reason not to follow (`"navigator"`), which drops a cut glide (variable `turnSinceFollow`) | `ComesInView` excuses a turn since follow mode last followed | 7,552 -> 14,131 |
-| `BatchFile` | The selection a `delete` needs (variable `selected`, `no_selection`) | `EditAtCursorProp` asks a `delete` to have a selection | 207 -> 369 |
-| `Reload` | A selection at the start of a changed run, which `mapThrough` keeps in place (`Holding`, `Moved`, variable `selectionAtStart`) | `StartOfRunStays` (new) | 160 -> 320 |
+| `Draft` | A reply the calibration takes resumes the reply pause (`ClearOnTaken`, `SendToCalibration`) | `ReplyMeansDraft` holds with it | 12, unchanged |
 | `EditEvents` | One pending edit event a file (variable `events`) | `OnePendingEdit` (new) | 516, unchanged |
-| `Calibration`, `Draft`, `RunBox`, `Timeline` | Comments only: they say what the code does | | unchanged |
+| `EditorAdapter` | A file reloaded from disk (`Reload`, the `"disk"` author, attributed `other`); an edit VS Code refuses (`RejectEdit`, `ownEdit` `"rejected"`); `create`'s save (`StartCreateSave`, `FinishCreateSave`, variable `creating`); fairness on `ResolveEdit` | `EditsEnd` (new) | 311 -> 3,195 |
+| `FollowMode` | `show` returning early for a file already in a visible editor (`ShowVisible`, `showCall` `"visible"`, variable `destinationVisible`); `LookAway` goes to `"otherFile"` | | 13 -> 19 |
+| `ListenGrace` | Every call ends the grace, not only one that blocked (`EndOnAnyCall`, `Read`, `FailRehearsal`); news that wakes no listen (`QuietNews`), and a timeout with news to report (`TimeoutWithNews`) | `NewsSkipsGraceProp` (new); `NoFalseYourMove` holds with `EndOnAnyCall` | 20 -> 40 |
+| `Outside` | The file's open document becoming the active editor again (`FocusDocument`) | | 564 -> 614 |
+| `Panel` | The session event that repeats a suspension (`RepeatSession`) | | 21, unchanged |
+| `Rehearsal` | The programmer's edits (`EditAsProgrammer`: interrupting in the agent's turn, never followed) and turn changes (`ChangeTurn`); a batch rehearsed in the programmer's turn queues no edit (`RehearsalTurn`); `FailPlay(made)` for any batch that does not complete, with its change made or not; every report as `Report`, which with a batch still playing sets `staleReported`, and `EndStale` clears `stale` when that batch ends. New constants `MaxProgrammerEdits` and `ReportWaitsForQueue`, variables `turn`, `programmerEdits`, and `staleReported` | `ReportedWhilePlaying` (new) | 79,999 -> 6,721,044 |
+| `Reload` | A selection at the start of a changed run, which `mapThrough` keeps in place (`Holding`, `Moved`, variable `selectionAtStart`) | `StartOfRunStays` (new) | 160 -> 320 |
+| `Resume` | The programmer ending a suspended session closes it at once, and an ended one closes on its agent's next call (`CloseEnded`) | `EndedHasAgent` (new); `WaitsProp` names `EndByProgrammer` | 62 -> 56 |
+| `Scroll` | The programmer's turn as a reason not to follow (`"navigator"`), which drops a cut glide (variable `turnSinceFollow`) | `ComesInView` excuses a turn since follow mode last followed | 7,552 -> 14,131 |
+| `Serialize` | The programmer ending the session (`End`), the socket closing (`CloseSocket`), and an interrupt (`Interrupt`) at any point, with variables `ended`, `gone`, and `closed`; a call refused with `"noSession"`; a discarded batch (`"discarded"`), whose step waits until nothing is queued | `NeverBlockedClosed`, `ReadyWhenEnded`, `DiscardedWaits` (new) | 709 -> 3,646 |
+| `Start` | Numbered questions (`questions`, `deliveredQuestion`, `NoQuestion`), so only the latest one's answer reaches the page; the CLI read when it asks; two asks in flight | `LatestAnswerProp` (new): only an answer the page shows counts | 12,684 -> 242,152 |
+| `Timeline` | The calibration's pause reason (`"calibrate"`); a second sleep while one is pending (`SleepAgain`), and a replaced sleep's timer firing (`FireReplaced`), with variables `unresolved` and `replaced` | `LatestPending` (new) | 88 -> 656 |
+| `Turns` | The action kinds from `PairDefs`; `type_fast` checks for the interrupt as `type` does | | 538 -> 1,234 |
 
-The two bugs, each shown by TLC before the fix:
+Comments in `Anchor`, `Calibration`, `Draft`, `EditEvents`, `FollowMode`,
+`Outside`, `RunBox`, `Serialize`, `Start`, and `Timeline` say what the code does
+now, and every action with code of its own has a comment in the code naming its
+spec.
 
--   **#219:** a report while the batch an interrupt left playing still played
-    cleared `stale`, so the next batch was rehearsed from that batch's fork,
-    which missed the programmer's edit, and a line just read was refused.
-    `ReportWaitsForQueue = FALSE` breaks `ReadIsStart`; the old `Return`
-    breaks `DiscardedWaits`.
--   **#220:** after the link closed, `open()` still tried the next window,
-    against `Wire`'s `OpenSocket` guard. `Wire` was right; only the code
-    changed.
+## Bugs fixed
+
+The first four were shown by TLC with the old design, then fixed in the spec
+and the code, with a test named for the invariant. The last needed the code
+only.
+
+| Issue | Spec | The bug | Shown by |
+|---|---|---|---|
+| #191 | `Draft` | A reply the calibration took left playback paused until the Resume button | `ClearOnTaken = FALSE` breaks `ReplyMeansDraft` |
+| #193 | `Anchor` | A step refused as unanchored dropped a rejection `restore` held | `DropsHeld = TRUE` breaks `NoRejectionLost` |
+| #194 | `ListenGrace` | Only a call that blocked ended the grace | `EndOnAnyCall = FALSE` breaks `NoFalseYourMove` |
+| #219 | `Rehearsal`, `Serialize` | A report while the batch an interrupt left playing still played cleared `stale`, so the next batch was rehearsed without the programmer's edit, and a line just read was refused | `ReportWaitsForQueue = FALSE` breaks `ReadIsStart`; the old `Return` breaks `DiscardedWaits` |
+| #220 | `Wire` | After the link closed, `open()` still tried the next window | `Wire`'s `OpenSocket` was right; only the code changed |
 
 A sweep with every bound raised by one found only `Controller` at
-`MaxCancels = 3`, which is #202.
+`MaxCancels = 3`, which is #202, filed with the audit's other findings
+(#201 to #218).
 
-## One meaning per term
+## Renames
 
-Pull request #199, issues #197 and #198, 2026-10-19. Every term means one thing
-across the specs, and every variable is named for what it holds. TLC held on
-every config, with the state counts unchanged except where a model changed:
-`Turns` 538 -> 1,234 (`type_fast` checks for the interrupt as `type` does),
-`EditorAdapter` 311 -> 1,464 (the `disk` author and `Reload`), and `BatchFile`
-121 -> 207 (a third file).
-
--   **The rules.** A term means one thing in every spec; a name of two or more
-    words is lowerCamelCase, a string value too, as section 5.10 of
-    [the style guide](tlaplus-style-guide.md) says; an absent value is a model
-    value, not a string; a spec's one process is `phase`; id sets are `Num*`
-    and bounds `Max*`; an action names its object where a verb was shared
-    (`CloseSocket`, `OpenDocument`).
--   **`PairDefs.tla`**, new: the shared vocabulary, `ActionKinds`,
-    `SessionPhases` and `NoSession`, `Views`, `PageStates`, `Calls` and
-    `NoCall`, `PauseReasons`, `Files` and `NoFile`, and the letters `Letter`,
-    `OtherLetter`, `Space`, `LineFeed`, `CarriageReturn`, with `Seqs`. The specs
-    that used them `EXTENDS` it.
--   **The programmer is `programmer`, never `user`**, in the specs and on the
-    wire: the turn, the Pause button's reason, the code, the tests, and
-    `PROTOCOL.md`, with version 0.8.0.
--   **Models that changed:** `EditorAdapter` gained the `disk` author and
-    `Reload`; `Turns` takes `ActionKinds` from `PairDefs`; `FollowMode`'s
-    `LookAway` goes to `"otherFile"`; `BatchFile`'s `EditAtCursorProp` covers
-    `type_fast`.
--   **The review (#198)** found names the sweep left behind, in 49 code and test
-    comments and in nine `ASSUME` names; nothing it found changed a formula's
-    meaning.
-
-Every rename, by spec. A row with `none` in Was is new; one with `none` in Now
-is gone, and says where it went:
+Every name that changed, by spec. A Now that says "in `PairDefs`" moved there;
+one that starts with "none" is gone, and says why.
 
 | Spec | Kind | Was | Now |
 |---|---|---|---|
@@ -91,14 +106,10 @@ is gone, and says where it went:
 | Actions | constant | `MaxLen` | `MaxActions` |
 | Actions | definition | `Full` | `FullEffects` |
 | Actions | definition | `Kinds` | `ActionShapes` |
-| Actions | value | none | `"type_fast"` in the step table |
 | Anchor | variable | `cursor` | `place` |
 | Anchor | variable | `pending` | `mustAnchor` |
 | Anchor | variable | `misplaced` | `wrongPlace` |
-| Anchor | variable | `held` | `heldCount` |
-| Anchor | variable | `lost` | `rejectionLost` |
 | Anchor | definition | `Discard` | `StopShort` |
-| Anchor | definition | `Deliver` | `TakeHeld` |
 | BatchFile | variable | `cursor` | `cursorFile` |
 | BatchFile | variable | `named` | `namedFile` |
 | BatchFile | variable | `played` | `actionsPlayed` |
@@ -107,7 +118,6 @@ is gone, and says where it went:
 | BatchFile | definition | `Reject` | `Stop` |
 | BatchFile | definition | `NoFile` | `NoFile` in `PairDefs` |
 | BatchFile | definition | `Kinds` | `ActionKinds` in `PairDefs` |
-| BatchFile | value | none | `"run"` and `"type_fast"` among its kinds |
 | Bridge | variable | `sock` | `socketState` |
 | Bridge | variable | `recent` | `restorable` |
 | Bridge | definition | `Close` | `CloseSocket` |
@@ -124,7 +134,7 @@ is gone, and says where it went:
 | Calibration | constant | `MaxRuns` | `MaxRounds` |
 | Calibration | definition | `Finish` | `StopTimer` |
 | Calibration | definition | `Cancel` | `CancelCalibration` |
-| Calibration | definition | none | `Rates` |
+| Calibration | definition | the set `{"default", "measured"}`, inline | `Rates` |
 | Calibration | value | `"armed"` | `"ready"` |
 | Calibration | value | `"old"` | `"staleDefault"` |
 | Controller | variable | `call` | `phase` |
@@ -175,11 +185,9 @@ is gone, and says where it went:
 | EditorAdapter | definition | `Edit` | `EditAsAgent` |
 | EditorAdapter | definition | `Type` | `EditAsProgrammer` |
 | EditorAdapter | definition | `OK` | `RightAttribution` |
-| EditorAdapter | definition | none | `Reload` |
 | EditorAdapter | value | `"programmer during save"` | `"programmerDuringSave"` |
 | EditorAdapter | value | `"seen"` | `"handled"` |
 | EditorAdapter | value | `"sent"` | `"awaiting"` |
-| EditorAdapter | value | none | `"disk"`, an author |
 | FileText | variable | `disk` | `diskText` |
 | FileText | variable | `doc` | `documentText` |
 | FileText | variable | `steps` | `changes` |
@@ -216,7 +224,6 @@ is gone, and says where it went:
 | ListenGrace | variable | `idle` | `timedOut` |
 | ListenGrace | variable | `expired` | `graceExpired` |
 | ListenGrace | variable | `quiet` | `absent` |
-| ListenGrace | definition | `Refuse` | `FailRehearsal` |
 | ListenGrace | definition | `TimeOut` | `Timeout` |
 | ListenGrace | definition | `Act` | `Interrupt` |
 | ListenGrace | definition | `GoQuiet` | `GoAbsent` |
@@ -243,7 +250,7 @@ is gone, and says where it went:
 | Outside | definition | `Create` | `Show` |
 | Outside | definition | `Write` | `WriteOutside` |
 | Outside | definition | `Report` | `WatcherReports` |
-| Outside | definition | none | `NoDocument`, a model value |
+| Outside | definition | `NoText`, for the document | `NoDocument` |
 | Panel | variable | `band` | `currentMessage` |
 | Panel | variable | `flag` | `messageFiled` |
 | Panel | variable | `added` | `entriesSinceMessage` |
@@ -256,7 +263,7 @@ is gone, and says where it went:
 | PanelScroll | variable | `before` | `topBefore` |
 | PanelScroll | constant | `MaxEntries` | `MaxEvents` |
 | PanelScroll | definition | `InRange` | `ViewAtEntry` |
-| PanelScroll | definition | none | `EventKinds` |
+| PanelScroll | definition | the set `{"entry", "you", "scroll"}`, inline | `EventKinds` |
 | Places | constant | `MaxLen` | `MaxChars` |
 | Places | definition | `Seqs` | `Seqs` in `PairDefs` |
 | Places | value | `"x"`, `"y"`, `"n"` | `Letter`, `OtherLetter`, `LineFeed` in `PairDefs`; `"m"`, the marker, is no character now |
@@ -292,6 +299,7 @@ is gone, and says where it went:
 | Reload | variable | `orig` | `selectionBefore` |
 | Reload | constant | `Refine` | `SplitRuns` |
 | Reload | definition | `NewLines` | `Replacements` |
+| Reload | definition | `After` | `Moved` |
 | Resume | variable | `state` | `session` |
 | Resume | variable | `dir` | `directory` |
 | Resume | variable | `conn` | `connected` |
@@ -349,10 +357,7 @@ is gone, and says where it went:
 | Start | variable | `shown` | `visible` |
 | Start | variable | `shownFor` | `visibleFor` |
 | Start | variable | `cmd` | `cliAndFolder` |
-| Start | variable | `asked` | `questions` |
 | Start | variable | `pending` | `unanswered` |
-| Start | variable | `setBy` | `deliveredQuestion` |
-| Start | variable | `newest` | `newestAnswered` |
 | Start | variable | `flips` | `environmentChanges` |
 | Start | variable | `runs` | `starts` |
 | Start | variable | `chosen` | `chosenLocation` |
@@ -365,7 +370,7 @@ is gone, and says where it went:
 | Start | definition | `FlipCmd` | `FlipCliAndFolder` |
 | Start | definition | `Exit` | `AgentExits` |
 | Start | definition | `Settles` | `NoteGoes` |
-| Start | definition | none | `NoQuestion`, a model value (was 0) |
+| Start | value | `0`, for no question | `NoQuestion`, a model value |
 | Start | value | `"gone"` | `"disposed"` |
 | Start | value | `"live"` | `"loaded"` |
 | Terminals | variable | `cmd` | `command` |
@@ -386,7 +391,7 @@ is gone, and says where it went:
 | Timeline | definition | `Reasons` | `PauseReasons` in `PairDefs` |
 | Timeline | value | `"user"` | `"programmer"` |
 | Timeline | value | `"waiting"` | `"timerStopped"` |
-| Timeline | value | `"away"`, `"calibrate"`, `"reply"` | `PauseReasons` in `PairDefs` |
+| Timeline | value | `"away"`, `"reply"` | `PauseReasons` in `PairDefs` |
 | Turns | variable | `changes` | `turnChanges` |
 | Turns | variable | `bad` | `wrongTurn` |
 | Turns | constant | `Kinds` | `ActionKinds` in `PairDefs` |
@@ -397,7 +402,6 @@ is gone, and says where it went:
 | Turns | definition | `Start` | `Perform` |
 | Turns | value | `"start"` | `"before"` |
 | Turns | value | `"user"` | `"programmer"` |
-| Turns | value | none | `"type_fast"` among its kinds |
 | Typing | constant | `MaxLen` | `MaxChars` |
 | Typing | value | `"n"`, `"s"`, `"x"` | `LineFeed`, `Space`, `Letter` in `PairDefs` |
 | Wire | variable | `sock` | `socketState` |
@@ -424,19 +428,3 @@ is gone, and says where it went:
 | Wire | value | `"pending"` | `"awaitingAnswer"` |
 | Wire | value | `"rejected"` | `"severed"` |
 | Wire | value | `"requestedAborted"` | `"requestedCanceled"` |
-
-## The specs follow the code, and three bugs fixed spec first
-
-Pull request #196, issues #191, #192, #193, and #194, 2026-10-19. An audit of
-every spec against the code; TLC passed every config, and the drift was in what
-the specs said about the code.
-
-| Spec | Change | Distinct states |
-|---|---|---|
-| `Draft` | `ClearOnTaken` (#191): a reply the calibration took left the reply pause in place; with `FALSE`, `ReplyMeansDraft` is violated | 12, unchanged |
-| `Anchor` | `DropsHeld` (#193): a step refused as unanchored dropped a rejection `restore` held; new invariant `NoRejectionLost` | 46 -> 113 |
-| `ListenGrace` | `EndOnAnyCall` (#194): every call ends the grace, not only one that blocked; with `FALSE`, `NoFalseYourMove` is violated | 20, unchanged |
-| `Start` | Questions carry a number, and the CLI is read when it asks (#192); new invariant `LatestAnswer`, since replaced (see the first section) | 12,684 -> 27,816 |
-| `Panel` | The session event that repeats a suspension (`RepeatSession`, #138) | 21, unchanged |
-| `Timeline` | The calibration's pause reason, `"calibrate"` | 88 -> 176 |
-| `Anchor`, `Serialize`, `FollowMode`, `EditEvents`, `Outside`, `Calibration` | Comments name the code as it is; `Anchor` says a failed batch needs an anchor too | unchanged |
