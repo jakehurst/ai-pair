@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.1
+
+-   The TLA+ specs and the code agree again, after an audit of every spec
+    against the code and checks across specs (#200). Comments, README rows,
+    and test titles that #199's renames left behind name the code as it is.
+    Thirteen specs model a path the code takes that they missed: the session
+    ending or the socket closing while calls wait (`Serialize.tla`), an edit
+    VS Code refuses and `create`'s save (`EditorAdapter.tla`), a window that
+    refuses the relay's hello (`Discovery.tla`), focusing an open document
+    (`Outside.tla`), `show` returning early for a file already in view
+    (`FollowMode.tla`), the programmer's turn in follow mode (`Scroll.tla`),
+    the selection a `delete` needs (`BatchFile.tla`), a selection where a
+    reload's change starts (`Reload.tla`), one pending edit event a file
+    (`EditEvents.tla`), two asks in flight for the Start button
+    (`Start.tla`), a second sleep while one is pending (`Timeline.tla`), news
+    during the listen grace (`ListenGrace.tla`), and closing an ended session
+    (`Resume.tla`).
+-   The relay's search for project guides stops only at the workspace
+    folder, which always holds the working directory; the check for the
+    file system's root, which no run reached, is removed.
+
 ## 0.8.0
 
 -   The programmer is `programmer` on the wire, never `user`: the turn
