@@ -55,7 +55,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
    * page, and again after Set Up Agent (specs/Start.tla, `LoadPage`, and `FlipSetUp` with ReaskOnSetUp).
    * Only the latest question's answer reaches the page, so a page replaced before its answer landed
    * cannot set the button on its successor, and an earlier question's answer cannot override a
-   * reask's (`Answer` with DropStale; OwnAnswer, LatestAnswer).
+   * reask's (`AnswerCheck` with DropStale; OwnAnswer, LatestAnswer).
    */
   askStart(): void {
     const asked = ++this.asked;

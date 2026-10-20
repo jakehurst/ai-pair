@@ -1,5 +1,5 @@
 // Files changed on disk outside the protocol, marked until the programmer looks at them (#15,
-// specs/Outside.tla). No VS Code here, so it can be tested on its own; extension.ts watches the
+// specs/Outside.tla). No VS Code here, so it can be tested on its own; outside_watch.ts watches the
 // files and draws the marks.
 
 import { withinFolder } from '@ai-pair/protocol';

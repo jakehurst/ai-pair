@@ -18,6 +18,7 @@ export type Span = { line: number } & ({ text: string } | { from: string; throug
 
 const MAX_CANDIDATES = 20;
 
+/** Returns every offset where `needle` occurs in `text` (specs/Places.tla, `Starts`). */
 function findAll(text: string, needle: string): number[] {
   const starts: number[] = [];
   if (needle === '') return starts;
@@ -39,7 +40,7 @@ function unmarked(text: string): string {
   return text.replaceAll(CURSOR_MARKER, '');
 }
 
-/** Returns where a spot's text occurs: its whole text, and the offsets of its marker in each match. */
+/** Returns where a spot's text occurs: its whole text, and the offsets of its marker in each match (specs/Places.tla, `SpotOffsets`). */
 function findSpot(text: string, at: string): { whole: string; found: number[] } {
   const marker = at.indexOf(CURSOR_MARKER);
   const before = at.slice(0, marker);

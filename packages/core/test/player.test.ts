@@ -421,7 +421,7 @@ describe('actions the player refuses', () => {
     expect((await h.player.play(1, [none as Action])).result.error).toEqual({ kind: 'invalid_action', message: 'Unknown action: {}' });
   });
 
-  it("Start: allows only say and point during the programmer's turn", async () => {
+  it("OnlyTalkInTheirTurn, Perform: allows only say and point during the programmer's turn", async () => {
     const h = harness({ files: { 'a.ts': 'x\n' }, scene: { turn: 'programmer' } });
     expect((await played(h, [moveTo(1)])).result.error).toEqual({
       kind: 'not_your_turn',
@@ -666,7 +666,7 @@ describe('type', () => {
     expect(h.editor.edit.mock.calls.length).toBe(before);
   });
 
-  it("StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed", async () => {
+  it("PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed", async () => {
     expect(await cutTyping(1, { type: `ab${CURSOR_MARKER}cd` })).toMatchObject({
       status: 'interrupted',
       unplayed: [{ type: `b${CURSOR_MARKER}cd` }, { say: 'After.' }],

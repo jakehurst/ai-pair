@@ -177,7 +177,7 @@ describe('run', () => {
     expect(lastTerminal().show).toHaveBeenCalledWith(/* preserveFocus= */ true);
   });
 
-  it('ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell', async () => {
+  it('RunReturns, ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell', async () => {
     const outcome = runIn(new PairTerminals(), 'npm test');
     await vi.advanceTimersByTimeAsync(0);
     lastExecution().output = ['ok', '\n'];
@@ -205,7 +205,7 @@ describe('run', () => {
     expect(given().pushed).toEqual(['a', 'b']);
   });
 
-  it('StopWaiting: returns with the command still running when the wait is over, or playback is interrupted', async () => {
+  it('RunReturns, StopWaiting: returns with the command still running when the wait is over, or playback is interrupted', async () => {
     const terminals = new PairTerminals();
     const waited = runIn(terminals, 'npm run watch');
     await vi.advanceTimersByTimeAsync(WAIT_MS);
@@ -219,7 +219,7 @@ describe('run', () => {
     expect(given().run.finished).toBe(false);
   });
 
-  it('Close: ends the wait when the programmer closes the terminal, and not for another terminal', async () => {
+  it('RunReturns, CloseTerminal: ends the wait when the programmer closes the terminal, and not for another terminal', async () => {
     const outcome = runIn(new PairTerminals(), 'npm test');
     await vi.advanceTimersByTimeAsync(0);
     fire('close', new fakes.FakeTerminal({ cwd: '/' }, true));
@@ -229,7 +229,7 @@ describe('run', () => {
     expect(given().run.exitCode()).toBeUndefined();
   });
 
-  it('waits for shell integration to come, for this terminal only, and types the command in without it', async () => {
+  it('RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it', async () => {
     fakes.integrated = false;
     const terminals = new PairTerminals();
     const late = runIn(terminals, 'npm test');
@@ -299,7 +299,7 @@ describe('acquire', () => {
     expect(samePath).toHaveBeenCalled();
   });
 
-  it('Close: forgets a terminal the programmer closes, and ignores the close of one it never made', async () => {
+  it('CloseTerminal: forgets a terminal the programmer closes, and ignores the close of one it never made', async () => {
     const terminals = new PairTerminals();
     const first = runIn(terminals, 'npm run build');
     await vi.advanceTimersByTimeAsync(0);

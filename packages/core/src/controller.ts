@@ -372,8 +372,8 @@ export class Controller {
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block('step', session, {}, signal);
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
-      // specs/Anchor.tla, `SubmitAnchored` and `RefuseUnanchored`). A rejection `restore` holds comes first, in the
-      // report of the step discarded as stale (`Deliver`, #193).
+      // specs/Anchor.tla, `SubmitAnchored`, `SubmitUnanchored`, and `RefuseUnanchored`). A rejection `restore` holds comes first, in the
+      // report of the step discarded as stale (`TakeHeld`, #193).
       const anchor = cursorAnchor(actions);
       if (session.anchorNeeded && anchor && !anchor.anchored && session.held.length === 0) return this.rejectUnanchored(session, anchor);
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
@@ -467,7 +467,7 @@ export class Controller {
    * `mayRepeat`: or the cancellation came after the answer, and the agent may have seen it (#67).
    */
   restore(report: Report, mayRepeat = false): void {
-    // `Restore` in specs/Controller.tla. Also once the session ended, or the report closed it: the next call takes the report again,
+    // `Restore` in specs/Controller.tla and specs/Anchor.tla. Also once the session ended, or the report closed it: the next call takes the report again,
     // and closes the session again (#60).
     const session = this.session ?? this.closed;
     if (!session) return;
@@ -671,7 +671,7 @@ export class Controller {
   /**
    * Removes one pause reason, or all of them. Playback continues when none are left (specs/Timeline.tla, `Resume`).
    * `reveal`: bring the view back to what it follows, as the Resume button does; a reply doesn't (specs/PointFocus.tla,
-   * `Reply`, issue 125).
+   * `SendReply`, issue 125).
    */
   resume(reason?: PauseReason, { reveal = true }: { reveal?: boolean } = {}): void {
     if (this.pauseReasons.size === 0) return;
@@ -686,7 +686,7 @@ export class Controller {
     const session = this.session;
     if (session) {
       // A point the programmer looked away from is stale: from now on the view follows the cursor,
-      // not it (specs/PointFocus.tla, `Resume`). The editor is told before a reveal targets it.
+      // not it (specs/PointFocus.tla, `ResumeAll`). The editor is told before a reveal targets it.
       if (lookedAway && session.scene.focus === 'point') {
         session.scene.focus = 'cursor';
         this.render();
@@ -1027,6 +1027,7 @@ export class Controller {
       }
     }
     session.finished = [];
+    // specs/Resume.tla, `Report`: a message from the programmer goes out with these events.
     session.events = [];
     // specs/Rehearsal.tla, `Report`: the agent now knows of the interrupt.
     session.stale = false;
@@ -1039,7 +1040,8 @@ export class Controller {
     if (this.pauseReasons.size > 0) report.paused = [...this.pauseReasons];
     if (session.mayRepeat) report.repeated = true;
     session.mayRepeat = false;
-    // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded.
+    // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded
+    // (specs/Anchor.tla, `TakeHeld`).
     const held = session.held.shift();
     if (held) report.rejected = held.rejected;
     // Its own mark: a report before it may have taken session.mayRepeat (specs/Controller.tla, `Commit` with MarkHeld).

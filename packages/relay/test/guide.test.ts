@@ -56,12 +56,6 @@ it('Exactly, Contained: leaves out a guide git ignores', () => {
   expect(projectGuides('/top/ws/app/src', '/top/ws', (file) => file === ignored)).toEqual([outer, inner]);
 });
 
-it("stops at the file system's root when `root` doesn't contain `cwd`", () => {
-  const top = guide('/');
-  const inner = guide('/top/app');
-  expect(projectGuides('/top/app', '/elsewhere', ignoresNone)).toEqual([top, inner]);
-});
-
 it('asks git whether it ignores a file: exit 0 is ignored; 1, not; 128, outside a repository', () => {
   const file = path.join('/top/ws', GUIDE_FILE);
   for (const [status, ignored] of [

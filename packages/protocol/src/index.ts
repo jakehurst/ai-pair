@@ -25,7 +25,7 @@ function fieldList(fields: string[]): string {
   return fields.map((f) => `\`${f}\``).join(', ');
 }
 
-/** Returns what's wrong with a place's `line`, if anything. */
+/** Returns what's wrong with a place's `line`, if anything (specs/ActionValidation.tla, `LineOK`). */
 function lineProblem(line: unknown): string | undefined {
   if (line === undefined || (typeof line === 'number' && Number.isInteger(line) && line >= 1)) return undefined;
   return "`line` is a line number, from 1, exactly as your latest `read` or report shows it. Omit it for your cursor's line.";
@@ -36,7 +36,10 @@ function markerCount(text: string): number {
   return text.split(CURSOR_MARKER).length - 1;
 }
 
-/** Returns what's wrong with a spot's `at`, if anything: it needs exactly one cursor marker, and text around it. */
+/**
+ * Returns what's wrong with a spot's `at`, if anything: it needs exactly one cursor marker, and text around it
+ * (specs/ActionValidation.tla, `SpotProblem`).
+ */
 function spotProblem(at: string): string | undefined {
   const markers = markerCount(at);
   if (markers === 0) {
@@ -49,7 +52,7 @@ function spotProblem(at: string): string | undefined {
   return undefined;
 }
 
-/** Returns what's wrong with a `move`'s combination of fields, if anything. */
+/** Returns what's wrong with a `move`'s combination of fields, if anything (specs/ActionValidation.tla, `MoveProblem`). */
 export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
   if ('before' in target || 'after' in target) {
     return `A spot is one text, \`at\`: the text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`at: "import { ${CURSOR_MARKER}type Context"\`.`;
@@ -66,7 +69,7 @@ export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
   return undefined;
 }
 
-/** Returns what's wrong with a `select`'s or `point`'s combination of fields, if anything. */
+/** Returns what's wrong with a `select`'s or `point`'s combination of fields, if anything (specs/ActionValidation.tla, `SpanProblem`). */
 export function spanProblem(span: Unchecked<SpanFields>): string | undefined {
   if ('near_line' in span) return 'Give `line`: the line the code starts on, exactly as your latest `read` or report shows it.';
   if ('to' in span) return 'The end of a range is `through`: `from` and `through` are both texts.';

@@ -67,8 +67,8 @@ Init ==
     /\ calibratedOnce = FALSE
     /\ rounds = 0
 
-\* The command, or the programmer asking in the panel: it says it will show the
-\* passage on go.
+\* The Calibrate Reading Speed command: it says it will show the passage on go.
+\* The programmer asking in the panel goes through the agent's tool, `Supply`.
 Arm ==
     /\ phase = "idle"
     /\ phase' = "ready"

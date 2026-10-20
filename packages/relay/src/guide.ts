@@ -37,8 +37,8 @@ export function projectGuides(cwd: string, root: string, ignored = gitIgnores): 
   for (let dir = cwd; ; dir = path.dirname(dir)) {
     const file = path.join(dir, GUIDE_FILE);
     if (fs.existsSync(file) && !ignored(file)) found.push(file);
-    // A `root` that doesn't contain `cwd` stops at the file system's root instead.
-    if (dir === root || path.dirname(dir) === dir) break;
+    // `root` always contains `cwd`: the relay finds the window by a workspace folder that holds it.
+    if (dir === root) break;
   }
   return found.toReversed();
 }

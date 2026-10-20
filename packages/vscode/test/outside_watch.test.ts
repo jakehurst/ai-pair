@@ -218,7 +218,7 @@ describe('watchOutside', () => {
     ]);
   });
 
-  it('Open: takes a file opened in a watched folder as seen, with its text on disk, and nothing else', async () => {
+  it('OpenDocument: takes a file opened in a watched folder as seen, with its text on disk, and nothing else', async () => {
     watching();
     fakes.disk.set('/p/a.ts', 'on disk');
     await fire('active', { document: { uri: new fakes.FakeUri('/p/a.ts') } });

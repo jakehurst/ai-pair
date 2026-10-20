@@ -618,6 +618,17 @@ export async function run(): Promise<void> {
   await insertAsProgrammer(unsaved.uri, new vscode.Position(0, 1), 'b');
   fs.unlinkSync(file('unsaved-88.txt'));
   assert.deepEqual((await controller.read('unsaved-88.txt')).lines, [{ number: 1, text: 'ab' }]);
+  // A move to it shows the document as it is: no file is created over the programmer's text.
+  const keptMove = await controller.step([{ move: { file: 'unsaved-88.txt', line: 1, to: 'line_end' } }]);
+  assert.equal(keptMove.rejected, undefined);
+  const keptPlayed = (await controller.step([])).batches;
+  assert.deepEqual(
+    keptPlayed.map((b) => b.status),
+    ['completed'],
+    JSON.stringify(keptPlayed),
+  );
+  assert.equal(await buffer('unsaved-88.txt'), 'ab');
+  assert.equal(fs.existsSync(file('unsaved-88.txt')), false);
   await unsaved.save();
   await controller.end();
   console.log(
@@ -1260,7 +1271,7 @@ export async function run(): Promise<void> {
   assert.equal((await homeless.listTools()).tools.length, tools.tools.length);
   await homeless.close();
   console.log(
-    'RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME',
+    'RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, canceled and shut down cleanly, and started without AI_PAIR_HOME',
   );
 
   // Set Up Agent, with the agents' config folders in the run's folder and no agent installed (scripts/integration.sh):

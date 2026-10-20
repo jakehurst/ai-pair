@@ -106,6 +106,22 @@ reported. The traces are in the issues.
 
 ## Specs and the code they model
 
+The code that implements a spec's action carries a comment naming the spec and
+the action. The actions below have no code of their own: they stand for the
+programmer, VS Code, the disk, the agent's MCP client, or the end of a run, so no
+comment names them.
+
+| Spec | Actions | What they stand for |
+|---|---|---|
+| `Actions`, `Bridge`, `FollowMode`, `Player`, `Reload`, `RunBox`, `Serialize`, `Wire` | `Finished` | the model's end: nothing left to do |
+| `EditorAdapter` | `EditAsProgrammer`, `Reload` | the programmer typing; VS Code reloading a clean document from disk |
+| `FileText` | `OpenDocument`, `CloseDocument`, `Write`, `Delete`, `Edit`, `Save`, `Reload` | VS Code and the disk |
+| `Navigator` | `Lull` | the programmer pausing their typing for `navigatorIdleMs` |
+| `Outside` | `CloseDocument`, `Edit`, `Save`, `WriteOutside` | VS Code, the programmer, and another program writing the file |
+| `PanelScroll` | `Scroll` | the programmer scrolling the history |
+| `Start` | `Choose`, `FlipCliAndFolder` | the programmer setting `preferredLocation`; the CLI installed or removed, or the folder closed |
+| `Wire` | `AbortInClient`, `Deliver` | the agent's client canceling a call; the MCP SDK handing the relay's answer to the client |
+
 ### `PairDefs`: the vocabulary the specs share
 
 No config: the module holds definitions only, as 5.2 of the style guide allows,
@@ -217,7 +233,7 @@ the test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `OwnCloseOnly` | `link.test.ts`: OwnCloseOnly: rejects a call only when the socket it was sent on closes |
-| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with a string, a number, an array, an object with no type, or a rejection whose reason isn't a text; RelayStaysUp: drops a frame that is not a message after the welcome, and an answer to no call; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME |
+| `RelayStaysUp` | `link.test.ts`: RelayStaysUp: fails to connect, without crashing, when a window answers with $name (a string, a number, an array, an object with no type, or a rejection whose reason isn't a text); RelayStaysUp: drops a frame that is not a message after the welcome, and an answer to no call; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, canceled and shut down cleanly, and started without AI_PAIR_HOME |
 | `NoReportLost` | `link.test.ts`: NoReportLost: doesn't send a call that was cancelled before it went out |
 | `RepeatsMarked` | `relay.test.ts`: RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `CallsAnswered` | `link.test.ts`: CallsAnswered: tells the agent to call `start` again when the editor disconnects during a call (#138) |
@@ -267,8 +283,8 @@ is `"you"`.
 
 | Spec | Code |
 |---|---|
-| `AddEntry` | everything `add()` puts in but the programmer's message: the agent's message filed, runs, dividers, changes outside the editor |
-| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message: it sets `scrollTop` to 0 |
+| `AddEntry` | everything put in but the programmer's message: the agent's message filed (by `add()`, or by `setNow` through `fileCurrent` when a new message replaces it), runs, dividers, changes outside the editor |
+| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message or a selection: it sets `scrollTop` to 0 |
 | `Scroll` | the programmer scrolling the history |
 | `entriesAboveView`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
 
@@ -346,7 +362,7 @@ report, where before it closed with the first.
 |---|---|
 | `Submit`, `Listen` | `step` with a batch, in the agent's turn (a `say` or `point` batch in the programmer's turn is `Turns`'s); `listen`; with `WaitForReturn`, held while a report is on its way back (`Sendable`) |
 | `EndByProgrammer` | `endSession()`: `ended`, the `end` event, `interrupt()` |
-| `FailRehearsal`, `PassRehearsal` | `rejectBatch()` with the action the rehearsal `failed` at; the batch queued, or discarded when `stale`, then `block()` |
+| `FailRehearsal`, `PassRehearsal` | `rejectBatch()` with the action the rehearsal `failed` at, or `rejectUnanchored()` before any rehearsal (#112); the batch queued, or discarded when `stale`, then `block()` |
 | `Play`, `Complete` | `run()` |
 | `Interrupt` | an interrupting event: `interrupt()` discards what is queued and sets `stale`; a turn change, `takeTurn` or `handBack` |
 | `Commit` | `finishCall` -> `snapshot`, which also hands out one `held` rejection; with the session ended, `close()` |
@@ -383,7 +399,7 @@ test's title carries its name:
 | `NoUnmarkedRepeat` | `controller.test.ts`: NoUnmarkedRepeat: says a returned report may repeat one already seen, and marks each returned rejection the agent may have seen; `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `HeldMeansStale` | `controller.test.ts`: HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has |
 | `PlaysKnowingEvents` | `controller.test.ts`: PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen |
-| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
+| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
 | `BatchesDelivered` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call; HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has; `relay.test.ts`: BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28) |
 | `EventsDelivered` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; EndDelivered, EventsDelivered: reports a returned report again after the programmer ended the session with it (#60); EventsDelivered: returns once something interrupts, and not for a quiet edit by others; `relay.test.ts`: EventsDelivered: cancels a blocked call without losing the report, even when racing |
 | `QuietDelivered` | `controller.test.ts`: NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back |
@@ -429,7 +445,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoInternal` | `link.test.ts`: NoInternal: skips a file that isn't JSON, JSON that isn't a window's, and a file not named as JSON; `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
 | `FindsRunningProp` | `bridge.test.ts`: OpenWindow, FindsRunningProp: listens on 127.0.0.1, then writes its discovery file beside it and renames it over; `integration.ts`, in VS Code: FindsRunningProp: the discovery file is never half written |
-| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME |
+| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, canceled and shut down cleanly, and started without AI_PAIR_HOME |
 | `FindsOpen` | `link.test.ts`: FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed; `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
 
 ### `EditorAdapter`: who made a change
@@ -442,7 +458,7 @@ before them: one channel, in order.
 
 | Spec | Code |
 |---|---|
-| `EditAsAgent`, `ResolveEdit` | `edit()`: the entry in `ownEdit`, VS Code applying it, `finally` |
+| `EditAsAgent`, `ResolveEdit` | `edit()`: the entry in `own`, VS Code applying it, `finally` |
 | `EditAsProgrammer` | a keystroke: its change event is queued for the extension host |
 | `StartSave`, `RunParticipant`, `FinishParticipants`, `FinishSave` | `save()`: the round trip, `saving`, the save participants (format on save), the write |
 | `Handle` | `onChange`: the agent's own edit, or `byProgrammer` |
@@ -604,7 +620,7 @@ violates `NoRejectionLost` in three steps: `StopShort`, `Restore`,
 | `SubmitAnchored` | a batch whose first action at the cursor is a `move` or `select` with `file` and `line`: accepted, and the flag cleared |
 | `SubmitUnanchored` | any other action at the cursor first, accepted while the flag is clear |
 | `RefuseUnanchored` | such a batch while the flag holds: `rejectUnanchored`, with `unanchored`, while nothing is held; with a held rejection, `step` discards it as stale and its report delivers the rejection |
-| `Restore` | `restore` of a report with a rejection: onto `heldCount`, and `stale` set (#67) |
+| `Restore` | `restore` of a report with a rejection: onto `held`, and `stale` set (#67) |
 | `TakeHeld` | `snapshot` taking one held rejection into the report of a `listen`, an `end`, or a step discarded as stale |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
@@ -641,7 +657,7 @@ with the default rate.
 |---|---|
 | `Arm`, `Supply` | the Calibrate Reading Speed command, or the calibrate tool, which the bridge refuses unless idle; both add the calibrate pause reason |
 | `Go`, `StopTimer` | the programmer typing go and x in the panel; the extension timestamps both |
-| `ApplyRate` | the configuration change applying the new timing, which also removes the pause |
+| `ApplyRate` | `store` awaits the settings write, then `controller.setTiming` applies the new timing; once `store` resolves, `finish` removes the pause |
 | `CancelCalibration` | any other reply, the view disposed, the session ending |
 | `StartSay` | the reading time computed in the player from the timing in force at that moment |
 | `EndSay` | the reading time's sleep ending |
@@ -680,7 +696,7 @@ with `TRUE`, TLC violates `ReplyKeepsView` in two steps: `LookAway`, `SendReply`
 
 | Spec | Code |
 |---|---|
-| `Point`, `ActAtCursor` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `activeFile.show` before each edit) |
+| `Point`, `ActAtCursor` | a `point` action setting the focus; the next cursor action taking it back, and showing its file (`player.ts`, `editor.show` before each edit) |
 | `LookAway` | `onActiveEditor` away from the target: `pause("away")` |
 | `CloseTab` | the programmer closing the target's tab, or every tab: `onActiveEditor(undefined)` returns early, so nothing pauses |
 | `SendReply` | the panel's `reply`: `resume(undefined, { reveal: false })`, then `userMessage`; a stale point is dropped, and nothing is revealed |
@@ -789,7 +805,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `StartsAreClicks` | `panel.test.ts`: StartsAreClicks: runs the starter once per start from the page; `webview/panel.test.ts`: StartsAreClicks: posts start when the button is clicked; `setup.test.ts`: StartsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `ClicksNeedButtonProp` | `webview/panel.test.ts`: ClicksNeedButtonProp: hides Start a session until the extension says it can start one |
 | `Offered` | `panel.test.ts`: Offered: tells a new page whether it can start a session |
-| `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload |
+| `ReaskedProp` | `panel.test.ts`: ReaskedProp: asks again after Set Up Agent, so the button appears without a reload; `extension.test.ts`: ReaskedProp: sets the agent up, and offers the panel the start again |
 | `KeepsLocation`, `StaysOnPair`, `StartsProp` | `setup.test.ts`: StartsAreClicks, StartsProp, StaysOnPair, KeepsLocation: runs the CLI with the prompt in a terminal it never shows, once per start |
 | `OneAtATime` | `setup.test.ts`: OneAtATime, Closes: starts no second agent while the first one's terminal is open, and starts again once it closes |
 | `Closes` | the same test, for the terminal closing. Nothing yet proves the CLI exits when the session ends; that needs a run in the editor |
@@ -836,7 +852,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
+| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
 | `DiscardedMeansNothing` | `session.e2e.test.ts`: DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla); PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: Stop: discards a batch interrupted before its first action, and reports no code for it |
 | `EventuallyReported` | `session.e2e.test.ts`: EventuallyReported: runs a command, reporting its output and exit code with the batch; `player.test.ts`: SaveAndRun: saves the batch first, runs in the root, waits as long as asked within the most, and reports the run |
 
@@ -887,7 +903,7 @@ elsewhere an action without `file` looked in the cursor's file, and a `type` or
 | `Say` | a `say` or `run`, which act in no file |
 | `ActInFile` | `move`, `select` and `point` in the file `fileOf` gives; only `move` and `select` move the cursor |
 | `ActAtCursor` | `type` and `delete` at the cursor, rejected with it outside the named file |
-| `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file |
+| `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, or the cursor outside the named file; the other ways an action fails (`no_selection` for a `delete` with nothing selected, a text not found, the programmer's turn) are other specs' |
 | `EndBatch` | a new `Playing` for the next batch; the cursor stays |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -1016,7 +1032,7 @@ Every invariant and property names the test that proves the code obeys it:
 
 ### `Outside`: marking files changed outside the protocol
 
-The feature of #15, specified before its code: `writtenOutside.ts` and
+The feature of #15, specified before its code: `outside.ts` and
 `outside_watch.ts` in `packages/vscode/src`. One file, written by VS Code's
 saves, by the extension's own `show`, and by anything else; a watcher that
 reports writes late and merges them. The code marks a file when a group of
@@ -1271,7 +1287,7 @@ the model already has.
 | Spec | Code |
 |---|---|
 | `Move` | an action moving the target, and the player's `follow()`; no action plays while a command runs |
-| `Leave`, `Follow` | the state leaving the following states (`paused`, `running`) and coming back: `renderCursor`; a pause's end: `resume`'s `reveal` |
+| `Leave`, `Follow` | the state leaving the following states (`paused`, `running`) and coming back: `renderCursor`; a pause's end: `resume`'s `reveal`, which a reply turns off (#125), so only the Resume button reveals |
 | `Glide` | `glide`'s frames; `scroll`'s `finally` and its follow if the target moved |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -1324,7 +1340,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `OnlyTalkInTheirTurn` | `controller.test.ts`: OnlyTalkInTheirTurn: takes the turn, interrupting playback, and hands it back with no message or selection; `player.test.ts`: Start: allows only say and point during the programmer's turn; `session.e2e.test.ts`: OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing |
+| `OnlyTalkInTheirTurn` | `controller.test.ts`: OnlyTalkInTheirTurn: takes the turn, interrupting playback, and hands it back with no message or selection; `player.test.ts`: OnlyTalkInTheirTurn, Perform: allows only say and point during the programmer's turn; `session.e2e.test.ts`: OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing |
 | `BatchEnds` | `controller.test.ts`: BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes |
 
 ### `Reload`: a file changed on disk
@@ -1386,7 +1402,7 @@ drops its copy of the file's ids, and reads the editor's.
 |---|---|
 | `Read` | `read`: `saw` with the queue's last `after.lines` when a queued batch edits the file (`planned`), unless `stale`; else the editor's |
 | `Submit` | `step`'s rehearsal: `fork()` of where the queue leaves off (`Origin`), the batch played in memory; while `stale`, the batch is discarded unrehearsed |
-| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a failure interrupts the queue |
+| `Play`, `FailPlay` | the oldest batch playing, the editor tracking its edits, `adopt`; a batch that does not complete (interrupted, discarded, or failed) is not adopted, and interrupts the queue |
 | `EditAsOther` | `otherEdit`: the editor tracks the change; the queue is interrupted if a batch edits the file (`interrupt`: the batches still queued are discarded, one already playing plays on, and `stale` is set), else each rehearsal follows it (`followChange`) |
 | `Accept` | the rehearsal's `knows` in `unseen`: the id the agent was shown at a number is the id there where the rehearsal starts |
 | `Report` | the report's `snapshot` clearing `stale`; `ready()` holds the report until a batch interrupted while playing has finished |
@@ -1420,7 +1436,7 @@ Every invariant names the test that proves the code obeys it:
 | `AcceptedOnlyForThatLine` | `session.e2e.test.ts`: AcceptedOnlyForThatLine: rejects a number from before the lines a queued batch adds above it, and takes one from a `read` after them; AcceptedOnlyForThatLine: rejects a report's number that a queued batch has since moved |
 | `IdsDistinct` | `lines.test.ts`: IdsDistinct: never gives two lines one identity, in the editor's LineIds or a fork of it, through the same change to both |
 | `OnePerLine` | `lines.test.ts`: OnePerLine, Distinct, Untouched, WithinALine, BreakAtEnd, BreakAtStart: gives each line of the result one identity, never one twice, and keeps the untouched lines'; `lines.test.ts`: OnePerLine: adopts a fork's identities only for a file that reads as it did in the fork (specs/Rehearsal.tla, #151). In the code, `version` checks a file's text again before it uses its ids, so a wrong `adopt` gives the file new identities, not too few or too many; this test fails that way when `adopt` skips its check |
-| `ReadIsStart` | `session.e2e.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a queued batch edits other files (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits; `controller.test.ts`: ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it |
+| `ReadIsStart` | `session.e2e.test.ts`: ReadIsStart: accepts a line a tool inserted, read while a batch that edits no file plays (specs/Rehearsal.tla); ReadIsStart: still interrupts for a change to a file a queued batch edits; `controller.test.ts`: ReadIsStart: an edit by others to a file a queued batch edits interrupts it, and to another file the queue's rehearsals follow it |
 
 ### `Terminals`: running commands
 
@@ -1453,7 +1469,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NoReuseWhileBusy` | `terminal.test.ts`: NoReuseWhileBusy: gives a second command a new terminal while the first one's command still runs |
 | `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd, Exit: reuses a terminal once its command ends, in the folder it's in, and not one whose shell exited |
-| `RunReturns` | `terminal.test.ts`: RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing |
+| `RunReturns` | `terminal.test.ts`: RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing; RunReturns, ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell; RunReturns, StopWaiting: returns with the command still running when the wait is over, or playback is interrupted; RunReturns, CloseTerminal: ends the wait when the programmer closes the terminal, and not for another terminal; RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it |
 
 ### Pure functions: `LineIdentity`, `Places`, `Typing`, `ActionValidation`
 

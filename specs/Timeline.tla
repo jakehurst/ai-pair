@@ -4,9 +4,11 @@
 (* that Controller.pause and Controller.resume keep in                        *)
 (* packages/core/src/controller.ts, and the places that pause and resume:     *)
 (* packages/vscode/src/panel.ts (Pause, Resume, the reply box's draft,        *)
-(* sending a reply, the turn button) and packages/vscode/src/editor.ts        *)
-(* (looking away). With no interruption and no pause, every queued batch      *)
-(* plays, and once no pause reason is left, playback continues (#19).         *)
+(* sending a reply, the turn button), packages/vscode/src/editor.ts (looking  *)
+(* away), and packages/vscode/src/extension.ts (the reading speed             *)
+(* calibration, the Toggle Pause command). With no interruption and no        *)
+(* pause, every queued batch plays, and once no pause reason is left,         *)
+(* playback continues (#19).                                                  *)
 (******************************************************************************)
 EXTENDS Naturals, PairDefs
 

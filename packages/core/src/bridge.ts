@@ -142,7 +142,8 @@ export class Bridge {
     try {
       fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 });
       // Written beside it, then renamed over it, so a relay reading it never sees it half written
-      // (#72, `AtomicWrite` in specs/Discovery.tla). Not a `.json`, so relays don't read the temporary one.
+      // (#72, `AtomicWrite` in specs/Discovery.tla; without it, `Focus` truncates the file and `FinishWrite` ends
+      // the write). Not a `.json`, so relays don't read the temporary one.
       const written = `${this.file}.tmp`;
       fs.writeFileSync(written, JSON.stringify(discovery), { mode: 0o600 });
       fs.renameSync(written, this.file);

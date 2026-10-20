@@ -267,7 +267,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
         if (!(await vscode.workspace.applyEdit(edit))) throw new Error('The edit was rejected.');
       }
     } finally {
-      // `ResolveEdit`: the entry goes, if its event didn't take it.
+      // specs/EditorAdapter.tla, `ResolveEdit`: the entry goes, if its event didn't take it.
       const i = pending.indexOf(entry);
       if (i !== -1) pending.splice(i, 1);
     }
@@ -282,11 +282,11 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     await vscode.workspace.fs.stat(doc.uri);
     this.saving.add(file);
     try {
-      // The save participants run (`RunParticipant`, `FinishParticipants`), then the file is written.
+      // The save participants run (specs/EditorAdapter.tla, `RunParticipant`, `FinishParticipants`), then the file is written.
       // A save that fails, say because the file on disk is newer, resolves to false instead of throwing.
       if (!(await doc.save())) throw new Error("the editor didn't save it; the file on disk may have changed");
     } finally {
-      // `FinishSave`: save() resolves after every change event before it.
+      // specs/EditorAdapter.tla, `FinishSave`: save() resolves after every change event before it.
       this.saving.delete(file);
     }
   }
@@ -303,7 +303,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     if (!changed) return;
     // A scroll a command cut short goes on once it's done; a pause's end reveals the target anyway,
     // and the programmer's turn is theirs to look where they like. specs/Scroll.tla: leaving the
-    // following states is `Leave`, and coming back `Return`.
+    // following states is `Leave`, and coming back `Follow`.
     if (state === 'navigator') {
       this.cut = false;
     } else if (this.cut && FOLLOWING.has(state)) {

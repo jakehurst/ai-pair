@@ -533,7 +533,7 @@ describe('the commands', () => {
     expect(playDemo).toHaveBeenCalledTimes(2);
   });
 
-  it('sets the agent up, and offers the panel the start again', async () => {
+  it('ReaskedProp: sets the agent up, and offers the panel the start again', async () => {
     const h = activated();
     await command('aiPair.setUpAgent');
     expect(setUpAgent).toHaveBeenCalledWith('/ext/launcher');
