@@ -22,11 +22,11 @@ ASSUME AssumeClearOnReady == ClearOnReady \in BOOLEAN
 ASSUME AssumeClearOnTaken == ClearOnTaken \in BOOLEAN
 
 VARIABLES
-    page,    \* the webview: "loaded", "disposed"
-    hasDraft,   \* the page's draft is nonempty
-    reportedDraft,    \* draftEmpty in the page: what it last told the extension
-    replyPause,   \* "reply" is a pause reason
-    pages    \* views created so far
+    page,          \* the webview: "loaded", "disposed"
+    hasDraft,      \* the page's draft is nonempty
+    reportedDraft, \* draftEmpty in the page: what it last told the extension
+    replyPause,    \* "reply" is a pause reason
+    pages          \* views created so far
 
 vars == <<page, hasDraft, reportedDraft, replyPause, pages>>
 

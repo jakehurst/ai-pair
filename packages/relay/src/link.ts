@@ -154,7 +154,7 @@ export class EditorLink {
   async call(tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     // A cancelled call's report may be on its way back, to be handed back with `return`. This call
     // goes out after it, so the editor restores the report before it takes this call (#59; specs/Wire.tla,
-    // `Send` with WaitCancelled; specs/Controller.tla, `Sendable` with WaitForReturn). The socket may close
+    // `Send`, and specs/Controller.tla, `Sendable`, each with WaitForReturn). The socket may close
     // meanwhile, so it is taken again after each wait; from there to `send`, nothing awaits.
     let connection: Connection;
     for (;;) {

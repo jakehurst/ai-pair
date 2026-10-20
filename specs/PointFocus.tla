@@ -25,21 +25,21 @@ ASSUME AssumeRevealOnReply == RevealOnReply \in BOOLEAN
 ASSUME AssumeMaxReplies == MaxReplies \in Nat
 
 VARIABLES
-    cursor,     \* the agent cursor's file: "sourceFile", or NoFile before the
-                \* first move
-    point,      \* the pointed code's file: "destinationFile", or NoFile
-    focus,      \* what the view follows: "cursor", or "point"
-    activeFile,     \* the file in the active editor: "sourceFile",
-                \* "destinationFile", "otherFile", or NoFile (no editor open)
-    awayPause,  \* the programmer looked away from what the view follows: the
-                \* away pause holds
-    stalePointRevealed,    \* a reply just revealed a point the programmer had
-                           \* looked away
-                \* from
-    replies,    \* replies so far
-    replyMovedEditor,     \* the last step was a reply that changed the active
-                          \* editor
-    cursorActed       \* the last step was a cursor action
+    cursor,             \* the agent cursor's file: "sourceFile", or NoFile
+                        \* before the first move
+    point,              \* the pointed code's file: "destinationFile", or NoFile
+    focus,              \* what the view follows: "cursor", or "point"
+    activeFile,         \* the file in the active editor: "sourceFile",
+                        \* "destinationFile", "otherFile", or NoFile (no editor
+                        \* open)
+    awayPause,          \* the programmer looked away from what the view
+                        \* follows: the away pause holds
+    stalePointRevealed, \* a reply just revealed a point the programmer had
+                        \* looked away from
+    replies,            \* replies so far
+    replyMovedEditor,   \* the last step was a reply that changed the active
+                        \* editor
+    cursorActed         \* the last step was a cursor action
 
 vars == <<cursor, point, focus, activeFile, awayPause, stalePointRevealed,
           replies, replyMovedEditor, cursorActed>>

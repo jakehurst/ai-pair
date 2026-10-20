@@ -12,7 +12,7 @@ export interface Timings {
    * time VS Code has told of its own saves.
    */
   groupMs: number;
-  /** How long after the extension's own navigation a view change is its own (specs/FollowMode.tla, `Expire`). */
+  /** How long after the extension's own navigation a view change is its own (specs/FollowMode.tla, `WindowExpires`). */
   selfNavMs: number;
   /** How often the read cursor pulses. */
   pulseMs: number;

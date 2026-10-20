@@ -8,13 +8,13 @@
 EXTENDS Naturals
 
 CONSTANTS
-    NumTerminals,   \* how many terminals the model has room for
-    MaxRuns,        \* how many run() calls the model makes
-    Directories            \* the directories a run may ask for
+    NumTerminals, \* how many terminals the model has room for
+    MaxRuns,      \* how many run() calls the model makes
+    Directories   \* the directories a run may ask for
 
 ASSUME AssumeNumTerminals == NumTerminals \in Nat \ {0}
 ASSUME AssumeMaxRuns == MaxRuns \in Nat
-ASSUME AssumeDirs == Directories # {}
+ASSUME AssumeDirectories == Directories # {}
 
 \* The terminals.
 TerminalIds == 1..NumTerminals
@@ -39,17 +39,16 @@ NoTerminal == CHOOSE v : v \notin TerminalIds
 NoCommand == CHOOSE v : v \notin CommandStates
 
 VARIABLES
-    state,       \* each terminal's state, one of TerminalStates
-    busy,        \* each terminal's Owned.busy
-    command,         \* each terminal's command, one of CommandStates, or
-                     \* NoCommand
-    run,         \* the run() call, one of RunStates
-    callTerminal,          \* the terminal the call has, or NoTerminal
-    interrupted, \* the playback signal fired (the timeline)
-    runs,        \* how many run() calls have started
-    busyReused,      \* a call took a terminal that was busy
-    directory          \* each terminal's directory (Owned.cwd, or where its
-                       \* shell is)
+    state,        \* each terminal's state, one of TerminalStates
+    busy,         \* each terminal's Owned.busy
+    command,      \* each terminal's command, one of CommandStates, or NoCommand
+    run,          \* the run() call, one of RunStates
+    callTerminal, \* the terminal the call has, or NoTerminal
+    interrupted,  \* the playback signal fired (the timeline)
+    runs,         \* how many run() calls have started
+    busyReused,   \* a call took a terminal that was busy
+    directory     \* each terminal's directory (Owned.cwd, or where its shell
+                  \* is)
 
 vars == <<state, busy, command, run, callTerminal, interrupted, runs,
           busyReused, directory>>

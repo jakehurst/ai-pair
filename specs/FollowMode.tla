@@ -18,18 +18,17 @@ CONSTANTS
 ASSUME AssumeHoldWhileShowing == HoldWhileShowing \in BOOLEAN
 
 VARIABLES
-    activeFile,   \* the file in the active editor
-    target,   \* the file of what the view follows (the agent cursor)
-    selfNavigationWindow,   \* the self-navigation window: "closed", "open", or
-                            \* "awaiting"
-              \* (open until show resolves)
-    showCall,     \* our show("destinationFile"): "idle" (not started),
-                  \* "awaiting"
-              \* (openTextDocument and showTextDocument), "eventQueued" (the
-              \* change
-              \* is queued), or "eventHandled"
-    awayPause,   \* playback paused as `away`
-    lookedAway    \* the programmer looked away themselves
+    activeFile,           \* the file in the active editor
+    target,               \* the file of what the view follows (the agent
+                          \* cursor)
+    selfNavigationWindow, \* the self-navigation window: "closed", "open", or
+                          \* "heldOpen" (open until show resolves)
+    showCall,             \* our show("destinationFile"): "idle" (not started),
+                          \* "awaiting" (openTextDocument and showTextDocument),
+                          \* "eventQueued" (the change is queued), or
+                          \* "eventHandled"
+    awayPause,            \* playback paused as `away`
+    lookedAway            \* the programmer looked away themselves
 
 vars == <<activeFile, target, selfNavigationWindow, showCall, awayPause,
           lookedAway>>
@@ -40,7 +39,7 @@ vars == <<activeFile, target, selfNavigationWindow, showCall, awayPause,
 TypeOK ==
     /\ activeFile \in Files
     /\ target \in Files
-    /\ selfNavigationWindow \in {"closed", "open", "awaiting"}
+    /\ selfNavigationWindow \in {"closed", "open", "heldOpen"}
     /\ showCall \in {"idle", "awaiting", "eventQueued", "eventHandled"}
     /\ awayPause \in BOOLEAN
     /\ lookedAway \in BOOLEAN
@@ -59,7 +58,7 @@ Init ==
 \* calls selfNav(), then awaits.
 StartShow ==
     /\ showCall = "idle"
-    /\ selfNavigationWindow' = IF HoldWhileShowing THEN "awaiting" ELSE "open"
+    /\ selfNavigationWindow' = IF HoldWhileShowing THEN "heldOpen" ELSE "open"
     /\ showCall' = "awaiting"
     /\ UNCHANGED <<activeFile, target, awayPause, lookedAway>>
 
@@ -92,7 +91,7 @@ ShowResolves ==
     /\ showCall = "eventHandled"
     /\ target = "sourceFile"
     /\ target' = "destinationFile"
-    /\ selfNavigationWindow' = IF selfNavigationWindow = "awaiting"
+    /\ selfNavigationWindow' = IF selfNavigationWindow = "heldOpen"
                                THEN "open" ELSE selfNavigationWindow
     /\ UNCHANGED <<activeFile, showCall, awayPause, lookedAway>>
 

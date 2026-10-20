@@ -14,12 +14,12 @@
 EXTENDS Integers
 
 CONSTANTS
-    NumLines,       \* the file's lines
-    ViewHeight,     \* the view's height, in lines
-    MaxMoves,       \* how many times the model moves the target
-    MaxFollowSwitches,     \* how many times the model stops or starts following
-    CatchUp         \* TRUE: a glide a command cut short goes on when the
-                    \* state follows again
+    NumLines,          \* the file's lines
+    ViewHeight,        \* the view's height, in lines
+    MaxMoves,          \* how many times the model moves the target
+    MaxFollowSwitches, \* how many times the model stops or starts following
+    CatchUp            \* TRUE: a glide a command cut short goes on when the
+                       \* state follows again
 
 ASSUME AssumeNumLines == NumLines \in Nat \ {0}
 ASSUME AssumeViewHeight == ViewHeight \in 1..NumLines
@@ -38,18 +38,18 @@ AwayReasons == {"pause", "running"}
 NotAway == CHOOSE v : v \notin AwayReasons
 
 VARIABLES
-    targetLine,     \* the target's line
-    viewTop,        \* the view's top line
-    scrolling,  \* a scroll is under way
-    landing,       \* its landing
+    targetLine,          \* the target's line
+    viewTop,             \* the view's top line
+    scrolling,           \* a scroll is under way
+    landing,             \* its landing
     targetAtStart,       \* the target's line when it started
-    awayReason,       \* NotAway: the state follows; "pause", or "running" a
-                      \* command:
-                \* it doesn't
-    glideCut,        \* a glide stopped short, as the state stopped following
-    moves,      \* target moves so far
-    followSwitches,   \* stops and starts of following so far
-    scrollBeyondLastLine      \* editor.scrollBeyondLastLine, on by default
+    awayReason,          \* NotAway: the view follows; "pause", or "running": a
+                         \* command runs; either way it does not
+    glideCut,            \* a glide stopped short, as the state stopped
+                         \* following
+    moves,               \* target moves so far
+    followSwitches,      \* stops and starts of following so far
+    scrollBeyondLastLine \* editor.scrollBeyondLastLine, on by default
 
 vars ==
     <<targetLine, viewTop, scrolling, landing, targetAtStart, awayReason,
@@ -199,8 +199,8 @@ ComesInView == <>[](awayReason = NotAway /\ moves = MaxMoves) => <>[]InView
 
 \* Moves and switches run out only so that the model is finite (6.8). It prunes
 \* exactly the states guards `moves < MaxMoves` on Move and
-\* `switches < MaxSwitches` on Leave and Follow never reached, so the
-\* behaviors, and ComesInView's result, are the guards' (8.6).
+\* `followSwitches < MaxFollowSwitches` on Leave and Follow never reached, so
+\* the behaviors, and ComesInView's result, are the guards' (8.6).
 Constraint == moves <= MaxMoves /\ followSwitches <= MaxFollowSwitches
 
 ================================================================================

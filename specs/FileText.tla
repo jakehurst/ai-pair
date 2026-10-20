@@ -12,8 +12,8 @@
 EXTENDS Naturals
 
 CONSTANTS
-    MaxChanges,   \* how many changes the model makes
-    PreferDirty       \* TRUE: the code as #88 and #89 fix it
+    MaxChanges, \* how many changes the model makes
+    PreferDirty \* TRUE: the code as #88 and #89 fix it
 
 ASSUME AssumeMaxChanges == MaxChanges \in Nat
 ASSUME AssumePreferDirty == PreferDirty \in BOOLEAN
@@ -32,10 +32,11 @@ Internal == CHOOSE v : v \notin Contents \cup {Absent, NoDocument, NoSuchFile}
 
 VARIABLES
     diskText,     \* the file on disk: a text, or Absent
-    documentText,      \* the document's text, or NoDocument
-    dirty,    \* the document has unsaved changes
-    created,  \* `show` just created the file, and nothing has changed it since
-    changes     \* changes so far
+    documentText, \* the document's text, or NoDocument
+    dirty,        \* the document has unsaved changes
+    created,      \* `show` just created the file, and nothing has changed it
+                  \* since
+    changes       \* changes so far
 
 vars == <<diskText, documentText, dirty, created, changes>>
 

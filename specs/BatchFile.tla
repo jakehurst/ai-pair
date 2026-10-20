@@ -25,15 +25,15 @@ ASSUME AssumeCursorInNamed == CursorInNamed \in BOOLEAN
 NamingKinds == {"move", "select", "point"}
 
 VARIABLES
-    cursorFile,   \* the agent's cursor's file, or NoFile: kept from batch to
-                  \* batch
-    namedFile,    \* the file the batch named, or NoFile (playing.named)
-    edited,   \* the batch has edited (playing.edited)
-    actionsPlayed,   \* actions played in this batch
-    rejected,  \* the batch was rejected at an action
-    actedIn   \* the file the last action acted in, or NoFile
+    cursorFile,    \* the agent's cursor's file, or NoFile: kept from batch to
+                   \* batch
+    namedFile,     \* the file the batch named, or NoFile (playing.named)
+    edited,        \* the batch has edited (playing.edited)
+    actionsPlayed, \* actions played in this batch
+    stopped,       \* the batch stopped at an action it refused
+    actedIn        \* the file the last action acted in, or NoFile
 
-vars == <<cursorFile, namedFile, edited, actionsPlayed, rejected, actedIn>>
+vars == <<cursorFile, namedFile, edited, actionsPlayed, stopped, actedIn>>
 
 --------------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ TypeOK ==
     /\ namedFile \in Files \cup {NoFile}
     /\ edited \in BOOLEAN
     /\ actionsPlayed \in Nat
-    /\ rejected \in BOOLEAN
+    /\ stopped \in BOOLEAN
     /\ actedIn \in Files \cup {NoFile}
 
 --------------------------------------------------------------------------------
@@ -53,19 +53,19 @@ Init ==
     /\ namedFile = NoFile
     /\ edited = FALSE
     /\ actionsPlayed = 0
-    /\ rejected = FALSE
+    /\ stopped = FALSE
     /\ actedIn = NoFile
 
 \* The action fails, and the batch stops at it.
 Stop ==
-    /\ rejected' = TRUE
+    /\ stopped' = TRUE
     /\ actedIn' = NoFile
     /\ UNCHANGED <<cursorFile, namedFile, edited>>
 
 \* A `say` or `run`: it acts in no file.
 Say ==
     /\ actedIn' = NoFile
-    /\ UNCHANGED <<cursorFile, namedFile, edited, rejected>>
+    /\ UNCHANGED <<cursorFile, namedFile, edited, stopped>>
 
 \* A `move`, `select` or `point` in the file it looks in, `looksIn`, with the
 \* batch's file now `namedAfter`; with no file to look in, no_cursor rejects it.
@@ -77,7 +77,7 @@ ActInFile(kind, namedAfter, looksIn) ==
     ELSE /\ cursorFile' = IF kind = "point" THEN cursorFile ELSE looksIn
          /\ namedFile' = namedAfter
          /\ actedIn' = looksIn
-         /\ UNCHANGED <<edited, rejected>>
+         /\ UNCHANGED <<edited, stopped>>
 
 \* A `type`, `type_fast`, or `delete` at the cursor, with the batch's file
 \* `namedAfter`:
@@ -90,7 +90,7 @@ ActAtCursor(namedAfter) ==
     ELSE /\ namedFile' = namedAfter
          /\ edited' = TRUE
          /\ actedIn' = cursorFile
-         /\ UNCHANGED <<cursorFile, rejected>>
+         /\ UNCHANGED <<cursorFile, stopped>>
 
 \* One action of the batch, of kind `kind`, with `file`, or NoFile for none
 \* given. It is rejected when it names a second file, or names the batch's
@@ -105,7 +105,7 @@ Act(kind, file) ==
                  THEN file
                  ELSE IF FallBackToNamed /\ namedAfter # NoFile
                       THEN namedAfter ELSE cursorFile
-    IN  /\ ~rejected
+    IN  /\ ~stopped
         /\ actionsPlayed' = actionsPlayed + 1
         /\ IF naming /\ namedFile # NoFile /\ file # namedFile
            THEN Stop
@@ -123,7 +123,7 @@ EndBatch ==
     /\ namedFile' = NoFile
     /\ edited' = FALSE
     /\ actionsPlayed' = 0
-    /\ rejected' = FALSE
+    /\ stopped' = FALSE
     /\ actedIn' = NoFile
     /\ UNCHANGED cursorFile
 
@@ -146,10 +146,10 @@ EditAtCursorProp ==
     [][\A k \in {"type", "type_fast", "delete"} :
            (Act(k, NoFile) /\ cursorFile # NoFile /\ namedFile \in {cursorFile,
                                                                     NoFile})
-               => (~rejected' /\ edited' /\ actedIn' = cursorFile)]_vars
+               => (~stopped' /\ edited' /\ actedIn' = cursorFile)]_vars
 
 \* Batches run out of actions only so that the model is finite (6.8). It
-\* prunes exactly the states a guard `played < MaxActions` on Act never
+\* prunes exactly the states a guard `actionsPlayed < MaxActions` on Act never
 \* reached.
 Constraint == actionsPlayed <= MaxActions
 

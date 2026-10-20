@@ -9,9 +9,9 @@
 EXTENDS Integers, Sequences, FiniteSets, PairDefs
 
 CONSTANTS
-    MaxChars,     \* the longest text the check covers
-    MaxNeedle   \* the longest needle: a spot's two halves together, a span's
-                \* text, `from`, or `through`
+    MaxChars, \* the longest text the check covers
+    MaxNeedle \* the longest needle: a spot's two halves together, a span's
+              \* text, `from`, or `through`
 
 ASSUME AssumeMaxChars == MaxChars \in Nat
 ASSUME AssumeMaxNeedle == MaxNeedle \in Nat

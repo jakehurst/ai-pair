@@ -8,9 +8,9 @@
 EXTENDS Naturals, Sequences
 
 CONSTANTS
-    MaxEvents,     \* how many entries the model adds
-    ScrollOn        \* which entries scroll the history to its top: "none",
-                    \* "you", or "all"
+    MaxEvents, \* how many entries the model adds
+    ScrollOn   \* which entries scroll the history to its top: "none", "you", or
+               \* "all"
 
 ASSUME AssumeMaxEvents == MaxEvents \in Nat
 ASSUME AssumeScrollOn == ScrollOn \in {"none", "you", "all"}
@@ -24,13 +24,13 @@ NoEntry == CHOOSE v : v \notin Nat
 NoEvent == CHOOSE v : v \notin EventKinds
 
 VARIABLES
-    time,     \* the time of the last entry: 1, 2, 3, ...
-    history,  \* the history, top first: the times of its entries
-    entriesAboveView,    \* how many entries are scrolled out of view, above the
-                         \* view
-    lastEvent,    \* the last event: "entry", "you", "scroll", or NoEvent
-    topBefore \* the entry at the view's top before the last event, or
-              \* NoEntry if the view was at the top
+    time,             \* the time of the last entry: 1, 2, 3, ...
+    history,          \* the history, top first: the times of its entries
+    entriesAboveView, \* how many entries are scrolled out of view, above the
+                      \* view
+    lastEvent,        \* the last event: "entry", "you", "scroll", or NoEvent
+    topBefore         \* the entry at the view's top before the last event, or
+                      \* NoEntry if the view was at the top
 
 vars == <<time, history, entriesAboveView, lastEvent, topBefore>>
 

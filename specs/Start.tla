@@ -16,23 +16,22 @@
 EXTENDS Naturals, PairDefs
 
 CONSTANTS
-    MaxPages,       \* how many pages the model loads
-    MaxEnvironmentChanges,       \* how often the model changes the environment:
-                                 \* Set Up
-                    \* Agent, Claude Code installed or removed
-    MaxClicks,      \* how many clicks the model makes
-    DropStale,      \* TRUE: only the latest question's answer reaches the
-                    \* page (the fix)
-    ReaskOnSetUp,   \* TRUE: Set Up Agent setting Claude Code up asks the live
-                    \* page again (the fix)
-    InTerminal,     \* TRUE: the CLI runs in a terminal never shown; FALSE:
-                    \* Claude Code's open command (#115)
-    OneAgent,       \* TRUE: no start while the last one's agent still runs
-                    \* (the fix)
-    NoteOnClick,    \* TRUE: the click shows the note on the page at once (the
-                    \* fix)
-    ClearOnExit     \* TRUE: the note goes when the agent's terminal closes,
-                    \* session or not (the fix)
+    MaxPages,              \* how many pages the model loads
+    MaxEnvironmentChanges, \* how often the model changes the environment: Set
+                           \* Up Agent, Claude Code installed or removed
+    MaxClicks,             \* how many clicks the model makes
+    DropStale,             \* TRUE: only the latest question's answer reaches
+                           \* the page (the fix)
+    ReaskOnSetUp,          \* TRUE: Set Up Agent setting Claude Code up asks the
+                           \* live page again (the fix)
+    InTerminal,            \* TRUE: the CLI runs in a terminal never shown;
+                           \* FALSE: Claude Code's open command (#115)
+    OneAgent,              \* TRUE: no start while the last one's agent still
+                           \* runs (the fix)
+    NoteOnClick,           \* TRUE: the click shows the note on the page at once
+                           \* (the fix)
+    ClearOnExit            \* TRUE: the note goes when the agent's terminal
+                           \* closes, session or not (the fix)
 
 ASSUME AssumeMaxPages == MaxPages \in Nat \ {0}
 ASSUME AssumeMaxEnvironmentChanges == MaxEnvironmentChanges \in Nat
@@ -57,33 +56,33 @@ NoPage == CHOOSE v : v \notin Nat
 NoQuestion == CHOOSE v : v \notin Nat
 
 VARIABLES
-    page,       \* the webview's page: "loaded", "disposed"
-    pages,      \* pages loaded so far; the live page's number
-    visible,    \* the button is visible
-    visibleFor, \* the page whose check's answer last set `visible`; NoPage when
-                \* hidden
-    setUp,      \* Claude Code's configuration runs the pair server
-    cliAndFolder,        \* Claude Code's CLI is here, and a folder is open
-    questions,      \* questions asked so far; the latest question's number
-    unanswered, \* checks asked and not yet answered: [q: the question's
-                \* number, for: the page, setUp: Claude Code was set up when
-                \* asked, cli: its CLI was here and a folder open when asked]
-    deliveredQuestion,      \* the question whose answer last reached the live
-                            \* page;
-                \* NoQuestion when none has since the page loaded
+    page,               \* the webview's page: "loaded", "disposed"
+    pages,              \* pages loaded so far; the live page's number
+    visible,            \* the button is visible
+    visibleFor,         \* the page whose check's answer last set `visible`;
+                        \* NoPage when hidden
+    setUp,              \* Claude Code's configuration runs the pair server
+    cliAndFolder,       \* Claude Code's CLI is here, and a folder is open
+    questions,          \* questions asked so far; the latest question's number
+    unanswered,         \* checks asked and not yet answered: [q: the question's
+                        \* number, for: the page, setUp: Claude Code was set up
+                        \* when asked, cli: its CLI was here and a folder open
+                        \* when asked]
+    deliveredQuestion,  \* the question whose answer last reached the live page;
+                        \* NoQuestion when none has since the page loaded
     newestAnswered,     \* the highest-numbered question answered so far;
-                \* NoQuestion when none
-    environmentChanges,      \* environment changes so far
-    clicks,     \* clicks on the button
-    starts,     \* times the starter ran
-    location,   \* Claude Code's `preferredLocation` setting: "sidebar",
-                \* "panel"
+                        \* NoQuestion when none
+    environmentChanges, \* environment changes so far
+    clicks,             \* clicks on the button
+    starts,             \* times the starter ran
+    location,           \* Claude Code's `preferredLocation` setting: "sidebar",
+                        \* "panel"
     chosenLocation,     \* the location the programmer last chose
-    sidebarShows,      \* what the sidebar shows: "pair", "claude"
-    agents,     \* agents started from the button and still running, each in
-                \* its own terminal
-    startingNoteShown,       \* the page shows the note: a session is starting
-    sessionLive        \* the agent's `start` has landed, and no `end` since
+    sidebarShows,       \* what the sidebar shows: "pair", "claude"
+    agents,             \* agents started from the button and still running,
+                        \* each in its own terminal
+    startingNoteShown,  \* the page shows the note: a session is starting
+    sessionLive         \* the agent's `start` has landed, and no `end` since
 
 vars ==
     <<page, pages, visible, visibleFor, setUp, cliAndFolder, questions,
@@ -184,7 +183,7 @@ AnswerCheck(c) ==
         /\ visibleFor' = IF deliver THEN answered ELSE visibleFor
         /\ deliveredQuestion' = IF deliver THEN c.question
                                 ELSE deliveredQuestion
-        /\ newestAnswered' = 
+        /\ newestAnswered' =
                IF newestAnswered = NoQuestion \/ c.question > newestAnswered
                THEN c.question
                ELSE newestAnswered
@@ -366,11 +365,11 @@ NoteUntilSession == startingNoteShown => (page = "loaded" /\ ~sessionLive)
 NoteGoes == startingNoteShown ~> ~startingNoteShown
 
 \* Pages, flips, and clicks run out only so that the model is finite (6.8). It
-\* prunes exactly the states the guards `pages < MaxPages`, `flips < MaxFlips`,
-\* and `clicks < MaxClicks` never reached. AnswerCheck and AgentExits,
-\* the actions under fairness, change none of the three, so no step fairness
-\* demands is pruned, and the results of Offered, Closes, and NoteGoes are the
-\* guards' (8.6).
+\* prunes exactly the states the guards `pages < MaxPages`,
+\* `environmentChanges < MaxEnvironmentChanges`, and `clicks < MaxClicks` never
+\* reached. AnswerCheck and AgentExits, the actions under fairness, change none
+\* of the three, so no step fairness demands is pruned, and the results of
+\* Offered, Closes, and NoteGoes are the guards' (8.6).
 Constraint ==
     /\ pages <= MaxPages
     /\ environmentChanges <= MaxEnvironmentChanges

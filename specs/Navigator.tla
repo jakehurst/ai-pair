@@ -19,14 +19,14 @@ ASSUME AssumeMaxEdits == MaxEdits \in Nat
 ASSUME AssumeResetReady == ResetReady \in BOOLEAN
 
 VARIABLES
-    typing,     \* the programmer edited less than navigatorIdleMs ago
-    timerArmed,      \* the navigator timer is armed
+    typing,              \* the programmer edited less than navigatorIdleMs ago
+    timerArmed,          \* the navigator timer is armed
     navigatorReady,      \* s.navigatorReady
-    unreported, \* edits not yet reported
-    call,       \* the agent's open call: one of Calls, or NoCall
-    returnedWhileTyping,      \* a listen returned for edits while the
-                              \* programmer was typing
-    edits       \* edits made so far
+    unreported,          \* edits not yet reported
+    call,                \* the agent's open call: one of Calls, or NoCall
+    returnedWhileTyping, \* a listen returned for edits while the programmer was
+                         \* typing
+    edits                \* edits made so far
 
 vars == <<typing, timerArmed, navigatorReady, unreported, call,
           returnedWhileTyping, edits>>
@@ -132,8 +132,8 @@ NotWhileTyping == ~returnedWhileTyping
 EditsReported == unreported ~> ~unreported
 
 \* Edits run out only so that the model is finite (6.8). It prunes exactly the
-\* states a guard `edits < MaxEdits` on Edit never reached, so the behaviors,
-\* and EditsReported's result, are the guard's (8.6).
+\* states a guard `edits < MaxEdits` on EditAsProgrammer never reached, so the
+\* behaviors, and EditsReported's result, are the guard's (8.6).
 Constraint == edits <= MaxEdits
 
 ================================================================================

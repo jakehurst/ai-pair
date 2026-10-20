@@ -78,7 +78,7 @@ export class Calibration {
     return false;
   }
 
-  /** Finishes the reading, on x: the rate is written, and only once the player reads it does the pause end (AwaitStore): specs/Calibration.tla, `Finish`, then `ApplyRate`. */
+  /** Finishes the reading, on x: the rate is written, and only once the player reads it does the pause end (AwaitStore): specs/Calibration.tla, `StopTimer`, then `ApplyRate`. */
   private async finish(elapsedMs: number): Promise<void> {
     this.phase = 'storing';
     const text = this.passage.text;
@@ -89,7 +89,7 @@ export class Calibration {
     this.host.resume();
   }
 
-  /** Cancels the calibration, on any other reply, the panel's view going away, or the session ending: back to idle, nothing stored (specs/Calibration.tla, `Cancel`). */
+  /** Cancels the calibration, on any other reply, the panel's view going away, or the session ending: back to idle, nothing stored (specs/Calibration.tla, `CancelCalibration`). */
   cancel(): void {
     if (this.phase !== 'armed' && this.phase !== 'reading') return;
     this.phase = 'idle';

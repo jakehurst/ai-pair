@@ -18,14 +18,13 @@ ASSUME AssumeFix == Fix \in {0, 1, 2}
 NoMessage == CHOOSE v : v \notin Nat
 
 VARIABLES
-    time,     \* the time of the last event
-    currentMessage,     \* the agent's current message, shown in the band, or
-                        \* NoMessage
-    messageFiled,     \* Fix 1: the current message is already in the history
-    entriesSinceMessage,    \* Fix 2: how many entries were added while the
-                            \* current message
-              \* was current
-    history   \* the history, top first: the times of its entries
+    time,                \* the time of the last event
+    currentMessage,      \* the agent's current message, shown in the band, or
+                         \* NoMessage
+    messageFiled,        \* Fix 1: the current message is already in the history
+    entriesSinceMessage, \* Fix 2: how many entries were added while the current
+                         \* message was current
+    history              \* the history, top first: the times of its entries
 
 vars == <<time, currentMessage, messageFiled, entriesSinceMessage, history>>
 

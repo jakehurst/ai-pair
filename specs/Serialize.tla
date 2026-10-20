@@ -48,17 +48,17 @@ NoQueueState == CHOOSE v : v \notin QueueStates
 NoCallOutcome == CHOOSE v : v \notin CallOutcomes
 
 VARIABLES
-    pc,         \* where each call is, one of Pcs
-    canceled,   \* the call's AbortSignal has fired: the agent canceled it
-    canceledAt, \* the pc the call was at when it was canceled, or NoPc
+    pc,             \* where each call is, one of Pcs
+    canceled,       \* the call's AbortSignal has fired: the agent canceled it
+    canceledAt,     \* the pc the call was at when it was canceled, or NoPc
     blockedCall,    \* this.call: the call blocked in block(), or NoCallId
-    queueState, \* the call's batch: one of QueueStates, or NoQueueState
-    settledAs,  \* how the call settled: one of CallOutcomes, or NoCallOutcome
+    queueState,     \* the call's batch: one of QueueStates, or NoQueueState
+    settledAs,      \* how the call settled: one of CallOutcomes, or
+                    \* NoCallOutcome
     emptyStep,      \* the step has no actions: it only waits for the queued
-                \* batches
-    rehearsalFailed      \* its batch failed its rehearsal, and the call
-                         \* answered with
-                 \* the rejection
+                    \* batches
+    rehearsalFailed \* its batch failed its rehearsal, and the call answered
+                    \* with the rejection
 
 vars == <<pc, canceled, canceledAt, blockedCall, queueState, settledAs,
           emptyStep, rehearsalFailed>>

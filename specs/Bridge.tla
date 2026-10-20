@@ -23,14 +23,14 @@ Sockets == 1..NumSockets
 NoSocket == CHOOSE v : v \notin Sockets
 
 VARIABLES
-    socketState,     \* each socket: "open" or "closed"
-    starting, \* the sockets whose `start` is awaiting controller.start()
-    owner,    \* this.owner: the socket that drives the session, or NoSocket
-    session,  \* the controller's session: one of SessionPhases, or NoSession
-    recent    \* this.closed: TRUE when a last report closed the session,
-              \* and a `return` can bring it back
+    socketState, \* each socket: "open" or "closed"
+    starting,    \* the sockets whose `start` is awaiting controller.start()
+    owner,       \* this.owner: the socket that drives the session, or NoSocket
+    session,     \* the controller's session: one of SessionPhases, or NoSession
+    restorable   \* this.closed: TRUE when a last report closed the session, and
+                 \* a `return` can bring it back
 
-vars == <<socketState, starting, owner, session, recent>>
+vars == <<socketState, starting, owner, session, restorable>>
 
 --------------------------------------------------------------------------------
 
@@ -40,7 +40,7 @@ TypeOK ==
     /\ starting \subseteq Sockets
     /\ owner \in Sockets \cup {NoSocket}
     /\ session \in SessionPhases \cup {NoSession}
-    /\ recent \in BOOLEAN
+    /\ restorable \in BOOLEAN
 
 --------------------------------------------------------------------------------
 
@@ -49,7 +49,7 @@ Init ==
     /\ starting = {}
     /\ owner = NoSocket
     /\ session = NoSession
-    /\ recent = FALSE
+    /\ restorable = FALSE
 
 \* dispatch("start"): refused while another socket's session is active, else
 \* controller.start().
@@ -58,7 +58,7 @@ BeginStart(s) ==
     /\ s \notin starting
     /\ ~(session = "active" /\ owner # s)
     /\ starting' = starting \cup {s}
-    /\ UNCHANGED <<socketState, owner, session, recent>>
+    /\ UNCHANGED <<socketState, owner, session, restorable>>
 
 \* controller.start() returns. It throws `session_active` if a session is
 \* active: the owner's own second start, or a start that began before another
@@ -68,14 +68,14 @@ FinishStart(s) ==
     /\ s \in starting
     /\ starting' = starting \ {s}
     /\ IF session = "active"
-       THEN UNCHANGED <<owner, session, recent>>
+       THEN UNCHANGED <<owner, session, restorable>>
        ELSE IF CheckOpen /\ socketState[s] = "closed"
             THEN /\ owner' = NoSocket
                  /\ session' = "suspended"
-                 /\ recent' = FALSE
+                 /\ restorable' = FALSE
             ELSE /\ owner' = s
                  /\ session' = "active"
-                 /\ recent' = FALSE
+                 /\ restorable' = FALSE
     /\ UNCHANGED socketState
 
 \* A socket closes: its calls are aborted, and if it owns the session,
@@ -86,21 +86,21 @@ CloseSocket(s) ==
     /\ IF owner = s
        THEN /\ owner' = NoSocket
             /\ session' = IF session = "active" THEN "suspended" ELSE NoSession
-            /\ recent' = FALSE
-       ELSE UNCHANGED <<owner, session, recent>>
+            /\ restorable' = FALSE
+       ELSE UNCHANGED <<owner, session, restorable>>
     /\ UNCHANGED starting
 
 \* The programmer ends the session from the panel.
 EndByProgrammer ==
     /\ session = "active"
     /\ session' = "ended"
-    /\ UNCHANGED <<socketState, starting, owner, recent>>
+    /\ UNCHANGED <<socketState, starting, owner, restorable>>
 
 \* The ended session's last report, to its owner's next call, closes it.
 CloseEnded ==
     /\ session = "ended"
     /\ session' = NoSession
-    /\ recent' = TRUE
+    /\ restorable' = TRUE
     /\ UNCHANGED <<socketState, starting, owner>>
 
 \* The programmer ends a suspended session: no agent is there to tell, so it
@@ -108,13 +108,13 @@ CloseEnded ==
 EndSuspended ==
     /\ session = "suspended"
     /\ session' = NoSession
-    /\ UNCHANGED <<socketState, starting, owner, recent>>
+    /\ UNCHANGED <<socketState, starting, owner, restorable>>
 
 \* The agent ends the session (`end`): its report closes it.
 EndByAgent ==
     /\ session = "active"
     /\ session' = NoSession
-    /\ recent' = TRUE
+    /\ restorable' = TRUE
     /\ UNCHANGED <<socketState, starting, owner>>
 
 \* A `return` from the owner's socket: restore() brings the closed session
@@ -124,9 +124,9 @@ Restore(s) ==
     /\ owner = s
     /\ socketState[s] = "open"
     /\ session = NoSession
-    /\ recent
+    /\ restorable
     /\ session' = "ended"
-    /\ recent' = FALSE
+    /\ restorable' = FALSE
     /\ UNCHANGED <<socketState, starting, owner>>
 
 \* Every socket closed, with no session and no start under way: nothing is left

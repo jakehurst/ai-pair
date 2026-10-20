@@ -401,7 +401,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   // It played on the text written again.
   assert.equal(followed.batches.at(-1)?.code?.lines[0]?.text, `b${CURSOR_MARKER}`, JSON.stringify(followed));
 
-  // A delete interrupted while its file comes into view stops before it deletes (specs/Player.tla, `Begin`).
+  // A delete interrupted while its file comes into view stops before it deletes (specs/Player.tla, `StartDelete`).
   controller.setSpeed(20);
   await controller.read('pauses.txt');
   await played([{ select: { file: 'pauses.txt', line: 1, text: 'one' } }]);
@@ -506,7 +506,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('paths.txt')));
 
   // A call canceled while it waits its turn never runs; one canceled while its batch is rehearsed ends without
-  // blocking; a cancel after the call ended changes nothing (specs/Serialize.tla: `Guard`, `Rehearse`, `Abort`).
+  // blocking; a cancel after the call ended changes nothing (specs/Serialize.tla: `Guard`, `Rehearse`, `Cancel`).
   const first = controller.listen();
   const waiting = new AbortController();
   const second = controller.listen(waiting.signal);

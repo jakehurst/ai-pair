@@ -25,15 +25,16 @@ ASSUME AssumeDropsHeld == DropsHeld \in BOOLEAN
 Positions == 1..3
 
 VARIABLES
-    place,      \* where the agent's cursor is
-    belief,     \* where the agent thinks it is
-    mustAnchor, \* a report said a batch was not completed, and no anchored
-                \* batch was accepted since
-    wrongPlace, \* an edit played where the agent did not think the cursor was
-    heldCount,  \* how many rejections `restore` holds for the next
-                \* reports (#67)
-    rejectionLost,       \* a held rejection reached no report
-    batches     \* batches submitted, and reports restored
+    place,         \* where the agent's cursor is
+    belief,        \* where the agent thinks it is
+    mustAnchor,    \* a report said a batch was not completed, and no anchored
+                   \* batch was accepted since
+    wrongPlace,    \* an edit played where the agent did not think the cursor
+                   \* was
+    heldCount,     \* how many rejections `restore` holds for the next reports
+                   \* (#67)
+    rejectionLost, \* a held rejection reached no report
+    batches        \* batches submitted, and reports restored
 
 vars == <<place, belief, mustAnchor, wrongPlace, heldCount, rejectionLost,
           batches>>

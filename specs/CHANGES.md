@@ -153,64 +153,65 @@ from. One entry per fix, newest last.
      config holds; BatchFile's state count moves with the third file.
 
 18.  **A third pass, over action and definition names** (Justine, 2026-10-19:
-     "do another consistency pass"). Three readers compared every name in the
-     37 modules by its comment, and every hit was checked against its lines.
-     Same name, two things: Wire's and Serialize's call ids are `CallIds` and
-     `NoCallId` (PairDefs' `Calls` is the kinds); Serialize's `QueueStates`,
-     `queueState`, and `NoQueueState` (Controller's `BatchStates` is per
-     batch); Anchor's cursor is `place` and its count `heldCount` (Controller's
-     `held` is a set); ListenGrace's `absent` (Controller's `quiet` edits);
-     FileText's and EditEvents' text as a number is `Contents`, as in Outside;
-     FileText's `NoSuchFile` and `Internal` (the code's `internal`);
-     Rehearsal's `Origin`, `EditorLines`, `QueuesAfterInterrupt`, `justRead`;
-     LineIdentity's `ApplyChange` and `LineFeeds`; Reload's `Replacements`;
-     BatchFile's `NamingKinds`; Scroll's `targetLine` and `"pause"` reason;
-     PanelScroll's `topBefore`; Discovery's one process is `phase`; PairDefs'
-     `SessionPhases`, since `phase` is a process's. One code path, one name:
-     the session ends by `EndByProgrammer` or `EndByAgent` (Bridge, Controller,
-     Resume); the cancel is `Cancel` and `canceled` (Serialize, as Controller;
-     `canceled` spelled one way, Wire too); a failed rehearsal is
-     `FailRehearsal` (Serialize, ListenGrace); `Return` is finishCall with a
-     report (Serialize too); `Timeout` everywhere; `Deliver` is the report
-     reaching the agent (Controller); `Interrupt` (ListenGrace);
-     `EditAsProgrammer` (Navigator, EditorAdapter) and `EditAsAgent`;
-     `LoadPage` and `PageStates`, `"loaded"` or `"disposed"`, for a webview
-     page (Draft, Start), so `live` is a session alone; `Views` in PairDefs,
-     from Resume; `Store` for workspace storage (Resume); id sets are `Num*`
-     and bounds `Max*`; the counts are `MaxEdits`/`edits` and
-     `MaxChanges`/`changes`; `MaxEvents` in the three panel specs; the pause
-     flags are `replyPause`, `calibratePause`, and `awayPause`; `ResumeAll`
-     for resume() with no reason; `selection`, `baseline`, `byProgrammer`, and
-     `interrupts` spelled out. An action names its object where a verb was
-     shared: `CloseSocket` and `OpenSocket`, `CloseDocument` and
-     `OpenDocument`, `CloseTerminal`, `Acquire`, `RejectHello`, `Perform` and
-     `StartHead` (Turns), `StartDelete`, `Complete` (Controller), `Played` and
-     `HandBack` (Serialize), `TakeHeld` and `StopShort` (Anchor), `Stop`
-     (BatchFile), `WriteOutside`, `WatcherReports`, and `Show` (Outside, as
-     FileText), `AnswerCheck` and `AgentExits` (Start), `CancelCalibration`
-     and `StopTimer`, `SendReply`, `ShowResolves`, `WindowExpires`,
-     `HandleEditorChange`, `Follow` and `InView` (Scroll), `Lull` (Navigator),
-     `ViewAtEntry`, `TypeDraft`. Properties: Start's `NoteGoes` and Scroll's
-     `ComesInView` (both were `Settles`), and `NoYourMoveAfterInterrupt`; the
-     tests named for them follow. Absent values as model values: Start's
-     `NoQuestion` (was 0) and ActionValidation's `Throws` (was a string);
-     Discovery's `"unstarted"` and Wire's `"unanswered"` for states that read
-     as absent. Sets named: `Rates` (Calibration), `EventKinds` (PanelScroll).
-     Models: FollowMode's `LookAway` goes to `"other"` and its `Other(f)` is
-     gone; BatchFile's `EditAtCursorProp` covers `type_fast`; Turns' and
-     Actions' `Batches` and ProjectGuide's `Paths` are `Seqs`; RunBox says it
-     stops at the first `run` post (`exited` comes later, to a box already
-     off). Comments behind a rename in eleven modules follow it, and the three
-     pure-function headers name their letters from PairDefs. The code comments
-     naming these actions, the README's tables, and `COVERAGE.md` follow. Left
-     alone, with the reason: `NoText`, `NoDocument`, and `NoOffset` are each a
-     `CHOOSE` over a local set, so they stay local; PanelReplay's
-     `SessionEvents` are events, not `Views`; EditorAdapter's `"other"` is the
-     wire's `by`. `Files` is `{"sourceFile", "destinationFile", "otherFile"}`,
-     Justine's names: where the cursor is, where it goes, and a file the
-     programmer went to on their own; so a file and the other kind of call no
-     longer share a word, and `"other"` in `Calls` stays. TLC:
-     every config holds with its state count unchanged.
+     "do another consistency pass"). Three readers compared every name in the 37
+     modules by its comment, and every hit was checked against its lines. Same
+     name, two things: Wire's and Serialize's call ids are `CallIds`, and
+     Serialize's absent call `NoCallId` (PairDefs' `Calls` is the kinds);
+     Serialize's `QueueStates`, `queueState`, and `NoQueueState` (Controller's
+     `BatchStates` is per batch); Anchor's cursor is `place` and its count
+     `heldCount` (Controller's `held` is a set); ListenGrace's `absent`
+     (Controller's `quiet` edits); FileText's and EditEvents' text as a number
+     is `Contents`, as in Outside; FileText's `NoSuchFile` and `Internal` (the
+     code's `internal`); Rehearsal's `Origin`, `EditorLines`,
+     `QueuesAfterInterrupt`, `justRead`; LineIdentity's `ApplyChange` and
+     `LineFeeds`; Reload's `Replacements`; BatchFile's `NamingKinds`; Scroll's
+     `targetLine` and `"pause"` reason; PanelScroll's `topBefore`; Discovery's
+     one process is `phase`; PairDefs' `SessionPhases`, since `phase` is a
+     process's. One code path, one name: the session ends by `EndByProgrammer`
+     (Bridge, Controller, Resume) or `EndByAgent` (Bridge, Resume); the cancel
+     is `Cancel` and `canceled` (Serialize, as Controller; `canceled` spelled
+     one way, Wire too); a failed rehearsal is `FailRehearsal` (Serialize,
+     ListenGrace); `Return` is finishCall with a report (Serialize too);
+     `Timeout` everywhere; `Deliver` is the report reaching the agent
+     (Controller); `Interrupt` (ListenGrace); `EditAsProgrammer` (Navigator,
+     EditorAdapter) and `EditAsAgent`; `LoadPage` and `PageStates`, `"loaded"`
+     or `"disposed"`, for a webview page (Draft, Start), so `live` is a session
+     alone; `Views` in PairDefs, from Resume; `Store` for workspace storage
+     (Resume); id sets are `Num*` and bounds `Max*`; the counts are
+     `MaxEdits`/`edits` and `MaxChanges`/`changes`; `MaxEvents` in the three
+     panel specs; the pause flags are `replyPause`, `calibratePause`, and
+     `awayPause`; `ResumeAll` for resume() with no reason; `selection`,
+     `baseline`, `byProgrammer`, and `interrupts` spelled out. An action names
+     its object where a verb was shared: `CloseSocket` and `OpenSocket`,
+     `CloseDocument` and `OpenDocument`, `CloseTerminal`, `Acquire`,
+     `RejectHello`, `Perform` and `StartHead` (Turns), `StartDelete`, `Complete`
+     (Controller), `Played` and `HandBack` (Serialize), `TakeHeld` and
+     `StopShort` (Anchor), `Stop` (BatchFile), `WriteOutside`, `WatcherReports`,
+     and `Show` (Outside, as FileText), `AnswerCheck` and `AgentExits` (Start),
+     `CancelCalibration` and `StopTimer`, `SendReply`, `ShowResolves`,
+     `WindowExpires`, `HandleEditorChange`, `Follow` and `InView` (Scroll),
+     `Lull` (Navigator), `ViewAtEntry`, `TypeDraft`. Properties: Start's
+     `NoteGoes` and Scroll's `ComesInView` (both were `Settles`), and
+     `NoYourMoveAfterInterrupt`; the tests named for them follow. Absent values
+     as model values: Start's `NoQuestion` (was 0) and ActionValidation's
+     `Throws` (was a string); Discovery's `"unstarted"` and Wire's
+     `"unanswered"` for states that read as absent. Sets named: `Rates`
+     (Calibration), `EventKinds` (PanelScroll). Models: FollowMode's `LookAway`
+     goes to `"other"` and its `Other(f)` is gone; BatchFile's
+     `EditAtCursorProp` covers `type_fast`; Turns' and Actions' `Batches` and
+     ProjectGuide's `Paths` are `Seqs`; RunBox says it stops at the first `run`
+     post (`exited` comes later, to a box already off). Comments behind a rename
+     in eleven modules follow it, and the three pure-function headers name their
+     letters from PairDefs. The code comments naming these actions, the README's
+     tables, and `COVERAGE.md` follow. Left alone, with the reason: `NoText`,
+     `NoDocument`, and `NoOffset` are each a `CHOOSE` over a local set, so they
+     stay local; PanelReplay's `SessionEvents` are events, not `Views`;
+     EditorAdapter's `"other"` is the wire's `by`. `Files` is
+     `{"sourceFile", "destinationFile", "otherFile"}`, Justine's names: where
+     the cursor is, where it goes, and a file the programmer went to on their
+     own; so a file and the other kind of call no longer share a word, and
+     `"other"` in `Calls` stays. TLC: every config holds with its state count
+     unchanged.
 
 19.  **Variables named for what they hold** (Justine, 2026-10-19: "these specs
      should be self-documenting"; a name a reader needs the comment for gets a
@@ -267,3 +268,27 @@ from. One entry per fix, newest last.
      had been renamed follow it. Lines the longer names pushed past 80 columns
      were rewrapped; four headers that quoted a code name in backticks keep it.
      TLC: every config holds with its state count unchanged.
+
+20.  **What the review of this branch found** (#198). An adversarial review of
+     the squashed diff found names the sweep left behind; nothing it found
+     changed a formula's meaning. Code and test comments that name a spec action
+     follow the renames in every form of reference, not only the `specs/X.tla`
+     one: 49 lines in `controller.ts`, `player.ts`, `lines.ts`, `link.ts`,
+     `calibration.ts`, `panel.ts`, `editor.ts`, `extension.ts`, `setup.ts`,
+     `outside.ts`, `timings.ts`, `terminal.ts`, `webview/panel.ts`,
+     `integration.ts`, and `integration_paths.ts`. `specs/COVERAGE.md` names
+     Anchor's `TakeHeld` and Resume's `Store` and `ReloadWindow`, and the
+     README's `AddYours` row the `programmer` event. Spec comments name
+     `MaxActions`, `actionsPlayed`, `EditAsProgrammer`, `SplitRuns`,
+     `NoDirectory`, `MaxSessions`, `environmentChanges`, `RejectPerSocket`, and
+     `followSwitches`; nine ASSUMEs are named for the constant they check
+     (`AssumeNumSockets`, `AssumeNumCalls`, `AssumeRejectPerSocket`,
+     `AssumeJunkFile`, `AssumeSplitRuns`, `AssumeDirectories` twice).
+     FollowMode's held window is `"heldOpen"`, so `"awaiting"` there is the show
+     call alone; BatchFile's flag is `stopped` again, set by `Stop`, since
+     `rejected` is a batch that failed rehearsal (fix 6); Bridge's `recent` is
+     `restorable`, the rename fix 19 listed. Every VARIABLES and CONSTANTS block
+     whose comment column the renames left ragged is aligned at one column, its
+     comments refilled; six header lines are 80 wide. Fix 18's sentences on
+     `NoCallId` and the end actions say which specs have them. TLC: every config
+     holds with its state count unchanged.

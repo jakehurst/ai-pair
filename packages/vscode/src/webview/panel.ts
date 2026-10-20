@@ -540,7 +540,7 @@ function handle(message: ToPanel): void {
       ui.start.hidden = !message.value;
       return;
     case 'startEnded':
-      // specs/Start.tla, `Exit`: the agent is done, session or not (Settles).
+      // specs/Start.tla, `AgentExits`: the agent is done, session or not (NoteGoes).
       ui.starting.hidden = true;
       return;
     case 'session':

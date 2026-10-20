@@ -120,7 +120,7 @@ export function claudeStarter(
   // What `start` returns while the agent runs: resolved once its terminal closes (#118).
   let exited = Promise.resolve();
   let exit: (() => void) | undefined;
-  // specs/Start.tla, `Exit`: the CLI exited, and its terminal closed with it.
+  // specs/Start.tla, `AgentExits`: the CLI exited, and its terminal closed with it.
   const closed = vscode.window.onDidCloseTerminal((t) => {
     if (t !== running) return;
     running = undefined;

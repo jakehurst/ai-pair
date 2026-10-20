@@ -1,11 +1,11 @@
 ---- MODULE ActionValidation ---------------------------------------------------
 (******************************************************************************)
 (* moveProblem and spanProblem in packages/protocol/src/index.ts, checked     *)
-(* over every place an agent can send, by the kind of value in each field.   *)
-(* The relay's schema and the player both ask these checks (#45), so what    *)
-(* they answer is what both accept: a place is accepted exactly when it is   *)
-(* valid, and every other place gets a message, never an internal error      *)
-(* (#163: `{ move: { line: 1, at: 5 } }` made moveProblem throw).            *)
+(* over every place an agent can send, by the kind of value in each field.    *)
+(* The relay's schema and the player both ask these checks (#45), so what     *)
+(* they answer is what both accept: a place is accepted exactly when it is    *)
+(* valid, and every other place gets a message, never an internal error       *)
+(* (#163: `{ move: { line: 1, at: 5 } }` made moveProblem throw).             *)
 (******************************************************************************)
 EXTENDS Naturals
 

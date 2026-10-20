@@ -278,7 +278,7 @@ export class Player {
     let effect = false;
     // specs/Actions.tla: `perform` takes an action's steps (`Proceed`, `TakeEffect`), and each pass after it is `FinishAction`.
     for (const [i, action] of actions.entries()) {
-      // specs/Turns.tla, `Start`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
+      // specs/Turns.tla, `Perform`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect);
       let outcome: Outcome;
       try {
@@ -336,12 +336,12 @@ export class Player {
         `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order.`,
       );
     }
-    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Reject`.
+    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Stop`.
     const named = this.names(action, playing);
     if (typeof named === 'object') return named;
     const fields = fieldsProblem(action);
     if (fields !== undefined) return fail('invalid_action', fields);
-    // specs/Turns.tla, `Start`: in the programmer's turn, only `say` and `point`.
+    // specs/Turns.tla, `Perform`: in the programmer's turn, only `say` and `point`.
     if (scene.turn === 'programmer' && !('say' in action) && !('point' in action)) {
       return fail('not_your_turn', "During the programmer's turn, only `say` and `point` are allowed.");
     }

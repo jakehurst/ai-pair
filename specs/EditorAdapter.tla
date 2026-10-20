@@ -32,15 +32,15 @@ Authors ==
 Attributions == {"agent", "other", "programmer"}
 
 VARIABLES
-    ownEdit,               \* the agent's edit in flight: "idle", "awaiting"
-                       \* (applying), or "handled" (its event handled)
-    saving,            \* our save: "idle", "participants" (save participants
-                       \* run), or "writing" (they're done)
-    inbox,             \* change events not yet handled, oldest first: who made
-                       \* each, and whether during our save
-    changes,              \* how many changes have happened
-    wrongAttributions  \* attributions that don't match who made the change:
-                       \* [author, as]
+    ownEdit,          \* the agent's edit in flight: "idle", "awaiting"
+                      \* (applying), or "handled" (its event handled)
+    saving,           \* our save: "idle", "participants" (save participants
+                      \* run), or "writing" (they're done)
+    inbox,            \* change events not yet handled, oldest first: who made
+                      \* each, and whether during our save
+    changes,          \* how many changes have happened
+    wrongAttributions \* attributions that don't match who made the change:
+                      \* [author, as]
 
 vars == <<ownEdit, saving, inbox, changes, wrongAttributions>>
 

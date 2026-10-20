@@ -35,17 +35,17 @@ NoOffset == CHOOSE v : v \notin Nat
 NoDeleteOutcome == CHOOSE v : v \notin DeleteOutcomes
 
 VARIABLES
-    phase,       \* the delete: "before", "awaiting" (show, getText), or "done"
-    selectedTextStart,      \* where the selected text starts now
-    selectionStart,   \* s.selection's start: moved by every edit, as
-                      \* `transform`
-                 \* does
-    copiedStart,        \* the start the delete copied before awaiting, or
-                        \* NoOffset
-    interrupted, \* the timeline was interrupted
-    edits,       \* how many edits the programmer has made
-    outcome,     \* what the delete did: an outcome, or NoDeleteOutcome
-    deletedAt    \* where the delete removed text, or NoOffset
+    phase,             \* the delete: "before", "awaiting" (show, getText), or
+                       \* "done"
+    selectedTextStart, \* where the selected text starts now
+    selectionStart,    \* s.selection's start: moved by every edit, as
+                       \* `transform` does
+    copiedStart,       \* the start the delete copied before awaiting, or
+                       \* NoOffset
+    interrupted,       \* the timeline was interrupted
+    edits,             \* how many edits the programmer has made
+    outcome,           \* what the delete did: an outcome, or NoDeleteOutcome
+    deletedAt          \* where the delete removed text, or NoOffset
 
 vars ==
     <<phase, selectedTextStart, selectionStart, copiedStart, interrupted,

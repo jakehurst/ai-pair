@@ -12,12 +12,12 @@
 EXTENDS Naturals, PairDefs
 
 CONSTANTS
-    Directories,           \* the directories an agent may start from
-    MaxSessions,         \* how many sessions the model starts
-    PostOnRevive    \* TRUE: `revive` tells the panel the session is suspended
-                    \* (the fix of #138)
+    Directories, \* the directories an agent may start from
+    MaxSessions, \* how many sessions the model starts
+    PostOnRevive \* TRUE: `revive` tells the panel the session is suspended (the
+                 \* fix of #138)
 
-ASSUME AssumeDirs == Directories # {}
+ASSUME AssumeDirectories == Directories # {}
 ASSUME AssumeMaxSessions == MaxSessions \in Nat
 ASSUME AssumePostOnRevive == PostOnRevive \in BOOLEAN
 
@@ -26,16 +26,16 @@ ASSUME AssumePostOnRevive == PostOnRevive \in BOOLEAN
 NoDirectory == CHOOSE v : v \notin Directories
 
 VARIABLES
-    session,    \* the window's session, one of SessionPhases, or NoSession
-    id,         \* which session it is: a new one gets a new id
-    directory,        \* its working directory, or NoDir
-    connected,  \* an agent's relay is connected, and drives the session if
-                \* one is active
-    messageWaiting,    \* a message from the programmer the agent hasn't been
-                       \* sent yet
-    shown,      \* what the panel shows, one of Views
-    stored      \* what the workspace's storage holds: the session as of its
-                \* last change
+    session,        \* the window's session, one of SessionPhases, or NoSession
+    id,             \* which session it is: a new one gets a new id
+    directory,      \* its working directory, or NoDirectory
+    connected,      \* an agent's relay is connected, and drives the session if
+                    \* one is active
+    messageWaiting, \* a message from the programmer the agent hasn't been sent
+                    \* yet
+    shown,          \* what the panel shows, one of Views
+    stored          \* what the workspace's storage holds: the session as of its
+                    \* last change
 
 vars == <<session, id, directory, connected, messageWaiting, shown, stored>>
 
@@ -229,7 +229,7 @@ Arrives ==
         (~messageWaiting \/ ~connected \/ session # "active")
 
 \* Sessions run out only so that the model is finite (6.8). It prunes exactly
-\* the states a guard `id < MaxIds` on a new session never reached, so the
+\* the states a guard `id < MaxSessions` on a new session never reached, so the
 \* behaviors, and Arrives' result, are the guard's (8.6).
 Constraint == id <= MaxSessions
 

@@ -10,27 +10,26 @@
 EXTENDS Naturals
 
 CONSTANTS
-    NumSockets,       \* how many sockets the relay may open in a run
-    NumCalls,         \* how many calls the agent makes, at most
-    RejectPerSocket,        \* TRUE: a close rejects only its own socket's calls
-                            \* (the
-                      \* fix for #3)
-    GuardedParse,     \* TRUE: a frame that is not a message (not JSON, or no
-                      \* message schema fits it, #163) is dropped (#4)
-    CheckAbort,       \* TRUE: call() checks signal.aborted after connect(),
-                      \* before sending (#29)
-    WaitForReturn,    \* TRUE: call() sends only once the socket's canceled
-                      \* calls are answered (#59)
-    HandBackAnswered, \* TRUE: a cancel that reaches the relay after it
-                      \* answered hands the report back (#67)
-    MarkRepeats,      \* TRUE: the report handed back is marked as possibly
-                      \* seen, so its next delivery says it may repeat (#67)
+    NumSockets,        \* how many sockets the relay may open in a run
+    NumCalls,          \* how many calls the agent makes, at most
+    RejectPerSocket,   \* TRUE: a close rejects only its own socket's calls (the
+                       \* fix for #3)
+    GuardedParse,      \* TRUE: a frame that is not a message (not JSON, or no
+                       \* message schema fits it, #163) is dropped (#4)
+    CheckAbort,        \* TRUE: call() checks signal.aborted after connect(),
+                       \* before sending (#29)
+    WaitForReturn,     \* TRUE: call() sends only once the socket's canceled
+                       \* calls are answered (#59)
+    HandBackAnswered,  \* TRUE: a cancel that reaches the relay after it
+                       \* answered hands the report back (#67)
+    MarkRepeats,       \* TRUE: the report handed back is marked as possibly
+                       \* seen, so its next delivery says it may repeat (#67)
     CloseAfterShutdown \* TRUE: after the shutdown, the link opens no socket,
                        \* and closes one the editor welcomes then (#163)
 
-ASSUME AssumeMaxSockets == NumSockets \in Nat \ {0}
-ASSUME AssumeMaxCalls == NumCalls \in Nat \ {0}
-ASSUME AssumePerSocket == RejectPerSocket \in BOOLEAN
+ASSUME AssumeNumSockets == NumSockets \in Nat \ {0}
+ASSUME AssumeNumCalls == NumCalls \in Nat \ {0}
+ASSUME AssumeRejectPerSocket == RejectPerSocket \in BOOLEAN
 ASSUME AssumeGuardedParse == GuardedParse \in BOOLEAN
 ASSUME AssumeCheckAbort == CheckAbort \in BOOLEAN
 ASSUME AssumeWaitForReturn == WaitForReturn \in BOOLEAN
@@ -69,25 +68,23 @@ Settled == {"result", "returned", "void", "severed"}
 CallStates == Unsent \cup Sent \cup Settled
 
 VARIABLES
-    socketState,       \* each socket's state, in SocketStates
-    activeSocket,        \* this.ws: the open socket calls go out on, or
-                         \* NoSocket
-    pc,         \* where each call is, in CallStates
+    socketState,    \* each socket's state, in SocketStates
+    activeSocket,   \* this.ws: the open socket calls go out on, or NoSocket
+    pc,             \* where each call is, in CallStates
     sentOn,         \* the socket each call was sent on, or NoSocket
-    awaitingAnswer,    \* the calls waiting for an answer, each in the `calls`
-                       \* map of
-                \* the socket it went out on
-    severedBy,  \* the socket whose close severed the call, or NoSocket
+    awaitingAnswer, \* the calls waiting for an answer, each in the `calls` map
+                    \* of the socket it went out on
+    severedBy,      \* the socket whose close severed the call, or NoSocket
     garbageSent,    \* whether the frame that is not a message has been sent yet
-    relayUp,    \* FALSE once an uncaught exception has ended the relay
-    canceled,    \* the agent's MCP client canceled the call: it drops any
-                \* answer from then on
-    cancelNoticed,    \* the relay has handled the client's
-                \* `notifications/cancelled` for it
-    answerAtClient,   \* the relay's answer reached the client: "unanswered",
-                \* "taken", or "dropped"
-    mayRepeat,  \* the report was handed back as possibly seen (`mayRepeat`)
-    serving     \* TRUE until the harness ends the relay's stdin (#163)
+    relayUp,        \* FALSE once an uncaught exception has ended the relay
+    canceled,       \* the agent's MCP client canceled the call: it drops any
+                    \* answer from then on
+    cancelNoticed,  \* the relay has handled the client's
+                    \* `notifications/cancelled` for it
+    answerAtClient, \* the relay's answer reached the client: "unanswered",
+                    \* "taken", or "dropped"
+    mayRepeat,      \* the report was handed back as possibly seen (`mayRepeat`)
+    serving         \* TRUE until the harness ends the relay's stdin (#163)
 
 vars ==
     <<socketState, activeSocket, pc, sentOn, awaitingAnswer, severedBy,
@@ -122,8 +119,8 @@ TypeOK ==
 AwaitsReturn(s) == \E d \in awaitingAnswer
                    : sentOn[d] = s /\ pc[d] = "pendingNoticed"
 
-\* The calls the close of socket s rejects: with PerSocket, only those sent on
-\* it; before #3, every call waiting.
+\* The calls the close of socket s rejects: with RejectPerSocket, only those
+\* sent on it; before #3, every call waiting.
 Victims(s) == IF RejectPerSocket THEN {c \in awaitingAnswer : sentOn[c] = s}
               ELSE awaitingAnswer
 
@@ -179,8 +176,8 @@ Request(c) ==
     /\ serving
     /\ pc[c] = "idle"
     /\ pc' = [pc EXCEPT ![c] = "requested"]
-    /\ UNCHANGED <<socketState, activeSocket, sentOn, awaitingAnswer,
-                   severedBy, garbageSent, relayUp>>
+    /\ UNCHANGED <<socketState, activeSocket, sentOn, awaitingAnswer, severedBy,
+                   garbageSent, relayUp>>
     /\ UNCHANGED <<canceled, cancelNoticed, answerAtClient, mayRepeat, serving>>
 
 \* The agent's client cancels: from now on it drops any answer to the call

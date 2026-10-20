@@ -14,9 +14,9 @@ CONSTANTS
 ASSUME AssumeClearOnEnd == ClearOnEnd \in BOOLEAN
 
 VARIABLES
-    playerPhase,  \* the player: "saving", "confirming", "running", "over"
-    boxShows,     \* the page's box: "cleared", "confirm", "running"
-    sessionLive     \* the session is live in the page
+    playerPhase, \* the player: "saving", "confirming", "running", "over"
+    boxShows,    \* the page's box: "cleared", "confirm", "running"
+    sessionLive  \* the session is live in the page
 
 vars == <<playerPhase, boxShows, sessionLive>>
 

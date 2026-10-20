@@ -12,8 +12,8 @@
 EXTENDS Naturals, Sequences, FiniteSets, PairDefs
 
 CONSTANTS
-    MaxChars,     \* the longest text the check covers
-    MaxInsert   \* the longest inserted text it covers
+    MaxChars, \* the longest text the check covers
+    MaxInsert \* the longest inserted text it covers
 
 ASSUME AssumeMaxChars == MaxChars \in Nat
 ASSUME AssumeMaxInsert == MaxInsert \in Nat

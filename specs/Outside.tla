@@ -40,19 +40,18 @@ NoText == CHOOSE v : v \notin Contents
 NoDocument == CHOOSE v : v \notin Contents
 
 VARIABLES
-    disk,       \* the file's content on disk
-    documentText,        \* the open document's text, or NoDocument if not open
-    knownText,      \* the last text VS Code saved or the programmer saw, or
-                    \* NoText
-    saved,      \* afterSave: a save happened since the last watcher event
+    disk,             \* the file's content on disk
+    documentText,     \* the open document's text, or NoDocument if not open
+    knownText,        \* the last text VS Code saved or the programmer saw, or
+                      \* NoText
+    saved,            \* afterSave: a save happened since the last watcher event
     unreportedWrites, \* the watcher has writes it hasn't reported yet
-    unreportedSave,     \* the text VS Code saved and hasn't yet told the code
-                        \* of
-                \* (onDidSaveTextDocument), or NoText
-    badged,     \* the file's badge shows
-    writtenOutside,    \* an outside write happened since the programmer last
-                       \* saw it
-    writes      \* contents so far; each new content is a fresh number
+    unreportedSave,   \* the text VS Code saved and hasn't yet told the code of
+                      \* (onDidSaveTextDocument), or NoText
+    badged,           \* the file's badge shows
+    writtenOutside,   \* an outside write happened since the programmer last saw
+                      \* it
+    writes            \* contents so far; each new content is a fresh number
 
 vars == <<disk, documentText, knownText, saved, unreportedWrites,
           unreportedSave, badged, writtenOutside, writes>>

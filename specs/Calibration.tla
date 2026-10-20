@@ -12,9 +12,9 @@
 EXTENDS Naturals
 
 CONSTANTS
-    MaxRounds,   \* how many calibrations the model completes
-    AwaitStore      \* TRUE: playback resumes only once the stored rate has been
-                    \* applied
+    MaxRounds, \* how many calibrations the model completes
+    AwaitStore \* TRUE: playback resumes only once the stored rate has been
+               \* applied
 
 ASSUME AssumeMaxRounds == MaxRounds \in Nat
 ASSUME AssumeAwaitStore == AwaitStore \in BOOLEAN
@@ -28,16 +28,16 @@ Rates == {"default", "measured", "staleDefault"}
 NoSay == CHOOSE v : v \notin Rates
 
 VARIABLES
-    phase,     \* "idle"; "ready", waiting for go; "reading", the timer
-               \* running; "storing", the rate being written
-    passageSource,   \* "builtin", or "supplied" by the agent's calibrate tool
-    rate,      \* what the player reads: "default", or "measured"
-    rateUnapplied,   \* a measured rate written to the settings, not yet applied
-    calibratePause,     \* calibrate is a pause reason
-    sayRate,       \* a say in flight: the rate its pause was timed with, or
-                   \* NoSay
-    calibratedOnce,  \* a calibration has completed
-    rounds     \* calibrations completed
+    phase,          \* "idle"; "ready", waiting for go; "reading", the timer
+                    \* running; "storing", the rate being written
+    passageSource,  \* "builtin", or "supplied" by the agent's calibrate tool
+    rate,           \* what the player reads: "default", or "measured"
+    rateUnapplied,  \* a measured rate written to the settings, not yet applied
+    calibratePause, \* calibrate is a pause reason
+    sayRate,        \* a say in flight: the rate its pause was timed with, or
+                    \* NoSay
+    calibratedOnce, \* a calibration has completed
+    rounds          \* calibrations completed
 
 vars == <<phase, passageSource, rate, rateUnapplied, calibratePause, sayRate,
           calibratedOnce, rounds>>

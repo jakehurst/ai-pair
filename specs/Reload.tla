@@ -14,12 +14,12 @@
 EXTENDS Naturals
 
 CONSTANTS
-    NumLines,   \* how many lines the file has
-    SplitRuns      \* TRUE: each run of changed lines is its own change
-                \* (diffLines within VS Code's change)
+    NumLines, \* how many lines the file has
+    SplitRuns \* TRUE: each run of changed lines is its own change (diffLines
+              \* within VS Code's change)
 
 ASSUME AssumeNumLines == NumLines \in Nat \ {0}
-ASSUME AssumeRefine == SplitRuns \in BOOLEAN
+ASSUME AssumeSplitRuns == SplitRuns \in BOOLEAN
 
 \* The file's lines.
 Lines == 1..NumLines
@@ -38,11 +38,12 @@ FreshIds == {FreshId(l) : l \in Lines}
 Replacements == {NewLine(l) : l \in Lines}
 
 VARIABLES
-    ghosts,  \* which line each line really is; a changed line is a new one
-    ids,     \* the editor's LineIds for the lines
-    selectionLine,     \* the line the agent's selection is on
-    selectionBefore,    \* the line it was on before the reload
-    reloaded \* the disk change happened
+    ghosts,          \* which line each line really is; a changed line is a new
+                     \* one
+    ids,             \* the editor's LineIds for the lines
+    selectionLine,   \* the line the agent's selection is on
+    selectionBefore, \* the line it was on before the reload
+    reloaded         \* the disk change happened
 
 vars == <<ghosts, ids, selectionLine, selectionBefore, reloaded>>
 
@@ -58,7 +59,7 @@ TypeOK ==
     /\ reloaded \in BOOLEAN
 
 \* The changes recordEdit is given, as ranges of lines, when `changed` are the
-\* lines that changed: with Refine, each run of them is its own change.
+\* lines that changed: with SplitRuns, each run of them is its own change.
 Runs(changed) ==
     {r \in [from : changed, to : changed] :
         /\ r.from <= r.to
@@ -66,7 +67,7 @@ Runs(changed) ==
         /\ (r.to + 1) \notin changed
         /\ \A l \in r.from..r.to : l \in changed}
 
-\* Without Refine: one change from the first changed line to the last, which
+\* Without SplitRuns: one change from the first changed line to the last, which
 \* the two CHOOSEs pick; each is unique.
 Coarse(changed) ==
     {[from |-> CHOOSE a \in changed : \A l \in changed : a <= l,

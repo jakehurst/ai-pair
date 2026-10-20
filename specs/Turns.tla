@@ -13,10 +13,10 @@
 EXTENDS Naturals, Sequences, PairDefs
 
 CONSTANTS
-    MaxActions,         \* how many actions a batch has, at most
-    MaxTurns,       \* how many times the model changes the turn
-    DeleteChecks    \* TRUE: `delete` stops after its awaits if interrupted
-                    \* (the fix for #49)
+    MaxActions,  \* how many actions a batch has, at most
+    MaxTurns,    \* how many times the model changes the turn
+    DeleteChecks \* TRUE: `delete` stops after its awaits if interrupted (the
+                 \* fix for #49)
 
 ASSUME AssumeMaxActions == MaxActions \in Nat \ {0}
 ASSUME AssumeMaxTurns == MaxTurns \in Nat
@@ -25,7 +25,7 @@ ASSUME AssumeDeleteChecks == DeleteChecks \in BOOLEAN
 \* The actions that edit.
 EditKinds == {"type", "type_fast", "delete", "run"}
 
-\* Every batch: one to MaxLen actions.
+\* Every batch: one to MaxActions actions.
 Batches == Seqs(ActionKinds, MaxActions) \ {<<>>}
 
 VARIABLES

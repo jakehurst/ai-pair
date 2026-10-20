@@ -119,7 +119,7 @@ export class PairTerminals implements vscode.Disposable {
     // listeners below are in place before it can fire.
     const execution = integration.executeCommand(command);
 
-    // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`Close`), and the terminal is free.
+    // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`CloseTerminal`), and the terminal is free.
     let exitCode: number | undefined;
     const ended = new Promise<void>((resolve) => {
       const listeners: vscode.Disposable[] = [];

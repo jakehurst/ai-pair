@@ -547,7 +547,7 @@ export async function run(): Promise<void> {
   await ask(waiter, 1, 'start', { cwd: root });
   assert.match(JSON.stringify(await ask(waiter, 2, 'listen', {})), /"waiting":true/);
   // "Your move" stays for the grace, then, with no call open for longer, the panel says the agent isn't
-  // listening, until its next call (#126, #149, specs/ListenGrace.tla: `Expire`, `GoQuiet`, `Call`).
+  // listening, until its next call (#126, #149, specs/ListenGrace.tla: `Expire`, `GoAbsent`, `Call`).
   await sleep(ABSENT_MS + GRACE_SLACK_MS);
   assert.ok(
     api.history().some((e) => e.type === 'state' && e.state === 'absent'),
@@ -1128,7 +1128,7 @@ export async function run(): Promise<void> {
 
   // A relay tries the windows best first, skipping a file that isn't a window's, a window whose pid is gone, one whose
   // port nothing answers, one that rejects its hello, and one that answers with something not a message; a folder that
-  // doesn't exist is no folder to look for (specs/Discovery.tla, `Start`, `Try`; specs/Wire.tla, `Reject`,
+  // doesn't exist is no folder to look for (specs/Discovery.tla, `Start`, `Try`; specs/Wire.tla, `RejectHello`,
   // `SendGarbage`). The windows that aren't hold this window's folder, focused later, so they come first.
   const refused = await fakeEditor(() => undefined);
   refused.server.close();
@@ -1158,7 +1158,7 @@ export async function run(): Promise<void> {
   const fooled = await relayAgent(relayEnv());
   const fooledStart = await called(fooled, 'start', { task: 'fakes', cwd: '/no/such/folder' });
   assert.equal(fooledStart.failed, false, fooledStart.text);
-  // Another folder of the window: the relay closes its socket and finds the window again (specs/Wire.tla, `Close`).
+  // Another folder of the window: the relay closes its socket and finds the window again (specs/Wire.tla, `CloseSocket`).
   fs.mkdirSync(file('sub'), { recursive: true });
   const relocated = await called(fooled, 'start', { task: 'moved', cwd: file('sub') });
   assert.equal(relocated.failed, false, relocated.text);
@@ -1169,7 +1169,7 @@ export async function run(): Promise<void> {
   assert.ok(nowhere.failed && nowhere.text.startsWith("no_editor: Couldn't connect to the editor: "), nowhere.text);
   assert.equal((await called(fooled, 'start', { task: 'back', cwd: root })).failed, false);
   // A listen the agent cancels before the editor answers: the next call waits until that answer comes, and goes
-  // back to the editor first (specs/Wire.tla, `Abort`, `Send` with WaitCancelled, `Reply`).
+  // back to the editor first (specs/Wire.tla, `Abort`, `Send` with WaitForReturn, `Reply`).
   const realListen = controller.listen.bind(controller);
   let held = Promise.withResolvers<void>();
   controller.listen = async () => {
@@ -1196,7 +1196,7 @@ export async function run(): Promise<void> {
   assert.ok(droppedAnswer.failed && droppedAnswer.text.includes('call `start` again'), droppedAnswer.text);
   await until(() => controller.isSuspended);
   // The harness going away while a call waits for a cancelled one: the relay shuts down, and the waiting call
-  // opens no socket (specs/Wire.tla, `Shutdown`, `Open` with CloseAfterShutdown).
+  // opens no socket (specs/Wire.tla, `Shutdown`, `OpenSocket` with CloseAfterShutdown).
   assert.equal((await called(fooled, 'start', { task: 'resumed', cwd: root })).failed, false);
   held = Promise.withResolvers<void>();
   const abandoning = new AbortController();

@@ -169,7 +169,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   );
   const { outside, disposable: outsideWatch } = watchOutside(controller, editor, panel);
   // A session survives a reload in the workspace's storage, suspended until its agent's `start` (#25,
-  // specs/Resume.tla, `ReloadWindow`): saved shortly after each change, and once more as the window goes (`Save`).
+  // specs/Resume.tla, `ReloadWindow`): saved shortly after each change, and once more as the window goes (`Store`).
   const stored: unknown = context.workspaceState.get(SAVED_SESSION);
   const saved = isSavedSession(stored) ? stored : undefined;
   if (saved) {

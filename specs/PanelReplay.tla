@@ -10,10 +10,10 @@
 EXTENDS Naturals, Sequences
 
 CONSTANTS
-    MaxLog,         \* MAX_LOG, scaled down
-    MaxEvents,       \* how many events the model posts
-    KeepSession     \* TRUE: cutting the log keeps its last `session` event
-                    \* (the fix for #54)
+    MaxLog,     \* MAX_LOG, scaled down
+    MaxEvents,  \* how many events the model posts
+    KeepSession \* TRUE: cutting the log keeps its last `session` event (the fix
+                \* for #54)
 
 ASSUME AssumeMaxLog == MaxLog \in Nat \ {0}
 ASSUME AssumeMaxEvents == MaxEvents \in Nat
@@ -28,11 +28,10 @@ Events == SessionEvents \cup {"other"}
 NoSessionEvent == CHOOSE v : v \notin SessionEvents
 
 VARIABLES
-    log,     \* NarrationPanel.log
-    liveViewSession,   \* the session state of a view that saw every event: the
-                       \* last
-             \* session event, or NoSessionEvent
-    posts    \* events posted so far
+    log,             \* NarrationPanel.log
+    liveViewSession, \* the session state of a view that saw every event: the
+                     \* last session event, or NoSessionEvent
+    posts            \* events posted so far
 
 vars == <<log, liveViewSession, posts>>
 

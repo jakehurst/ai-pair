@@ -13,8 +13,7 @@ EXTENDS Naturals
 
 CONSTANTS
     NumWindows, \* how many editor windows
-    JunkFile,       \* TRUE: a file with a live pid but no workspaceFolders is
-                    \* in
+    JunkFile,   \* TRUE: a file with a live pid but no workspaceFolders is in
                 \* the folder
     CheckFiles, \* TRUE: findWindows skips a file whose fields are not a
                 \* Discovery, by its schema (the fix for #31; #163)
@@ -22,7 +21,7 @@ CONSTANTS
                 \* is never half written (the fix for #72)
 
 ASSUME AssumeNumWindows == NumWindows \in Nat
-ASSUME AssumeJunk == JunkFile \in BOOLEAN
+ASSUME AssumeJunkFile == JunkFile \in BOOLEAN
 ASSUME AssumeCheckFiles == CheckFiles \in BOOLEAN
 ASSUME AssumeAtomicWrite == AtomicWrite \in BOOLEAN
 
@@ -34,15 +33,14 @@ Windows == 1..NumWindows
 NoWindow == CHOOSE v : v \notin Windows
 
 VARIABLES
-    windowState,         \* each window: "unstarted", "open", "writing" (open,
-                 \* its file truncated and not yet rewritten), "unlisted" (open,
-                 \* its file not written), "closed" (file removed), "crashed"
-                 \* (file left, pid dead), "pidReused" (file left, pid alive
-                 \* again,
-                 \* nothing on the port)
+    windowState, \* each window: "unstarted", "open", "writing" (open, its file
+                 \* truncated and not yet rewritten), "unlisted" (open, its file
+                 \* not written), "closed" (file removed), "crashed" (file left,
+                 \* pid dead), "pidReused" (file left, pid alive again, nothing
+                 \* on the port)
     phase,       \* "idle", "trying", "connected", "no_editor", "internal"
                  \* (findWindows threw)
-    untried,       \* the candidates open() has not tried yet
+    untried,     \* the candidates open() has not tried yet
     connectedTo  \* the window the relay connected to, or NoWindow
 
 vars == <<windowState, phase, untried, connectedTo>>

@@ -268,7 +268,7 @@ is `"you"`.
 | Spec | Code |
 |---|---|
 | `AddEntry` | everything `add()` puts in but the programmer's message: the agent's message filed, runs, dividers, changes outside the editor |
-| `AddYours` | `addYou`, for the `user` event and a `turn` event with a message: it sets `scrollTop` to 0 |
+| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message: it sets `scrollTop` to 0 |
 | `Scroll` | the programmer scrolling the history |
 | `entriesAboveView`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
 
@@ -515,7 +515,7 @@ with the controller's session. `CheckOpen` is the fix for #42.
 | `CloseSocket` | the `close` handler: aborts the socket's calls, and `disconnect()` if it owns the session, which suspends it, unowned (#25) |
 | `EndSuspended` | the programmer ending a suspended session: it closes at once |
 | `EndByProgrammer`, `CloseEnded`, `EndByAgent` | the programmer ending the session from the panel, and its last report closing it; the agent's `end` |
-| `Restore` | a `return` from the owner's socket: `restore()` puts a session its last report closed back, as ended (#60); `recent` is `this.closed` |
+| `Restore` | a `return` from the owner's socket: `restore()` puts a session its last report closed back, as ended (#60); `restorable` is `this.closed` |
 | `Finished` | every socket closed, with no session: nothing more happens until another socket connects |
 
 Each invariant and property was proved to bite with a mutation of a copy of

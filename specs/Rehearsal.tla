@@ -68,17 +68,17 @@ QueuedBatches ==
      ghosts : Seq(Nat)]
 
 VARIABLES
-    ghosts,     \* the file's lines: which line each really is
-    ids,        \* the editor's LineIds for them
-    queue,      \* the queued batches, oldest first
-    shownLines,       \* what the agent was shown: number -> [id, ghost]
-    wrongLine,  \* a number was accepted for a line other than the one shown
-                \* at it
-    otherChanges,     \* changes by others so far
-    batches,    \* batches submitted so far
+    ghosts,       \* the file's lines: which line each really is
+    ids,          \* the editor's LineIds for them
+    queue,        \* the queued batches, oldest first
+    shownLines,   \* what the agent was shown: number -> [id, ghost]
+    wrongLine,    \* a number was accepted for a line other than the one shown
+                  \* at it
+    otherChanges, \* changes by others so far
+    batches,      \* batches submitted so far
     nextId,       \* the counter all trackers share, and new ghosts
-    justRead,      \* nothing changed since the agent's last read
-    stale       \* an interrupt came, and no report has said so yet (`stale`)
+    justRead,     \* nothing changed since the agent's last read
+    stale         \* an interrupt came, and no report has said so yet (`stale`)
 
 vars ==
     <<ghosts, ids, queue, shownLines, wrongLine, otherChanges, batches, nextId,

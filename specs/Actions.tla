@@ -17,9 +17,9 @@
 EXTENDS Naturals, Sequences, PairDefs
 
 CONSTANTS
-    MaxActions,     \* how many actions a batch has, at most
-    RestOnly,   \* TRUE: a `type` cut after a chunk returns only what's left
-                \* of it
+    MaxActions, \* how many actions a batch has, at most
+    RestOnly,   \* TRUE: a `type` cut after a chunk returns only what's left of
+                \* it
     ConsumeRun  \* TRUE: a `run` interrupted while its command runs counts as
                 \* played
 
@@ -60,7 +60,7 @@ MostSteps ==
     CHOOSE n \in {Len(Steps(k)) : k \in ActionShapes} :
         \A k \in ActionShapes : Len(Steps(k)) <= n
 
-\* Every batch: one to MaxLen actions.
+\* Every batch: one to MaxActions actions.
 Batches == Seqs(ActionShapes, MaxActions) \ {<<>>}
 
 \* No first unplayed action, while the batch plays. Any value that is not an
@@ -68,14 +68,14 @@ Batches == Seqs(ActionShapes, MaxActions) \ {<<>>}
 NoAction == CHOOSE v : v \notin Nat
 
 VARIABLES
-    batch,       \* the batch's actions
-    action,      \* the index of the action playing
-    pc,          \* its step next
-    effectsPlayed,     \* each action: how many of its effects took place
-    interrupted, \* the timeline was interrupted
-    result       \* the outcome: status ("playing" until done), from (the
-                 \* first unplayed action), and rest (a cut type's chunks
-                 \* left)
+    batch,         \* the batch's actions
+    action,        \* the index of the action playing
+    pc,            \* its step next
+    effectsPlayed, \* each action: how many of its effects took place
+    interrupted,   \* the timeline was interrupted
+    result         \* the outcome: status ("playing" until done), from (the
+                   \* first unplayed action), and rest (a cut type's chunks
+                   \* left)
 
 vars == <<batch, action, pc, effectsPlayed, interrupted, result>>
 

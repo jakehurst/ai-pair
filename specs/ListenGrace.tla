@@ -5,35 +5,35 @@
 (* nothing to report, and the agent calls `listen` again a few seconds later. *)
 (* With `Grace`, such a timeout starts listenGraceMs of grace, during which   *)
 (* the status stays "listening" ("Your move"). The grace ends at the agent's  *)
-(* next call, when the programmer acts, or when it expires. With             *)
+(* next call, when the programmer acts, or when it expires. With              *)
 (* `ShowAbsent`, once no call has been open for absentMs, the status is       *)
 (* "absent" ("Agent isn't listening") until the agent calls again (#149).     *)
 (******************************************************************************)
 EXTENDS PairDefs
 
 CONSTANTS
-    Grace,      \* TRUE: a listen that timed out with nothing to report keeps
-                \* "listening"
-    ShowAbsent, \* TRUE: with no call open for absentMs, the panel says the
-                \* agent isn't listening (#149)
+    Grace,       \* TRUE: a listen that timed out with nothing to report keeps
+                 \* "listening"
+    ShowAbsent,  \* TRUE: with no call open for absentMs, the panel says the
+                 \* agent isn't listening (#149)
     EndOnAnyCall \* TRUE: every call ends the grace; FALSE: only a call that
-                \* blocks does, the code before #194
+                 \* blocks does, the code before #194
 
 ASSUME AssumeGrace == Grace \in BOOLEAN
 ASSUME AssumeShowAbsent == ShowAbsent \in BOOLEAN
 ASSUME AssumeEndOnAnyCall == EndOnAnyCall \in BOOLEAN
 
 VARIABLES
-    call,       \* the agent's open call: one of Calls, or NoCall
+    call,         \* the agent's open call: one of Calls, or NoCall
     inGrace,      \* the grace timer is armed
-    owesResponse,       \* the agent was handed something to act on, and has not
-                \* called since
-    unreported, \* the programmer did something not yet reported
-    timedOut,   \* the agent's last listen timed out empty, and it has not
-                \* called since
-    graceExpired,    \* listenGraceMs passed since that timeout
-    absent       \* absentMs passed since the agent's last call ended, with no
-                \* call since
+    owesResponse, \* the agent was handed something to act on, and has not
+                  \* called since
+    unreported,   \* the programmer did something not yet reported
+    timedOut,     \* the agent's last listen timed out empty, and it has not
+                  \* called since
+    graceExpired, \* listenGraceMs passed since that timeout
+    absent        \* absentMs passed since the agent's last call ended, with no
+                  \* call since
 
 vars == <<call, inGrace, owesResponse, unreported, timedOut, graceExpired,
           absent>>

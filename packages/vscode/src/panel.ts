@@ -188,7 +188,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'reply':
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
-        // selection stay as they were (specs/PointFocus.tla, `Reply`, issue 125; specs/Draft.tla,
+        // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
         if (this.wiring.calibration().reply(message.text)) {
           // The box is empty now, and the page posts no `draft` for it: specs/Draft.tla, `SendToCalibration` (#191).
@@ -243,8 +243,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (PANEL_COMMANDS.has(message.command)) void vscode.commands.executeCommand(message.command);
         return;
       case 'start':
-        // specs/Start.tla, `Click`: one run per click. `Exit`: the agent is done, and the page drops its
-        // note (Settles).
+        // specs/Start.tla, `Click`: one run per click. `AgentExits`: the agent is done, and the page drops its
+        // note (NoteGoes).
         void this.wiring.starter.start().then(() => {
           this.send({ type: 'startEnded' });
         });

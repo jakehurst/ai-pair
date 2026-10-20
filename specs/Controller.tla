@@ -68,48 +68,46 @@ EventStates ==
      "lost"}
 
 VARIABLES
-    batchState,      \* each batch's state
-    eventState,      \* each programmer event's state
-    endState,        \* the programmer ending the session: an event's state
-    batchDeliveries, \* how many times each batch has reached the agent
-    eventDeliveries, \* how many times each event has reached the agent
-    phase,           \* the agent's call: "idle", "rehearsing", "blocked", or
-                     \* "committed"
-    callBatch,       \* the batch the current step submitted, or NoBatch
-    canceled,        \* whether the agent canceled the current call
-    cancels,         \* how many calls the agent has canceled
-    reportRejection,        \* the batch whose rejection the committed report
-                     \* carries, or NoBatch
-    returningRejection,        \* the batch whose rejection the returning report
-                     \* carries, or NoBatch
-    stale,           \* s.stale: an unreported interruption; new batches are
-                     \* discarded
-    held,            \* restore(): the returned rejections waiting to be
-                     \* reported again, each with whether the agent may have
-                     \* seen it
-    completed,       \* each batch: it played to the end
-    knownBatches,    \* each batch: the batches the agent had been told about
-                     \* when it submitted it
-    knownEvents,     \* each batch: the events the agent had been told about
-    knownQuietEdits,      \* each batch: the programmer's quiet edits the agent
-                          \* had
-                     \* been told about
-    ended,           \* the programmer ended the session (s.ended)
-    closed,          \* close(): this.session is null; the agent's calls fail
-                     \* with no_session
+    batchState,          \* each batch's state
+    eventState,          \* each programmer event's state
+    endState,            \* the programmer ending the session: an event's state
+    batchDeliveries,     \* how many times each batch has reached the agent
+    eventDeliveries,     \* how many times each event has reached the agent
+    phase,               \* the agent's call: "idle", "rehearsing", "blocked",
+                         \* or "committed"
+    callBatch,           \* the batch the current step submitted, or NoBatch
+    canceled,            \* whether the agent canceled the current call
+    cancels,             \* how many calls the agent has canceled
+    reportRejection,     \* the batch whose rejection the committed report
+                         \* carries, or NoBatch
+    returningRejection,  \* the batch whose rejection the returning report
+                         \* carries, or NoBatch
+    stale,               \* s.stale: an unreported interruption; new batches are
+                         \* discarded
+    held,                \* restore(): the returned rejections waiting to be
+                         \* reported again, each with whether the agent may have
+                         \* seen it
+    completed,           \* each batch: it played to the end
+    knownBatches,        \* each batch: the batches the agent had been told
+                         \* about when it submitted it
+    knownEvents,         \* each batch: the events the agent had been told about
+    knownQuietEdits,     \* each batch: the programmer's quiet edits the agent
+                         \* had been told about
+    ended,               \* the programmer ended the session (s.ended)
+    closed,              \* close(): this.session is null; the agent's calls
+                         \* fail with no_session
     quietEditState,      \* each edit the programmer makes in their turn: an
-                     \* event's state
+                         \* event's state
     quietEditDeliveries, \* how many times each quiet edit has reached the agent
-    turn,            \* s.scene.turn: "agent" or "programmer"
-    lastRejection,    \* the batch whose rejection the last report the agent
-                     \* took carried, or NoBatch
-    returnedAfterTaken,          \* the returning report was handed back after
-                                 \* the agent
-                     \* took it (#67)
-    mayRepeat,       \* s.mayRepeat: the next report is marked as one that may
-                     \* repeat an earlier one
-    unmarkedRepeat   \* something reached the agent again, in a report not
-                     \* marked as a repeat
+    turn,                \* s.scene.turn: "agent" or "programmer"
+    lastRejection,       \* the batch whose rejection the last report the agent
+                         \* took carried, or NoBatch
+    returnedAfterTaken,  \* the returning report was handed back after the agent
+                         \* took it (#67)
+    mayRepeat,           \* s.mayRepeat: the next report is marked as one that
+                         \* may repeat an earlier one
+    unmarkedRepeat       \* something reached the agent again, in a report not
+                         \* marked as a repeat
 
 vars ==
     <<batchState, eventState, endState, batchDeliveries, eventDeliveries, phase,

@@ -24,7 +24,7 @@ SleepStates == {"timerStopped", "armed"}
 NoSleep == CHOOSE v : v \notin SleepStates
 
 VARIABLES
-    pauseReasons,      \* Controller.pauseReasons
+    pauseReasons, \* Controller.pauseReasons
     paused,       \* Timeline.paused
     sleeping,     \* Timeline.sleeping: NoSleep, "timerStopped" (no timer), or
                   \* "armed" (timer running)
