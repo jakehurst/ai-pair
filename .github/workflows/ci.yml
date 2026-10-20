@@ -124,11 +124,11 @@ jobs:
           distribution: temurin
           java-version: 21
       # TLA+ tools from the v1.8.0 release, checked against its SHA-256. The release's jar is re-uploaded
-      # from master now and then (last on 2026-10-15), and the checksum follows it.
+      # from master now and then (last on 2026-10-20), and the checksum follows it.
       - name: Download TLC
         run: |
           curl -sSL -o "$RUNNER_TEMP/tla2tools.jar" https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-          echo "15d103b7e5617780bcc904c0af12f1ad242e2b345c0301136c5be4588f17edac  $RUNNER_TEMP/tla2tools.jar" | sha256sum -c
+          echo "5bd7b64db99ae4c6c35f290de5e809c0ee41af43f8699cf696099ffb6452b1e2  $RUNNER_TEMP/tla2tools.jar" | sha256sum -c
       - name: Check every spec, with coverage
         run: specs/check.sh --coverage
         env:
