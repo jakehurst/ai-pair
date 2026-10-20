@@ -8,7 +8,8 @@
 (* of 6 changed on disk came as one change replacing lines 2 to 5).           *)
 (* `recordEdit` moves the agent's selection and the lines' identities through *)
 (* each change it is given: a line inside a change gets a fresh identity, and *)
-(* a selection inside one ends up after it (`mapThrough`). Lines are changed  *)
+(* a selection inside one ends up after it (`mapThrough`), unless it starts   *)
+(* where the change does, at the start of its first line. Lines are changed   *)
 (* in place: which lines change, of NumLines, is any nonempty set.            *)
 (******************************************************************************)
 EXTENDS Naturals
@@ -38,14 +39,17 @@ FreshIds == {FreshId(l) : l \in Lines}
 Replacements == {NewLine(l) : l \in Lines}
 
 VARIABLES
-    ghosts,          \* which line each line really is; a changed line is a new
-                     \* one
-    ids,             \* the editor's LineIds for the lines
-    selectionLine,   \* the line the agent's selection is on
-    selectionBefore, \* the line it was on before the reload
-    reloaded         \* the disk change happened
+    ghosts,           \* which line each line really is; a changed line is a
+                      \* new one
+    ids,              \* the editor's LineIds for the lines
+    selectionLine,    \* the line the agent's selection is on
+    selectionBefore,  \* the line it was on before the reload
+    selectionAtStart, \* it starts at the start of its line, column 1
+    reloaded          \* the disk change happened
 
-vars == <<ghosts, ids, selectionLine, selectionBefore, reloaded>>
+vars ==
+    <<ghosts, ids, selectionLine, selectionBefore, selectionAtStart,
+      reloaded>>
 
 --------------------------------------------------------------------------------
 
@@ -56,6 +60,7 @@ TypeOK ==
     /\ ids \in [Lines -> OldIds \cup FreshIds]
     /\ selectionLine \in 1..(NumLines + 1)
     /\ selectionBefore \in Lines
+    /\ selectionAtStart \in BOOLEAN
     /\ reloaded \in BOOLEAN
 
 \* The changes recordEdit is given, as ranges of lines, when `changed` are the
@@ -76,10 +81,17 @@ Coarse(changed) ==
 \* Line l is inside one of the changes cs.
 InChange(l, cs) == \E r \in cs : r.from <= l /\ l <= r.to
 
+\* The change of cs that holds line l. The changes are disjoint, so it is
+\* unique.
+Holding(l, cs) == CHOOSE r \in cs : r.from <= l /\ l <= r.to
+
 \* mapThrough: a position inside a change maps to its end, the start of the
-\* line after it. The changes are disjoint, so the CHOOSE's change, the one
-\* holding l, is unique.
-After(l, cs) == (CHOOSE r \in cs : r.from <= l /\ l <= r.to).to + 1
+\* line after it; one where the change starts (`pos <= change.offset`), the
+\* start of its first line, stays.
+Moved(l, atStart, cs) ==
+    IF InChange(l, cs) /\ ~(atStart /\ l = Holding(l, cs).from)
+    THEN Holding(l, cs).to + 1
+    ELSE l
 
 --------------------------------------------------------------------------------
 
@@ -88,6 +100,7 @@ Init ==
     /\ ids = [l \in Lines |-> OldId(l)]
     /\ selectionLine \in Lines
     /\ selectionBefore = selectionLine
+    /\ selectionAtStart \in BOOLEAN
     /\ reloaded = FALSE
 
 \* The file changes on disk, `changed` being its changed lines, and VS Code
@@ -99,11 +112,9 @@ Reload(changed) ==
            [l \in Lines |-> IF l \in changed THEN NewLine(l) ELSE ghosts[l]]
         /\ ids' =
            [l \in Lines |-> IF InChange(l, cs) THEN FreshId(l) ELSE ids[l]]
-        /\ selectionLine' = IF InChange(selectionLine, cs)
-                        THEN After(selectionLine, cs)
-                        ELSE selectionLine
+        /\ selectionLine' = Moved(selectionLine, selectionAtStart, cs)
         /\ reloaded' = TRUE
-        /\ UNCHANGED selectionBefore
+        /\ UNCHANGED <<selectionBefore, selectionAtStart>>
 
 \* The run ends after its one reload, by design (6.13).
 Finished ==
@@ -121,6 +132,15 @@ Spec == Init /\ [][Next]_vars
 \* A selection on a line that didn't change stays on it.
 SelectionStays == (ghosts[selectionBefore] = selectionBefore)
     => (selectionLine = selectionBefore)
+
+\* A selection at the start of a changed run's first line, where the change
+\* starts, stays on that line.
+StartOfRunStays ==
+    (/\ selectionAtStart
+     /\ ghosts[selectionBefore] # selectionBefore
+     /\ \/ selectionBefore = 1
+        \/ ghosts[selectionBefore - 1] = selectionBefore - 1)
+        => (selectionLine = selectionBefore)
 
 \* For precision: a line that didn't change keeps its identity, so its
 \* number is still known.

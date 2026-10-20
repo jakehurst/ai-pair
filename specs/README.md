@@ -84,7 +84,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, a second sleep while one is pending | holds | 656 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,234 |
-| `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk | holds | 160 |
+| `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxBatches = 2` batches, `MaxQueued = 2` queued | holds | 79,999 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 369 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
@@ -1289,7 +1289,7 @@ left out.
 
 | Spec | Code |
 |---|---|
-| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: the event's `before` (the baseline) and `after`, `by`, `interrupted`; the event holds both texts, so a pending edit always has them (#176) |
+| `EditAsProgrammer`, `EditAsOther` | `userEdit` and `otherEdit` -> `recordEdit`: a new event only with none pending for the file (`pendingEdit`); the event's `before` (the baseline) and `after`, `by`, `interrupted`; the event holds both texts, so a pending edit always has them (#176) |
 | `Report` | `snapshot`: the event, unless the file is unchanged and the edit didn't interrupt |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
@@ -1300,13 +1300,16 @@ reverted:
 | an edit to a text outside `Contents` | `TypeOK` |
 | an event only for an edit that interrupted | `NetReported` |
 | `KeepInterrupts = FALSE`, the code before | `Explained` |
+| `Record` adds an event for every edit | `OnePendingEdit` |
+| `Report` leaves the events pending | `OnePendingEdit` |
 
 Every invariant names the test that proves the code obeys it:
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NetReported` | `controller.test.ts`: NetReported, EditInterrupts: reports programmer edits as one diff a file, the agent cursor moving with them |
+| `NetReported` | `controller.test.ts`: NetReported, EditInterrupts, OnePendingEdit: reports programmer edits as one diff a file, the agent cursor moving with them |
+| `OnePendingEdit` | `controller.test.ts`: NetReported, EditInterrupts, OnePendingEdit: reports programmer edits as one diff a file, the agent cursor moving with them |
 | `Explained` | `controller.test.ts`: Explained: reports an interrupting edit the programmer undid, and drops a quiet edit by others that was undone |
 
 ### `Scroll`: follow mode's scrolling
@@ -1399,7 +1402,7 @@ last, unchanged lines included. `SplitRuns` is the fix for #65: `lineChanges` in
 
 | Spec | Code |
 |---|---|
-| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` -> `recordEdit` moves the scene (`mapThrough`) and the identities (`applyChange`) through them |
+| `Reload` | a file changed on disk: `onChange` in `editor.ts` passes VS Code's changes, `otherEdit` -> `recordEdit` moves the scene (`mapThrough`, which keeps a position where a change starts) and the identities (`applyChange`) through them |
 | `Runs`, `Coarse` | the changes `recordEdit` is given, with and without `lineChanges` |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
@@ -1410,6 +1413,7 @@ first, and SelectionStays with UnchangedKeepIds left out of the config:
 |---|---|
 | a selection moved past the file | `TypeOK` |
 | a selection on an unchanged line moves down one | `SelectionStays` |
+| a selection at the start of a changed run moves past it, as one inside it does | `StartOfRunStays` |
 | every line gets a fresh id | `UnchangedKeepIds` |
 | no line gets a fresh id | `ChangedGetNewIds` |
 
@@ -1420,6 +1424,7 @@ Every invariant names the test that proves the code obeys it:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `SelectionStays` | `session.e2e.test.ts`: SelectionStays: keeps the agent's selection on a line between the changed ones |
 | `UnchangedKeepIds` | `session.e2e.test.ts`: UnchangedKeepIds: keeps the numbers of the lines between the changed ones known |
+| `StartOfRunStays` | `player.test.ts`: StartOfRunStays: keeps a selection that starts where a change starts, and moves its end past the change |
 | `ChangedGetNewIds` | `session.e2e.test.ts`: ChangedGetNewIds: forgets the number of a changed line, so a batch has to read it again |
 
 ### `Rehearsal`: line identities across a rehearsal

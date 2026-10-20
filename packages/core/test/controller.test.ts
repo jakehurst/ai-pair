@@ -1014,7 +1014,7 @@ describe("the programmer's input", () => {
     expect(h.controller.turn).toBeUndefined();
   });
 
-  it('NetReported, EditInterrupts: reports programmer edits as one diff a file, the agent cursor moving with them', async () => {
+  it('NetReported, EditInterrupts, OnePendingEdit: reports programmer edits as one diff a file, the agent cursor moving with them', async () => {
     const h = await started();
     const changes = [
       { offset: 0, deleteLength: 0, text: 'x' },

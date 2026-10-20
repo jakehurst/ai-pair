@@ -293,6 +293,20 @@ describe('transformScene', () => {
     transformScene(scene, A, { offset: 0, deleteLength: 0, text: 'x' });
     expect(scene.selection).toEqual({ start: 2, end: 3 });
   });
+
+  it('StartOfRunStays: keeps a selection that starts where a change starts, and moves its end past the change', () => {
+    const scene: Scene = {
+      turn: 'agent',
+      focus: 'cursor',
+      pointFar: false,
+      allowedCommands: new Set(),
+      cursor: { file: A, offset: 2 },
+      selection: { start: 2, end: 3 },
+    };
+    transformScene(scene, A, { offset: 2, deleteLength: 2, text: 'xyz' });
+    expect(scene.cursor).toEqual({ file: A, offset: 2 });
+    expect(scene.selection).toEqual({ start: 2, end: 5 });
+  });
 });
 
 describe('play', () => {

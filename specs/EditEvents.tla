@@ -7,7 +7,8 @@
 (* edit that interrupts (the programmer's, or a tool's to a file the queued   *)
 (* batches edit) discards the agent's batches and wakes a `listen`            *)
 (* (`interrupting`), so the agent has to be told of it, even when the file    *)
-(* ends up as it was.                                                         *)
+(* ends up as it was. `recordEdit` adds an event only when it finds none      *)
+(* pending for the file (`pendingEdit`), and the event holds the baseline.    *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -36,9 +37,12 @@ VARIABLES
     discarded,    \* batches were discarded for an edit since the last report
     report,       \* the last report: taken, with an event, the programmer's, a
                   \* net change, batches discarded, a file edited
-    edits         \* edits made so far
+    edits,        \* edits made so far
+    events        \* the file's edit events pending, awaiting their diff
 
-vars == <<text, baseline, byProgrammer, interrupts, discarded, report, edits>>
+vars ==
+    <<text, baseline, byProgrammer, interrupts, discarded, report, edits,
+      events>>
 
 --------------------------------------------------------------------------------
 
@@ -52,6 +56,7 @@ TypeOK ==
     /\ report \in [taken : BOOLEAN, event : BOOLEAN, byProgrammer : BOOLEAN,
                  netChange : BOOLEAN, discarded : BOOLEAN, edited : BOOLEAN]
     /\ edits \in Nat
+    /\ events \in Nat
 
 \* No report yet.
 NoReport ==
@@ -59,12 +64,14 @@ NoReport ==
      netChange |-> FALSE,
      discarded |-> FALSE, edited |-> FALSE]
 
-\* recordEdit: the first edit since the report sets the baseline and the
-\* event.
+\* recordEdit: an edit with no event pending for the file (`pendingEdit`)
+\* adds one, with the text before it as the baseline; a later one updates
+\* that event.
 Record(t, asProgrammer, interrupting) ==
     /\ t # text
     /\ text' = t
-    /\ baseline' = IF baseline = NoText THEN text ELSE baseline
+    /\ baseline' = IF events = 0 THEN text ELSE baseline
+    /\ events' = IF events = 0 THEN 1 ELSE events
     /\ byProgrammer' = (byProgrammer \/ asProgrammer)
     /\ interrupts' = (interrupts \/ interrupting)
     /\ discarded' = (discarded \/ interrupting)
@@ -81,6 +88,7 @@ Init ==
     /\ discarded = FALSE
     /\ report = NoReport
     /\ edits = 0
+    /\ events = 0
 
 \* userEdit in the agent's turn: it interrupts.
 EditAsProgrammer(t) == Record(t, TRUE, TRUE)
@@ -93,6 +101,7 @@ EditAsOther(t, planned) == Record(t, FALSE, planned)
 Report ==
     /\ baseline # NoText
     /\ baseline' = NoText
+    /\ events' = 0
     /\ byProgrammer' = FALSE
     /\ interrupts' = FALSE
     /\ discarded' = FALSE
@@ -118,6 +127,12 @@ NetReported == (report.taken /\ report.netChange) => report.event
 \* Batches discarded for an edit come with the edit that discarded them, so
 \* the agent knows why.
 Explained == (report.taken /\ report.discarded) => report.event
+
+\* A file has one edit event pending at most, and it is pending exactly while
+\* the file has a baseline.
+OnePendingEdit ==
+    /\ events <= 1
+    /\ (events = 1) <=> (baseline # NoText)
 
 \* Edits run out only so that the model is finite (6.8).
 Constraint == edits <= MaxEdits
