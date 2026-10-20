@@ -63,6 +63,16 @@ async function reads(file: string, text: string): Promise<void> {
   assert.equal(doc.getText(), text);
 }
 
+/**
+ * Reverts `file`'s document to the file on disk. VS Code's revert command takes no file: it reverts the active
+ * editor, so the file is shown first.
+ */
+async function revert(file: string): Promise<void> {
+  const editor = await vscode.window.showTextDocument(vscode.Uri.file(file));
+  await vscode.commands.executeCommand('workbench.action.files.revert');
+  assert.equal(editor.document.isDirty, false, `${file} is still dirty after its revert`);
+}
+
 function statuses(report: Report): BatchStatus[] {
   return report.batches.map((b) => b.status);
 }
@@ -98,6 +108,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   }
 
   fs.writeFileSync(file('paths.txt'), PATHS);
+  await reads(file('paths.txt'), PATHS);
   fs.writeFileSync(file('one.txt'), 'a\n');
   fs.writeFileSync(file('unread.txt'), 'x\ny b\nz\n');
   fs.writeFileSync(file('empty.txt'), '');
@@ -324,7 +335,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
     } else {
       assert.equal(report.batches[0]?.unsaved?.[0]?.file, 'unsaved.txt', JSON.stringify(report));
     }
-    await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('unsaved.txt')));
+    await revert(file('unsaved.txt'));
   }
 
   // An interrupt in each pause: before a move, before a select, before the first keystroke, and part way
@@ -434,6 +445,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
     return path.join(root, name);
   }
   fs.writeFileSync(file('paths.txt'), PATHS);
+  await reads(file('paths.txt'), PATHS);
   fs.mkdirSync(file('folder'), { recursive: true });
   const selection = { file: file('paths.txt'), from: { line: 1, column: 1 }, to: { line: 1, column: 6 }, text: 'alpha' };
 
@@ -464,7 +476,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   const typed = new vscode.WorkspaceEdit();
   typed.insert(outsideDoc.uri, new vscode.Position(0, 0), '#');
   await vscode.workspace.applyEdit(typed);
-  await vscode.commands.executeCommand('workbench.action.files.revert', outsideDoc.uri);
+  await revert(file('paths.txt'));
 
   await controller.start('controller paths');
   // An answer for a run no one is asked about changes nothing.
@@ -509,7 +521,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   controller.setSpeed(20);
   const unanchored = await controller.step([{ type: `x${CURSOR_MARKER}` }]);
   assert.equal(unanchored.rejected?.error.kind, 'unanchored', JSON.stringify(unanchored));
-  await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('paths.txt')));
+  await revert(file('paths.txt'));
 
   // A call canceled while it waits its turn never runs; one canceled while its batch is rehearsed ends without
   // blocking; a cancel after the call ended changes nothing (specs/Serialize.tla: `Guard`, `Rehearse`, `Cancel`).
@@ -571,7 +583,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   assert.deepEqual(statuses(rehearsed), ['completed']);
   assert.ok(rehearsed.submitted, JSON.stringify(rehearsed));
   await controller.step([]);
-  await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('paths.txt')));
+  await revert(file('paths.txt'));
 
   // A report the agent never took, put back after its session closed: the next call takes it, and closes the
   // session again (#60, specs/Controller.tla, `Restore`).
@@ -621,7 +633,7 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   controller.endSession();
   assert.equal(controller.isActive, false);
   controller.setSpeed(10);
-  await vscode.commands.executeCommand('workbench.action.files.revert', vscode.Uri.file(file('paths.txt')));
+  await revert(file('paths.txt'));
   // An ended session the agent's relay then leaves is closed (specs/Bridge.tla, `CloseEnded`).
   await controller.start('ended, then left');
   controller.endSession();
@@ -639,6 +651,7 @@ export async function extensionPaths(api: Api, root: string): Promise<void> {
   const settings = vscode.workspace.getConfiguration('aiPair');
   const global = vscode.ConfigurationTarget.Global;
   fs.writeFileSync(path.join(root, 'paths.txt'), PATHS);
+  await reads(path.join(root, 'paths.txt'), PATHS);
 
   // With no session, nothing is saved.
   await sleep(SAVE_SETTLE_MS);
