@@ -6,6 +6,11 @@
 (* blocks until it is ready to report or its timer fires; an abort can come   *)
 (* at any point before it settles. The constant AbortInBlock switches the     *)
 (* abort check at the top of block() (#1).                                    *)
+(*                                                                            *)
+(* The programmer can end the session at any point, and the agent's socket    *)
+(* can close, which closes an ended session, even while a step is rehearsed   *)
+(* (#174). The bridge aborts the socket's calls before disconnect(), so no    *)
+(* call blocks on a closed session, and ready() is true for an ended one.     *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -27,8 +32,9 @@ Pcs == {"inChain", "rehearsing", "blocked", "committed", "settled"}
 \* A queued batch, and one played or discarded.
 QueueStates == {"queued", "done"}
 
-\* How a call settles: canceled, or with its report handed back.
-CallOutcomes == {"canceled", "reported"}
+\* How a call settles: canceled, with its report handed back, or refused by
+\* requireSession() with `no_session`.
+CallOutcomes == {"canceled", "reported", "noSession"}
 
 \* No call: this.call is null. Any value that is not a call will do, so the
 \* config makes it a model value (6.20).
@@ -48,20 +54,26 @@ NoQueueState == CHOOSE v : v \notin QueueStates
 NoCallOutcome == CHOOSE v : v \notin CallOutcomes
 
 VARIABLES
-    pc,             \* where each call is, one of Pcs
-    canceled,       \* the call's AbortSignal has fired: the agent canceled it
-    canceledAt,     \* the pc the call was at when it was canceled, or NoPc
-    blockedCall,    \* this.call: the call blocked in block(), or NoCallId
-    queueState,     \* the call's batch: one of QueueStates, or NoQueueState
-    settledAs,      \* how the call settled: one of CallOutcomes, or
-                    \* NoCallOutcome
-    emptyStep,      \* the step has no actions: it only waits for the queued
-                    \* batches
-    rehearsalFailed \* its batch failed its rehearsal, and the call answered
-                    \* with the rejection
+    pc,              \* where each call is, one of Pcs
+    canceled,        \* the call's AbortSignal has fired: the agent canceled it
+    canceledAt,      \* the pc the call was at when it was canceled, or NoPc
+    blockedCall,     \* this.call: the call blocked in block(), or NoCallId
+    queueState,      \* the call's batch: one of QueueStates, or NoQueueState
+    settledAs,       \* how the call settled: one of CallOutcomes, or
+                     \* NoCallOutcome
+    emptyStep,       \* the step has no actions: it only waits for the queued
+                     \* batches
+    rehearsalFailed, \* its batch failed its rehearsal, and the call answered
+                     \* with the rejection
+    ended,           \* s.ended: the programmer ended the session
+    gone,            \* the agent's socket closed: disconnect() ran
+    closed           \* this.session is null: close() ran
 
 vars == <<pc, canceled, canceledAt, blockedCall, queueState, settledAs,
-          emptyStep, rehearsalFailed>>
+          emptyStep, rehearsalFailed, ended, gone, closed>>
+
+\* The session's state, which the calls leave alone.
+sessionVars == <<ended, gone, closed>>
 
 --------------------------------------------------------------------------------
 
@@ -75,6 +87,9 @@ TypeOK ==
     /\ settledAs \in [CallIds -> CallOutcomes \cup {NoCallOutcome}]
     /\ emptyStep \in [CallIds -> BOOLEAN]
     /\ rehearsalFailed \in [CallIds -> BOOLEAN]
+    /\ ended \in BOOLEAN
+    /\ gone \in BOOLEAN
+    /\ closed \in BOOLEAN
 
 \* The call's batch plays next: queued, with no batch before it still queued.
 AtHead(i) ==
@@ -82,11 +97,14 @@ AtHead(i) ==
     /\ \A j \in 1..(i - 1) : queueState[j] # "queued"
 
 \* finishCall: the blocked call commits to a report, and this.call is cleared.
+\* A report on an ended session may close it: with no rejection held
+\* (Controller's DrainHeld), which this spec does not track.
 Commit(i) ==
     /\ pc' = [pc EXCEPT ![i] = "committed"]
     /\ blockedCall' = NoCallId
+    /\ closed' \in {closed, closed \/ ended}
     /\ UNCHANGED <<canceled, canceledAt, queueState, settledAs, emptyStep,
-                   rehearsalFailed>>
+                   rehearsalFailed, ended, gone>>
 
 --------------------------------------------------------------------------------
 
@@ -99,19 +117,26 @@ Init ==
     /\ settledAs = [i \in CallIds |-> NoCallOutcome]
     /\ emptyStep \in [CallIds -> BOOLEAN]
     /\ rehearsalFailed = [i \in CallIds |-> FALSE]
+    /\ ended = FALSE
+    /\ gone = FALSE
+    /\ closed = FALSE
 
 \* serialize: once every call before it has settled, the call runs, unless its
-\* abort fired while it waited.
+\* abort fired while it waited; with the session closed, requireSession()
+\* refuses it.
 Guard(i) ==
     /\ pc[i] = "inChain"
     /\ \A j \in 1..(i - 1) : pc[j] = "settled"
     /\ IF canceled[i]
        THEN /\ pc' = [pc EXCEPT ![i] = "settled"]
             /\ settledAs' = [settledAs EXCEPT ![i] = "canceled"]
+       ELSE IF closed
+       THEN /\ pc' = [pc EXCEPT ![i] = "settled"]
+            /\ settledAs' = [settledAs EXCEPT ![i] = "noSession"]
        ELSE /\ pc' = [pc EXCEPT ![i] = "rehearsing"]
             /\ UNCHANGED settledAs
     /\ UNCHANGED <<canceled, canceledAt, blockedCall, queueState, emptyStep,
-                   rehearsalFailed>>
+                   rehearsalFailed, sessionVars>>
 
 \* step, after its rehearsal: an empty step blocks with no batch. A batch is
 \* queued, or done at once (discarded) when an interrupt came first (`stale`)
@@ -128,8 +153,10 @@ Rehearse(i) ==
             /\ UNCHANGED settledAs
     /\ IF emptyStep[i]
        THEN UNCHANGED queueState
-       ELSE \E b \in QueueStates : queueState' = [queueState EXCEPT ![i] = b]
-    /\ UNCHANGED <<canceled, canceledAt, emptyStep, rehearsalFailed>>
+       ELSE \E b \in IF ended THEN {"done"} ELSE QueueStates :
+                queueState' = [queueState EXCEPT ![i] = b]
+    /\ UNCHANGED <<canceled, canceledAt, emptyStep, rehearsalFailed,
+                   sessionVars>>
 
 \* rejectBatch, or rejectUnanchored: the batch failed its rehearsal, or did
 \* not anchor the cursor, so the call answers with the rejection, queuing
@@ -140,7 +167,7 @@ FailRehearsal(i) ==
     /\ pc' = [pc EXCEPT ![i] = "committed"]
     /\ rehearsalFailed' = [rehearsalFailed EXCEPT ![i] = TRUE]
     /\ UNCHANGED <<canceled, canceledAt, blockedCall, queueState, settledAs,
-                   emptyStep>>
+                   emptyStep, sessionVars>>
 
 \* The call's AbortSignal fires. Its listener in block() is attached only once
 \* the call blocks, and it releases the call only if it is this.call.
@@ -154,22 +181,24 @@ Cancel(i) ==
        ELSE UNCHANGED <<pc, blockedCall, settledAs>>
     /\ canceled' = [canceled EXCEPT ![i] = TRUE]
     /\ canceledAt' = [canceledAt EXCEPT ![i] = pc[i]]
-    /\ UNCHANGED <<queueState, emptyStep, rehearsalFailed>>
+    /\ UNCHANGED <<queueState, emptyStep, rehearsalFailed, sessionVars>>
 
 \* The player finishes the call's batch, after every batch queued before it.
 Played(i) ==
     /\ AtHead(i)
     /\ queueState' = [queueState EXCEPT ![i] = "done"]
     /\ UNCHANGED <<pc, canceled, canceledAt, blockedCall, settledAs, emptyStep,
-                   rehearsalFailed>>
+                   rehearsalFailed, sessionVars>>
 
-\* ready(): an empty step is ready once nothing is queued, any other once its
-\* batch is done or plays next (#150); then finishCall.
+\* ready(): true for an ended session; else an empty step is ready once
+\* nothing is queued, any other once its batch is done or plays next (#150);
+\* then pump() calls finishCall on `call.session`.
 Return(i) ==
     /\ pc[i] = "blocked"
-    /\ IF emptyStep[i]
-       THEN \A j \in CallIds : queueState[j] # "queued"
-       ELSE queueState[i] = "done" \/ AtHead(i)
+    /\ \/ ended
+       \/ IF emptyStep[i]
+          THEN \A j \in CallIds : queueState[j] # "queued"
+          ELSE queueState[i] = "done" \/ AtHead(i)
     /\ Commit(i)
 
 \* The maxBlockMs timer fires, and finishCall reports what there is.
@@ -184,7 +213,43 @@ HandBack(i) ==
     /\ pc' = [pc EXCEPT ![i] = "settled"]
     /\ settledAs' = [settledAs EXCEPT ![i] = "reported"]
     /\ UNCHANGED <<canceled, canceledAt, blockedCall, queueState, emptyStep,
-                   rehearsalFailed>>
+                   rehearsalFailed, sessionVars>>
+
+\* endSession(): s.ended, and interrupt() discards every batch still queued;
+\* the one playing, at the head, plays on (#151). A suspended session closes
+\* at once (Bridge's `EndSuspended`).
+End ==
+    /\ ~ended
+    /\ ended' = TRUE
+    /\ queueState' =
+           [i \in CallIds |->
+               IF queueState[i] = "queued" /\ ~AtHead(i)
+               THEN "done"
+               ELSE queueState[i]]
+    /\ closed' = (closed \/ gone)
+    /\ UNCHANGED <<pc, canceled, canceledAt, blockedCall, settledAs, emptyStep,
+                   rehearsalFailed, gone>>
+
+\* The agent's socket closes: the bridge aborts each of its calls not yet
+\* settled, a blocked one released at once as in Cancel, then disconnect()
+\* rejects this.call, if any, and closes an ended session (Bridge's
+\* `CloseSocket`).
+CloseSocket ==
+    /\ ~gone
+    /\ pc' = [i \in CallIds |-> IF pc[i] = "blocked" THEN "settled" ELSE pc[i]]
+    /\ canceled' = [i \in CallIds |-> canceled[i] \/ pc[i] # "settled"]
+    /\ canceledAt' =
+           [i \in CallIds |->
+               IF ~canceled[i] /\ pc[i] # "settled"
+               THEN pc[i]
+               ELSE canceledAt[i]]
+    /\ blockedCall' = NoCallId
+    /\ settledAs' =
+           [i \in CallIds |->
+               IF pc[i] = "blocked" THEN "canceled" ELSE settledAs[i]]
+    /\ gone' = TRUE
+    /\ closed' = (closed \/ ended)
+    /\ UNCHANGED <<queueState, emptyStep, rehearsalFailed, ended>>
 
 \* Every call has settled: the agent makes no more calls.
 Finished ==
@@ -201,6 +266,8 @@ Next ==
            \/ Return(i)
            \/ Timeout(i)
            \/ HandBack(i)
+    \/ End
+    \/ CloseSocket
     \/ Finished
 
 \* The controller goes on through each call, and the player through each
@@ -242,6 +309,15 @@ CancelReleases ==
     \A i \in CallIds :
         (canceled[i] /\ pc[i] \in {"inChain", "rehearsing", "blocked"}) ~>
             (settledAs[i] = "canceled" \/ rehearsalFailed[i])
+
+\* #174: no call is blocked on a closed session, where nothing but its timer
+\* would end it.
+NeverBlockedClosed == \A i \in CallIds : (pc[i] = "blocked") => ~closed
+
+\* A blocked call on an ended session is ready to report at once, whatever
+\* still plays.
+ReadyWhenEnded ==
+    \A i \in CallIds : (pc[i] = "blocked" /\ ended) => ENABLED Return(i)
 
 \* A call waiting its turn in the serialize chain eventually settles. A
 \* chain that never ran a call would fail it, so it says something must

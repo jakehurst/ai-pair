@@ -404,7 +404,7 @@ describe('call', () => {
     await expect(fourth).rejects.toMatchObject({ code: 'no_editor' });
   });
 
-  it('ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do', async () => {
+  it('ConnectedToOpen, FindsOpen: tries the next window when one fails, and fails with the first error when all do', async () => {
     window('new', ['/a'], { lastFocused: 2 });
     window('old', ['/a'], { lastFocused: 1 });
     const link = new EditorLink('/a', DIR);

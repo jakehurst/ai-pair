@@ -628,7 +628,8 @@ export class Controller {
       this.panel.post({ type: 'session', active: false, reason: 'programmer' });
       return;
     }
-    // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it.
+    // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it
+    // (`End` in specs/Serialize.tla).
     session.ended = true;
     session.events.push({ kind: 'end' });
     this.interrupt(session);

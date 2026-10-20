@@ -7,10 +7,12 @@
 (* writes it when `show` creates it; and anything else may write it: the      *)
 (* agent's own tools, git, a formatter run in a terminal. A file watcher      *)
 (* reports writes late, and may report several as one event; when it reports, *)
-(* the code reads the file and decides. Opening the file is the programmer    *)
-(* seeing it: the mark clears. A write to an open file also reaches the       *)
-(* controller as VS Code's document change: EditorAdapter attributes it, and  *)
-(* Rehearsal's `EditAsOther` interrupts or follows it. That path is not here. *)
+(* the code reads the file and decides. Any change of active editor to the    *)
+(* file is the programmer seeing it, whether it opens the file or goes back   *)
+(* to its open document: the mark clears. A write to an open file also        *)
+(* reaches the controller as VS Code's document change: EditorAdapter         *)
+(* attributes it, and Rehearsal's `EditAsOther` interrupts or follows it.     *)
+(* That path is not here.                                                     *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -101,6 +103,18 @@ OpenDocument ==
     /\ writtenOutside' = FALSE
     /\ UNCHANGED <<disk, saved, unreportedWrites, unreportedSave, writes>>
 
+\* The file's open document becomes the active editor again: the programmer
+\* switches back to it, or `show` reveals it. The code reads what's on disk,
+\* whatever the document holds, and the mark clears.
+FocusDocument ==
+    /\ Idle
+    /\ documentText # NoDocument
+    /\ knownText' = disk
+    /\ badged' = FALSE
+    /\ writtenOutside' = FALSE
+    /\ UNCHANGED <<disk, documentText, saved, unreportedWrites, unreportedSave,
+                   writes>>
+
 \* The programmer closes the file.
 CloseDocument ==
     /\ Idle
@@ -177,6 +191,7 @@ WatcherReports ==
 
 Next ==
     \/ OpenDocument
+    \/ FocusDocument
     \/ CloseDocument
     \/ Edit
     \/ Save

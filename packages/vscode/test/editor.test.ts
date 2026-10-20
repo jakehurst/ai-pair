@@ -575,7 +575,7 @@ describe('show', () => {
     expect(fakes.showTextDocument.mock.lastCall?.[1]).toEqual({ preview: false, preserveFocus: true, viewColumn: undefined });
   });
 
-  it('leaves a file already in view as it is', async () => {
+  it('NoPauseFromOurOwnShow: leaves a file already in view as it is', async () => {
     fakes.onDisk.add(FILE);
     inView(FILE);
     const { editor } = made();
@@ -939,7 +939,7 @@ describe('edit', () => {
     expect(controller.userEdit.mock.calls).toHaveLength(1);
   });
 
-  it('rejects an edit its editor refuses, and forgets it', async () => {
+  it('EditsEnd, RejectEdit: rejects an edit its editor refuses, and forgets it', async () => {
     const { editor } = made();
     const view = inView(FILE);
     view.applies = false;

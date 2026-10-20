@@ -236,7 +236,8 @@ export class Bridge {
 
     ws.on('close', () => {
       trace?.(`socket ${socket} closed`);
-      // specs/Bridge.tla, `CloseSocket`: the owner's socket gone, the session is suspended, or closed if it ended.
+      // specs/Bridge.tla and specs/Serialize.tla, `CloseSocket`: the socket's calls are aborted, then the owner's
+      // socket gone, the session is suspended, or closed if it ended.
       for (const abort of calls.values()) {
         abort.abort();
       }

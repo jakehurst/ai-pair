@@ -657,7 +657,7 @@ describe('steps and their batches', () => {
     expect(rehearse).not.toHaveBeenCalled();
   });
 
-  it('CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal', async () => {
+  it('NeverBlockedClosed, CancelKeepsBatch, CancelReleases: cancels a step whose abort arrives during its rehearsal', async () => {
     const h = await started();
     const abort = new AbortController();
     const { promise, resolve } = Promise.withResolvers<Awaited<ReturnType<typeof rehearse>>>();
@@ -735,7 +735,7 @@ describe('playing the queue', () => {
     expect(h.traced).toContain('interrupt: discarding [2]');
   });
 
-  it('stops playing a session that closed while a batch played', async () => {
+  it('ReadyWhenEnded: stops playing a session that closed while a batch played', async () => {
     const h = await started();
     const finish = holdPlay();
     await report(h.controller.step(SAY));

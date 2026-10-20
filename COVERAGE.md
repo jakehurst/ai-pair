@@ -161,11 +161,11 @@ Last updated: tla, 2026-10-20.
 | `specs/EditEvents.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/EditEvents.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/EditorAdapter.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/EditorAdapter.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
+| `specs/EditorAdapter.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
 | `specs/FileText.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FileText.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/FollowMode.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/FollowMode.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/FollowMode.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/LineIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LineIdentity.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/ListenGrace.cfg` | TLC config | - | - | - | - | - | - |
@@ -173,7 +173,7 @@ Last updated: tla, 2026-10-20.
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Outside.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/Outside.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
@@ -200,7 +200,7 @@ Last updated: tla, 2026-10-20.
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Serialize.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Serialize.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/Serialize.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |

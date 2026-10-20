@@ -555,7 +555,7 @@ describe('calls', () => {
     ]);
   });
 
-  it("CloseSocket: aborts a closed socket's calls, and suspends the session only when the socket owned it", async () => {
+  it("NeverBlockedClosed, CloseSocket: aborts a closed socket's calls, and suspends the session only when the socket owned it", async () => {
     const { server } = await started();
     const socket = await owner(server);
     const stranger = welcomed(server);

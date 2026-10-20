@@ -6,10 +6,12 @@
 (* is `viewTop`, and the target line follow mode keeps in view. `follow`      *)
 (* starts a scroll when the target is out of the view's middle half, unless   *)
 (* one is under way; the scroll glides a line per frame to its landing, and   *)
-(* stops early when the state stops following (a command running, a pause);   *)
-(* afterwards it follows again if the target moved. A pause ends in `resume`, *)
-(* which reveals the target; a command's end has to pick up a glide it cut    *)
-(* short. Line numbers from 0.                                                *)
+(* stops early when the state stops following (a command running, a pause,    *)
+(* the programmer's turn); afterwards it follows again if the target moved. A *)
+(* pause ends in `resume`, which reveals the target; a command's end has to   *)
+(* pick up a glide it cut short. The programmer's turn outranks a pause and a *)
+(* command, and drops a glide cut before it: the turn is theirs to look where *)
+(* they like, so follow mode waits for the next move. Line numbers from 0.    *)
 (******************************************************************************)
 EXTENDS Integers
 
@@ -30,8 +32,9 @@ ASSUME AssumeCatchUp == CatchUp \in BOOLEAN
 \* The file's line numbers.
 Lines == 0..(NumLines - 1)
 
-\* Why the state does not follow: the programmer paused, or a command runs.
-AwayReasons == {"pause", "running"}
+\* Why the state does not follow: the programmer paused, a command runs, or it
+\* is the programmer's turn ("navigator").
+AwayReasons == {"pause", "running", "navigator"}
 
 \* Not away: the state follows. Any value that is not a reason will do, so the
 \* config makes it a model value (6.20).
@@ -43,17 +46,20 @@ VARIABLES
     scrolling,           \* a scroll is under way
     landing,             \* its landing
     targetAtStart,       \* the target's line when it started
-    awayReason,          \* NotAway: the view follows; "pause", or "running": a
-                         \* command runs; either way it does not
+    awayReason,          \* NotAway: the view follows; "pause", "running": a
+                         \* command runs, or "navigator": the programmer's
+                         \* turn; any of them, it does not
     glideCut,            \* a glide stopped short, as the state stopped
                          \* following
     moves,               \* target moves so far
     followSwitches,      \* stops and starts of following so far
-    scrollBeyondLastLine \* editor.scrollBeyondLastLine, on by default
+    scrollBeyondLastLine, \* editor.scrollBeyondLastLine, on by default
+    turnSinceFollow      \* the programmer's turn began after follow mode
+                         \* last followed the target
 
 vars ==
     <<targetLine, viewTop, scrolling, landing, targetAtStart, awayReason,
-      glideCut, moves, followSwitches, scrollBeyondLastLine>>
+      glideCut, moves, followSwitches, scrollBeyondLastLine, turnSinceFollow>>
 
 --------------------------------------------------------------------------------
 
@@ -69,6 +75,7 @@ TypeOK ==
     /\ moves \in Nat
     /\ followSwitches \in Nat
     /\ scrollBeyondLastLine \in BOOLEAN
+    /\ turnSinceFollow \in BOOLEAN
 
 Max(a, b) == IF a > b THEN a ELSE b
 
@@ -118,6 +125,7 @@ Init ==
     /\ glideCut = FALSE
     /\ moves = 0
     /\ followSwitches = 0
+    /\ turnSinceFollow = FALSE
 
 \* The target moves to line t, and the player calls follow(): keepInView,
 \* when following. An action moves it, or the programmer's edit above it
@@ -126,29 +134,41 @@ Move(t) ==
     /\ awayReason # "running"
     /\ targetLine' = t
     /\ IF awayReason = NotAway
-       THEN KeepInView(t)
-       ELSE UNCHANGED <<scrolling, landing, targetAtStart>>
+       THEN /\ KeepInView(t)
+            /\ turnSinceFollow' = FALSE
+       ELSE UNCHANGED <<scrolling, landing, targetAtStart, turnSinceFollow>>
     /\ moves' = moves + 1
     /\ UNCHANGED <<viewTop, awayReason, glideCut, followSwitches,
                    scrollBeyondLastLine>>
 
-\* The state stops following, for reason why: the programmer pauses, or a
-\* command runs (no actions meanwhile).
+\* The state stops following, for reason why: the programmer pauses, a
+\* command runs (no actions meanwhile), or the turn passes to the programmer,
+\* which outranks a pause or a command (the controller's state()).
+\* renderCursor drops a glide cut before the turn; a frame of one still
+\* under way can cut it after.
 Leave(why) ==
-    /\ awayReason = NotAway
+    /\ \/ awayReason = NotAway
+       \/ why = "navigator" /\ awayReason # "navigator"
     /\ awayReason' = why
     /\ followSwitches' = followSwitches + 1
+    /\ IF why = "navigator"
+       THEN /\ glideCut' = FALSE
+            /\ turnSinceFollow' = TRUE
+       ELSE UNCHANGED <<glideCut, turnSinceFollow>>
     /\ UNCHANGED <<targetLine, viewTop, scrolling, landing, targetAtStart,
-                   glideCut, moves, scrollBeyondLastLine>>
+                   moves, scrollBeyondLastLine>>
 
 \* It follows again. `resume` reveals the target, so follows; the command's
-\* end only renders, which with CatchUp follows if a glide was cut short.
+\* end, or the turn's, only renders, which with CatchUp follows if a glide
+\* was cut short.
 Follow ==
     /\ awayReason # NotAway
     /\ IF awayReason = "pause" \/ (CatchUp /\ glideCut)
        THEN /\ KeepInView(targetLine)
             /\ glideCut' = FALSE
-       ELSE UNCHANGED <<scrolling, landing, targetAtStart, glideCut>>
+            /\ turnSinceFollow' = FALSE
+       ELSE UNCHANGED <<scrolling, landing, targetAtStart, glideCut,
+                        turnSinceFollow>>
     /\ awayReason' = NotAway
     /\ followSwitches' = followSwitches + 1
     /\ UNCHANGED <<targetLine, viewTop, moves, scrollBeyondLastLine>>
@@ -170,7 +190,7 @@ Glide ==
             /\ glideCut' = (glideCut \/ (awayReason # NotAway))
             /\ UNCHANGED viewTop
     /\ UNCHANGED <<targetLine, awayReason, moves, followSwitches,
-                   scrollBeyondLastLine>>
+                   scrollBeyondLastLine, turnSinceFollow>>
 
 Next ==
     \/ \E t \in Lines : Move(t)
@@ -193,9 +213,13 @@ InView == InPlace(targetLine)
 InRange == viewTop \in 0..MaxTop /\ landing \in 0..MaxTop
 
 \* Once the state follows for good, and the target stays, the view settles on
-\* it. The target stays once the model's moves have run out. Code that never
-\* scrolled would fail it, so it says something must happen.
-ComesInView == <>[](awayReason = NotAway /\ moves = MaxMoves) => <>[]InView
+\* it, unless the programmer's turn came since follow mode last followed: the
+\* turn is theirs to look where they like, and the next move follows. The
+\* target stays once the model's moves have run out. Code that never scrolled
+\* would fail it, so it says something must happen.
+ComesInView ==
+    <>[](awayReason = NotAway /\ moves = MaxMoves /\ ~turnSinceFollow)
+        => <>[]InView
 
 \* Moves and switches run out only so that the model is finite (6.8). It prunes
 \* exactly the states guards `moves < MaxMoves` on Move and

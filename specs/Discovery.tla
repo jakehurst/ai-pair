@@ -7,7 +7,10 @@
 (* was not a Discovery. AtomicWrite is the fix for #72: a window rewrites its *)
 (* file each time it gains focus, and written in place, a relay reading it    *)
 (* mid-write skipped it. A window whose write fails runs with no file, and no *)
-(* relay can find it; the code reports the failure (`failed`).                *)
+(* relay can find it; the code reports the failure (`failed`). A window that  *)
+(* runs may still refuse the relay's hello: an older extension (`rejected`),  *)
+(* or another program on its port answering with garbage. open() then tries   *)
+(* the next window.                                                           *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -41,9 +44,11 @@ VARIABLES
     phase,       \* "idle", "trying", "connected", "no_editor", "internal"
                  \* (findWindows threw)
     untried,     \* the candidates open() has not tried yet
-    connectedTo  \* the window the relay connected to, or NoWindow
+    connectedTo, \* the window the relay connected to, or NoWindow
+    refuses      \* each window: TRUE if it refuses the relay's hello, as
+                 \* chosen when it opens
 
-vars == <<windowState, phase, untried, connectedTo>>
+vars == <<windowState, phase, untried, connectedTo, refuses>>
 
 --------------------------------------------------------------------------------
 
@@ -55,6 +60,7 @@ TypeOK ==
     /\ phase \in {"idle", "trying", "connected", "no_editor", "internal"}
     /\ untried \subseteq Windows
     /\ connectedTo \in Windows \cup {NoWindow}
+    /\ refuses \in [Windows -> BOOLEAN]
 
 \* findWindows lists the window: its file parses, and its pid is alive. A file
 \* being written does not parse, and is skipped.
@@ -73,20 +79,22 @@ Init ==
     /\ phase = "idle"
     /\ untried = {}
     /\ connectedTo = NoWindow
+    /\ refuses = [w \in Windows |-> FALSE]
 
 \* A window starts, or reopens with a new pid: writeDiscovery, whose write may
-\* fail.
+\* fail. It runs our extension or an older one, which refuses our hello.
 OpenWindow(w) ==
     /\ windowState[w] \in {"unstarted", "closed"}
     /\ \E s \in {"open",
                  "unlisted"} : windowState' = [windowState EXCEPT ![w] = s]
+    /\ \E r \in BOOLEAN : refuses' = [refuses EXCEPT ![w] = r]
     /\ UNCHANGED <<phase, untried, connectedTo>>
 
 \* A clean close: dispose() removes the file.
 CloseWindow(w) ==
     /\ windowState[w] \in {"open", "unlisted"}
     /\ windowState' = [windowState EXCEPT ![w] = "closed"]
-    /\ UNCHANGED <<phase, untried, connectedTo>>
+    /\ UNCHANGED <<phase, untried, connectedTo, refuses>>
 
 \* The window gains focus: focused() -> writeDiscovery. writeFileSync
 \* truncates the file, then writes it. With AtomicWrite, a rename replaces it
@@ -95,32 +103,32 @@ Focus(w) ==
     /\ windowState[w] = "open"
     /\ ~AtomicWrite
     /\ windowState' = [windowState EXCEPT ![w] = "writing"]
-    /\ UNCHANGED <<phase, untried, connectedTo>>
+    /\ UNCHANGED <<phase, untried, connectedTo, refuses>>
 
 \* The write that Focus began ends: the file is whole again.
 FinishWrite(w) ==
     /\ windowState[w] = "writing"
     /\ windowState' = [windowState EXCEPT ![w] = "open"]
-    /\ UNCHANGED <<phase, untried, connectedTo>>
+    /\ UNCHANGED <<phase, untried, connectedTo, refuses>>
 
 \* A later focus writes the file of a window that has none, and this time the
 \* write succeeds.
 ListWindow(w) ==
     /\ windowState[w] = "unlisted"
     /\ windowState' = [windowState EXCEPT ![w] = "open"]
-    /\ UNCHANGED <<phase, untried, connectedTo>>
+    /\ UNCHANGED <<phase, untried, connectedTo, refuses>>
 
 \* A crash: the file stays behind, and its pid is dead.
 Crash(w) ==
     /\ windowState[w] = "open"
     /\ windowState' = [windowState EXCEPT ![w] = "crashed"]
-    /\ UNCHANGED <<phase, untried, connectedTo>>
+    /\ UNCHANGED <<phase, untried, connectedTo, refuses>>
 
 \* Another process gets the crashed window's pid, so alive(pid) says yes.
 Reuse(w) ==
     /\ windowState[w] = "crashed"
     /\ windowState' = [windowState EXCEPT ![w] = "pidReused"]
-    /\ UNCHANGED <<phase, untried, connectedTo>>
+    /\ UNCHANGED <<phase, untried, connectedTo, refuses>>
 
 \* The relay calls start: locate -> findWindows lists the candidates, or
 \* throws on the junk file without CheckFiles.
@@ -132,21 +140,22 @@ Start ==
        ELSE LET found == {w \in Windows : Alive(w)}
             IN  /\ phase' = IF found = {} THEN "no_editor" ELSE "trying"
                 /\ untried' = found
-    /\ UNCHANGED <<windowState, connectedTo>>
+    /\ UNCHANGED <<windowState, connectedTo, refuses>>
 
-\* open() tries one candidate: openWindow connects if the window runs, and
-\* otherwise the next candidate is tried, until none is left.
+\* open() tries one candidate: openWindow connects if the window runs and
+\* welcomes the hello, and otherwise the next candidate is tried, until none
+\* is left.
 Try(w) ==
     /\ phase = "trying"
     /\ w \in untried
-    /\ IF Running(w)
+    /\ IF Running(w) /\ ~refuses[w]
        THEN /\ phase' = "connected"
             /\ untried' = {}
             /\ connectedTo' = w
        ELSE /\ phase' = IF (untried \ {w}) = {} THEN "no_editor" ELSE "trying"
             /\ untried' = untried \ {w}
             /\ UNCHANGED connectedTo
-    /\ UNCHANGED windowState
+    /\ UNCHANGED <<windowState, refuses>>
 
 \* The window the relay connected to stops running: the socket closes, and
 \* the next call opens again.
@@ -155,7 +164,7 @@ Disconnect ==
     /\ ~Running(connectedTo)
     /\ phase' = "idle"
     /\ connectedTo' = NoWindow
-    /\ UNCHANGED <<windowState, untried>>
+    /\ UNCHANGED <<windowState, untried, refuses>>
 
 Next ==
     \/ \E w \in Windows : OpenWindow(w)
@@ -194,12 +203,13 @@ FindsRunningProp ==
 \* The relay connects only to a window that answered.
 ConnectedToOpen == (phase = "connected") => (connectedTo # NoWindow)
 
-\* While one window stays open, a relay that keeps calling start keeps
-\* finding one. A relay that never connected would fail it, so it says
-\* something must happen. The <>[] sits under \E because the window that
-\* stays open is any one of them (6.29).
+\* While one window that welcomes the relay stays open, a relay that keeps
+\* calling start keeps finding one, past any window that refuses it. A relay
+\* that never connected would fail it, so it says something must happen. The
+\* <>[] sits under \E because the window that stays open is any one of them
+\* (6.29).
 FindsOpen ==
-    (\E w \in Windows : <>[](windowState[w] = "open"))
+    (\E w \in Windows : <>[](windowState[w] = "open" /\ ~refuses[w]))
         => []<>(phase = "connected")
 
 ================================================================================

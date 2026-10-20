@@ -451,7 +451,7 @@ describe('actions the player refuses', () => {
     });
   });
 
-  it('refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected', async () => {
+  it('EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected', async () => {
     const h = harness({ files: { 'a.ts': 'x\n' } });
     const noCursor = { kind: 'no_cursor', message: "Your cursor isn't in a file yet; give `file`." };
     expect((await played(h, [{ move: { line: 1, to: 'line_end' } }])).result.error).toEqual(noCursor);
