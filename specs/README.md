@@ -427,10 +427,10 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NoInternal` | `link.test.ts`: NoInternal: skips a file that isn't JSON, JSON that isn't a window's, and a file not named as JSON; `phase.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
+| `NoInternal` | `link.test.ts`: NoInternal: skips a file that isn't JSON, JSON that isn't a window's, and a file not named as JSON; `relay.test.ts`: NoInternal: skips a discovery file that parses but isn't a window's |
 | `FindsRunningProp` | `bridge.test.ts`: OpenWindow, FindsRunningProp: listens on 127.0.0.1, then writes its discovery file beside it and renames it over; `integration.ts`, in VS Code: FindsRunningProp: the discovery file is never half written |
-| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `phase.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME |
-| `FindsOpen` | `link.test.ts`: FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed; `phase.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
+| `ConnectedToOpen` | `link.test.ts`: ConnectedToOpen: tries the next window when one fails, and fails with the first error when all do; ConnectedToOpen: skips a window whose pid is gone, and keeps one it may not signal, which is alive; `relay.test.ts`: ConnectedToOpen: skips a window whose file outlived it, even when its pid now belongs to another process; `integration.ts`, in VS Code: RelayStaysUp, ConnectedToOpen: a relay skipped the windows that are not, cancelled and shut down cleanly, and started without AI_PAIR_HOME |
+| `FindsOpen` | `link.test.ts`: FindsOpen: opens one socket for calls made while it opens, reuses it, and opens again once it closed; `relay.test.ts`: FindsOpen: finds the window again after the relay's socket to it closes, while it stays open |
 
 ### `EditorAdapter`: who made a change
 
@@ -1048,8 +1048,8 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `NoFalseMark` | `writtenOutside.test.ts`: NoFalseMark: doesn't mark a save, or a file the extension created; NoFalseMark: clears the mark when the programmer sees the file, and a late event for what they saw doesn't bring it back; NoFalseMark: doesn't mark a file the programmer saw before its writes settled |
-| `Marks` | `writtenOutside.test.ts`: Marks: marks a file written outside once its writes settle, and reports it; Marks: marks a write the watcher reports in one event with a save (the afterSave rule misses it) |
+| `NoFalseMark` | `outside.test.ts`: NoFalseMark: doesn't mark a save, or a file the extension created; NoFalseMark: clears the mark when the programmer sees the file, and a late event for what they saw doesn't bring it back; NoFalseMark: doesn't mark a file the programmer saw before its writes settled |
+| `Marks` | `outside.test.ts`: Marks: marks a file written outside once its writes settle, and reports it; Marks: marks a write the watcher reports in one event with a save (the afterSave rule misses it) |
 
 ### `ProjectGuide`: which project guides `start` reads
 
