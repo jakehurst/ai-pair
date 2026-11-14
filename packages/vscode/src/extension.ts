@@ -1171,12 +1171,21 @@ export function activate(context: vscode.ExtensionContext): Api {
       void playDemo(controller, root);
     }),
     vscode.commands.registerCommand('aiPair.togglePause', () => {
+      if (!controller.isActive) return;
       if (controller.isPaused) {
         controller.resume();
       } else {
         controller.pause();
       }
     }),
+    vscode.commands.registerCommand('aiPair.toggleAttention', () => {
+      if (!controller.isActive) return;
+      if (controller.isAttentionGranted) panel.focusReply();
+      else controller.requestAttention();
+    }),
+    vscode.commands.registerCommand('aiPair.configureShortcuts', () =>
+      vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', '@ext:mattyv.ai-pair'),
+    ),
     vscode.commands.registerCommand('aiPair.interrupt', () => {
       controller.userInterrupt();
     }),
@@ -1191,6 +1200,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       controller.endSession();
     }),
     vscode.commands.registerCommand('aiPair.focusReply', () => {
+      if (!controller.isActive) return;
       panel.focusReply();
     }),
     vscode.commands.registerCommand('aiPair.askAboutSelection', () => {

@@ -1949,13 +1949,16 @@ describe('pause and resume', () => {
     narration.attentionCue.mockResolvedValue(undefined);
     const h = harness({}, {}, narration);
     await h.controller.start();
+    expect(h.controller.isAttentionGranted).toBe(false);
     h.controller.requestAttention();
     await settle();
     expect(posted(h)).toContainEqual({ type: 'attention', state: 'granted' });
     expect(h.controller.isPaused).toBe(true);
+    expect(h.controller.isAttentionGranted).toBe(true);
     expect(narration.attentionCue).toHaveBeenCalledOnce();
     h.controller.resume();
     expect(h.controller.isPaused).toBe(false);
+    expect(h.controller.isAttentionGranted).toBe(false);
     expect(narration.cancel).toHaveBeenCalled();
   });
 

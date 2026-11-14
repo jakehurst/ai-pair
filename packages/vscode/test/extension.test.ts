@@ -285,6 +285,7 @@ const fakes = vi.hoisted(() => {
     onDiagnostic?: (event: unknown) => void;
     isPaused = false;
     isActive = false;
+    isAttentionGranted = false;
     isSuspended = false;
     turn: string | undefined = undefined;
     saved: unknown = undefined;
@@ -297,6 +298,7 @@ const fakes = vi.hoisted(() => {
     readonly pause = vi.fn();
     readonly resume = vi.fn();
     readonly userInterrupt = vi.fn();
+    readonly requestAttention = vi.fn();
     readonly takeTurn = vi.fn();
     readonly handBack = vi.fn();
     readonly endSession = vi.fn();
@@ -612,6 +614,7 @@ vi.mock('vscode', () => ({
       }
       if (name === 'aiPair.localAudio.frame' && fakes.companionAvailable) return Promise.resolve(fakes.frameAccepted);
       if (name === 'workbench.extensions.action.installVSIX') return Promise.resolve();
+      if (name === 'workbench.action.openGlobalKeybindings') return Promise.resolve();
       if (name.startsWith('aiPair.localAudio.') && fakes.companionAvailable) return Promise.resolve(true);
       return Promise.reject(new Error('missing command'));
     },
@@ -1778,6 +1781,7 @@ describe('the session across a reload', () => {
 describe('the commands', () => {
   it('pauses or resumes, interrupts, takes or hands back the turn, and ends the session', () => {
     const h = activated();
+    h.controller.isActive = true;
     command('aiPair.togglePause');
     expect(h.controller.pause).toHaveBeenCalledOnce();
     h.controller.isPaused = true;
@@ -1795,6 +1799,29 @@ describe('the commands', () => {
     command('aiPair.focusReply');
     command('aiPair.askAboutSelection');
     expect(h.panel.focusReply).toHaveBeenCalledTimes(2);
+  });
+
+  it('guards shortcuts without a session and mirrors the hand button during a session', () => {
+    const h = activated();
+    command('aiPair.togglePause');
+    command('aiPair.toggleAttention');
+    command('aiPair.focusReply');
+    expect(h.controller.pause).not.toHaveBeenCalled();
+    expect(h.controller.requestAttention).not.toHaveBeenCalled();
+    expect(h.panel.focusReply).not.toHaveBeenCalled();
+    h.controller.isActive = true;
+    command('aiPair.toggleAttention');
+    expect(h.controller.requestAttention).toHaveBeenCalledOnce();
+    h.controller.isAttentionGranted = true;
+    command('aiPair.toggleAttention');
+    expect(h.controller.requestAttention).toHaveBeenCalledOnce();
+    expect(h.panel.focusReply).toHaveBeenCalledOnce();
+  });
+
+  it('opens VS Code keyboard shortcuts filtered to Pair', async () => {
+    activated();
+    await command('aiPair.configureShortcuts');
+    expect(fakes.commandCalls).toContainEqual(['workbench.action.openGlobalKeybindings', '@ext:mattyv.ai-pair']);
   });
 
   it('plays the demo in the folder, or says to open one, and plays it through the Api', async () => {

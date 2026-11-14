@@ -645,8 +645,9 @@ snapshots, batch completion, typing-pause acknowledgement and turn ownership
 are untouched. Canceled notices retry only for their matching generation.
 The Archi Navigator view separates this path from activity evidence.
 
-The private workspace-to-companion contract is version 6 for these strict
-commentary action/update messages. Both extensions must be updated together;
+The private workspace-to-companion contract is version 7 for the strict
+commentary action/update messages and shortcut configuration action. Both
+extensions must be updated together;
 incompatible peers are rejected rather than silently ignoring the setting.
 This does not change the editor-relay protocol version.
 
@@ -710,3 +711,8 @@ API facade. Temporary fixture directories are removed on success or failure.
 Relocated GPU fixtures receive an explicit workspace Node path. Development
 bundles provide source-mapped coverage; packaged probes verify shipped behavior
 without claiming source coverage from a production bundle with no source map.
+
+Pair shortcut dispatch stays with VS Code's keybinding service. The workspace
+commands delegate to the existing session and attention owners; the panel
+retains only a pending focus request until its page is ready. The companion
+forwards the Settings action over the existing validated panel boundary.

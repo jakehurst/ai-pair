@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.38.3",
+  "version": "0.39.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -116,6 +116,16 @@
         "category": "AI Pair"
       },
       {
+        "command": "aiPair.toggleAttention",
+        "title": "Raise / Lower Hand",
+        "category": "AI Pair"
+      },
+      {
+        "command": "aiPair.configureShortcuts",
+        "title": "Configure Keyboard Shortcuts",
+        "category": "AI Pair"
+      },
+      {
         "command": "aiPair.interrupt",
         "title": "Interrupt",
         "category": "AI Pair"
@@ -141,6 +151,23 @@
         "category": "AI Pair"
       }
     ],
+    "keybindings": [
+      {
+        "command": "aiPair.togglePause",
+        "key": "alt+q",
+        "when": "aiPair.active"
+      },
+      {
+        "command": "aiPair.toggleAttention",
+        "key": "alt+w",
+        "when": "aiPair.active"
+      },
+      {
+        "command": "aiPair.focusReply",
+        "key": "ctrl+alt+space",
+        "when": "aiPair.active"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
@@ -156,6 +183,10 @@
         },
         {
           "command": "aiPair.togglePause",
+          "when": "aiPair.active"
+        },
+        {
+          "command": "aiPair.toggleAttention",
           "when": "aiPair.active"
         },
         {

@@ -14,6 +14,13 @@ a multi-line command waits up to 500 ms for identification. If it remains
 unknown, Pair submits the original command. Bash trap/debug context and
 error line numbers can differ; normal shell state and exit status are kept.
 
+During a session, the defaults are **Alt+Q** to pause or resume,
+**Alt+W** to raise or lower your hand, and **Ctrl+Alt+Space** to
+focus Reply. A granted hand shortcut focuses Reply. Pair Settings opens VS
+Code's Keyboard Shortcuts editor to customize these bindings. Desktop and
+keyboard-layout shortcuts can intercept them; a focused terminal may need the
+Pair commands in `terminal.integrated.commandsToSkipShell`.
+
 Use the hand button to the left of Reply to request a chance to interject. The agent
 finishes the current speech and safe action before handing you the floor. Press
 it again while waiting to lower your hand; once the floor is yours, press it

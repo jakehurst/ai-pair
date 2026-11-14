@@ -738,6 +738,8 @@ describe('focusReply', () => {
   it('shows the view, taking focus, and tells the page to focus the reply box', () => {
     const { panel } = harness();
     const view = open(panel);
+    view.send({ type: 'ready' });
+    view.posted.length = 0;
     panel.focusReply();
     expect(view.view.show.mock.calls).toEqual([[false]]);
     expect(view.posted).toEqual([{ type: 'focusReply' }]);
@@ -746,6 +748,34 @@ describe('focusReply', () => {
   it('focuses the view by command with no view', () => {
     harness().panel.focusReply();
     expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([['aiPair.narration.focus']]);
+  });
+
+  it('delivers a reply focus requested before the page is ready', () => {
+    const { panel } = harness();
+    panel.focusReply();
+    const view = open(panel);
+    expect(view.posted).not.toContainEqual({ type: 'focusReply' });
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'focusReply' });
+  });
+
+  it('drops a pending reply focus when its session ends', () => {
+    const { panel } = harness();
+    panel.focusReply();
+    panel.post({ type: 'session', active: false, reason: 'programmer' });
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).not.toContainEqual({ type: 'focusReply' });
+  });
+
+  it('keeps a pending reply focus across page replacement', () => {
+    const { panel } = harness();
+    panel.focusReply();
+    const old = open(panel);
+    const current = open(panel);
+    old.dispose();
+    current.send({ type: 'ready' });
+    expect(current.posted).toContainEqual({ type: 'focusReply' });
   });
 });
 
@@ -1151,8 +1181,13 @@ describe('receive', () => {
     const view = open(harness().panel);
     view.send({ type: 'command', command: 'aiPair.playDemo' });
     view.send({ type: 'command', command: 'aiPair.setUpAgent' });
+    view.send({ type: 'command', command: 'aiPair.configureShortcuts' });
     view.send({ type: 'command', command: 'workbench.action.quit' });
-    expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([['aiPair.playDemo'], ['aiPair.setUpAgent']]);
+    expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
+      ['aiPair.playDemo'],
+      ['aiPair.setUpAgent'],
+      ['aiPair.configureShortcuts'],
+    ]);
   });
 
   it('openUrl: opens an http or https link, and no other', () => {
@@ -1683,6 +1718,20 @@ it('routes remote interrupt, turn, end and page disposal without stopping remote
   expect(speech.stop).not.toHaveBeenCalled();
   panel.receiveRemote(1, { type: 'pageClosed' });
   expect(controller.releaseReadingHold.mock.calls).toHaveLength(1);
+});
+
+it('forwards shortcut customization from a companion page to the workspace command', () => {
+  const companion = harness().panel;
+  const forward = vi.fn<import('../src/panel').CompanionPanelRouting['forward']>();
+  companion.useCompanion({ forward, closed: vi.fn<import('../src/panel').CompanionPanelRouting['closed']>() });
+  const view = open(companion);
+  view.send({ type: 'command', command: 'aiPair.configureShortcuts' });
+  expect(forward).toHaveBeenCalledWith({ type: 'command', command: 'aiPair.configureShortcuts' }, 1);
+
+  const workspace = harness().panel;
+  workspace.attachRemote(1, vi.fn<(message: ToPanel) => void>());
+  workspace.receiveRemote(1, { type: 'command', command: 'aiPair.configureShortcuts' });
+  expect(vi.mocked(vscode.commands.executeCommand)).toHaveBeenCalledWith('aiPair.configureShortcuts');
 });
 
 it('tracks legacy sessions and restores a reloaded session as partial', () => {

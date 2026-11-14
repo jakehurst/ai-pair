@@ -1155,6 +1155,11 @@ export class Controller {
     return this.pauseReasons.size > 0 || this.attention === 'granted';
   }
 
+  /** Whether the hand has reached its safe, held boundary. */
+  get isAttentionGranted(): boolean {
+    return this.attention === 'granted';
+  }
+
   get turn(): Turn | undefined {
     return this.activeSession()?.scene.turn;
   }

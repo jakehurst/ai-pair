@@ -348,6 +348,7 @@ Last updated: tla, 2026-11-14.
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_shortcuts.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_speech_coverage_paths.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
@@ -372,6 +373,7 @@ Last updated: tla, 2026-11-14.
 | `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/session_speech_cost.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/shortcuts_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -648,6 +650,8 @@ Last updated: tla, 2026-11-14.
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Outside.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/PairShortcuts.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/PairShortcuts.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/PanelMenus.cfg` | TLC config | - | - | - | - | - | - |

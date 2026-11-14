@@ -83,6 +83,7 @@ const ui = {
   voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
+  configureShortcuts: $('configure-shortcuts', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
   navigatorCommentary: $('navigator-commentary', HTMLSelectElement),
   settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
@@ -1047,6 +1048,15 @@ function syncVoiceStatus(): void {
 }
 
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
+let focusReplyAfterSettings = false;
+function focusReplyBox(): void {
+  if (ui.settingsDialog.open) {
+    focusReplyAfterSettings = true;
+    ui.settingsDialog.close();
+  } else {
+    ui.reply.focus();
+  }
+}
 ui.settings.addEventListener('click', () => {
   ui.settingsDialog.showModal();
   ui.chatOrder.focus();
@@ -1054,8 +1064,14 @@ ui.settings.addEventListener('click', () => {
 ui.settingsClose.addEventListener('click', () => {
   ui.settingsDialog.close();
 });
+ui.configureShortcuts.addEventListener('click', () => {
+  vscode.postMessage({ type: 'command', command: 'aiPair.configureShortcuts' });
+});
 ui.settingsDialog.addEventListener('close', () => {
-  ui.settings.focus();
+  if (focusReplyAfterSettings) {
+    focusReplyAfterSettings = false;
+    ui.reply.focus();
+  } else ui.settings.focus();
 });
 function isSpeechVoice(value: string): value is SpeechVoice {
   return SPEECH_VOICES.some((voice) => voice === value);
@@ -1903,11 +1919,11 @@ function handle(message: ToPanel): void {
       ui.attention.setAttribute('aria-pressed', String(attention !== 'none'));
       ui.attention.classList.toggle('on', attention !== 'none');
       setTip(ui.attention, label);
-      if (attention === 'granted' && !replaying) ui.reply.focus();
+      if (attention === 'granted' && !replaying) focusReplyBox();
       return;
     }
     case 'focusReply':
-      ui.reply.focus();
+      focusReplyBox();
       return;
     case 'speed':
       showSpeed(ui.speed, ui.speedMenu, 'Playback speed', '', message.value);

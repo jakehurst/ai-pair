@@ -12,6 +12,13 @@ heredocs and pipes. Approval and reports show your original command. Other
 shells keep their original submission behavior. Bash trap/debug context and
 error line numbers can differ; normal shell state and exit status are kept.
 
+During a session, the defaults are **Alt+Q** to pause or resume,
+**Alt+W** to raise or lower your hand, and **Ctrl+Alt+Space** to
+focus Reply. A granted hand shortcut focuses Reply. Pair Settings opens VS
+Code's Keyboard Shortcuts editor to customize these bindings. Desktop and
+keyboard-layout shortcuts can intercept them; a focused terminal may need the
+Pair commands in `terminal.integrated.commandsToSkipShell`.
+
 A plain **Hand back** without a reply or attached selection preserves queued
 navigator observations. A reply, attached selection, takeover or hand request
 keeps its interruption behavior. A plain turn change keeps manual **Pause**

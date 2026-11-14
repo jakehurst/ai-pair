@@ -3888,3 +3888,25 @@ pending runs eventually start and active runs eventually finish.
 Mutations independently broke type membership, run partitioning, group
 exclusivity, manual isolation and eventual start, respectively. The model does
 not simulate GitHub runner availability or prove its event delivery.
+
+## PairShortcuts
+
+`PairShortcuts.cfg` checks active-session dispatch, attention grant, deferred
+reply focus, page reload and customization without draft submission. TLC
+checked 38 distinct states (247 generated, depth 9). `FocusProgress` assumes
+eventual page readiness and fair delivery while the session remains active.
+The extension, panel and webview shortcut tests exercise the corresponding
+commands, replacement and modal-focus paths; native tests exercise VS Code
+dispatch. The model abstracts keyboard resolution and operating-system
+interception.
+
+`NoInactiveEffect` and `GrantedIsPreserved` map to "guards shortcuts without
+a session and mirrors the hand button during a session". `FocusProgress` maps
+to "delivers a reply focus requested before the page is ready", "keeps a
+pending reply focus across page replacement", and "drops a pending reply
+focus when its session ends". `DraftNotSubmitted` maps to the browser test
+"reply focus closes the modal settings dialog without sending a draft". The
+mutants for
+`GuardActive`, `PreserveGrant`, `PreserveDraft`, and `DeliverFocus` each
+violate their corresponding property; an invalid initial attention state violates
+`TypeOK`.

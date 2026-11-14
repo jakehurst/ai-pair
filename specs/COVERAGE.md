@@ -281,3 +281,7 @@ Code goes without a spec for one of these reasons:
 |---|---|
 | `packages/vscode/scripts/integration.sh` | `IntegrationFixture`: selected extension identity and cleanup |
 | `packages/vscode/scripts/integration_speech_faults.sh` | `IntegrationFixture`: per-fixture extension identity and cleanup |
+
+Shortcut command dispatch, deferred focus and settings customization are
+modeled by `PairShortcuts`; extension, panel and webview tests exercise their
+actual boundaries. Native integration covers session command dispatch.

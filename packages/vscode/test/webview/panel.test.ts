@@ -1372,6 +1372,19 @@ describe('chat order', () => {
 });
 
 describe('panel settings', () => {
+  it('opens shortcut customization from Pair settings', () => {
+    click(element('settings'));
+    click(element('configure-shortcuts'));
+    expect(posted()).toContainEqual({ type: 'command', command: 'aiPair.configureShortcuts' });
+  });
+
+  it('closes settings and focuses reply when focus is requested', () => {
+    click(element('settings'));
+    expect(element('settings-dialog').hasAttribute('open')).toBe(true);
+    send({ type: 'focusReply' });
+    expect(element('settings-dialog').hasAttribute('open')).toBe(false);
+    expect(document.activeElement).toBe(replyBox());
+  });
   it('projects navigator commentary and sends changes', () => {
     const select = element('navigator-commentary');
     if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');

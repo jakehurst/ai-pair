@@ -53,6 +53,7 @@ import { speechCoveragePaths } from './integration_speech_coverage_paths';
 import { vscodeCoveragePaths } from './integration_vscode_coverage_paths';
 import { diagnosticCoveragePaths } from './integration_diagnostic_coverage_paths';
 import { attentionPaths } from './integration_attention_paths';
+import { shortcutCommandPaths } from './integration_shortcuts';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -1613,6 +1614,7 @@ export async function run(): Promise<void> {
   await speechCoveragePaths(api);
   await vscodeCoveragePaths(api);
   await diagnosticCoveragePaths(api);
+  await shortcutCommandPaths(api);
   await gapPaths(api);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open

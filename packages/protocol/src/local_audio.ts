@@ -5,7 +5,7 @@ import { SPEECH_DELIVERY_SCHEMA } from './schemas';
 import { localPanelChunk } from './panel_chunks';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 6;
+export const LOCAL_AUDIO_VERSION = 7;
 
 /** Lists the `<platform>-<arch>` hosts the bundled Kokoro runtime is built for (#39). */
 export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darwin-arm64'];

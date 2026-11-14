@@ -23,6 +23,7 @@ describe('cross-host panel actions', () => {
       { type: 'openChange', file: 'example.ts' },
       { type: 'openUrl', url: 'https://example.com' },
       { type: 'command', command: 'aiPair.playDemo' },
+      { type: 'command', command: 'aiPair.configureShortcuts' },
       { type: 'start' },
       { type: 'copyDiagnostics' },
       { type: 'navigatorCommentary', value: 'quiet' },

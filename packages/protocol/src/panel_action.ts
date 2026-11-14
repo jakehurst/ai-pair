@@ -33,7 +33,7 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('openFile'), file: reference }),
   z.strictObject({ type: z.literal('openChange'), file: reference }),
   z.strictObject({ type: z.literal('openUrl'), url: reference }),
-  z.strictObject({ type: z.literal('command'), command: z.enum(['aiPair.playDemo', 'aiPair.setUpAgent']) }),
+  z.strictObject({ type: z.literal('command'), command: z.enum(['aiPair.playDemo', 'aiPair.setUpAgent', 'aiPair.configureShortcuts']) }),
   z.strictObject({ type: z.literal('start') }),
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('navigatorCommentary'), value: NAVIGATOR_COMMENTARY_SCHEMA }),

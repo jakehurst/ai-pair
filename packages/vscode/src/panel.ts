@@ -32,8 +32,8 @@ const MAX_LOG = 400;
 const DECODE_PROBE_TIMEOUT_MS = 5000;
 const DECODE_TIMEOUT_MS = 30_000;
 
-/** The commands the panel may run: the ones its intro links to. */
-const PANEL_COMMANDS: ReadonlySet<string> = new Set(['aiPair.playDemo', 'aiPair.setUpAgent']);
+/** The commands the panel may run from its intro and settings. */
+const PANEL_COMMANDS: ReadonlySet<string> = new Set(['aiPair.playDemo', 'aiPair.setUpAgent', 'aiPair.configureShortcuts']);
 
 /** Page messages handled exclusively by the local speech service. */
 const LOCAL_SPEECH_MESSAGES: ReadonlySet<string> = new Set([
@@ -134,6 +134,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private companion?: CompanionPanelRouting;
   private speechPageId = 0;
   private speechPageReady = false;
+  private replyPageReady = false;
+  private replyFocusPending = false;
   private decodeToken?: string;
   private readonly speechDecoder = new SpeechDecodeBridge({
     post: (message) =>
@@ -364,7 +366,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     if (event.type === 'session') {
       void vscode.commands.executeCommand('setContext', 'aiPair.active', event.active);
       if (event.active) this.reveal();
-      if (!event.active) this.wiring.calibration().cancel();
+      if (!event.active) {
+        this.replyFocusPending = false;
+        this.wiring.calibration().cancel();
+      }
       this.showCommandApprovals();
     }
     this.onPost?.();
@@ -378,7 +383,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   focusReply(): void {
     this.reveal(/* preserveFocus= */ false);
-    this.send({ type: 'focusReply' });
+    if (this.replyPageReady) this.send({ type: 'focusReply' });
+    else this.replyFocusPending = true;
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -389,6 +395,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.view = view;
     this.speechPageId++;
     this.speechPageReady = false;
+    this.replyPageReady = false;
     this.decodeToken = undefined;
     const pageId = this.speechPageId;
     let document: DecodeDocument | undefined;
@@ -467,6 +474,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       if (this.view === view) {
         this.view = undefined;
         this.speechPageReady = false;
+        this.replyPageReady = false;
         this.decodeToken = undefined;
         this.wiring.speech.pageClosed(pageId);
         if (this.companion !== undefined) this.companion.closed(pageId);
@@ -530,6 +538,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   attachRemote(pageId: number, send: (message: ToPanel) => void): void {
     this.remote = { pageId, send };
     this.speechPageId = pageId;
+    this.replyPageReady = false;
   }
 
   /** Dispatches a validated action from the currently attached companion page. */
@@ -543,6 +552,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   closeRemote(pageId: number): void {
     if (this.remote?.pageId !== pageId) return;
     this.remote = undefined;
+    this.replyPageReady = false;
     this.wiring.controller().releaseReadingHold();
     this.wiring.controller().resume('reply');
     this.wiring.calibration().cancel();
@@ -840,6 +850,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         );
         return;
       case 'ready':
+        this.replyPageReady = true;
         if (this.remote === undefined) this.readySpeech(pageId);
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller().resume('reply');
@@ -863,6 +874,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showTimings();
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart();
+        if (this.replyFocusPending) {
+          this.replyFocusPending = false;
+          this.send({ type: 'focusReply' });
+        }
         return;
       case 'replyBehavior':
         if (message.value === 'interrupt' || message.value === 'finishAction') this.replyBehavior.set(message.value);

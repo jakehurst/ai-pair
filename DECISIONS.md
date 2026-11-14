@@ -33,6 +33,15 @@ Issue discussions and working notes hold the detailed evidence and history.
     not both a branch push and its pull request. Separate concurrency groups
     by workflow, event and PR or ref; manual runs use unique run IDs.
 
+## Pair shortcuts
+
+-   VS Code owns shortcut resolution and remapping. Pair Settings opens its
+    keyboard shortcuts editor rather than maintaining another binding store.
+    Session commands use the existing pause, attention and reply owners. A
+    granted hand focuses Reply rather than changing the turn. Pending focus
+    waits for the panel page and is discarded when the session ends. Desktop
+    bindings, keyboard layouts and terminal shell routing can intercept keys.
+
 ## Speech continuity and delivery
 
 -   Context is opt-in and session-local: retain at most three completed agent

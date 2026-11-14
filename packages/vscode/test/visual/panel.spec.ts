@@ -305,3 +305,18 @@ test('navigator commentary shows the workspace value and sends a selection', asy
     )
     .toContainEqual({ type: 'navigatorCommentary', value: 'coach' });
 });
+
+test('reply focus closes the modal settings dialog without sending a draft', async ({ page }) => {
+  const send = await load(page);
+  await send({ type: 'session', active: true, task: 'Shortcut focus' });
+  await page.locator('[data-ui="settings"]').click();
+  await expect(page.locator('[data-ui="settings-dialog"]')).toBeVisible();
+  await send({ type: 'focusReply' });
+  await expect(page.locator('[data-ui="settings-dialog"]')).not.toBeVisible();
+  await expect(page.locator('[data-ui="reply"]')).toBeFocused();
+  const messages = await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (globalThis as unknown as { messages: Array<{ type: string }> }).messages;
+  });
+  expect(messages.some((message) => message.type === 'reply')).toBe(false);
+});

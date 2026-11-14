@@ -116,6 +116,13 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <p>Changes apply to the next typing action. You can also choose this in the toolbar.</p>
     </section>
     <section class="settings-section">
+      <h2>Keyboard shortcuts</h2>
+      <p>Defaults: Alt+Q pauses or resumes, Alt+W raises or lowers the hand,
+        and Ctrl+Alt+Space focuses reply. Your shortcuts may differ.</p>
+      <p>Change shortcuts in VS Code. Your keyboard, system, or terminal may reserve a key.</p>
+      <button type="button" data-ui="configure-shortcuts">Configure shortcuts</button>
+    </section>
+    <section class="settings-section">
       <h2>Commands</h2>
       <label class="settings-check"><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
       <label class="settings-check">

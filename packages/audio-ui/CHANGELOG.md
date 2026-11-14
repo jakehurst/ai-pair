@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.39.0
+
+-   Add configurable session shortcuts for pause, the hand control and reply
+    focus through VS Code Keyboard Shortcuts and Pair Settings.
+
 ## 0.38.3
 
 -   Report command approval and pending completion during MCP waits, including
