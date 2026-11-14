@@ -1,6 +1,7 @@
 # What the specs cover
 
-Every source file under `packages/*/src`, function by function: the spec that
+Every source file under `packages/*/src`, function by function, and selected
+test harness scripts: the spec that
 models it, or why it has none (#19). The specs themselves are in
 [README.md](README.md).
 
@@ -20,9 +21,9 @@ Code goes without a spec for one of these reasons:
 
 | Functions | Spec |
 |---|---|
-| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller`, `NavigatorCommentary` (final projection), `NavigatorFollowup` |
+| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller`, `NavigatorCommentary` (final projection), `NavigatorFollowup`, `CommandTracking` |
 | `setNavigatorCommentary` | `NavigatorCommentary` |
-| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
+| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`); command news and origin: `CommandTracking` |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
@@ -221,11 +222,11 @@ Code goes without a spec for one of these reasons:
 | `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `WarmSynthesisWorker`; worker isolation and concrete messages: unit and integration tests |
 | `speech_local_protocol.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
-| `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`; typed diagnostic events: `DiagnosticsPrivacy` |
+| `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`, `CommandTracking`, `CommandEncoding`, `ShellIdentity`; typed diagnostic events: `DiagnosticsPrivacy` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
 | `python_diagnostics.ts` | `pythonDiagnostic` | `Diagnostics`: bounded advisory check, with Python parsing source on stdin |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
-| `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
+| `output.ts` | `outcomeOf`, `push` | `CommandTracking` (completion observation); pure output tail conversion |
 | `diagnostics.ts` | all | `DiagnosticsPrivacy`: bounded allowlisted event history, speech-only events and independent snapshots |
 | `diagnostics_collector.ts` | all | `DiagnosticsRequest` (`Complete`): bounded, independently validated companion reads |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
@@ -265,3 +266,10 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `load`, `invalidate`, `contains`, eligibility admission | `OpenRouterCatalog` (identity, stale replies and remembered-pair eligibility). |
+
+## Native test harness
+
+| Script | Spec |
+|---|---|
+| `packages/vscode/scripts/integration.sh` | `IntegrationFixture`: selected extension identity and cleanup |
+| `packages/vscode/scripts/integration_speech_faults.sh` | `IntegrationFixture`: per-fixture extension identity and cleanup |

@@ -27,8 +27,11 @@ readonly TMP
 # Keep the temporary path short enough for Code's sockets.
 TMP_FILES="$(mktemp -d /tmp/ai-pair.XXXXXX)"
 readonly TMP_FILES
+# The packaged run temporarily puts its test bundle under the extension root,
+# so VS Code attributes the fixture to the same extension API facade.
+TEST_DIR="${TMP}/unused"
 # Temporary data is removed after success or failure (#176).
-trap 'rm -rf "${TMP}" "${TMP_FILES}"' EXIT
+trap 'rm -rf "${TMP}" "${TMP_FILES}" "${TEST_DIR}"' EXIT
 mkdir -p "${TMP}/workspace" "${TMP}/agents/codex"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
 export AI_PAIR_HOME="${TMP}/home"
@@ -36,8 +39,14 @@ if [[ -z "${EXTENSION_PATH}" ]]; then
   npm run build --silent
   EXTENSION_PATH="${PWD}"
 fi
+TEST_BUNDLE="${PWD}/dist-test/integration.js"
+if [[ "${EXTENSION_PATH}" != "${PWD}" ]]; then
+  # specs/IntegrationFixture.tla, Build: use this extension's API facade.
+  TEST_DIR="$(mktemp -d "${EXTENSION_PATH}/.ai-pair-test.XXXXXX")"
+  TEST_BUNDLE="${TEST_DIR}/integration.js"
+fi
 npx esbuild test/integration.ts --bundle --platform=node --format=cjs \
-  --target=node22 --external:vscode --outfile=dist-test/integration.js \
+  --target=node22 --external:vscode --outfile="${TEST_BUNDLE}" \
   --log-level=warning
 # VSCODE_ARGS: more flags, like the ones a CI machine needs (--no-sandbox),
 # split on spaces.
@@ -65,7 +74,7 @@ TMPDIR="${TMP_FILES}" CLAUDE_CONFIG_DIR="${TMP}/agents/claude" \
   --extensions-dir="${TMP}/extensions" \
   --disable-workspace-trust --skip-welcome --skip-release-notes \
   --extensionDevelopmentPath="${EXTENSION_PATH}" \
-  --extensionTestsPath="${PWD}/dist-test/integration.js" \
+  --extensionTestsPath="${TEST_BUNDLE}" \
   "${TMP}/workspace"
 # The companion's normal-window restart uses the same coverage output.
 bash scripts/integration_companion.sh "${ROOT}" "${TMP}" "${TMP_FILES}" \

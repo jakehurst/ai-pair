@@ -78,14 +78,21 @@ function renderError(error: BatchError): string {
 
 function renderRun(run: RunResult): string {
   const outcome =
-    run.exit_code !== undefined ? `exited with ${run.exit_code}` : run.running ? 'still running in its terminal' : 'exit code unknown';
+    run.closed === true
+      ? 'terminal closed; exit status unknown'
+      : run.exit_code !== undefined
+        ? `exited with ${run.exit_code}`
+        : run.running
+          ? 'was awaiting completion evidence in its terminal when its wait ended'
+          : 'exit code unknown';
+  const prefix = run.id === undefined ? '' : `Command ${run.id}: `;
   const shell = run.shell === undefined ? '' : ` in ${run.shell}`;
   if (run.output === '') {
     const hint = run.exit_code === undefined && run.running ? ' It may be waiting for input; check the terminal.' : '';
-    return `Ran \`${run.command}\`${shell}: ${outcome}, no output.${hint}`;
+    return `${prefix}Ran \`${run.command}\`${shell}: ${outcome}, no output.${hint}`;
   }
   const fence = '`'.repeat(Math.max(MIN_FENCE, longestRun(run.output, '`') + 1));
-  return `Ran \`${run.command}\`${shell}: ${outcome}. Output${run.truncated ? ', its end' : ''}:\n${fence}\n${run.output}\n${fence}`;
+  return `${prefix}Ran \`${run.command}\`${shell}: ${outcome}. Output${run.truncated ? ', its end' : ''}:\n${fence}\n${run.output}\n${fence}`;
 }
 
 function renderRejected(r: NonNullable<Report['rejected']>): string {
@@ -140,6 +147,15 @@ function renderEvent(event: Event): string {
         return `${event.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${event.diff}`;
       }
       return `Editor text changed in ${event.file}:\n${event.diff}`;
+    case 'command_exit':
+      return renderRun({
+        id: event.id,
+        command: event.command,
+        output: event.output,
+        exit_code: event.exit_code,
+        truncated: event.truncated,
+        closed: event.closed,
+      });
     case 'interrupt':
       return 'The programmer pressed Interrupt.';
     case 'turn':
@@ -204,6 +220,13 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   for (const b of report.batches) {
     sections.push(renderBatch(b));
   }
+  for (const command of report.commands ?? []) {
+    sections.push(
+      command.phase === 'confirm'
+        ? `Command ${command.id} is awaiting the programmer's approval: ${command.command}`
+        : `Command ${command.id} is awaiting completion evidence: ${command.command}`,
+    );
+  }
   if (report.speechReminder) {
     sections.push(
       'Speech is available, and your last batches had nothing it could speak. Keep each `say` within 45 words and 280 characters, and leave `speak` out, so it is spoken.',
@@ -234,6 +257,8 @@ export function renderReport(report: Report, tool: ReportingTool): string {
       sections.push(`Programmer's cursor: ${programmerCursor.file}, line ${programmerCursor.line}, column ${programmerCursor.column}.`);
     }
     if (!ended) sections.push('Comment if useful, then call `listen` again.');
+  } else if (report.waiting && report.commands !== undefined) {
+    sections.push(tool === 'listen' ? 'Call `listen` again.' : 'Carry on as usual.');
   } else if (report.waiting) {
     const activity = report.events.length > 0 || report.batches.length > 0;
     sections.push(

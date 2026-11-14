@@ -24,6 +24,8 @@ export interface Timings {
   frameMs: number;
   /** How long a new terminal gets to report shell integration before the command is just typed in. */
   shellIntegrationMs: number;
+  /** How long multiline input waits for an as-yet unknown shell identity. */
+  shellIdentityMs: number;
   /** After a command ends, how long its output stream gets to drain. */
   drainMs: number;
   /** How long the pointer rests on a control before its tooltip shows, and how long after one hides the next shows at once. */
@@ -41,6 +43,7 @@ export const DEFAULT_TIMINGS: Readonly<Timings> = {
   scrollMaxMs: 500,
   frameMs: 16,
   shellIntegrationMs: 5000,
+  shellIdentityMs: 500,
   drainMs: 500,
   tipDelayMs: 500,
   tipWarmMs: 300,

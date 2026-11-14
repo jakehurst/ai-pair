@@ -396,7 +396,9 @@ a clickable reference instead.
 
 Runs a shell command in an integrated terminal in the agent's working directory.
 The Pair panel shows the command and result; the programmer can reveal its
-terminal. For commands whose outcome the programmer should witness: tests,
+terminal. New editor-relay reports use wire version 6 and carry immutable
+session origin. Canceled reports from another session are rejected before any
+facts are restored. For commands whose outcome the programmer should witness: tests,
 builds, starting the app, a request to it. Purely mechanical
 commands can still run in the background with the agent's native tools.
 
@@ -419,6 +421,24 @@ commands can still run in the background with the agent's native tools.
     playback stops waiting, and the command keeps running.
 -   The output needs shell integration in the terminal. Without it, the command
     is typed into the terminal and the entry says the output wasn't captured.
+-   **Pending status.** Reports expose `commands` with stable run IDs and
+    `confirm` or `running` phases. Here `running` means completion is not yet
+    observed, not proof of a live process. Commands remain visible after the
+    foreground wait ends. Pending approval is a distinct phase.
+-   **Later completion.** A noninterrupting `command_exit` event carries the
+    original ID/command, observed exit code when available, and final bounded
+    output tail. It wakes `listen` or an empty `step`, preserves queued work,
+    and can repeat after canceled report delivery. Terminal closure sets
+    `closed: true`; it does not invent an exit code or success.
+-   **Multi-line Bash submission.** A positively identified Bash terminal
+    receives one physical line using `builtin eval` with ANSI-C quoting of the
+    exact original text. This avoids a reproduced VS Code capture/end failure
+    for heredoc pipelines. Preserve original approval and report text. Cwd,
+    exports and exit status remain in the same shell; trap/debug context and
+    syntax/error line numbers can differ. An unknown shell gets up to 500 ms to
+    identify itself before submission; interruption or closure stops the run.
+    Unknown or other shells retain their original submission and may still have
+    incomplete shell-integration data.
 -   Not allowed during the programmer's turn.
 
 ## Places
@@ -572,6 +592,8 @@ Internally, the editor produces a structured report, which the relay renders:
 
 ```ts
 type Report = {
+  sessionId: string          // immutable origin; restore must match the session
+  commands?: { id: number, command: string, phase: "confirm" | "running" }[]
   batches: BatchResult[]      // finished since the last report, in order
   submitted?: { id: number, status: "queued" | "playing" }  // step only, while unfinished
   rejected?: {                // step only: the batch wasn't queued, because it would fail
@@ -598,11 +620,13 @@ type BatchResult = {
   warnings?: string[]         // advisory; never changes the batch status
   diagnostics?: { file: string, line: number, endLine: number, message: string, source?: string }[]
   runs?: {                    // one per `run` that started
+    id?: number               // present in new reports; legacy reports may omit it
     command: string
     exit_code?: number        // absent while running, or if it couldn't be observed
     output: string            // plain text, the tail if long
     truncated?: true
-    running?: true            // still running in its terminal
+    running?: true            // wait ended before completion was observed
+    closed?: true             // terminal closed; exit status may be unknown
     shell?: string
   }[]
   unsaved?: { file: string, error: string }[]  // edited files that couldn't be saved

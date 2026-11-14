@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { reportDiagnostic, samePath } from '@ai-pair/core';
 import { outcomeOf, Tail } from '../src/output';
-import { PairTerminals } from '../src/terminal';
+import { PairTerminals, commandForShell } from '../src/terminal';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -61,6 +61,7 @@ const fakes = vi.hoisted(() => {
     /** Whether the next terminal has shell integration from the start. */
     integrated: true,
     failCreate: false,
+    onStateSubscribe: undefined as (() => void) | undefined,
     terminals: [] as FakeTerminal[],
     /** The listeners each event has, by its name. */
     listeners: new Map<string, Set<(value: unknown) => void>>(),
@@ -98,6 +99,11 @@ vi.mock('vscode', () => ({
     onDidCloseTerminal: event('close'),
     onDidStartTerminalShellExecution: event('start'),
     onDidChangeTerminalShellIntegration: event('integration'),
+    onDidChangeTerminalState: (listener: (value: unknown) => void) => {
+      const subscription = event('state')(listener);
+      fakes.onStateSubscribe?.();
+      return subscription;
+    },
     onDidEndTerminalShellExecution: event('end'),
     createTerminal: (options: { cwd: string; hideFromUser?: boolean }) => {
       if (fakes.failCreate) throw new Error('private creation error');
@@ -154,7 +160,7 @@ function lastExecution(): InstanceType<typeof fakes.FakeExecution> {
 /** Returns what outcomeOf was last given: the tail's pushes, and the run. */
 function given(): {
   pushed: string[];
-  run: { shell: string | undefined; finished: boolean; exitCode: () => number | undefined; ended: Promise<void> };
+  run: { shell: string | undefined; finished: boolean; exitCode: () => number | undefined; closed: () => boolean; ended: Promise<void> };
 } {
   const [output, ran] = vi.mocked(outcomeOf).mock.calls.at(-1) ?? [];
   // The mocked Tail and the run outcomeOf is handed, of these types.
@@ -176,11 +182,209 @@ afterEach(() => {
   fakes.listeners.clear();
   fakes.integrated = true;
   fakes.failCreate = false;
+  fakes.onStateSubscribe = undefined;
   vi.useRealTimers();
   vi.clearAllMocks();
 });
 
 describe('run', () => {
+  it('waits for delayed Bash identity before submitting multiline input', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).not.toHaveBeenCalled();
+    const other = new fakes.FakeTerminal({ cwd: '/other' }, true);
+    fire('state', other);
+    fire('close', other);
+    fire('state', terminal);
+    expect(submit).not.toHaveBeenCalled();
+    const queued = [...(fakes.listeners.get('state') ?? [])][0];
+    terminal.state.shell = 'bash';
+    fire('state', terminal);
+    queued?.(terminal);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).toHaveBeenCalledWith(commandForShell('printf a\nprintf b', 'bash'));
+    expect(fakes.listeners.get('state')?.size ?? 0).toBe(0);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await promise;
+  });
+
+  it('submits unchanged after the shell identity wait expires', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(499);
+    expect(submit).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(submit).toHaveBeenCalledWith('printf a\nprintf b');
+    expect(fakes.listeners.get('state')?.size ?? 0).toBe(0);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await promise;
+  });
+
+  it('does not submit a multiline command interrupted while shell identity is pending', async () => {
+    const terminals = new PairTerminals(() => false);
+    const abort = new AbortController();
+    const promise = runIn(terminals, 'printf a\nprintf b', abort.signal);
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(0);
+    abort.abort();
+    await expect(promise).resolves.toEqual({ output: '', notStarted: true });
+    expect(submit).not.toHaveBeenCalled();
+    expect(fakes.listeners.get('state')?.size ?? 0).toBe(0);
+  });
+
+  it('does not submit a multiline command when its terminal closes during identification', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(0);
+    terminal.exitStatus = { code: 0 };
+    fire('close', terminal);
+    await expect(promise).rejects.toThrow('Terminal closed before command submission');
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('notices terminal closure while subscribing to shell state', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    fakes.onStateSubscribe = () => {
+      terminal.exitStatus = { code: 0 };
+    };
+    await expect(promise).rejects.toThrow('Terminal closed before command submission');
+    expect(terminal.executions).toHaveLength(0);
+  });
+
+  it('notices interruption while subscribing to shell state', async () => {
+    const terminals = new PairTerminals(() => false);
+    const abort = new AbortController();
+    const promise = runIn(terminals, 'printf a\nprintf b', abort.signal);
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    fakes.onStateSubscribe = () => {
+      abort.abort();
+    };
+    await expect(promise).resolves.toEqual({ output: '', notStarted: true });
+    expect(terminal.executions).toHaveLength(0);
+  });
+
+  it('rechecks shell identity and cancellation when the terminal state changes at entry', async () => {
+    const terminals = new PairTerminals(() => false);
+    const abort = new AbortController();
+    const promise = runIn(terminals, 'printf a\nprintf b', abort.signal);
+    const terminal = lastTerminal();
+    Object.defineProperty(terminal.state, 'shell', {
+      get() {
+        abort.abort();
+        return undefined;
+      },
+    });
+    await expect(promise).resolves.toEqual({ output: '', notStarted: true });
+    expect(terminal.executions).toHaveLength(0);
+  });
+
+  it('does not submit when the terminal closes as identity checking starts', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    Object.defineProperty(terminal.state, 'shell', {
+      get() {
+        terminal.exitStatus = { code: 0 };
+        return undefined;
+      },
+    });
+    await expect(promise).rejects.toThrow('Terminal closed before command submission');
+    expect(terminal.executions).toHaveLength(0);
+  });
+
+  it('uses identity observed on the second immediate shell-state read', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    let reads = 0;
+    Object.defineProperty(terminal.state, 'shell', {
+      get() {
+        return ++reads === 1 ? undefined : 'bash';
+      },
+    });
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).toHaveBeenCalledWith(commandForShell('printf a\nprintf b', 'bash'));
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await promise;
+  });
+
+  it('submits known non-Bash multiline input immediately without wrapping', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const integration = lastTerminal().shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).toHaveBeenCalledWith('printf a\nprintf b');
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await promise;
+  });
+
+  it('observes shell identity that arrives while the state listener is registered', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a\nprintf b');
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    fakes.onStateSubscribe = () => {
+      terminal.state.shell = 'bash';
+    };
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).toHaveBeenCalledWith(commandForShell('printf a\nprintf b', 'bash'));
+    expect(fakes.listeners.get('state')?.size ?? 0).toBe(0);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await promise;
+  });
+
+  it('does not wait for shell identity for a single-line command', async () => {
+    const terminals = new PairTerminals(() => false);
+    const promise = runIn(terminals, 'printf a');
+    const terminal = lastTerminal();
+    terminal.state.shell = undefined;
+    const integration = terminal.shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    const submit = vi.spyOn(integration, 'executeCommand');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(submit).toHaveBeenCalledWith('printf a');
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await promise;
+  });
+
   it('records terminal creation failure without its error text', async () => {
     fakes.failCreate = true;
     const events: unknown[] = [];
@@ -434,6 +638,7 @@ describe('run', () => {
     await vi.advanceTimersByTimeAsync(DRAIN_MS);
     await outcome;
     expect(given().run.exitCode()).toBeUndefined();
+    expect(given().run.closed()).toBe(true);
   });
 
   it('RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it', async () => {
@@ -526,4 +731,40 @@ describe('acquire', () => {
     terminals.dispose();
     expect(fakes.listeners.get('close')?.size).toBe(0);
   });
+});
+
+it('waits for a timed-out execution output stream to drain after its matching end', async () => {
+  const terminals = new PairTerminals(() => false);
+  const outcome = runIn(terminals, 'long command');
+  await vi.advanceTimersByTimeAsync(WAIT_MS);
+  await outcome;
+  const execution = lastExecution();
+  let settled = false;
+  void given().run.ended.then(() => {
+    settled = true;
+  });
+  fire('end', { execution: new fakes.FakeExecution(), exitCode: 0 });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(settled).toBe(false);
+  fire('end', { execution, exitCode: 0 });
+  execution.output = ['late output'];
+  await vi.advanceTimersByTimeAsync(0);
+  expect(settled).toBe(false);
+  execution.released.resolve();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(settled).toBe(true);
+  expect(given().pushed).toEqual(['late output']);
+});
+
+it('encodes Bash multiline input on one physical line and leaves unsupported shells unchanged', () => {
+  const command = "cat <<'EOF'\n$HOME \\n caf\u00E9\nEOF\n";
+  expect(commandForShell(command, 'bash')).toBe("builtin eval -- $'cat <<\\'EOF\\'\\n$HOME \\\\n caf\u00E9\\nEOF\\n'");
+  expect(commandForShell(command, 'zsh')).toBe(command);
+  expect(commandForShell(command, undefined)).toBe(command);
+  expect(commandForShell('echo ok', 'bash')).toBe('echo ok');
+  expect(commandForShell('echo a\n\u0000b', 'bash')).toBe('echo a\n\u0000b');
+});
+
+it('encodes carriage return and control bytes without physical control input', () => {
+  expect(commandForShell('a\r\n\t\u007F', 'bash')).toBe("builtin eval -- $'a\\r\\n\\x09\\x7f'");
 });

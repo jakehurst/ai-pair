@@ -91,6 +91,30 @@ export async function run(): Promise<void> {
         assert.match(runs[0]?.output ?? '', trial.kind === 'pipeline' ? /beta/ : /ai-pair-smoke/);
       }
     }
+    const marker = vscode.Uri.joinPath(folder.uri, 'heredoc-output.txt');
+    const command = `cat <<'PAIR_END' | tail -n 1 > '${marker.fsPath}'\nalpha\nbeta\nPAIR_END`;
+    const first = await bounded(controller.step([{ run: command, wait: 1 }]));
+    const second = await bounded(controller.step([]));
+    const commandRun = [first, second].flatMap((report) => report.batches.flatMap((batch) => batch.runs ?? []))[0];
+    assert.ok(commandRun, 'heredoc command did not yield a report');
+    assert.equal(new TextDecoder().decode(await vscode.workspace.fs.readFile(marker)), 'beta\n');
+    if (commandRun.shell === 'bash') {
+      assert.equal(commandRun.exit_code, 0, 'Bash heredoc did not report its observed completion');
+      const visible = "cat <<'PAIR_END' | tail -n 1\nalpha\nbeta\nPAIR_END";
+      const visibleFirst = await bounded(controller.step([{ run: visible, wait: 5 }]));
+      const visibleSecond = await bounded(controller.step([]));
+      const visibleRun = [visibleFirst, visibleSecond].flatMap((report) => report.batches.flatMap((batch) => batch.runs ?? []))[0];
+      assert.equal(visibleRun?.exit_code, 0, 'Bash heredoc output run did not end');
+      assert.match(visibleRun.output, /beta/, 'Bash heredoc output was not captured');
+    } else if (commandRun.running === true) {
+      assert.equal(commandRun.exit_code, undefined, 'unobserved completion must not claim success');
+    } else {
+      assert.equal(commandRun.exit_code, 0, 'reported completion must carry its observed exit code');
+    }
+    console.log(
+      `Native heredoc pipeline: ${JSON.stringify({ running: commandRun.running, exitCode: commandRun.exit_code, output: commandRun.output })}`,
+    );
+    await vscode.workspace.fs.delete(marker);
   } finally {
     console.log(`Native Controller terminal events: ${JSON.stringify(events)}`);
     controller.endSession();

@@ -41391,6 +41391,99 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               },
             },
           },
+          {
+            id: "command-tracking",
+            name: "Command tracking",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Physical execution ownership, session-scoped reports and native Bash capture workaround" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "command-player",
+                  label: "Player\nForeground and background status",
+                  files: ["packages/core/src/player.ts"],
+                  x: 40,
+                  y: 160,
+                },
+                {
+                  id: "command-terminal",
+                  label: "PairTerminals\nExecution and output owner",
+                  files: ["packages/vscode/src/terminal.ts", "packages/vscode/src/output.ts"],
+                  x: 600,
+                  y: 160,
+                },
+                { id: "command-native", label: "VS Code shell integration\nExact execution boundary", files: [], x: 1160, y: 160 },
+                {
+                  id: "command-controller",
+                  label: "Controller\nSession reports and replay",
+                  files: ["packages/core/src/controller.ts", "packages/core/src/ports.ts"],
+                  x: 40,
+                  y: 560,
+                },
+                {
+                  id: "command-relay",
+                  label: "MCP relay\nPending and completion text",
+                  files: ["packages/relay/src/render.ts", "packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts"],
+                  x: 600,
+                  y: 560,
+                },
+                { id: "command-agent", label: "Agent\nObserve status and output", files: ["AGENT_GUIDE.md"], x: 1160, y: 560 },
+              ],
+              edges: [
+                { from: "command-player", to: "command-terminal", label: "original run / ID" },
+                { from: "command-terminal", to: "command-native", label: "exact execution API" },
+                {
+                  from: "command-player",
+                  to: "command-controller",
+                  label: "phase / final tail",
+                  labelPosition: { distance: 0.5, offset: { x: 65, y: 0 } },
+                },
+                { from: "command-controller", to: "command-relay", label: "reports / replay" },
+                { from: "command-relay", to: "command-agent", label: "MCP result" },
+              ],
+              groups: [],
+              comments: {
+                "command-player": [
+                  {
+                    id: "command-logical-owner",
+                    text: "Own active and unfinished background command metadata keyed by original run ID. Keep background status until matching completion. This metadata does not control physical terminal reuse or playback. The foreground commandRunning projection excludes background work. Completion is noninterrupting and session-bound.",
+                    ts: 0,
+                  },
+                ],
+                "command-terminal": [
+                  {
+                    id: "command-physical-owner",
+                    text: "Own the exact VS Code execution identity, terminal busy/reuse state and bounded output reader. Timeout ends waiting, not physical ownership. Matching execution end supplies exit status and final bounded tail; terminal close supplies closed/unknown. Ignore foreign end events. For identified Bash only, encode multiline text as one physical builtin-eval submission; preserve original approval/report text and document trap/error-context limits.",
+                    ts: 0,
+                  },
+                ],
+                "command-native": [
+                  {
+                    id: "command-native-boundary",
+                    text: "Native VS Code 1.146/Bash probe wrote expected heredoc-pipeline output to a file while returned execution supplied no read/end. The encoded one-line control produced matching end/output. Other shells keep original behavior. No timeout or independent file marker substitutes for exact completion in production.",
+                    ts: 0,
+                  },
+                ],
+                "command-controller": [
+                  {
+                    id: "command-session-owner",
+                    text: "Combine authoritative Player pending commands with current confirmation state. Capture originating session for late callbacks. Persist immutable session origin and reject mismatched report replay before restoring facts. Same-session cancellation can replay completion news without losing queued work; ended/replaced sessions cannot receive predecessor news. Suspended same-session work can be delivered after resume.",
+                    ts: 0,
+                  },
+                ],
+                "command-relay": [
+                  {
+                    id: "command-status-render",
+                    text: "Distinguish approval from completion not yet observed. Never infer success or a live process from timeout. Correlate final exit/closed status and bounded tail with original run ID. Use editor-relay wire version 6 for command news and report-origin checks; local panel protocol stays unchanged.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
         ],
         typesPresent: ["overview", "architecture", "flow", "dataflow", "state", "sequence", "class", "er", "concurrency"],
         codeThreads: [

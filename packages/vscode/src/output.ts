@@ -1,7 +1,7 @@
 // A `run` command's output and what the agent is told about it, from terminal.ts, without VS Code,
 // so it can be tested on its own (#7).
 
-import { terminalText, type CommandOutcome } from '@ai-pair/core';
+import { terminalText, type CommandCompletion, type CommandOutcome } from '@ai-pair/core';
 
 /** Output kept for the agent: the tail, where the result and the errors are. */
 export const MAX_OUTPUT = 12_000;
@@ -22,23 +22,32 @@ export class Tail {
 
 /**
  * Returns what the agent is told about a command: the tail of its output, as text, and either how it
- * ended (`finished`), or that it is still running, with its exit code once `ended` (which `exitCode`
- * reads then).
+ * ended (`finished`), or that completion is unobserved, with the bounded output and exit code once
+ * `ended` resolves.
  */
 export function outcomeOf(
   output: Tail,
-  run: { shell: string | undefined; finished: boolean; exitCode: () => number | undefined; ended: Promise<void> },
+  run: { shell: string | undefined; finished: boolean; exitCode: () => number | undefined; ended: Promise<void>; closed?: () => boolean },
 ): CommandOutcome {
   const text = terminalText(output.text);
   const outcome: CommandOutcome = { output: text.length > MAX_OUTPUT ? text.slice(-MAX_OUTPUT) : text };
   if (run.shell !== undefined) outcome.shell = run.shell;
   if (output.dropped || text.length > MAX_OUTPUT) outcome.truncated = true;
   if (run.finished) {
+    if (run.closed?.() === true) outcome.closed = true;
     const exitCode = run.exitCode();
     if (exitCode !== undefined) outcome.exitCode = exitCode;
   } else {
     outcome.running = true;
-    outcome.exited = run.ended.then(() => run.exitCode());
+    outcome.exited = run.ended.then(() => {
+      const finalText = terminalText(output.text);
+      const completion: CommandCompletion = { output: finalText.length > MAX_OUTPUT ? finalText.slice(-MAX_OUTPUT) : finalText };
+      if (run.closed?.() === true) completion.closed = true;
+      const code = run.exitCode();
+      if (code !== undefined) completion.exitCode = code;
+      if (output.dropped || finalText.length > MAX_OUTPUT) completion.truncated = true;
+      return completion;
+    });
   }
   return outcome;
 }

@@ -17,6 +17,12 @@ const POLLS = 200;
 /** How long a report may take after an interrupt. */
 const INTERRUPT_WAIT_MS = 5000;
 
+/** Maximum terminal events kept for a failure-only foreign execution trace. */
+const MAX_TERMINAL_TRACE = 40;
+/** Bounds each diagnostic command and the diagnostic output tail. */
+const MAX_TRACE_COMMAND = 512;
+const MAX_TRACE_OUTPUT = 2000;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -457,6 +463,110 @@ async function terminalEndWithoutStatus(api: Api): Promise<void> {
   }
 }
 
+/** Exercises the shell-identity wait against a real terminal with delayed state metadata. */
+async function delayedShellIdentity(api: Api): Promise<void> {
+  if (process.platform !== 'linux') return;
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'workspace not found');
+  await closeTerminals();
+  const options = { id: 90_001, cwd: folder.uri.fsPath, waitMs: 5000, signal: new AbortController().signal };
+  const warm = await api.editor.runCommand('printf shell-identity-ready', options);
+  assert.equal(warm.exitCode, 0);
+  const terminal = vscode.window.terminals.at(-1);
+  assert.ok(terminal?.shellIntegration, 'the identity test has no integrated terminal');
+  const originalState = Object.getOwnPropertyDescriptor(terminal, 'state');
+  const originalEvent = Object.getOwnPropertyDescriptor(vscode.window, 'onDidChangeTerminalState');
+  assert.ok(originalState);
+  assert.ok(originalEvent);
+  assert.equal(originalState.configurable, true);
+  assert.equal(originalEvent.configurable, true);
+  for (let i = 0; i < POLLS && terminal.state.shell !== 'bash'; i++) await sleep(POLL_MS);
+  assert.equal(terminal.state.shell, 'bash', 'the identity test did not use Bash');
+  const actualState = terminal.state;
+  let known = false;
+  let readsUntilKnown = 0;
+  let identifyOnSubscribe = false;
+  let listener: ((changed: vscode.Terminal) => unknown) | undefined;
+  async function waitForListener(): Promise<(changed: vscode.Terminal) => unknown> {
+    for (let i = 0; i < POLLS; i++) {
+      const current = listener;
+      if (current !== undefined) return current;
+      await sleep(POLL_MS);
+    }
+    return assert.fail('the terminal did not wait for shell identity');
+  }
+  const listen = vscode.window.onDidChangeTerminalState;
+  Object.defineProperty(terminal, 'state', {
+    ...originalState,
+    get: () => {
+      if (readsUntilKnown > 0 && --readsUntilKnown === 0) known = true;
+      return { ...actualState, shell: known ? 'bash' : undefined };
+    },
+  });
+  Object.defineProperty(vscode.window, 'onDidChangeTerminalState', {
+    ...originalEvent,
+    value: (callback: (changed: vscode.Terminal) => unknown) => {
+      listener = callback;
+      if (identifyOnSubscribe) known = true;
+      return listen(callback);
+    },
+  });
+  try {
+    const command = "printf 'delayed-one\\n'\nprintf delayed-two";
+    const delayed = api.editor.runCommand(command, { ...options, id: 90_002 });
+    const notifyState = await waitForListener();
+    known = true;
+    notifyState(terminal);
+    // A callback already queued before disposal must not settle the wait twice.
+    notifyState(terminal);
+    const completed = await Promise.race([delayed, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(completed, 'the delayed Bash command did not finish');
+    assert.equal(completed.exitCode, 0);
+    assert.match(completed.output, /delayed-one[\s\S]*delayed-two/);
+
+    known = false;
+    identifyOnSubscribe = true;
+    const registered = await api.editor.runCommand('printf registered-one\nprintf registered-two', { ...options, id: 90_005 });
+    identifyOnSubscribe = false;
+    assert.equal(registered.exitCode, 0);
+    assert.match(registered.output, /registered-oneregistered-two/);
+
+    known = false;
+    readsUntilKnown = 2;
+    const immediate = await api.editor.runCommand('printf immediate-one\nprintf immediate-two', { ...options, id: 90_006 });
+    assert.equal(immediate.exitCode, 0);
+    assert.match(immediate.output, /immediate-oneimmediate-two/);
+
+    known = false;
+    listener = undefined;
+    const cancel = new AbortController();
+    const interrupted = api.editor.runCommand('printf never\nprintf submitted', { ...options, id: 90_003, signal: cancel.signal });
+    await waitForListener();
+    cancel.abort();
+    assert.deepEqual(await interrupted, { output: '', notStarted: true });
+
+    known = false;
+    listener = undefined;
+    const timeout = api.editor.runCommand('printf identity-timeout\n', { ...options, id: 90_004 });
+    await waitForListener();
+    const result = await Promise.race([timeout, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(result, 'the unknown-shell timeout did not settle');
+    assert.match(result.output, /identity-timeout/);
+
+    known = false;
+    listener = undefined;
+    const closing = api.editor.runCommand('printf closed\nprintf never', { ...options, id: 90_007 });
+    await waitForListener();
+    terminal.dispose();
+    await assert.rejects(closing, /Terminal closed before command submission/);
+    console.log('ShellIdentity: delayed Bash, interruption and unknown-shell timeout use a real terminal');
+  } finally {
+    Object.defineProperty(terminal, 'state', originalState);
+    Object.defineProperty(vscode.window, 'onDidChangeTerminalState', originalEvent);
+    await closeTerminals();
+  }
+}
+
 /** A foreign shell execution protects its terminal from reuse by Pair. */
 async function foreignTerminalExecution(api: Api): Promise<void> {
   const { controller } = api;
@@ -468,6 +578,48 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
   const initialEnded = Promise.withResolvers<vscode.TerminalShellExecutionEndEvent>();
   let initialExecution: vscode.TerminalShellExecution | undefined;
   let initialTerminal: vscode.Terminal | undefined;
+  let foreign: vscode.TerminalShellExecution | undefined;
+  let foreignOutput = '';
+  const terminalTrace: Array<{
+    kind: 'start' | 'end' | 'close';
+    terminal: vscode.Terminal;
+    execution?: vscode.TerminalShellExecution;
+    command?: string;
+    confidence?: vscode.TerminalShellExecutionCommandLineConfidence;
+    trusted?: boolean;
+    exitCode?: number;
+  }> = [];
+  function record(event: (typeof terminalTrace)[number]): void {
+    if (terminalTrace.length < MAX_TERMINAL_TRACE) terminalTrace.push(event);
+  }
+  const traceListeners = [
+    vscode.window.onDidStartTerminalShellExecution((event) => {
+      const command = event.execution.commandLine;
+      record({
+        kind: 'start',
+        terminal: event.terminal,
+        execution: event.execution,
+        command: command.value.slice(0, MAX_TRACE_COMMAND),
+        confidence: command.confidence,
+        trusted: command.isTrusted,
+      });
+    }),
+    vscode.window.onDidEndTerminalShellExecution((event) => {
+      const command = event.execution.commandLine;
+      record({
+        kind: 'end',
+        terminal: event.terminal,
+        execution: event.execution,
+        command: command.value.slice(0, MAX_TRACE_COMMAND),
+        confidence: command.confidence,
+        trusted: command.isTrusted,
+        exitCode: event.exitCode,
+      });
+    }),
+    vscode.window.onDidCloseTerminal((terminal) => {
+      record({ kind: 'close', terminal });
+    }),
+  ];
   const startListener = vscode.window.onDidStartTerminalShellExecution((event) => {
     if (event.execution.commandLine.value === initialCommand) {
       initialExecution = event.execution;
@@ -510,16 +662,14 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
     assert.ok(vscode.window.terminals.includes(terminal), 'Pair terminal closed after the initial command');
     const command = 'printf foreign-terminal-command';
     const foreignEnded = Promise.withResolvers<vscode.TerminalShellExecutionEndEvent>();
-    let foreign: vscode.TerminalShellExecution | undefined;
     const foreignListener = vscode.window.onDidEndTerminalShellExecution((event) => {
       if (event.terminal === terminal && event.execution === foreign) foreignEnded.resolve(event);
     });
     try {
       foreign = terminal.shellIntegration.executeCommand(command);
       const output = (async () => {
-        let text = '';
-        for await (const chunk of foreign.read()) text += chunk;
-        return text;
+        for await (const chunk of foreign.read()) foreignOutput += chunk;
+        return foreignOutput;
       })();
       const completed = await Promise.race([
         foreignEnded.promise,
@@ -551,7 +701,30 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
       'Pair reused the foreign terminal',
     );
     console.log('a foreign terminal execution keeps its terminal separate from the next Pair run');
+  } catch (error) {
+    // Collect silently during the test: logging can perturb the timing under investigation.
+    console.error(
+      'Foreign terminal failure trace:',
+      JSON.stringify({
+        output: foreignOutput.slice(-MAX_TRACE_OUTPUT),
+        terminalOpen: initialTerminal !== undefined && vscode.window.terminals.includes(initialTerminal),
+        shell: initialTerminal?.state.shell,
+        dimensions: initialTerminal === undefined ? undefined : (Reflect.get(initialTerminal, 'dimensions') as unknown),
+        events: terminalTrace.map((event) => ({
+          kind: event.kind,
+          sameTerminal: event.terminal === initialTerminal,
+          sameInitial: event.execution !== undefined && event.execution === initialExecution,
+          sameForeign: event.execution !== undefined && event.execution === foreign,
+          command: event.command,
+          confidence: event.confidence,
+          trusted: event.trusted,
+          exitCode: event.exitCode,
+        })),
+      }),
+    );
+    throw error;
   } finally {
+    for (const listener of traceListeners) listener.dispose();
     startListener.dispose();
     endListener.dispose();
     controller.endSession();
@@ -957,6 +1130,7 @@ export async function gapPaths(api: Api): Promise<void> {
   await interruptRunningCommand(api);
   await terminalWithoutReportedCwd(api);
   await terminalEndWithoutStatus(api);
+  await delayedShellIdentity(api);
   await foreignTerminalExecution(api);
   await diagnosticObserverFailure(api);
   await narrationSettingsFailure(api);

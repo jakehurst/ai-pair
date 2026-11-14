@@ -627,18 +627,21 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
 
   // A report the agent never took, put back after its session closed: the next call takes it, and closes the
   // session again (#60, specs/Controller.tla, `Restore`).
-  await controller.end();
-  controller.restore({ batches: [], events: [{ kind: 'interrupt' }], turn: 'agent' });
+  const ended = await controller.end();
+  assert.ok(ended.sessionId !== undefined && ended.sessionId !== '', 'the ended report has no session origin');
+  controller.restore({ sessionId: ended.sessionId, batches: [], events: [{ kind: 'interrupt' }], turn: 'agent' });
   assert.deepEqual((await controller.listen()).events, [{ kind: 'interrupt' }]);
   assert.equal(controller.isActive, false);
   // With nothing closed to take it, it goes nowhere.
   controller.disconnect();
-  controller.restore({ batches: [], events: [{ kind: 'interrupt' }], turn: 'agent' });
+  controller.restore({ sessionId: ended.sessionId, batches: [], events: [{ kind: 'interrupt' }], turn: 'agent' });
   assert.equal(controller.isActive, false);
 
   // An edit restored with its report comes again with its diff; a rejection restored is held for the next report.
-  await controller.start('restored');
+  const restoredStart = await controller.start('restored');
+  assert.ok(restoredStart.sessionId !== undefined && restoredStart.sessionId !== '', 'the restored session has no origin');
   controller.restore({
+    sessionId: restoredStart.sessionId,
     batches: [],
     events: [
       { kind: 'edit', file: 'paths.txt', diff: '@@ -1 +1 @@', by: 'other', omitted: 2 },

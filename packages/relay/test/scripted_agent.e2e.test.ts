@@ -250,6 +250,60 @@ describe('scripted agent flows', () => {
     await h.call(client, 'end');
   });
 
+  it('distinguishes approval, pending execution and a later background completion', async () => {
+    const h = await setup(620);
+    const client = await h.connect();
+    h.controller.setTimeouts({ maxBlockMs: 40 });
+    h.editor.commandScript.set('slow command', { ms: 240, exitCode: 0, output: 'final output' });
+    await h.call(client, 'start');
+    await h.call(client, 'step', { actions: [{ run: 'slow command', wait: 0.1 }] });
+    await h.waitFor('approval', () => h.panel.events.some((event) => event.type === 'run' && event.phase === 'confirm'));
+    const confirmation = h.panel.events.find((event) => event.type === 'run' && event.phase === 'confirm');
+    if (confirmation?.type !== 'run') throw new Error('missing confirmation');
+    const approval = await h.call(client, 'listen');
+    expect(approval).toContain("awaiting the programmer's approval");
+    expect(approval).not.toContain('Nothing has happened yet');
+    h.controller.decideRun(confirmation.id, true);
+    await h.waitFor('running', () => h.editor.commands.length === 1);
+    const running = await h.call(client, 'listen');
+    expect(running).toContain('awaiting completion evidence');
+    expect(running).not.toContain('Nothing has happened yet');
+    let background = '';
+    for (let attempt = 0; attempt < 5 && !background.includes('when its wait ended'); attempt++) {
+      background = await h.call(client, 'listen');
+    }
+    expect(background).toContain('when its wait ended');
+    let exit = '';
+    for (let attempt = 0; attempt < 8 && !exit.includes('exited with 0'); attempt++) {
+      exit = await h.call(client, 'listen');
+    }
+    expect(exit).toContain('exited with 0');
+    expect(exit).toContain('final output');
+    expect(exit).toContain(`Command ${confirmation.id}:`);
+    await h.call(client, 'end');
+  });
+
+  it('keeps other background commands pending after one completes', async () => {
+    const h = await setup(621);
+    const client = await h.connect();
+    h.controller.setConfirmCommands(false);
+    h.controller.setTimeouts({ maxBlockMs: 30 });
+    h.editor.commandScript.set('first slow', { ms: 180, exitCode: 0, output: 'first done' });
+    h.editor.commandScript.set('second slow', { ms: 500, exitCode: 0, output: 'second done' });
+    await h.call(client, 'start');
+    await h.call(client, 'step', { actions: [{ run: 'first slow', wait: 0.01 }] });
+    await h.call(client, 'step', { actions: [{ run: 'second slow', wait: 0.01 }] });
+    const first = await h.call(client, 'listen');
+    expect(first).toContain('first slow');
+    expect(first).toContain('second slow');
+    let update = '';
+    for (let attempt = 0; attempt < 10 && !update.includes('first done'); attempt++) update = await h.call(client, 'listen');
+    expect(update).toContain('first done');
+    expect(update).toContain('second slow');
+    expect(update).toContain('awaiting completion evidence');
+    await h.call(client, 'end');
+  });
+
   it('waits for controlled narration and continues when speech fails', async () => {
     let finish: () => void = noop;
     let fail: () => void = noop;

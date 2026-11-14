@@ -132,7 +132,12 @@ const FILE = path.join(DIR, `${process.pid}.json`);
 const TOKEN = Buffer.alloc(24, fakes.tokenBytes).toString('hex');
 
 /** A report, built by its schema, as the controller answers. */
-const REPORT = REPORT_SCHEMA.parse({ batches: [{ id: 1, status: 'completed' }], events: [{ kind: 'interrupt' }], turn: 'agent' });
+const REPORT = REPORT_SCHEMA.parse({
+  sessionId: 'session-1',
+  batches: [{ id: 1, status: 'completed' }],
+  events: [{ kind: 'interrupt' }],
+  turn: 'agent',
+});
 
 /** A file, built by its schema, as the controller's `read` answers. */
 const FILE_CONTENT = FILE_CONTENT_SCHEMA.parse({

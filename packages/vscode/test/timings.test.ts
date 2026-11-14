@@ -14,6 +14,7 @@ const NAMES: ReadonlyArray<keyof Timings> = [
   'scrollMaxMs',
   'frameMs',
   'shellIntegrationMs',
+  'shellIdentityMs',
   'drainMs',
   'tipDelayMs',
   'tipWarmMs',

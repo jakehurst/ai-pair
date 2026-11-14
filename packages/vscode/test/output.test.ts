@@ -61,6 +61,45 @@ describe('outcomeOf', () => {
     expect(running.exitCode).toBeUndefined();
     exit.code = 143;
     ends.resolve();
-    expect(await running.exited).toBe(143);
+    expect(await running.exited).toEqual({ output: 'serving', exitCode: 143 });
   });
+});
+
+it('retains final output and unknown exit when a background command ends', async () => {
+  const output = tail('initial');
+  const ends = Promise.withResolvers<void>();
+  const result = outcomeOf(output, { shell: 'bash', finished: false, exitCode: () => undefined, ended: ends.promise });
+  output.push(' later');
+  ends.resolve();
+  expect(await result.exited).toEqual({ output: 'initial later' });
+});
+
+it('identifies a terminal close without inventing an exit code', async () => {
+  const ends = Promise.withResolvers<void>();
+  const result = outcomeOf(tail('partial'), {
+    shell: undefined,
+    finished: false,
+    exitCode: () => undefined,
+    ended: ends.promise,
+    closed: () => true,
+  });
+  ends.resolve();
+  expect(await result.exited).toEqual({ output: 'partial', closed: true });
+});
+
+it('bounds a late output tail and identifies immediate terminal closure', async () => {
+  const output = new Tail(MAX_OUTPUT + 2);
+  output.push('x'.repeat(MAX_OUTPUT + 3));
+  const ends = Promise.withResolvers<void>();
+  const running = outcomeOf(output, { shell: undefined, finished: false, exitCode: () => undefined, ended: ends.promise });
+  ends.resolve();
+  expect(await running.exited).toEqual({ output: 'x'.repeat(MAX_OUTPUT), truncated: true });
+  const closed = outcomeOf(tail('partial'), {
+    shell: undefined,
+    finished: true,
+    exitCode: () => undefined,
+    ended: Promise.resolve(),
+    closed: () => true,
+  });
+  expect(closed).toEqual({ output: 'partial', closed: true });
 });

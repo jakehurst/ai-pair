@@ -199,6 +199,9 @@ function harness({ files = {}, scene = {}, config = {}, knows }: HarnessOptions 
     codePlayback: () => 'typing',
     render: vi.fn<Stage['render']>(),
     confirm,
+    commandExited: (event) => {
+      panel.post({ type: 'run', id: event.id, command: event.command, phase: 'exited', exitCode: event.exit_code });
+    },
     lines,
     ...(knows === undefined ? {} : { knows }),
   };
@@ -1066,7 +1069,9 @@ describe('run', () => {
     const h = harness({ files: { 'a.ts': 'x' }, scene: { root: '/work', cursor: { file: A, offset: 1 } } });
     h.editor.runCommand.mockResolvedValueOnce({ exitCode: 0, output: 'done', truncated: true, shell: 'zsh' });
     const { result } = await played(h, [{ type: `y${CURSOR_MARKER}` }, { run: 'npm test', wait: 60 }]);
-    expect(result.runs).toEqual([{ command: 'npm test', output: 'done', exit_code: 0, truncated: true, shell: 'zsh' }]);
+    expect(result.runs?.map(({ id: _id, ...run }) => run)).toEqual([
+      { command: 'npm test', output: 'done', exit_code: 0, truncated: true, shell: 'zsh' },
+    ]);
     expect(h.editor.save.mock.invocationCallOrder[0]).toBeLessThan(h.editor.runCommand.mock.invocationCallOrder[0] ?? 0);
     expect(h.editor.runCommand.mock.calls[0]?.slice(0, 1)).toEqual(['npm test']);
     expect(h.editor.runCommand.mock.calls[0]?.[1]).toMatchObject({ cwd: '/work', waitMs: CONFIG.maxRunWaitMs });
@@ -1084,7 +1089,7 @@ describe('run', () => {
       error: { kind: 'command_failed', message: 'The command exited with 2.' },
       unplayed: [{ say: 'After.' }],
     });
-    expect(result.runs).toEqual([{ command: 'false', output: '', exit_code: 2 }]);
+    expect(result.runs?.map(({ id: _id, ...run }) => run)).toEqual([{ command: 'false', output: '', exit_code: 2 }]);
     const last = await played(h, [{ run: 'false' }]);
     expect(last.result.unplayed).toBeUndefined();
   });
@@ -1156,12 +1161,12 @@ describe('run', () => {
   });
 
   it('StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted', async () => {
-    const exited = Promise.withResolvers<number | undefined>();
+    const exited = Promise.withResolvers<{ output: string; exitCode?: number }>();
     const h = harness();
     h.editor.runCommand.mockResolvedValueOnce(runningOutcome({ exited: exited.promise }));
     const first = await played(h, [{ run: 'build' }]);
-    expect(first.result.runs).toEqual([{ command: 'build', output: 'so far', running: true }]);
-    exited.resolve(0);
+    expect(first.result.runs?.map(({ id: _id, ...run }) => run)).toEqual([{ command: 'build', output: 'so far', running: true }]);
+    exited.resolve({ output: 'done', exitCode: 0 });
     await Promise.resolve();
     expect(phases(h).filter((phase) => phase === 'exited')).toEqual(['exited']);
     for (const [actions, unplayed] of [
@@ -1467,4 +1472,44 @@ describe('grouped playback', () => {
     expect(h.files.get(A)).toBe('a');
     expect(result.unplayed).toEqual([{ say: 'After' }]);
   });
+});
+
+it('passes speech settlement to action and grouped typing boundaries', async () => {
+  const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+  const boundary = vi.fn(() => Promise.resolve());
+  h.stage.attentionBoundary = boundary;
+  h.stage.codePlayback = () => 'lines';
+  await h.player.currentSpeech;
+  await played(h, [{ type: `ab${CURSOR_MARKER}` }]);
+  expect(boundary.mock.calls.length).toBeGreaterThanOrEqual(3);
+});
+
+it('reports terminal closure and each observed background completion field', async () => {
+  const h = harness();
+  const exited = Promise.withResolvers<{ output: string; exitCode?: number; truncated?: true; closed?: true }>();
+  const callback = vi.fn<NonNullable<Stage['commandExited']>>();
+  h.stage.commandExited = callback;
+  h.editor.runCommand.mockResolvedValueOnce({ output: 'partial', closed: true });
+  expect((await played(h, [{ run: 'closed' }])).result.runs?.[0]?.closed).toBe(true);
+  h.editor.runCommand.mockResolvedValueOnce({ output: 'early', running: true, exited: exited.promise });
+  const running = await played(h, [{ run: 'background' }]);
+  expect(h.player.backgroundCommands).toEqual([{ id: running.result.runs?.[0]?.id, command: 'background', phase: 'running' }]);
+  exited.resolve({ output: 'later', exitCode: 4, truncated: true, closed: true });
+  await Promise.resolve();
+  expect(h.player.backgroundCommands).toEqual([]);
+  expect(callback).toHaveBeenCalledWith({
+    kind: 'command_exit',
+    id: running.result.runs?.[0]?.id,
+    command: 'background',
+    output: 'later',
+    exit_code: 4,
+    truncated: true,
+    closed: true,
+  });
+  const unknown = Promise.withResolvers<{ output: string }>();
+  h.editor.runCommand.mockResolvedValueOnce({ output: '', running: true, exited: unknown.promise });
+  await played(h, [{ run: 'unknown' }]);
+  unknown.resolve({ output: 'partial' });
+  await Promise.resolve();
+  expect(callback).toHaveBeenLastCalledWith(expect.objectContaining({ command: 'unknown', output: 'partial' }));
 });

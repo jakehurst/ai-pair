@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.38.3
+
+-   Report command approval and pending completion during MCP waits, including
+    background commands and later observed exits with bounded output.
+-   Submit multi-line Bash commands as one encoded line to preserve shell
+    integration capture for heredoc pipelines. Keep original approval text.
+-   Wait briefly for a new terminal's shell identity before submitting a
+    multi-line command, while preserving cancellation and unknown-shell fallback.
+-   Update the editor-relay wire contract; reconnect Pair after updating.
+
 ## 0.38.2
 
 -   Deliver changed navigator commentary preferences immediately through a

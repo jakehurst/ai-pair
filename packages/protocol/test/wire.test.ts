@@ -53,3 +53,12 @@ describe('parseEditorMessage', () => {
     expect(parseEditorMessage(Buffer.from(JSON.stringify({ type: 'cancel', id: 7 })))).toBeUndefined();
   });
 });
+
+it('requires a session origin on returned reports', () => {
+  const report = { batches: [], events: [], turn: 'agent' };
+  expect(parseRelayMessage(Buffer.from(JSON.stringify({ type: 'return', report })))).toBeUndefined();
+  expect(parseRelayMessage(Buffer.from(JSON.stringify({ type: 'return', report: { ...report, sessionId: 'session-1' } })))).toMatchObject({
+    type: 'return',
+    report: { sessionId: 'session-1' },
+  });
+});

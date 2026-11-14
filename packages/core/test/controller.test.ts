@@ -7,6 +7,7 @@ import { reportDiagnostic } from '../src/diagnostic_delivery';
 // timers are fake. Every report is parsed by REPORT_SCHEMA.
 
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import { CURSOR_MARKER, REPORT_SCHEMA, type Action, type BatchResult, type Report } from '@ai-pair/protocol';
@@ -18,6 +19,11 @@ import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
 import type { DiagnosticEvent, EditorPort, NarrationPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
+
+vi.mock('node:crypto', () => {
+  let next = 0;
+  return { randomUUID: () => `session-${++next}` };
+});
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -65,6 +71,8 @@ const fakes = vi.hoisted(() => {
     readonly isCurrentReading = vi.fn<(id: number) => boolean>();
     readonly hasCurrentReading = vi.fn<() => boolean>();
     commandRunning = false;
+    command?: { id: number; command: string; phase: 'running' };
+    backgroundCommands: Array<{ id: number; command: string; phase: 'running' }> = [];
     readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }> =>
       Promise.resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] }),
     );
@@ -455,6 +463,7 @@ describe('start', () => {
       events: [],
       turn: 'agent',
       navigatorCommentary: 'helpful',
+      sessionId: h.controller.saved?.sessionId,
     });
     expect(scene()).toMatchObject({ root: path.join(ROOT, 'sub'), turn: 'agent', focus: 'cursor', pointFar: false });
     expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: 'Fix it.', rules: ['GUIDE.md'] });
@@ -500,7 +509,14 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(h.controller.isSuspended).toBe(true);
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', suspended: true });
     const resumed = REPORT_SCHEMA.parse(await h.controller.start(undefined, ROOT, ['GUIDE.md']));
-    expect(resumed).toEqual({ batches: [], events: [], turn: 'agent', resumed: true, navigatorCommentary: 'helpful' });
+    expect(resumed).toEqual({
+      batches: [],
+      events: [],
+      turn: 'agent',
+      resumed: true,
+      navigatorCommentary: 'helpful',
+      sessionId: h.controller.saved?.sessionId,
+    });
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true, rules: ['GUIDE.md'] });
     expect(fakes.players).toHaveLength(1);
     h.controller.disconnect();
@@ -607,6 +623,7 @@ describe('a session the agent leaves, and comes back to', () => {
     h.controller.userInterrupt();
     h.controller.userEdit(A, 'a', 'b', []);
     expect(h.controller.saved).toEqual({
+      sessionId: h.controller.saved?.sessionId,
       task: 'Kept.',
       scene: { root: ROOT, turn: 'agent', cursor: { file: A, offset: 2 }, selection: undefined, allowedCommands: ['ls'] },
       finished: [],
@@ -714,7 +731,13 @@ describe('steps and their batches', () => {
 
   it('an empty step waits for the queued batches, and returns at once with none', async () => {
     const h = await started();
-    expect(await report(h.controller.step([]))).toEqual({ batches: [], events: [], turn: 'agent', navigatorCommentary: 'helpful' });
+    expect(await report(h.controller.step([]))).toEqual({
+      batches: [],
+      events: [],
+      turn: 'agent',
+      navigatorCommentary: 'helpful',
+      sessionId: h.controller.saved?.sessionId,
+    });
     const finish = holdPlay();
     await report(h.controller.step(SAY));
     const waiting = h.controller.step([]);
@@ -837,7 +860,7 @@ describe('steps and their batches', () => {
     h.controller.userInterrupt();
     await report(h.controller.step(SAY));
     const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line' as const, message: 'No.' } };
-    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected });
+    h.controller.restore({ sessionId: h.controller.saved?.sessionId, batches: [], events: [], turn: 'agent', rejected });
     const type: Action = { type: `x${CURSOR_MARKER}` };
     expect(await report(h.controller.step([type]))).toMatchObject({ rejected, batches: [{ status: 'discarded' }] });
     expect((await report(h.controller.step([type]))).rejected?.error.kind).toBe('unanchored');
@@ -1398,7 +1421,14 @@ describe('listen', () => {
     const h = await started();
     const listen = h.controller.listen();
     await settle(CONFIG.maxBlockMs);
-    expect(await report(listen)).toEqual({ batches: [], events: [], turn: 'agent', waiting: true, navigatorCommentary: 'helpful' });
+    expect(await report(listen)).toEqual({
+      batches: [],
+      events: [],
+      turn: 'agent',
+      waiting: true,
+      navigatorCommentary: 'helpful',
+      sessionId: h.controller.saved?.sessionId,
+    });
     expect(h.traced.at(-1)).toMatch(/^report to listen: batches \[\], events \[\], waiting, \d+ chars$/);
   });
 
@@ -1653,7 +1683,7 @@ describe('restore', () => {
   it('HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has', async () => {
     const h = await started();
     const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line' as const, message: 'No.' } };
-    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected });
+    h.controller.restore({ sessionId: h.controller.saved?.sessionId, batches: [], events: [], turn: 'agent', rejected });
     const discarded = await report(h.controller.step(SAY));
     expect(discarded).toMatchObject({ rejected, batches: [{ status: 'discarded' }] });
     expect(rehearse).not.toHaveBeenCalled();
@@ -1662,9 +1692,15 @@ describe('restore', () => {
   it('NoUnmarkedRepeat: says a returned report may repeat one already seen, and marks each returned rejection the agent may have seen', async () => {
     const h = await started();
     const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line' as const, message: 'No.' } };
-    h.controller.restore({ batches: [{ id: 1, status: 'completed' }], events: [], turn: 'agent' }, /* mayRepeat= */ true);
-    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected }, /* mayRepeat= */ true);
-    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected });
+    h.controller.restore(
+      { sessionId: h.controller.saved?.sessionId, batches: [{ id: 1, status: 'completed' }], events: [], turn: 'agent' },
+      /* mayRepeat= */ true,
+    );
+    h.controller.restore(
+      { sessionId: h.controller.saved?.sessionId, batches: [], events: [], turn: 'agent', rejected },
+      /* mayRepeat= */ true,
+    );
+    h.controller.restore({ sessionId: h.controller.saved?.sessionId, batches: [], events: [], turn: 'agent', rejected });
     const first = await report(h.controller.listen());
     expect(first).toMatchObject({ batches: [{ id: 1 }], repeated: true, rejected });
     const second = await report(h.controller.listen());
@@ -1674,11 +1710,21 @@ describe('restore', () => {
 
   it("marks the session stale for a returned report's interrupting events or unfinished batches, not for others' quiet edits", async () => {
     const h = await started();
-    h.controller.restore({ batches: [], events: [{ kind: 'edit', file: 'b.ts', diff: 'x', by: 'other' }], turn: 'agent' });
+    h.controller.restore({
+      sessionId: h.controller.saved?.sessionId,
+      batches: [],
+      events: [{ kind: 'edit', file: 'b.ts', diff: 'x', by: 'other' }],
+      turn: 'agent',
+    });
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'edit', file: 'b.ts', diff: 'x', by: 'other' }]);
     holdPlay();
     expect((await report(h.controller.step(SAY))).submitted).toEqual({ id: 1, status: 'playing' });
-    h.controller.restore({ batches: [{ id: 9, status: 'interrupted' }], events: [], turn: 'agent' });
+    h.controller.restore({
+      sessionId: h.controller.saved?.sessionId,
+      batches: [{ id: 9, status: 'interrupted' }],
+      events: [],
+      turn: 'agent',
+    });
     expect((await report(h.controller.step(SAY))).batches.map((b) => [b.id, b.status])).toEqual([
       [2, 'discarded'],
       [9, 'interrupted'],
@@ -1699,8 +1745,8 @@ describe('restore', () => {
 
   it('BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call', async () => {
     const h = await started();
-    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected: heldRejection(1) });
-    h.controller.restore({ batches: [], events: [], turn: 'agent', rejected: heldRejection(2) });
+    h.controller.restore({ sessionId: h.controller.saved?.sessionId, batches: [], events: [], turn: 'agent', rejected: heldRejection(1) });
+    h.controller.restore({ sessionId: h.controller.saved?.sessionId, batches: [], events: [], turn: 'agent', rejected: heldRejection(2) });
     h.controller.endSession();
     expect((await report(h.controller.listen())).rejected?.index).toBe(1);
     expect((await report(h.controller.listen())).rejected?.index).toBe(2);
@@ -1789,11 +1835,17 @@ describe("the programmer's input", () => {
   it('reports an edit whose diff a restored report already carries, as it was', async () => {
     const h = await started();
     h.controller.restore({
+      sessionId: h.controller.saved?.sessionId,
       batches: [],
       events: [{ kind: 'edit', file: 'a.ts', diff: '@@', omitted: 900, by: 'programmer' }],
       turn: 'agent',
     });
-    h.controller.restore({ batches: [], events: [{ kind: 'edit', file: 'b.ts', diff: '@@', by: 'other' }], turn: 'agent' });
+    h.controller.restore({
+      sessionId: h.controller.saved?.sessionId,
+      batches: [],
+      events: [{ kind: 'edit', file: 'b.ts', diff: '@@', by: 'other' }],
+      turn: 'agent',
+    });
     expect((await report(h.controller.listen())).events).toEqual([
       { kind: 'edit', file: 'b.ts', diff: '@@', by: 'other' },
       { kind: 'edit', file: 'a.ts', diff: '@@', omitted: 900, by: 'programmer' },
@@ -2347,7 +2399,12 @@ describe('settings', () => {
     const busy = vi.fn(() => false);
     expect(() => h.controller.calibrate(passage, busy)).toThrow('A calibration is already under way in the Pair panel.');
     expect(busy).toHaveBeenCalledWith(passage);
-    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage, () => true))).toEqual({ batches: [], events: [], turn: 'agent' });
+    expect(REPORT_SCHEMA.parse(h.controller.calibrate(passage, () => true))).toEqual({
+      batches: [],
+      events: [],
+      turn: 'agent',
+      sessionId: h.controller.saved?.sessionId,
+    });
     expect(() => harness().controller.calibrate(passage, () => true)).toThrow('No pairing session is active.');
   });
 });
@@ -2468,8 +2525,18 @@ describe('the status in the panel', () => {
 describe('reports', () => {
   it('sorts the batches by id, says which batch the step submitted, and anchors after one that stopped short', async () => {
     const h = await started();
-    h.controller.restore({ batches: [{ id: 5, status: 'completed' }], events: [], turn: 'agent' });
-    h.controller.restore({ batches: [{ id: 2, status: 'discarded' }], events: [], turn: 'agent' });
+    h.controller.restore({
+      sessionId: h.controller.saved?.sessionId,
+      batches: [{ id: 5, status: 'completed' }],
+      events: [],
+      turn: 'agent',
+    });
+    h.controller.restore({
+      sessionId: h.controller.saved?.sessionId,
+      batches: [{ id: 2, status: 'discarded' }],
+      events: [],
+      turn: 'agent',
+    });
     const listened = await report(h.controller.listen());
     expect(listened.batches.map((b) => b.id)).toEqual([2, 5]);
     expect((await report(h.controller.step([{ type: `x${CURSOR_MARKER}` }]))).rejected?.error.kind).toBe('unanchored');
@@ -2897,4 +2964,132 @@ describe('live navigator commentary notice', () => {
     expect(pause.navigator?.wakeReason).toBe('typing_pause');
     expect(pause.events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
   });
+});
+
+it('reports a command awaiting completion rather than an empty heartbeat', async () => {
+  const h = await started();
+  player().command = { id: 42, command: 'sleep 2', phase: 'running' };
+  const listening = h.controller.listen();
+  await settle(CONFIG.maxBlockMs);
+  expect((await report(listening)).commands).toEqual([{ id: 42, command: 'sleep 2', phase: 'running' }]);
+});
+
+it('delivers background exit evidence once and restores canceled news without staling work', async () => {
+  const h = await started();
+  stage().commandExited?.({ kind: 'command_exit', id: 42, command: 'sleep 2', output: 'done', exit_code: 0 });
+  const first = await report(h.controller.listen());
+  expect(first.events).toContainEqual(
+    expect.objectContaining({ kind: 'command_exit', id: 42, command: 'sleep 2', output: 'done', exit_code: 0 }),
+  );
+  h.controller.restore(first);
+  expect((await report(h.controller.listen())).events).toEqual(first.events);
+  const next = h.controller.listen();
+  expect(await pending(next)).toBe(true);
+  h.controller.userMessage('continue');
+  await report(next);
+});
+
+it('retains an observed background exit while suspended and rejects predecessor callbacks', async () => {
+  const h = await started();
+  const oldStage = stage();
+  h.controller.disconnect();
+  oldStage.commandExited?.({ kind: 'command_exit', id: 73, command: 'old', output: 'suspended' });
+  expect((await report(h.controller.start())).events).toContainEqual(
+    expect.objectContaining({ kind: 'command_exit', id: 73, command: 'old', output: 'suspended' }),
+  );
+  h.controller.endSession();
+  await report(h.controller.listen());
+  await report(h.controller.start());
+  oldStage.commandExited?.({ kind: 'command_exit', id: 74, command: 'old', output: 'stale' });
+  const listening = h.controller.listen();
+  expect(await pending(listening)).toBe(true);
+  h.controller.userMessage('continue');
+  expect((await report(listening)).events).not.toContainEqual(expect.objectContaining({ kind: 'command_exit' }));
+});
+
+it.each(['listen', 'empty step'] as const)('reports background completion to %s while later work plays', async (kind) => {
+  const h = await started();
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  const waiting = kind === 'listen' ? h.controller.listen() : h.controller.step([]);
+  expect(await pending(waiting)).toBe(true);
+  stage().commandExited?.({ kind: 'command_exit', id: 1, command: 'build', output: 'done', exit_code: 0 });
+  expect((await report(waiting)).events).toContainEqual(expect.objectContaining({ kind: 'command_exit', id: 1 }));
+  finish();
+  await settle();
+});
+
+it('restoring completion news does not stale later queued work', async () => {
+  const h = await started();
+  stage().commandExited?.({ kind: 'command_exit', id: 1, command: 'build', output: 'done', exit_code: 0 });
+  const news = await report(h.controller.listen());
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  h.controller.restore(news);
+  const queued = h.controller.step(SAY);
+  await settle();
+  finish();
+  const delivered = await report(queued);
+  expect(delivered.events).toContainEqual(expect.objectContaining({ kind: 'command_exit', id: 1 }));
+  expect(delivered.batches).not.toContainEqual(expect.objectContaining({ status: 'discarded' }));
+});
+
+it('reports the current confirmation request on an idle heartbeat', async () => {
+  const h = await started();
+  const confirmation = stage().confirm(44, 'dangerous command');
+  const listening = h.controller.listen();
+  await settle(CONFIG.maxBlockMs);
+  expect((await report(listening)).commands).toEqual([{ id: 44, command: 'dangerous command', phase: 'confirm' }]);
+  h.controller.decideRun(44, false);
+  await confirmation;
+});
+
+it('reports every pending background command until its own completion', async () => {
+  const h = await started();
+  player().backgroundCommands = [
+    { id: 11, command: 'one', phase: 'running' },
+    { id: 12, command: 'two', phase: 'running' },
+  ];
+  const first = h.controller.listen();
+  await settle(CONFIG.maxBlockMs);
+  expect((await report(first)).commands?.map((command) => command.id)).toEqual([11, 12]);
+  player().backgroundCommands = [{ id: 12, command: 'two', phase: 'running' }];
+  stage().commandExited?.({ kind: 'command_exit', id: 11, command: 'one', output: 'done', exit_code: 0 });
+  const update = await report(h.controller.listen());
+  expect(update.events).toContainEqual(expect.objectContaining({ kind: 'command_exit', id: 11 }));
+  expect(update.commands?.map((command) => command.id)).toEqual([12]);
+});
+
+it('does not restore a previous session command completion into a replacement session', async () => {
+  const h = await started();
+  stage().commandExited?.({ kind: 'command_exit', id: 81, command: 'old', output: 'old output', exit_code: 0 });
+  // The relay serializes and parses reports; exercise that boundary.
+  // oxlint-disable-next-line unicorn/prefer-structured-clone
+  const old = REPORT_SCHEMA.parse(JSON.parse(JSON.stringify(await report(h.controller.listen()))));
+  h.controller.endSession();
+  await report(h.controller.listen());
+  await report(h.controller.start());
+  h.controller.restore(old);
+  const next = h.controller.listen();
+  expect(await pending(next)).toBe(true);
+  h.controller.userMessage('continue');
+  expect((await report(next)).events).not.toContainEqual(expect.objectContaining({ kind: 'command_exit' }));
+});
+
+it('retains report origin across saved-session revive and rejects a missing origin', async () => {
+  const first = await started();
+  stage().commandExited?.({ kind: 'command_exit', id: 85, command: 'build', output: 'done' });
+  const observed = await report(first.controller.listen());
+  const saved = first.controller.saved;
+  if (saved === undefined) throw new Error('missing saved session');
+  const second = harness();
+  second.controller.revive(saved);
+  expect((await report(second.controller.start())).sessionId).toBe(observed.sessionId);
+  second.controller.restore({ ...observed, sessionId: undefined });
+  const idle = second.controller.listen();
+  expect(await pending(idle)).toBe(true);
+  second.controller.userMessage('continue');
+  await report(idle);
+  second.controller.restore(observed);
+  expect((await report(second.controller.listen())).events).toContainEqual(expect.objectContaining({ kind: 'command_exit', id: 85 }));
 });

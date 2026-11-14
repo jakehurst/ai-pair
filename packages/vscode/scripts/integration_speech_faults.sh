@@ -8,7 +8,15 @@ code="$4"
 extension="$5"
 shift 5
 profile="${run}/speech-faults"
-trap 'rm -rf "${profile}"' EXIT
+fixture_tmp=''
+# Removes the isolated profile and whichever test bundle is active.
+cleanup() {
+  rm -rf "${profile}"
+  if [[ -n "${fixture_tmp}" ]]; then
+    rm -rf "${fixture_tmp}"
+  fi
+}
+trap cleanup EXIT
 (cd "${root}" && npm run build --workspace=packages/audio-ui --silent)
 platform="$(uname -s)"
 password_args=()
@@ -44,14 +52,17 @@ for fixture in integration_catalog_paths integration_companion_faults \
     "${fixture}" == integration_workspace_incompatible ]]; then
     debug_args=(--remote-debugging-port=0)
   fi
+  # specs/IntegrationFixture.tla, Build: attribute each fixture to its host.
+  fixture_tmp="$(mktemp -d "${development}/.ai-pair-test.XXXXXX")"
   (cd "${root}/packages/vscode" && npx esbuild "test/${fixture}.ts" \
     --bundle --platform=node --format=cjs --target=node22 --external:vscode \
-    --outfile="dist-test/${fixture}.js" --log-level=warning)
+    --outfile="${fixture_tmp}/${fixture}.js" --log-level=warning)
   workspace_args=()
   if [[ "${fixture}" != integration_no_workspace ]]; then
     workspace_args=("${profile}/${fixture}/workspace")
   fi
   TMPDIR="${short_tmp}" AI_PAIR_HOME="${profile}/${fixture}/home" \
+    AI_PAIR_TEST_GPU_NODE="${root}/packages/audio-ui/dist/speech-gpu/node" \
     AI_PAIR_TEST_CDP_FILE="${profile}/${fixture}/user/DevToolsActivePort" \
     PULSE_SERVER='unix:/nonexistent' \
     PIPEWIRE_REMOTE='ai-pair-integration-no-audio' \
@@ -64,6 +75,8 @@ for fixture in integration_catalog_paths integration_companion_faults \
     --extensions-dir="${profile}/${fixture}/extensions" \
     --disable-workspace-trust --skip-welcome --skip-release-notes \
     --extensionDevelopmentPath="${development}" \
-    --extensionTestsPath="${root}/packages/vscode/dist-test/${fixture}.js" \
+    --extensionTestsPath="${fixture_tmp}/${fixture}.js" \
     ${workspace_args[@]+"${workspace_args[@]}"}
+  rm -rf "${fixture_tmp}"
+  fixture_tmp=''
 done

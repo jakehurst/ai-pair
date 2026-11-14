@@ -4,6 +4,7 @@ export type {
   AgentState,
   Change,
   CommandDiagnostic,
+  CommandCompletion,
   CommandOutcome,
   DiagnosticEvent,
   CursorView,

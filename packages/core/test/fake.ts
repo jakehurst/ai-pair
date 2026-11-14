@@ -133,10 +133,10 @@ export class FakeEditor implements EditorPort {
       });
     });
     if (finished) return { exitCode: script.exitCode, output, shell: 'bash' };
-    const exited = new Promise<number | undefined>((resolve) => {
+    const exited = new Promise<{ output: string; exitCode?: number }>((resolve) => {
       setTimeout(
         () => {
-          resolve(script.exitCode);
+          resolve({ output, ...(script.exitCode === undefined ? {} : { exitCode: script.exitCode }) });
         },
         Math.max(0, script.ms - (Date.now() - started)),
       );

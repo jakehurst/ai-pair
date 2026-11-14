@@ -15,6 +15,7 @@ import {
   type Candidate,
   type Code,
   type ErrorKind,
+  type Event,
   type RunResult,
   type SpanTarget,
   type Turn,
@@ -78,6 +79,8 @@ export interface Stage {
   attentionBoundary?(speech: Promise<void>): Promise<void>;
   /** Runs after each live action has finished. */
   afterAction?(): void;
+  /** Reports an observed background command completion. */
+  commandExited?(event: Extract<Event, { kind: 'command_exit' }>): void;
   /** Shows the agent cursor and state after a change. */
   render(): void;
   /** Waits for the programmer to allow or decline a command. */
@@ -190,7 +193,18 @@ export class Player {
   /** In a reading pause, or waiting for the programmer to allow a command. */
   reading = false;
   /** A `run` whose command is executing. */
-  commandRunning = false;
+  command?: { id: number; command: string; phase: 'running' };
+  private readonly background = new Map<number, { id: number; command: string; phase: 'running' }>();
+
+  /** Returns commands still awaiting observed terminal completion. */
+  get backgroundCommands(): Array<{ id: number; command: string; phase: 'running' }> {
+    return [...this.background.values()];
+  }
+
+  /** Returns whether a command is awaiting its editor result. */
+  get commandRunning(): boolean {
+    return this.command !== undefined;
+  }
   private playing?: Playing;
   private readingId?: number;
   private speech?: Promise<void>;
@@ -649,7 +663,7 @@ export class Player {
     const waitMs = Math.max(0, Math.min(config.maxRunWaitMs, requested));
     // specs/RunBox.tla, `SaveAndRun`, or `Go` after a confirm.
     panel.post({ type: 'run', id, command, phase: 'running' });
-    this.commandRunning = true;
+    this.command = { id, command, phase: 'running' };
     this.stage.render();
     // specs/RunBox.tla, `FinishCommand`: done or background when it ran, declined when it never started or threw.
     let outcome;
@@ -659,7 +673,7 @@ export class Player {
       panel.post({ type: 'run', id, command, phase: 'declined' });
       throw error;
     } finally {
-      this.commandRunning = false;
+      this.command = undefined;
       this.stage.render();
     }
     if (outcome.notStarted === true) {
@@ -667,9 +681,10 @@ export class Player {
       return { kind: 'interrupted' };
     }
 
-    const result: RunResult = { command, output: outcome.output };
+    const result: RunResult = { id, command, output: outcome.output };
     if (outcome.exitCode !== undefined && outcome.running !== true) result.exit_code = outcome.exitCode;
     if (outcome.truncated === true) result.truncated = true;
+    if (outcome.closed === true) result.closed = true;
     if (outcome.running === true) result.running = true;
     if (outcome.shell !== undefined) result.shell = outcome.shell;
     playing.runs.push(result);
@@ -677,9 +692,19 @@ export class Player {
     panel.post({ type: 'run', id, command, phase, exitCode: result.exit_code });
     // The panel keeps showing it as running until it ends, whenever that is.
     if (outcome.running === true) {
+      this.background.set(id, { id, command, phase: 'running' });
       // It ends, or its terminal closes: either way, it never rejects.
-      void outcome.exited?.then((exitCode) => {
-        panel.post({ type: 'run', id, command, phase: 'exited', exitCode });
+      void outcome.exited?.then((completion) => {
+        this.background.delete(id);
+        this.stage.commandExited?.({
+          kind: 'command_exit',
+          id,
+          command,
+          output: completion.output,
+          ...(completion.exitCode === undefined ? {} : { exit_code: completion.exitCode }),
+          ...(completion.truncated === true ? { truncated: true } : {}),
+          ...(completion.closed === true ? { closed: true } : {}),
+        });
       });
     }
 

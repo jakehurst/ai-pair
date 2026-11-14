@@ -208,7 +208,7 @@ file:
   "workspaceFolders": ["/Users/me/projects/todo-app"],
   "port": 53817,
   "token": "...",             // random, per window
-  "protocolVersion": 5,
+  "protocolVersion": 6,
   "lastFocused": 1758700000000   // epoch ms, updated when the window gains focus
 }
 ```
@@ -676,3 +676,37 @@ before the workspace decision arrives. Draft-empty events retain their own
 pause semantics. This avoids a paused-audio restart without another pending
 intent owner; explicit Resume releases manual Pause. Message/selection handback
 retains cancellation before resume.
+
+## Command reporting and shell submission
+
+PairTerminals owns exact VS Code execution identity, terminal reuse and bounded
+output. Its completion promise includes the final tail after bounded drain,
+known exit code or explicit terminal-closed status. A timeout ends only the
+foreground wait; it does not retire or release a live terminal.
+
+Player owns the active command and pending background metadata. Controller
+combines this with its confirmation state for report snapshots. The terminal
+callback reaches a session-bound completion callback; Controller records it as
+noninterrupting command news, with replay on canceled delivery. This preserves
+queued playback and prevents predecessor results entering a successor session.
+Every report carries the logical session's immutable UUID, persisted on save
+and retained on revive. Restore validates this origin before replaying any
+facts or resurrecting a closed session, rather than relying on object identity
+that would be lost at the JSON wire boundary.
+
+For identified Bash only, terminal submission encodes multi-line original text
+as one physical builtin-eval command. It adds no subprocess or temporary-script
+owner. Original command text remains at the approval/report boundary. Other
+shells retain original submission; the exact-ID completion rule never relaxes.
+If shell identity is unknown, multiline submission waits at most 500 ms for
+VS Code's terminal state; interruption or closure stops it. An unresolved
+identity retains the original submission, without guessing a shell.
+The editor-relay wire version is 6 for the new command event. The local audio
+contract remains 6 because no new panel message is introduced.
+
+The native integration harness generates each packaged fixture under its
+owning extension root, ensuring framework stubs use that extension's VS Code
+API facade. Temporary fixture directories are removed on success or failure.
+Relocated GPU fixtures receive an explicit workspace Node path. Development
+bundles provide source-mapped coverage; packaged probes verify shipped behavior
+without claiming source coverage from a production bundle with no source map.

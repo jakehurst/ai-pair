@@ -92,12 +92,14 @@ export const CANDIDATE_SCHEMA = z.object({ line: z.number(), context: z.string()
 
 /** Checks a {@link RunResult}. */
 export const RUN_RESULT_SCHEMA = z.object({
+  id: z.number().int().positive().optional(),
   command: z.string(),
-  /** Absent when the command is still running, or its exit code couldn't be observed. */
+  /** Absent while completion is unobserved, or when no exit code was reported. */
   exit_code: z.number().optional(),
   output: z.string(),
   truncated: z.literal(true).optional(),
-  /** Still running: `wait` elapsed, or playback was interrupted. It keeps running in the terminal. */
+  closed: z.literal(true).optional(),
+  /** The wait ended before completion evidence arrived; the command may still be running. */
   running: z.literal(true).optional(),
   /** The terminal's shell, e.g. `pwsh` or `zsh`, when it's known. */
   shell: z.string().optional(),
@@ -179,6 +181,15 @@ export const EVENT_SCHEMA = z.discriminatedUnion('kind', [
     /** The diff was too long, so `diff` has only its hunks' headers, and this many lines were left out (#149). */
     omitted: z.number().optional(),
   }),
+  z.object({
+    kind: z.literal('command_exit'),
+    id: z.number().int().positive(),
+    command: z.string(),
+    output: z.string(),
+    exit_code: z.number().optional(),
+    truncated: z.literal(true).optional(),
+    closed: z.literal(true).optional(),
+  }),
   z.object({ kind: z.literal('interrupt') }),
   z.object({ kind: z.literal('turn'), to: TURN_SCHEMA, message: z.string().optional(), selection: EXCERPT_SCHEMA.optional() }),
   z.object({ kind: z.literal('end') }),
@@ -198,6 +209,9 @@ export const REPORT_SCHEMA = z.object({
    */
   rejected: z.object({ index: z.number(), action: ACTION_SCHEMA, error: BATCH_ERROR_SCHEMA, code: CODE_SCHEMA.optional() }).optional(),
   events: z.array(EVENT_SCHEMA),
+  /** Identifies the session that created a report for safe restoration. */
+  sessionId: z.string().min(1).optional(),
+  commands: z.array(z.object({ id: z.number().int().positive(), command: z.string(), phase: z.enum(['confirm', 'running']) })).optional(),
   turn: TURN_SCHEMA,
   /** Current preference, projected when the report is delivered. */
   navigatorCommentary: NAVIGATOR_COMMENTARY_SCHEMA.optional(),
@@ -269,7 +283,11 @@ export const RELAY_MESSAGE_SCHEMA = z.discriminatedUnion('type', [
   z.object({ type: z.literal('call'), id: z.number(), tool: z.string(), args: z.record(z.string(), z.unknown()).optional() }),
   z.object({ type: z.literal('cancel'), id: z.number() }),
   /** A report that arrived for a call the agent had already cancelled: deliver it again. */
-  z.object({ type: z.literal('return'), report: REPORT_SCHEMA, mayRepeat: z.literal(true).optional() }),
+  z.object({
+    type: z.literal('return'),
+    report: REPORT_SCHEMA.extend({ sessionId: z.string().min(1) }),
+    mayRepeat: z.literal(true).optional(),
+  }),
 ]);
 
 /** Checks an {@link EditorMessage}. */

@@ -24,6 +24,7 @@ import {
   type ToolName,
 } from '@ai-pair/protocol';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
+import { defaultConfig } from '@ai-pair/core';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
@@ -1302,7 +1303,7 @@ export async function run(): Promise<void> {
   const reported = `${commandsRan}\n${await toolAll('listen')}`;
   assert.match(reported, /Ran `true`.*no output/);
   assert.match(reported, /Output:\n````/);
-  assert.match(reported, /still running in its terminal/);
+  assert.match(reported, /awaiting completion evidence in its terminal/);
   assert.match(await tool('read', { file: 'render.txt' }), /^render\.txt:\n1 {2}first line/);
   assert.match(await tool('read', { file: 'render.txt', from_line: 2, to_line: 2 }), /second line/);
   assert.match(await tool('read', { file: 'render.txt', from_line: 50, to_line: 60 }), /\(end of file\)/);
@@ -1329,6 +1330,45 @@ export async function run(): Promise<void> {
   assert.match(turns, /handed the turn back to you:\n> your move/);
   await tool('end', { summary: 'Done.' });
   console.log('the relay: a command in each form, a file read in each form, and a selection sent with a reply and a turn');
+  if (process.platform === 'linux') {
+    // Observe the real relay's approval, running and late-output messages for one command.
+    await tool('start', { task: 'command status through relay' });
+    controller.setTimeouts({ maxBlockMs: 250 });
+    controller.setConfirmCommands(true);
+    const release = `/tmp/ai-pair-62-relay-${process.pid}`;
+    fs.rmSync(release, { force: true });
+    const command = `while [ ! -f '${release}' ]; do sleep 0.05; done; head -c 52000 /dev/zero | tr '\\0' X; printf RELAY-END`;
+    try {
+      await toolAll('step', { actions: [{ run: command, wait: 0.3 }] });
+      await until(() => api.history().some((event) => event.type === 'run' && event.command === command && event.phase === 'confirm'));
+      const confirmation = api
+        .history()
+        .findLast((event) => event.type === 'run' && event.command === command && event.phase === 'confirm');
+      assert.ok(confirmation && confirmation.type === 'run');
+      assert.match(await toolAll('listen'), /awaiting the programmer's approval/);
+      controller.decideRun(confirmation.id, true);
+      await until(() => api.history().some((event) => event.type === 'run' && event.command === command && event.phase === 'running'));
+      const active = await toolAll('listen');
+      assert.match(active, /awaiting completion evidence/);
+      const background = active.includes('was awaiting completion evidence in its terminal when its wait ended')
+        ? active
+        : await toolAll('step', { actions: [] });
+      assert.match(background, /was awaiting completion evidence in its terminal when its wait ended/);
+      controller.setTimeouts({ maxBlockMs: 5000 });
+      fs.writeFileSync(release, '');
+      const late = await toolAll('listen');
+      assert.match(late, /exited with 0/);
+      assert.match(late, /Output, its end:/);
+      assert.match(late, /RELAY-END/);
+      await tool('end', { summary: 'Command status checked.' });
+    } finally {
+      fs.writeFileSync(release, '');
+      await sleep(100);
+      fs.rmSync(release, { force: true });
+      controller.setTimeouts({ maxBlockMs: defaultConfig.maxBlockMs });
+      controller.setConfirmCommands(false);
+    }
+  }
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');

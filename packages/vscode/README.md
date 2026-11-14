@@ -1,5 +1,19 @@
 # AI Pair
 
+Command reports distinguish approval from waiting for completion, and retain
+commands left in the background after the wait limit. A later observed finish
+reports the original run ID, exit status and bounded output tail. A timeout
+means completion was not observed; it does not prove the command is still
+alive or succeeded. **Show terminal** opens that run's owned terminal.
+
+For terminals identified as Bash, multi-line commands use a one-line encoded
+submission to avoid a reproduced VS Code shell-integration failure with
+heredocs and pipes. Approval and reports show your original command. Other
+shells keep their original submission behavior. If the shell is not yet known,
+a multi-line command waits up to 500 ms for identification. If it remains
+unknown, Pair submits the original command. Bash trap/debug context and
+error line numbers can differ; normal shell state and exit status are kept.
+
 Use the hand button to the left of Reply to request a chance to interject. The agent
 finishes the current speech and safe action before handing you the floor. Press
 it again while waiting to lower your hand; once the floor is yours, press it

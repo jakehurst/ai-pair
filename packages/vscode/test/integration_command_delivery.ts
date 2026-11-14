@@ -1,6 +1,9 @@
 // Exercises command-result wakeup with a real player and terminal in VS Code.
 import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
 import * as vscode from 'vscode';
+import { defaultConfig } from '@ai-pair/core';
+import { REPORT_SCHEMA } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 
 /** Waits for a condition without advancing the controller's heartbeat. */
@@ -38,6 +41,7 @@ export async function commandDeliveryPaths(api: Api): Promise<void> {
   const confirmCommands = vscode.workspace.getConfiguration('aiPair').get<boolean>('confirmCommands', true);
   const previousTrace = controller.trace;
   const traces: string[] = [];
+  let releaseFile: string | undefined;
   controller.trace = (line) => {
     traces.push(line);
     previousTrace?.(line);
@@ -121,16 +125,122 @@ export async function commandDeliveryPaths(api: Api): Promise<void> {
     await controller.end();
     console.log('CommandDelivery NoQuietWake: empty step waited for later work after quiet completion');
 
+    // Verify the Bash workaround through the actual extension and shell integration.
+    await controller.start('Bash heredoc command');
+    const identifyFirst = await within(controller.step([{ run: 'printf shell-ready', wait: 5 }]), 'shell probe did not start');
+    const identifySecond = await within(controller.step([]), 'shell probe did not complete');
+    const identified = [identifyFirst, identifySecond].flatMap((result) => result.batches.flatMap((batch) => batch.runs ?? []))[0];
+    assert.ok(identified, 'shell probe did not report a run');
+    const shellTerminal = vscode.window.terminals.find((terminal) => !originalTerminals.has(terminal));
+    if (process.platform === 'linux') {
+      assert.ok(shellTerminal, 'the Bash probe did not create a terminal');
+      await waitFor(() => shellTerminal.state.shell === 'bash', 'Linux integration did not identify the Bash shell');
+    }
+    if (process.platform === 'linux' || identified.shell === 'bash') {
+      const command = "cat <<'PAIR_END' | tail -n 1\nalpha\nbeta\nPAIR_END";
+      const initial = await within(controller.step([{ run: command, wait: 5 }]), 'heredoc did not start');
+      const completed = await within(controller.step([]), 'heredoc did not complete');
+      const observed = [initial, completed].flatMap((result) => result.batches.flatMap((batch) => batch.runs ?? []))[0];
+      assert.equal(observed?.exit_code, 0, 'Bash heredoc did not report its observed exit');
+      assert.equal(observed.shell, 'bash', 'the heredoc did not use the identified Bash shell');
+      assert.match(observed.output, /beta/, 'Bash heredoc output was not captured');
+      assert.equal(observed.command, command, 'report changed the approved command');
+      const controls = "printf '%s' 'a\\b\r\u0001' | od -An -tx1\n";
+      const submitted = await within(controller.step([{ run: controls, wait: 5 }]), 'control-character command did not start');
+      const finished = await within(controller.step([]), 'control-character command did not finish');
+      const result = [submitted, finished].flatMap((reply) => reply.batches.flatMap((batch) => batch.runs ?? []))[0];
+      assert.equal(result?.exit_code, 0);
+      assert.equal(result.command, controls);
+      assert.match(result.output, /61 5c 62 0d 01/);
+    }
+    await controller.end();
+
+    // A returned report from a previous session must not be revived in a replacement session.
+    await controller.start('predecessor report');
+    controller.userMessage('predecessor-only message');
+    const predecessor = await within(controller.listen(), 'predecessor report did not arrive');
+    assert.ok(predecessor.events.some((event) => event.kind === 'message' && event.text === 'predecessor-only message'));
+    await controller.end();
+    const replacementStart = await controller.start('replacement report');
+    assert.match(predecessor.sessionId ?? '', /\S/);
+    assert.match(replacementStart.sessionId ?? '', /\S/);
+    assert.notEqual(predecessor.sessionId, replacementStart.sessionId);
+    // Exercise the wire representation rather than preserving object identity.
+    // oxlint-disable-next-line unicorn/prefer-structured-clone
+    controller.restore(REPORT_SCHEMA.parse(JSON.parse(JSON.stringify(predecessor))));
+    controller.setTimeouts({ maxBlockMs: 250 });
+    const replacement = await within(controller.listen(), 'replacement listen did not return');
+    assert.equal(replacement.waiting, true);
+    assert.ok(!replacement.events.some((event) => event.kind === 'message' && event.text === 'predecessor-only message'));
+    await controller.end();
+
+    if (process.platform === 'linux') {
+      // Observe approval, running, and an eventually truncated output tail through real VS Code.
+      controller.setConfirmCommands(true);
+      await controller.start('approval and late output');
+      const release = `/tmp/ai-pair-62-native-${process.pid}`;
+      releaseFile = release;
+      fs.rmSync(release, { force: true });
+      const command = `while [ ! -f '${release}' ]; do sleep 0.05; done; head -c 52000 /dev/zero | tr '\\0' X; printf LATE-END`;
+      const initial = await controller.step([{ run: command, wait: 0.3 }]);
+      assert.equal(initial.submitted?.status, 'playing');
+      await waitFor(
+        () => api.history().some((event) => event.type === 'run' && event.command === command && event.phase === 'confirm'),
+        'command approval was not shown',
+      );
+      const approval = await within(controller.listen(), 'approval report did not return');
+      const pending = approval.commands?.find((item) => item.command === command);
+      assert.equal(pending?.phase, 'confirm');
+      controller.decideRun(pending.id, true);
+      await waitFor(
+        () => api.history().some((event) => event.type === 'run' && event.command === command && event.phase === 'running'),
+        'approved command did not start',
+      );
+      const active = await within(controller.listen(), 'active command report did not return');
+      assert.equal(
+        active.commands?.some((item) => item.id === pending.id && item.phase === 'running'),
+        true,
+      );
+      const alreadyReported = active.batches.some(
+        (batch) => batch.runs?.some((run) => run.id === pending.id && run.running === true) === true,
+      );
+      if (!alreadyReported) {
+        const background = await within(controller.step([]), 'background command did not report');
+        assert.ok(background.batches.some((batch) => batch.runs?.some((run) => run.id === pending.id && run.running === true) === true));
+      }
+      controller.setTimeouts({ maxBlockMs: 5000 });
+      fs.writeFileSync(release, '');
+      const completion = await within(controller.listen(), 'late command output was not delivered');
+      const news = completion.events.find((event) => event.kind === 'command_exit' && event.id === pending.id);
+      assert.ok(news && news.kind === 'command_exit');
+      assert.equal(news.exit_code, 0);
+      assert.equal(news.truncated, true);
+      assert.match(news.output, /LATE-END$/);
+      assert.ok(news.output.length <= 12_000);
+      await controller.end();
+      fs.rmSync(release, { force: true });
+      releaseFile = undefined;
+      controller.setConfirmCommands(false);
+    }
+
     console.log('CommandDelivery: listen and empty step deliver command output once while later work plays');
   } catch (error) {
     console.error('CommandDelivery trace:', JSON.stringify(traces));
     throw error;
   } finally {
+    if (releaseFile !== undefined) fs.writeFileSync(releaseFile, '');
     controller.endSession();
+    if (releaseFile !== undefined) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 100);
+      });
+      fs.rmSync(releaseFile, { force: true });
+    }
     for (const terminal of vscode.window.terminals) {
       if (!originalTerminals.has(terminal)) terminal.dispose();
     }
     controller.trace = previousTrace;
+    controller.setTimeouts({ maxBlockMs: defaultConfig.maxBlockMs });
     controller.setConfirmCommands(confirmCommands);
     await waitFor(() => vscode.window.terminals.every((terminal) => originalTerminals.has(terminal)), 'test terminals did not close');
   }

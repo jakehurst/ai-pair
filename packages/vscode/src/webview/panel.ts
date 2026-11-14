@@ -429,7 +429,7 @@ function setOutcome(el: Element, outcome: Element, phase: RunPhase, exitCode: nu
   } else if (phase === 'background') {
     outcome.textContent = 'still running';
   } else if (exitCode === undefined) {
-    outcome.textContent = phase === 'exited' ? 'ended' : 'done';
+    outcome.textContent = 'status unknown';
   } else if (exitCode === 0) {
     outcome.classList.add('ok');
     outcome.textContent = 'exit 0';

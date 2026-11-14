@@ -9,6 +9,11 @@ import { timings } from './timings';
 
 /** The tail keeps this many times the output it reports, so a cut at its start loses nothing it shows. */
 const TAIL_SLACK = 4;
+/** The first printable ASCII code and DEL control code. */
+const ASCII_PRINTABLE = 32;
+const ASCII_DEL = 127;
+/** Radix used by Bash hexadecimal escapes. */
+const HEX_RADIX = 16;
 
 interface Owned {
   terminal: vscode.Terminal;
@@ -54,6 +59,51 @@ function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promi
   });
 }
 
+/** Waits briefly for authoritative shell identity, or stops when the terminal closes or the run is interrupted. */
+function shellIdentity(terminal: vscode.Terminal, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted || terminal.state.shell !== undefined || terminal.exitStatus !== undefined) {
+    return Promise.resolve(terminal.exitStatus !== undefined);
+  }
+  return new Promise((resolve) => {
+    const cleanup: Array<() => void> = [];
+    let settled = false;
+    function done(closed: boolean): void {
+      if (settled) return;
+      settled = true;
+      for (const undo of cleanup) undo();
+      resolve(closed);
+    }
+    const state = vscode.window.onDidChangeTerminalState((changed) => {
+      if (changed === terminal && terminal.state.shell !== undefined) done(false);
+    });
+    cleanup.push(() => {
+      state.dispose();
+    });
+    const close = vscode.window.onDidCloseTerminal((changed) => {
+      if (changed === terminal) done(true);
+    });
+    cleanup.push(() => {
+      close.dispose();
+    });
+    const timer = setTimeout(() => {
+      done(false);
+    }, timings.shellIdentityMs);
+    cleanup.push(() => {
+      clearTimeout(timer);
+    });
+    function abort(): void {
+      done(false);
+    }
+    signal.addEventListener('abort', abort, { once: true });
+    cleanup.push(() => {
+      signal.removeEventListener('abort', abort);
+    });
+    // Close the gap between the first state read and subscribing to changes.
+    if (terminal.exitStatus !== undefined) done(true);
+    else if (signal.aborted || terminal.state.shell !== undefined) done(false);
+  });
+}
+
 /**
  * Resolves `false` when the wait is over or playback is interrupted (specs/Terminals.tla, `StopWaiting`). The signal
  * hasn't fired yet: `run` returned `notStarted` for one that had, and nothing awaits between that check and this.
@@ -83,6 +133,24 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+/** Encodes multiline Bash input without submitting physical newlines (specs/CommandEncoding.tla, Submit). */
+export function commandForShell(command: string, shell: string | undefined): string {
+  if (shell !== 'bash' || !command.includes('\n') || command.includes('\0')) return command;
+  let encoded = '';
+  for (const character of command) {
+    // Only ASCII control codes need numeric inspection; all other characters pass through.
+    // oxlint-disable-next-line unicorn/prefer-code-point
+    const code = character.charCodeAt(0);
+    if (character === "'") encoded += "\\'";
+    else if (character === '\\') encoded += '\\\\';
+    else if (character === '\n') encoded += '\\n';
+    else if (character === '\r') encoded += '\\r';
+    else if (code < ASCII_PRINTABLE || code === ASCII_DEL) encoded += `\\x${code.toString(HEX_RADIX).padStart(2, '0')}`;
+    else encoded += character;
+  }
+  return `builtin eval -- $'${encoded}'`;
 }
 
 /** Runs the agent's commands in VS Code terminals with shell integration, and collects their output. */
@@ -140,14 +208,25 @@ export class PairTerminals implements vscode.Disposable {
         return { output: '[output not captured: this terminal has no shell integration]' };
       }
 
+      // specs/ShellIdentity.tla: wait only for unknown identity on multiline input; never guess a shell.
+      const closedBeforeStart =
+        command.includes('\n') && terminal.state.shell === undefined ? await shellIdentity(terminal, options.signal) : false;
+      if (options.signal.aborted) {
+        this.diagnostic({ kind: 'command', id: options.id, phase: 'abort' });
+        owned.busy = false;
+        return { output: '', notStarted: true };
+      }
+      if (closedBeforeStart || terminal.exitStatus !== undefined) throw new Error('Terminal closed before command submission');
+
       // specs/Terminals.tla, `ExecuteCommand`. Its end event comes through VS Code's event loop, so the
       // listeners below are in place before it can fire.
-      const execution = integration.executeCommand(command);
+      const execution = integration.executeCommand(commandForShell(command, terminal.state.shell));
       owned.execution = execution;
       this.diagnostic({ kind: 'command', id: options.id, phase: 'start' });
 
       // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`CloseTerminal`), and the terminal is free.
       let exitCode: number | undefined;
+      let closed = false;
       const ended = new Promise<void>((resolve) => {
         const listeners: vscode.Disposable[] = [];
         function done(): void {
@@ -165,6 +244,7 @@ export class PairTerminals implements vscode.Disposable {
           }),
           vscode.window.onDidCloseTerminal((t) => {
             if (t === terminal) {
+              closed = true;
               this.diagnostic({ kind: 'command', id: options.id, phase: 'closed' });
               done();
             }
@@ -189,7 +269,13 @@ export class PairTerminals implements vscode.Disposable {
       if (finished) await Promise.race([drained, delay(timings.drainMs)]);
       else this.diagnostic({ kind: 'command', id: options.id, phase: options.signal.aborted ? 'abort' : 'timeout' });
 
-      const outcome = outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended });
+      const outcome = outcomeOf(output, {
+        shell: terminal.state.shell,
+        finished,
+        exitCode: () => exitCode,
+        closed: () => closed,
+        ended: ended.then(() => Promise.race([drained, delay(timings.drainMs)])),
+      });
       return outcome;
     } catch (error) {
       this.diagnostic({ kind: 'command', id: options.id, phase: 'failed' });

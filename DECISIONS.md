@@ -1178,6 +1178,68 @@ later pause acknowledgement when a timeout already reported meaningful work;
 an undo after such a report is itself a reportable reversal. Keep generation
 checks when restoring canceled reports and consider all edited files.
 
+## Command status and multi-line completion tracking
+
+Keep physical execution identity, terminal reuse and bounded output in
+PairTerminals. Player owns its current and unobserved-background command
+metadata; this is logical report state, not another physical busy flag.
+Controller projects those facts with its confirmation state. Late completion
+callbacks capture the originating session: suspended same-session work can be
+reported after resume, while ended or replaced sessions ignore it. Completion
+news is noninterrupting, replayable, and wakes listen/empty-step without
+pretending another batch finished. Use original run IDs for correlation.
+Persist an immutable session UUID and stamp every production report with its
+origin. Wire version 6 requires it. Reject missing or mismatched origins before
+any restore mutation, including closed-session resurrection. This protects all
+replayed facts, not just late command events, after JSON serialization. Legacy
+saved sessions receive a fresh ID; current saved sessions keep theirs on revive.
+
+A timeout is absence of observed completion. An exact VS Code execution end
+supplies exit status; terminal closure supplies only a closed/unknown result.
+The final output tail comes from the terminal owner's existing bounded reader
+after bounded drain. Neither event authorizes a foreign execution or assumes
+that the original process succeeded.
+
+Native VS Code1.146/Bash tests independently reproduced a heredoc pipeline
+writing its output file while its returned execution produced neither read
+output nor an end event. A one-line Bash builtin-eval submission returned the
+matching end and output, including failure status and same-shell cwd/export
+controls. Apply this workaround only to positively identified Bash terminals.
+Encode quotes, backslashes, newlines and control characters without command
+substitution or temporary scripts. Keep original command text in approval,
+reports and history. Eval changes trap/debug/error-context observability;
+those diagnostic differences are an explicit limit, not exact equivalence.
+Unknown shells keep their existing behavior and honest completion status.
+Shell identity can arrive after shell integration: a native first-command probe
+observed two unwrapped submissions in 30 fresh Bash terminals. Wait up to 500 ms
+for authoritative identity only for multiline input whose shell is unknown;
+known shells and single-line input do not wait. Cancellation or terminal closure
+stops submission. If identity remains unknown at the deadline, submit the
+original input; the wait is best effort, not a guarantee. A repeat probe saw all
+30 submissions identified and wrapped. Separately, stock VS Code 1.146 can
+associate a wrapped prompt with the wrong execution object at a narrow terminal
+width. Pair retains exact identity checks; an isolated candidate upstream fix
+passed the reproduction, but is not installed or a stock-host release check.
+
+The new command-exit event is a breaking wire-union extension. Bump the
+editor-relay protocol to 6 so older peers reject the connection clearly rather
+than failing to parse a live report. Local Audio's panel protocol is unchanged.
+
+## Packaged integration fixture ownership
+
+VS Code attributes a test module's API facade by the extension root containing
+that module. Native A/B profiles proved that a packaged test outside the root
+never reached its stubbed input handler, while the same fixture inside the
+root did. Generate fixture bundles under their corresponding selected
+extension, including the audio companion, and clean only mktemp-owned fixture
+directories. Keep isolated profiles and test credentials separate from users.
+
+Relocated fixtures cannot derive workspace resources from their new
+`__dirname`. Pass the pinned GPU test Node path explicitly from the launcher,
+with the old development fallback for direct runs. Source-mapped coverage uses
+development bundles; packaged functional probes establish shipped behavior
+separately. No speech-provider or approval-policy change is involved.
+
 ## Marketplace publishing
 
 Publish AI Pair and AI Pair Local Audio to the VS Code Marketplace from

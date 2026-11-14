@@ -1,6 +1,8 @@
 // The protocol state machine: sessions, the batch queue, and reports. Playing a batch is player.ts.
 // See PROTOCOL.md for the rules implemented here.
 
+import { randomUUID } from 'node:crypto';
+
 import {
   spokenSay,
   CURSOR_MARKER,
@@ -89,6 +91,7 @@ interface CursorAnchor {
 
 /** A session as the window saves it across a reload, as JSON: what it needs to carry on (#25). */
 export interface SavedSession {
+  sessionId?: string;
   task?: string;
   scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection' | 'allowAllCommands'> & { allowedCommands: string[] };
   finished: BatchResult[];
@@ -103,6 +106,7 @@ export function isSavedSession(v: unknown): v is SavedSession {
 }
 
 interface Session {
+  sessionId: string;
   task?: string;
   speechReminder: SpeechReminder;
   scene: Scene;
@@ -165,7 +169,10 @@ interface Call {
  * the existing conservative treatment. An event it holds for is `Interrupt` in specs/ListenGrace.tla.
  */
 function interrupting(e: PendingEvent): boolean {
-  return e.kind !== 'edit' || ('before' in e ? e.interrupted === true : e.by === 'programmer' || e.interrupted === true);
+  return (
+    e.kind !== 'command_exit' &&
+    (e.kind !== 'edit' || ('before' in e ? e.interrupted === true : e.by === 'programmer' || e.interrupted === true))
+  );
 }
 
 /** Returns whether an event is an edit since the last report, which awaits its diff. */
@@ -190,7 +197,13 @@ function callReady(session: Session, call: Call): boolean {
     case 'step':
       // A discarded step waits for queued batches, including the one an interrupt left playing (#219).
       // specs/CommandDelivery.tla, PromptRunReady: an empty step can return command news before later work.
-      if (call.batch === undefined) return session.queue.length === 0 || session.finished.some((r) => (r.runs?.length ?? 0) > 0);
+      if (call.batch === undefined) {
+        return (
+          session.queue.length === 0 ||
+          session.events.some((e) => e.kind === 'command_exit') ||
+          session.finished.some((r) => (r.runs?.length ?? 0) > 0)
+        );
+      }
       if (call.batch.result?.status === 'discarded') return session.queue.length === 0;
       // A step's batch is done, or plays next (`AtHead`): the step returns once the one before it has (#150).
       return call.batch.state === 'done' || session.queue[0] === call.batch;
@@ -199,7 +212,7 @@ function callReady(session: Session, call: Call): boolean {
     default:
       // The last kind, `listen`: a new kind would widen `call.kind` here and fail the `satisfies`.
       call.kind satisfies 'listen';
-      if (session.held.length > 0) return true;
+      if (session.held.length > 0 || session.events.some((e) => e.kind === 'command_exit')) return true;
       // specs/CommandDelivery.tla, PromptRunReady: command output is actionable even while later batches play.
       if (session.finished.some((r) => r.status !== 'completed' || (r.runs?.length ?? 0) > 0)) return true;
       // Other completed batches and noninterrupting edits stay quiet (specs/ListenGrace.tla, `QuietNews`).
@@ -346,14 +359,14 @@ export class Controller {
         pointFar: false,
         allowedCommands: new Set(),
       };
-      this.open(scene, task);
+      const opened = this.open(scene, task);
       this.diagnostic({ kind: 'session', state: 'active' });
       this.reportPause();
       this.trace?.(`session started${task === undefined ? '' : `: ${task}`}`);
       this.panel.post({ type: 'session', active: true, task, ...(rules !== undefined && rules.length > 0 ? { rules } : {}) });
       this.panel.post({ type: 'attention', state: 'none' });
       this.render();
-      return { batches: [], events: [], turn: scene.turn };
+      return { batches: [], events: [], turn: scene.turn, sessionId: opened.sessionId };
     });
   }
 
@@ -381,10 +394,11 @@ export class Controller {
   }
 
   /** Opens a new session, the window's from now on. */
-  private open(scene: Scene, task?: string): Session {
+  private open(scene: Scene, task?: string, sessionId?: string): Session {
     const timeline = new Timeline(this.pauseReasons.size > 0);
     const lines = LineIds.editor();
     const s: Session = {
+      sessionId: sessionId ?? randomUUID(),
       task,
       scene,
       speechReminder: new SpeechReminder(),
@@ -405,6 +419,13 @@ export class Controller {
           this.render();
         },
         confirm: (id, command) => this.confirm(s, id, command),
+        commandExited: (event) => {
+          // specs/CommandTracking.tla, End: a predecessor cannot publish into a successor.
+          if (this.session !== s || s.ended) return;
+          s.events.push(event);
+          this.panel.post({ type: 'run', id: event.id, command: event.command, phase: 'exited', exitCode: event.exit_code });
+          this.update();
+        },
         lines,
       }),
       queue: [],
@@ -447,6 +468,7 @@ export class Controller {
     if (!session || session.ended) return undefined;
     const { root, turn, cursor, selection } = session.scene;
     return {
+      sessionId: session.sessionId,
       task: session.task,
       scene: {
         root,
@@ -478,7 +500,11 @@ export class Controller {
       // specs/CommandApproval.tla, Suspend and Resume: preserve only an explicit grant from the saved session.
       allowAllCommands: saved.scene.allowAllCommands === true,
     };
-    const session = this.open(scene, saved.task);
+    const session = this.open(
+      scene,
+      saved.task,
+      typeof saved.sessionId === 'string' && saved.sessionId !== '' ? saved.sessionId : undefined,
+    );
     session.suspended = true;
     this.diagnostic({ kind: 'session', state: 'suspended' });
     this.reportPause();
@@ -611,6 +637,8 @@ export class Controller {
     // and closes the session again (#60).
     const session = this.session ?? this.closed;
     if (!session) return;
+    // specs/CommandTracking.tla, Restore: a report belongs only to its originating session.
+    if (report.sessionId !== session.sessionId) return;
     if (!this.session) {
       session.ended = true;
       this.session = session;
@@ -1065,7 +1093,7 @@ export class Controller {
   calibrate(passage: Passage, arm: (passage: Passage) => boolean): Report {
     const session = this.requireSession();
     if (!arm(passage)) throw new ToolError('calibration_busy', 'A calibration is already under way in the Pair panel.');
-    return { batches: [], events: [], turn: session.scene.turn };
+    return { batches: [], events: [], turn: session.scene.turn, sessionId: session.sessionId };
   }
 
   /**
@@ -1274,6 +1302,7 @@ export class Controller {
         events: [],
         turn: session.scene.turn,
         commentaryChanged: { noticeId: session.commentaryGeneration },
+        sessionId: session.sessionId,
       };
       if (this.pauseReasons.size > 0 || this.attention === 'granted') {
         report.paused = [...this.pauseReasons, ...(this.attention === 'granted' ? ['attention' as const] : [])];
@@ -1459,7 +1488,12 @@ export class Controller {
       session.staleReported = true;
     }
 
-    const report: Report = { batches, events, turn: session.scene.turn };
+    const report: Report = { batches, events, turn: session.scene.turn, sessionId: session.sessionId };
+    const commands: NonNullable<Report['commands']> = [...session.player.backgroundCommands];
+    const confirming = session.confirming;
+    if (confirming !== undefined) commands.push({ id: confirming.id, command: confirming.command, phase: 'confirm' });
+    else if (session.player.command !== undefined) commands.push(session.player.command);
+    if (commands.length > 0) report.commands = commands;
     if (submitted && submitted.state !== 'done') report.submitted = { id: submitted.id, status: submitted.state };
     if (waiting) report.waiting = true;
     // The agent's batches are held: it's told why, so it can say so or wait (#149).

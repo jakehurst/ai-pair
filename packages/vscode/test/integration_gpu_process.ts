@@ -23,7 +23,7 @@ export async function gpuProcessPaths(): Promise<void> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-pair-gpu-ipc-'));
   const model = path.join(directory, 'model');
   const versionFile = path.join(directory, 'version');
-  const node = path.resolve(__dirname, '../../audio-ui/dist/speech-gpu/node');
+  const node = process.env.AI_PAIR_TEST_GPU_NODE ?? path.resolve(__dirname, '../../audio-ui/dist/speech-gpu/node');
   await fs.mkdir(model);
   await fs.writeFile(
     path.join(directory, 'gpu_worker.mjs'),

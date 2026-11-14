@@ -783,7 +783,7 @@ describe('where the controller and the player meet', () => {
     expect(editor.state).toBe('running');
 
     const report = await until(controller.step([]));
-    expect(report.batches).toEqual([
+    expect(report.batches.map(({ runs, ...batch }) => ({ ...batch, runs: runs?.map(({ id: _id, ...run }) => run) }))).toEqual([
       {
         id: 1,
         status: 'completed',

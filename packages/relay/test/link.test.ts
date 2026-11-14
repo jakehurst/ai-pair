@@ -95,7 +95,7 @@ const DIR = fakes.dir;
 const FIRST_PORT = 1000;
 
 /** A report, built by its schema, as the editor answers. */
-const REPORT = REPORT_SCHEMA.parse({ batches: [], events: [], turn: 'agent' });
+const REPORT = REPORT_SCHEMA.parse({ sessionId: 'session-1', batches: [], events: [], turn: 'agent' });
 
 vi.mock('ws', () => ({ default: fakes.FakeSocket }));
 vi.mock('node:fs', () => ({

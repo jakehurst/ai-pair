@@ -311,7 +311,7 @@ describe('the variants each part can take', () => {
   it('says a run is still running, or that its exit code is unknown, and fences output that has backticks', () => {
     const run = { command: 'npm test', output: 'a ``` b' };
     const running = renderReport(report({ batches: [{ id: 1, status: 'completed', runs: [{ ...run, running: true }] }] }), 'step');
-    expect(running).toMatch(/still running in its terminal/);
+    expect(running).toMatch(/awaiting completion evidence in its terminal/);
     expect(running).toContain('````\na ``` b\n````');
     const unknown = renderReport(report({ batches: [{ id: 1, status: 'completed', runs: [run] }] }), 'step');
     expect(unknown).toMatch(/exit code unknown/);
@@ -420,7 +420,7 @@ describe('every field', () => {
       'unsaved-error-1',
       'Batch 102 interrupted',
       'command-2',
-      'still running',
+      'awaiting completion evidence',
       'Batch 103 is queued',
       'action 4',
       'rejected-action',
@@ -501,4 +501,18 @@ it('explains a live commentary change during the agent turn', () => {
   expect(text).toContain('commentary preference changed');
   expect(text).toContain('Quiet');
   expect(text).toContain('listen');
+});
+
+it('distinguishes pending approval, running work, and closed terminals', () => {
+  const pending = renderReport(report({ waiting: true, commands: [{ id: 7, command: 'build', phase: 'confirm' }] }), 'listen');
+  expect(pending).toContain("awaiting the programmer's approval");
+  expect(pending).not.toContain('Nothing has happened');
+  const active = renderReport(report({ waiting: true, commands: [{ id: 7, command: 'build', phase: 'running' }] }), 'listen');
+  expect(active).toContain('awaiting completion evidence');
+  expect(renderReport(report({ waiting: true, commands: [{ id: 7, command: 'build', phase: 'running' }] }), 'step')).toContain(
+    'Carry on as usual',
+  );
+  const closed = renderReport(report({ events: [{ kind: 'command_exit', id: 7, command: 'build', output: '', closed: true }] }), 'listen');
+  expect(closed).toContain('terminal closed; exit status unknown');
+  expect(closed).not.toContain('exited with 0');
 });

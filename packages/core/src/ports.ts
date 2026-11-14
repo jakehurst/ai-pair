@@ -60,19 +60,28 @@ export type CommandDiagnostic =
   | { kind: 'command'; id: number; phase: 'end'; exitCode?: number }
   | { kind: 'command'; id: number; phase: 'start' | 'timeout' | 'abort' | 'closed' | 'untracked' | 'failed' };
 
+/** The final bounded output after a matching end or terminal closure. */
+export interface CommandCompletion {
+  output: string;
+  exitCode?: number;
+  truncated?: true;
+  closed?: true;
+}
+
 /** What a command produced in the terminal, and how it ended. */
 export interface CommandOutcome {
-  /** Absent while still running, or when the terminal couldn't report it. */
+  /** Absent while completion is unobserved, or when no exit code was reported. */
   exitCode?: number;
   output: string;
   truncated?: boolean;
+  closed?: true;
   running?: boolean;
   /** The terminal's shell, e.g. `pwsh` or `zsh`, when it's known. */
   shell?: string;
   /** Interrupted before the command was sent to the terminal. */
   notStarted?: boolean;
-  /** For a command still running: resolves when it ends or its terminal closes, with its exit code if the terminal reported one; never rejects. */
-  exited?: Promise<number | undefined>;
+  /** Resolves on a matching end or terminal close with the bounded final output; never rejects. */
+  exited?: Promise<CommandCompletion>;
 }
 
 /** How to run a command: where, how long to wait, and the signal that stops waiting. */

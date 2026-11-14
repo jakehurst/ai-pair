@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { EDITOR_MESSAGE_SCHEMA, RELAY_MESSAGE_SCHEMA, type EditorMessage, type RelayMessage } from './schemas';
 
 /** The wire protocol's version; a relay and an editor must agree on it. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** A WebSocket frame's data, as `ws` hands it over with no `binaryType` set: one Buffer (#180). */
 export type Frame = Buffer;

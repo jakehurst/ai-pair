@@ -839,7 +839,7 @@ describe('the run box (specs/RunBox.tla)', () => {
   it.each([
     ['declined', undefined, 'skipped', []],
     ['background', undefined, 'still running', []],
-    ['done', undefined, 'done', []],
+    ['done', undefined, 'status unknown', []],
     ['done', 0, 'exit 0', ['ok']],
     ['done', 130, 'stopped', []],
     ['done', 143, 'stopped', []],
@@ -860,7 +860,7 @@ describe('the run box (specs/RunBox.tla)', () => {
   it('says how a command left running ended, on its row', () => {
     runPhase('background');
     send({ type: 'run', id: 1, command: 'npm test', phase: 'exited' });
-    expect(element('history').querySelector('.run[data-run="1"] .outcome')?.textContent).toBe('ended');
+    expect(element('history').querySelector('.run[data-run="1"] .outcome')?.textContent).toBe('status unknown');
     send({ type: 'run', id: 1, command: 'npm test', phase: 'exited', exitCode: 1 });
     expect(element('history').querySelector('.run[data-run="1"] .outcome')?.textContent).toBe('exit 1');
     send({ type: 'run', id: 9, command: 'gone', phase: 'exited', exitCode: 0 });

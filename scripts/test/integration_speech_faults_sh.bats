@@ -16,7 +16,7 @@ FAKE
   cat >"${BATS_TEST_TMPDIR}/bin/code" <<'FAKE'
 #!/bin/bash
 printf '%s\n' "$*" >>"${RECORD}"
-printf '%s %s %s\n' "${PULSE_SERVER}" "${PIPEWIRE_REMOTE}" "${NODE_V8_COVERAGE:-}" >>"${RECORD}.env"
+printf '%s %s %s %s\n' "${PULSE_SERVER}" "${PIPEWIRE_REMOTE}" "${NODE_V8_COVERAGE:-}" "${AI_PAIR_TEST_GPU_NODE:-}" >>"${RECORD}.env"
 if [[ "${FAIL_CODE:-}" == 1 ]]; then exit 7; fi
 FAKE
   chmod +x "${BATS_TEST_TMPDIR}/bin/code"
@@ -71,4 +71,38 @@ FAKE
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode"
   [ "${status}" -eq 0 ]
   ! grep -q 'integration_restricted_runtime.js' "${RECORD}"
+}
+
+@test "SameExtension, NoLeftovers: loads each speech fixture from its development extension" {
+  local packaged="${BATS_TEST_TMPDIR}/packaged"
+  mkdir -p "${packaged}"
+  run bash "${ROOT}/packages/vscode/scripts/integration_speech_faults.sh" \
+    "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
+    "${BATS_TEST_TMPDIR}/bin/code" "${packaged}"
+  [ "${status}" -eq 0 ]
+  while IFS= read -r line; do
+    local extension test_path
+    extension="$(sed -n 's/.*--extensionDevelopmentPath=\([^ ]*\).*/\1/p' <<<"${line}")"
+    test_path="$(sed -n 's/.*--extensionTestsPath=\([^ ]*\).*/\1/p' <<<"${line}")"
+    [[ "${test_path}" == "${extension}"/*/integration_*.js ]]
+    [ ! -e "${test_path}" ]
+  done <"${RECORD}"
+}
+
+@test "EventuallyCleaned: removes a packaged speech fixture when the extension host fails" {
+  local packaged="${BATS_TEST_TMPDIR}/failing-packaged"
+  mkdir -p "${packaged}"
+  FAIL_CODE=1 run bash "${ROOT}/packages/vscode/scripts/integration_speech_faults.sh" \
+    "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
+    "${BATS_TEST_TMPDIR}/bin/code" "${packaged}"
+  [ "${status}" -ne 0 ]
+  [ -z "$(find "${packaged}" -mindepth 1 -maxdepth 1 -print -quit)" ]
+}
+
+@test "passes the workspace GPU runtime path to relocated fixtures" {
+  run bash "${ROOT}/packages/vscode/scripts/integration_speech_faults.sh" \
+    "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
+    "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode"
+  [ "${status}" -eq 0 ]
+  grep -Fq "${ROOT}/packages/audio-ui/dist/speech-gpu/node" "${RECORD}.env"
 }

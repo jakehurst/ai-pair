@@ -48,6 +48,9 @@ for arg in "$@"; do
 done
 printf '%s\n' "$@" >"${RECORD}"
 env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME|TMPDIR|AI_PAIR_COMPANION_RESTART|PULSE_SERVER|PIPEWIRE_REMOTE)=' >"${ENV_RECORD}" || true
+if [[ "${FAIL_MAIN:-}" == 1 && -z "${AI_PAIR_COMPANION_RESTART:-}" ]]; then
+  exit 7
+fi
 if [[ -n "${AI_PAIR_COMPANION_RESTART:-}" ]]; then
   cp "${RECORD}" "${RECORD}.${AI_PAIR_COMPANION_RESTART}"
   cp "${ENV_RECORD}" "${ENV_RECORD}.${AI_PAIR_COMPANION_RESTART}"
@@ -166,4 +169,28 @@ CODE
     [[ -f "${RECORD}.speech.catalog" && -f "${RECORD}.speech.restricted" ]]
   fi
   grep -q "^NODE_V8_COVERAGE=${COVERAGE_ROOT}/integration/v8\$" "${ENV_RECORD}.speech.companion"
+}
+
+@test "SameExtension, NoLeftovers: loads the packaged fixture under its extension and removes it" {
+  EXTENSION_PATH="${BATS_TEST_TMPDIR}/packaged-extension"
+  export EXTENSION_PATH
+  mkdir -p "${EXTENSION_PATH}"
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
+  [[ "${status}" -eq 0 ]]
+  local test_path
+  test_path="$(sed -n 's/^--extensionTestsPath=//p' "${RECORD}")"
+  [[ "${test_path}" == "${EXTENSION_PATH}"/*/integration.js ]]
+  [[ ! -e "${test_path}" ]]
+}
+
+@test "EventuallyCleaned: removes a packaged test bundle when the extension host fails" {
+  EXTENSION_PATH="${BATS_TEST_TMPDIR}/failing-extension"
+  export EXTENSION_PATH
+  mkdir -p "${EXTENSION_PATH}"
+  FAIL_MAIN=1 run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh"
+  [[ "${status}" -ne 0 ]]
+  local test_path
+  test_path="$(sed -n 's/^--extensionTestsPath=//p' "${RECORD}")"
+  [[ "${test_path}" == "${EXTENSION_PATH}"/*/integration.js ]]
+  [[ ! -e "${test_path}" ]]
 }

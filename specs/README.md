@@ -165,6 +165,9 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 80 |
 | `CommandDelivery.cfg` | queue bounded to two completions | holds | 84 |
+| `CommandTracking.cfg` | one execution, two session identities, late report and replay | holds | 18 |
+| `CommandEncoding.cfg` | two shell types, six abstract character classes | holds | 24 |
+| `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -1149,6 +1152,8 @@ Every invariant and property names the test that proves the code obeys it:
 
 ### `RunBox`: the panel's run box
 
+The model checks phase transitions, not the wording of an unknown exit status.
+
 One `run`: the phases `runCommand` in `packages/core/src/player.ts` posts, and
 the page's `case "run"` and `setActive` in `webview/panel.ts`. Every way a run
 ends posts a phase other than `confirm` and `running`, which clears the box:
@@ -1523,6 +1528,115 @@ Every invariant and property names the test that proves the code obeys it:
 | `AbsentShows` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `NewsSkipsGraceProp` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report. No test times a listen out with only an edit that interrupts nothing yet |
 
+### `IntegrationFixture`: test bundle ownership
+
+The native test harness puts each temporary bundle inside the selected
+extension root, so VS Code supplies the same extension API facade to both the
+test and the extension. A packaged extension and the companion can have roots
+different from the source workspace. The model abstracts the file system and
+assumes cleanup can run; it does not model abrupt process termination or a
+read-only extension directory. Weak fairness of `Build` and `Cleanup` requires
+an invocation to finish. The cleanup tests also cover an extension-host error.
+
+| Spec | Code |
+|---|---|
+| `Build`, `Launch`, `Cleanup` | `integration.sh` and `integration_speech_faults.sh` |
+
+| Mutation | Breaks |
+|---|---|
+| `PlaceInside = FALSE` | `SameExtension` |
+| `CleanupOwned = FALSE` | `NoLeftovers` |
+| Start with an invalid phase | `TypeOK` |
+| Remove build and cleanup fairness | `EventuallyCleaned` |
+
+| Invariant or property | Test |
+|---|---|
+| `TypeOK` | Bash shell tests |
+| `SameExtension`, `NoLeftovers` | `integration_sh.bats`: SameExtension, NoLeftovers: loads the packaged fixture under its extension and removes it; `integration_speech_faults_sh.bats`: SameExtension, NoLeftovers: loads each speech fixture from its development extension |
+| `EventuallyCleaned` | `integration_sh.bats`: EventuallyCleaned: removes a packaged test bundle when the extension host fails; `integration_speech_faults_sh.bats`: EventuallyCleaned: removes a packaged speech fixture when the extension host fails |
+
+### `CommandTracking`: observed completion and report origin
+
+This bounded model tracks one command, a possible replacement session, the
+terminal lease and one completion report. It distinguishes confirmation,
+foreground execution, background waiting and observed completion; a missing
+completion never becomes success. Restoring command news does not stale queued
+work, and an old session cannot publish or restore into its successor. The
+model abstracts terminal closure, bounded output, multiple simultaneous runs,
+actual shell events and UUID generation. The named tests cover those boundaries.
+Weak fairness of `Report` establishes progress once news exists.
+
+| Spec | Code |
+|---|---|
+| `Approve`, `Timeout` | `Player.runCommand` and terminal wait |
+| `End`, `Replace` | exact execution end/close and session identity guard |
+| `Report`, `Restore` | controller snapshot, report origin and `restore` |
+| `View` | controller's pending approval and player command projections |
+
+| Mutation | Breaks |
+|---|---|
+| `ExactEnd = FALSE` | `MatchingExecution` |
+| `SessionGuard = FALSE` | `SessionIsolated` |
+| `RestoreGuard = FALSE` | `RestoreIsolated` |
+| `KeepNews = FALSE` | `Conservation` |
+| `NoFalseSuccess = FALSE` | `NoInventedSuccess` |
+| `ViewUsesPhase = FALSE` | `AccurateView` |
+| `PreserveStale = FALSE` | `InformationalRestore` |
+| Give the initial session an invalid identity | `TypeOK` |
+| Remove report fairness | `EventuallyReported` |
+
+| Invariant or property | Test |
+|---|---|
+| `TypeOK` | protocol schemas and TypeScript |
+| `NoInventedSuccess`, `MatchingExecution` | `terminal.test.ts`: waits for a timed-out execution output stream to drain after its matching end |
+| `SessionIsolated`, `RestoreIsolated` | `controller.test.ts`: retains an observed background exit while suspended and rejects predecessor callbacks; does not restore a previous session command completion into a replacement session; `integration_command_delivery.ts`: rejects a wire-roundtripped predecessor report in a new session |
+| `Conservation`, `InformationalRestore` | `controller.test.ts`: restoring completion news does not stale later queued work |
+| `AccurateView`, `EventuallyReported` | `scripted_agent.e2e.test.ts`: distinguishes approval, pending execution and a later background completion; `integration_command_delivery.ts`: reports real approval and execution before a bounded late output tail |
+
+### `ShellIdentity`: bounded shell identification
+
+`ShellIdentity.tla` models one multiline submission with a known, delayed or
+unavailable shell identity. An unknown identity waits for a change or a bounded
+timeout; cancellation and terminal closure stop submission. The model abstracts
+the timer as a fair expiration and does not promise that identity will arrive.
+TLC checked 26 generated states, 18 distinct states and depth 4. Mutations that
+skip waiting, wrap every shell, submit after cancellation, add an invalid shell,
+or remove expiration fairness violate `WaitBeforeUnknown`, `WrapOnlyBash`,
+`NoSubmitAfterStop`, `TypeOK`, and `EventuallySettled`, respectively.
+
+| Property | Test |
+|---|---|
+| `WaitBeforeUnknown`, `WrapOnlyBash` | `terminal.test.ts`: delayed Bash identity and unavailable shell timeout; `integration_gap_paths.ts`: delayed identity and timeout with a real terminal |
+| `NoSubmitAfterStop` | `terminal.test.ts` and `integration_gap_paths.ts`: interruption and terminal closure during identification |
+| `EventuallySettled` | `terminal.test.ts`: unavailable shell timeout and known non-Bash immediate submission |
+
+### `CommandEncoding`: scoped Bash submission
+
+This is an abstract contract for one character class and shell choice, not a
+model of Bash parsing or the encoding algorithm. It checks the intended scope,
+payload and approval invariants; the real Bash comparison tests exercise quote,
+backslash, newline, Unicode, heredoc and exit behavior. The native VS Code
+integration test checks capture and an observed exit for Bash. Bash `eval` may
+change trap, stack and line-number observability. Unknown shells and input with
+a NUL are left unchanged. Weak fairness of `Submit` gives progress.
+
+| Spec | Code |
+|---|---|
+| `Submit` | `commandForShell`, called only for terminal submission |
+
+| Mutation | Breaks |
+|---|---|
+| `ExactEncode = FALSE` | `PayloadPreserved` (with `TypeOK` omitted), and `TypeOK` |
+| `ScopeBash = FALSE` | `ScopeBashOnly` |
+| Mark the approved command as changed | `ApprovalPreserved` |
+| Remove submit fairness | `EventuallySubmitted` |
+
+| Invariant or property | Test |
+|---|---|
+| `TypeOK`, `PayloadPreserved`, `ScopeBashOnly` | `terminal.test.ts`: encodes Bash multiline input on one physical line and leaves unsupported shells unchanged; `terminal_encoding.e2e.test.ts`: preserves command output and exit |
+| `ApprovalPreserved` | `integration_command_delivery.ts`: Bash heredoc and control-character commands retain their original text in the report |
+| `EventuallySubmitted` | `terminal_smoke_integration.ts`: native Bash heredoc captures output and observed exit |
+
 ### `CommandDelivery`: prompt command results
 
 `callReady` and `ready` in `packages/core/src/controller.ts` (#27). A
@@ -1780,7 +1894,9 @@ Every invariant names the test that proves the code obeys it:
 ### `Terminals`: running commands
 
 `packages/vscode/src/terminal.ts`: `acquire`, the wait for shell integration,
-the command, and what ends each wait.
+the command, and what ends each wait. The real foreign-execution fixture keeps
+a bounded, failure-only trace of terminal event identities and captured output;
+this diagnostic does not change the transitions modeled here.
 
 | Spec | Code |
 |---|---|
