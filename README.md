@@ -427,8 +427,11 @@ code --extensionDevelopmentPath="$PWD/packages/vscode" <a project folder>
 ### Releasing
 
 Follow the [release checklist](RELEASE.md), including the README and
-architecture review, paired artifacts, and verification evidence. The current
-`npm run release` script publishes the main extension; the companion and
+architecture review, paired artifacts, and verification evidence. Each change
+bumps the version in its pull request. On `main`, `npm run release` tags that
+version and pushes the tag; the
+[Publish workflow](.github/workflows/publish.yml) then publishes both
+extensions to the VS Code Marketplace and makes the GitHub release. The
 platform assets need separate checks.
 
 ## License

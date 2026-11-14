@@ -1,0 +1,129 @@
+# Publishes AI Pair and AI Pair Local Audio to the VS Code Marketplace, and makes the GitHub
+# release, when a version tag is pushed (#68). `npm run release` pushes that tag.
+#
+# The Marketplace trusts this workflow by name: the publisher mattyv has a Trusted Publishing
+# policy for mattyv/ai-pair and publish.yml, so vsce trades the job's OIDC token for a
+# short-lived Marketplace credential and no token is stored. Renaming this file, or moving the
+# publish step to another workflow, needs the policy changed with it.
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+# One release at a time, and never cancel one that has started publishing.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+# Speech runs on CPU; do not download unused CUDA provider binaries.
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
+jobs:
+  native:
+    uses: ./.github/workflows/native-audio.yml
+
+  # The build steps are those of build-vsix.yml's vsix job; keep the two in step.
+  publish:
+    needs: native
+    runs-on: ubuntu-latest
+    permissions:
+      # The GitHub release.
+      contents: write
+      # The OIDC token vsce trades for a Marketplace credential.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, to check that the tag is on main.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - name: Require a tag on main that matches both versions
+        id: version
+        shell: bash
+        run: |
+          version=$(node -p "require('./packages/vscode/package.json').version")
+          companion_version=$(node -p "require('./packages/audio-ui/package.json').version")
+          test "$version" = "$companion_version"
+          test "$GITHUB_REF_NAME" = "v$version"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Read the release notes from the changelog
+        shell: bash
+        run: |
+          awk -v heading="## ${{ steps.version.outputs.version }}" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' packages/vscode/CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          grep --quiet '[^[:space:]]' "$RUNNER_TEMP/notes.md"
+      - run: npm ci
+      - name: Install isolated GPU runtime
+        run: npm ci --prefix packages/audio-ui/gpu-runtime --workspaces=false --ignore-scripts
+      - name: Stage verified GPU Node runtime
+        shell: bash
+        run: |
+          curl --fail --location --proto '=https' --max-filesize 60000000 \
+            https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.xz \
+            --output "$RUNNER_TEMP/gpu-node.tar.xz"
+          printf '%s  %s\n' \
+            '1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce' \
+            "$RUNNER_TEMP/gpu-node.tar.xz" | sha256sum --check
+          mkdir -p packages/audio-ui/gpu-runtime/node_modules/.gpu-node
+          tar -xJf "$RUNNER_TEMP/gpu-node.tar.xz" \
+            -C packages/audio-ui/gpu-runtime/node_modules/.gpu-node --strip-components=1 \
+            node-v22.23.4-linux-x64/bin/node node-v22.23.4-linux-x64/LICENSE
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: audio-*-compile-only
+          path: ${{ runner.temp }}/native-audio
+          merge-multiple: true
+      - name: Require all universal companion helpers
+        shell: bash
+        run: |
+          for name in audio-darwin-x64 audio-darwin-arm64 audio-win32-x64.exe audio-win32-arm64.exe; do
+            test -s "$RUNNER_TEMP/native-audio/$name"
+          done
+      - name: Package main extension
+        run: npm run package
+      - name: Package local audio companion
+        run: npm run package -w packages/audio-ui
+        env:
+          AI_PAIR_NATIVE_ASSETS: ${{ runner.temp }}/native-audio
+          AI_PAIR_UNIVERSAL_AUDIO: "1"
+      - name: Write the checksums
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          sha256sum "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" > SHA256SUMS
+          cat SHA256SUMS
+      # --skip-duplicate lets a run that failed after its first publish be run again.
+      - name: Publish AI Pair to the Marketplace
+        run: >-
+          npx vsce publish --oidc --skip-duplicate
+          --packagePath "ai-pair-${{ steps.version.outputs.version }}.vsix"
+      - name: Publish AI Pair Local Audio to the Marketplace
+        run: >-
+          npx vsce publish --oidc --skip-duplicate
+          --packagePath "ai-pair-local-audio-${{ steps.version.outputs.version }}.vsix"
+      - name: Make the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" \
+            "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" SHA256SUMS \
+            --verify-tag --title "$version" --notes-file "$RUNNER_TEMP/notes.md"

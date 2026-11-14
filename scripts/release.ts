@@ -1,25 +1,25 @@
-// Releases the extension: checks, bumps the version, builds the .vsix once, publishes that file to
-// the Marketplace, then commits, tags, pushes, and makes a GitHub release with it.
+// Releases the version on main: checks the repository, then tags the commit and pushes the tag.
+// The tag starts .github/workflows/publish.yml, which builds both extensions, publishes them to
+// the Marketplace, and makes the GitHub release with them (#68).
 //
-//   npm run release -- patch | minor | major | <x.y.z> [--yes]
+//   npm run release [-- --yes]
 //
-// The new version needs a section in packages/vscode/CHANGELOG.md, `## <version>`, which can be
-// written just before: CHANGELOG.md is the one file that may have uncommitted changes, and it goes
-// into the release commit.
+// The version is the one in packages/vscode/package.json, which the pull request that made the
+// change bumped, with its section in packages/vscode/CHANGELOG.md. Nothing is built or published
+// from this machine, and main is not pushed: only the tag is.
 
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { RIGHT_ARROW } from '../packages/core/src/constants.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const EXTENSION = 'packages/vscode';
+const COMPANION = 'packages/audio-ui';
 const CHANGELOG = `${EXTENSION}/CHANGELOG.md`;
-const MANIFEST = `${EXTENSION}/package.json`;
-const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
-/** `git status --porcelain`: two status columns and a space before the path. */
-const STATUS_WIDTH = 3;
+const VERSION = /^\d+\.\d+\.\d+$/;
+/** Where the publishing run that the tag starts is shown. */
+const WORKFLOW = 'https://github.com/mattyv/ai-pair/actions/workflows/publish.yml';
 
 interface Manifest {
   publisher: string;
@@ -62,33 +62,12 @@ function isManifest(value: unknown): value is Manifest {
   );
 }
 
-/** Reads the extension's manifest, failing if it lacks a field the release reads. */
-function manifest(): Manifest {
-  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, MANIFEST), 'utf8'));
-  if (!isManifest(parsed)) return fail(`${MANIFEST} needs a publisher, a name, and a version.`);
+/** Reads the manifest of the extension in `folder`, failing if it lacks a field the release reads. */
+function manifest(folder: string): Manifest {
+  const file = `${folder}/package.json`;
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, file), 'utf8'));
+  if (!isManifest(parsed)) return fail(`${file} needs a publisher, a name, and a version.`);
   return parsed;
-}
-
-/** Splits an `x.y.z` version into its three numbers, or fails. */
-function parts(version: string): [number, number, number] {
-  const match = VERSION.exec(version);
-  if (!match) return fail(`${version} is not an x.y.z version.`);
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
-}
-
-/** Returns the version after `bump`, from `current`. An exact one may be the current, for its first release. */
-function next(current: string, bump: string): string {
-  const [major, minor, patch] = parts(current);
-  if (VERSION.test(bump)) {
-    const [bumpMajor, bumpMinor, bumpPatch] = parts(bump);
-    const order = bumpMajor - major || bumpMinor - minor || bumpPatch - patch;
-    if (order < 0) fail(`${bump} is older than the current ${current}.`);
-    return bump;
-  }
-  if (bump === 'major') return `${major + 1}.0.0`;
-  if (bump === 'minor') return `${major}.${minor + 1}.0`;
-  if (bump === 'patch') return `${major}.${minor}.${patch + 1}`;
-  return fail('Say which version: patch, minor, major, or an exact x.y.z.');
 }
 
 /** Returns the body of the changelog's section for `version`, without its heading. */
@@ -101,95 +80,48 @@ function notes(version: string): string | undefined {
 
 const args = process.argv.slice(2);
 const yes = args.includes('--yes');
-const bump = args.find((a) => !a.startsWith('--'));
-if (bump === undefined) fail('Usage: npm run release -- patch | minor | major | <x.y.z> [--yes]');
+const unknown = args.filter((arg) => arg !== '--yes');
+if (unknown.length) fail('Usage: npm run release [-- --yes]');
 
-const { publisher, name, version: current } = manifest();
-const version = next(current, bump);
+const { publisher, name, version } = manifest(EXTENSION);
+const companion = manifest(COMPANION);
+if (!VERSION.test(version)) fail(`${version} is not an x.y.z version.`);
+if (companion.version !== version) fail(`${companion.name} is at ${companion.version}, and ${name} at ${version}: they release together.`);
 const tag = `v${version}`;
-const vsix = `${name}-${version}.vsix`;
 
-step('Checking the repository and accounts');
+step('Checking the repository');
 if (read('git', ['branch', '--show-current']) !== 'main') fail('Release from main.');
 // Not `read`: trimming would take the first line's leading status column.
-const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
-const unexpected = dirty.filter((line) => line.slice(STATUS_WIDTH) !== CHANGELOG);
-if (unexpected.length) fail(`Commit or stash these first; only ${CHANGELOG} may have changes:\n${unexpected.join('\n')}`);
+const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).trimEnd();
+if (dirty !== '') fail(`Commit or stash these first:\n${dirty}`);
 run('git', ['fetch', '--quiet', '--tags', 'origin', 'main']);
 if (read('git', ['rev-parse', 'HEAD']) !== read('git', ['rev-parse', 'origin/main'])) {
-  fail("main isn't the same as origin/main: pull or push first.");
+  fail("main isn't the same as origin/main: pull first.");
 }
-if (read('git', ['tag', '--list', tag])) fail(`${tag} is already tagged.`);
+if (read('git', ['tag', '--list', tag])) fail(`${tag} is already tagged: a change that ships bumps the version in its pull request.`);
 const changes = notes(version);
 if (changes === undefined || changes === '') fail(`${CHANGELOG} has no section for ${version}: add "## ${version}" with what changed.`);
-if (!read('vsce', ['ls-publishers']).split('\n').includes(publisher)) {
-  fail(`vsce has no token for the publisher ${publisher}: run \`vsce login ${publisher}\`.`);
-}
-run('gh', ['auth', 'status'], { stdio: 'ignore' });
-
-step('Testing');
-run('npm', ['test']);
-run('npm', ['run', 'typecheck']);
-run('npm', ['run', 'lint']);
-run('npm', ['run', 'format:check']);
-run('npm', ['run', 'lint:swift']);
-run('npm', ['run', 'typecheck:swift']);
-run('npm', ['run', 'lint:sh']);
-run('npm', ['run', 'lint:web']);
-run('npm', ['run', 'lint:md']);
-run('npm', ['run', 'test:integration']);
-
-if (version !== current) {
-  step(`Bumping ${current} ${RIGHT_ARROW} ${version}`);
-  run('npm', ['version', version, '-w', EXTENSION, '--no-git-tag-version'], { stdio: ['inherit', 'ignore', 'inherit'] });
-}
-
-step(`Building ${vsix}`);
-run('npm', ['run', 'package']);
 
 if (!yes) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await rl.question(
-    `\nPublish ${publisher}.${name} ${version} to the Marketplace? A version can't be published twice. [y/N] `,
+    `\nTag ${tag} and push it? That publishes ${publisher}.${name} and ${publisher}.${companion.name} ${version} to the Marketplace; a version can't be published twice. [y/N] `,
   );
   rl.close();
-  if (answer.trim().toLowerCase() !== 'y') fail(`Not published. To undo the bump: git checkout ${MANIFEST} package-lock.json`);
+  if (answer.trim().toLowerCase() !== 'y') fail('Not tagged.');
 }
 
-step('Committing and tagging');
-run('git', ['add', MANIFEST, 'package-lock.json', CHANGELOG]);
-// Releasing the current version with its changelog already committed leaves nothing to commit.
-const committed = read('git', ['diff', '--cached', '--name-only']) !== '';
-if (committed) run('git', ['commit', '--quiet', '-m', `Release ${version}`]);
+step(`Tagging ${tag}`);
 run('git', ['tag', '-a', tag, '-m', `Release ${version}`]);
 
-step('Publishing to the Marketplace');
+step('Pushing the tag');
 try {
-  run('vsce', ['publish', '--packagePath', vsix]);
+  run('git', ['push', '--quiet', 'origin', tag]);
 } catch {
-  // Nothing has left this machine: take the commit and tag back, keeping the changes.
+  // Nothing has left this machine: take the tag back.
   run('git', ['tag', '-d', tag], { stdio: 'ignore' });
-  if (committed) run('git', ['reset', '--soft', 'HEAD~1']);
-  fail(`Publishing failed; the commit and tag are undone, the bump is kept. Fix it, then: npm run release -- ${version}`);
+  fail(`Pushing ${tag} failed; the tag is undone. Fix it, then: npm run release`);
 }
 
-// Published: from here on, a failure is finished by hand.
-step('Pushing');
-try {
-  run('git', ['push', '--quiet', 'origin', 'main', tag]);
-} catch {
-  fail(
-    `${version} is published, but pushing failed. Finish with:\n  git push origin main ${tag}\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`,
-  );
-}
-
-step('Making the GitHub release');
-try {
-  run('gh', ['release', 'create', tag, vsix, '--title', version, '--notes', changes]);
-} catch {
-  fail(
-    `${version} is published and pushed, but the GitHub release failed. Finish with:\n  gh release create ${tag} ${vsix} --title ${version} --notes-file <its changelog section>`,
-  );
-}
-
-console.log(`\nReleased ${version}: https://marketplace.visualstudio.com/items?itemName=${publisher}.${name}`);
+console.log(`\nTagged ${version}. Publishing runs at ${WORKFLOW}`);
+console.log(`When it finishes: https://marketplace.visualstudio.com/items?itemName=${publisher}.${name}`);

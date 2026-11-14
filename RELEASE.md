@@ -23,7 +23,13 @@ remaining limitations with the release; a skipped check is not a pass.
     Verify their versions and checksums, and provide the checksum file with the
     release assets. Do not label a missing platform or untested device as
     verified.
-6.  Obtain the required publishing approval before publishing or pushing.
-    The current `npm run release` script handles the main extension; verify the
-    companion and platform assets separately. Preserve the exact artifacts
-    checked for publication and release.
+6.  Obtain the required publishing approval before tagging. On `main`, at
+    the merged commit to release, run `npm run release`: it checks the
+    repository, then tags the version and pushes the tag. The tag starts the
+    [Publish workflow](.github/workflows/publish.yml), which builds both
+    universal VSIX files, publishes AI Pair and AI Pair Local Audio to the
+    VS Code Marketplace, and makes the GitHub release with both files and
+    their `SHA256SUMS`. Verify the platform assets separately. A Marketplace
+    version cannot be published twice.
+7.  After the workflow finishes, check both Marketplace listings and the
+    GitHub release, and record the run with the release evidence.

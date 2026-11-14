@@ -492,7 +492,7 @@
   },
   "devDependencies": {
     "@types/vscode": "1.106.0",
-    "@vscode/vsce": "^4.0.0"
+    "@vscode/vsce": "^4.1.1"
   },
   "repository": {
     "type": "git",

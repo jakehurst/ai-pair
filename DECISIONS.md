@@ -1177,3 +1177,17 @@ should not produce empty change reports or a typing-pause wake. Preserve the
 later pause acknowledgement when a timeout already reported meaningful work;
 an undo after such a report is itself a reportable reversal. Keep generation
 checks when restoring canceled reports and consider all edited files.
+
+## Marketplace publishing
+
+Publish AI Pair and AI Pair Local Audio to the VS Code Marketplace from
+GitHub Actions with Trusted Publishing, on a pushed version tag (#68). The
+publisher `mattyv` trusts `publish.yml` in `mattyv/ai-pair` by name, so no
+token is stored; Azure DevOps retires the global tokens that `vsce login`
+needs. `main` takes changes only by pull request, so the release script pushes
+the tag alone and no longer bumps, builds, or publishes from a workstation.
+The workflow requires the tag to match both manifests and to be on `main`,
+and repeats the Build VSIX checks before it packages. The Mac-specific builds
+are not published. Whether a first publish of a new extension works through
+Trusted Publishing is unverified; the fallback is a manual VSIX upload on the
+publisher's page.
