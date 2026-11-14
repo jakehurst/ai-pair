@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Separate workflows, event types and PRs; manual runs never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # Speech runs on CPU; do not download unused CUDA provider binaries.
 env:
   ONNXRUNTIME_NODE_INSTALL_CUDA: skip
@@ -172,7 +177,7 @@ jobs:
         if: steps.models.outputs.needed == 'true'
         run: specs/check.sh --coverage
         env:
-          TLC: java -XX:+UseParallelGC -cp ${{ runner.temp }}/tla2tools.jar tlc2.TLC
+          TLC: java -Xmx2g -XX:+UseParallelGC -cp ${{ runner.temp }}/tla2tools.jar tlc2.TLC
       - uses: actions/upload-artifact@v7
         if: always() && steps.models.outputs.needed == 'true'
         with:

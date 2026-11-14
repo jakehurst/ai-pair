@@ -8,11 +8,11 @@ import { commandForShell } from '../src/terminal';
 describe('Bash multiline submission', () => {
   it.each([
     "cat <<'EOF' | tail -n 1\nalpha\nbeta\nEOF\n",
-    "cat <<'CPP'\n#include <iostream>\nint main() { std::cout << \"$x \\\\n ' café\"; }\nCPP\n",
+    "cat <<'CPP'\n#include <iostream>\nint main() { std::cout << \"$x \\\\n ' caf\u00E9\"; }\nCPP\n",
     "printf '%s\\n' 'literal \\\\n' 'quote'\nprintf 'done\\n'\n",
     'set -o pipefail\nprintf fail | false\n',
     'cd /tmp\nexport PAIR_ENCODING=ready\nprintf \'%s:%s\\n\' "$PWD" "$PAIR_ENCODING"\n',
-    "printf 'control\\n'\n\tprintf 'unicode café\\n'\n",
+    "printf 'control\\n'\n\tprintf 'unicode caf\u00E9\\n'\n",
   ])('preserves command output and exit for %s', (command) => {
     const original = spawnSync('/bin/bash', ['-c', command], { encoding: 'utf8' });
     const submitted = spawnSync('/bin/bash', ['-c', commandForShell(command, 'bash')], { encoding: 'utf8' });

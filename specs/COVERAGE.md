@@ -272,6 +272,8 @@ Code goes without a spec for one of these reasons:
 | Source | Spec |
 |---|---|
 | `scripts/download_shfmt.sh` | `ShfmtDownload` (`Primary`, `Fallback`) |
+| `specs/check.sh`, `specs/run_configs.sh` | `CiScheduler` (`Start`, `Finish`, `Report`, `Cancel`) |
+| `.github/workflows/ci.yml`, `.github/workflows/build-vsix.yml` | `CiConcurrency` |
 
 ## Native test harness
 

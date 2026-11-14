@@ -458,3 +458,9 @@ platform assets need separate checks.
 ## License
 
 [MIT](LICENSE)
+
+### Checking specifications locally
+
+`npm run coverage:tla` checks all TLC configurations and aggregates action
+coverage. It runs two configurations at a time with one TLC worker each; set
+`TLC_JOBS` from 1 to 8 to change that limit for the available memory and CPU.

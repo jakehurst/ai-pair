@@ -19,6 +19,20 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   The shell coverage run refreshed actual shell measurements. Its unrelated
     test-row marker changes were normalized out of this change.
 
+## CI scheduling
+
+-   Run at most two independent TLC configurations by default, with one TLC
+    worker each and a 2 GiB Java heap in CI. `TLC_JOBS` permits one through
+    eight. Collect every result
+    before aggregating coverage and cancel and reap children on interruption.
+    This bounds default resource use; the slowest single configuration and
+    external runner capacity still limit the speedup. Cancellation hard-kills
+    the direct TLC processes and waits for them, discarding their scratch state;
+    custom `TLC` wrappers must `exec` the checker so descendants are not orphaned.
+-   Build VSIX packages for main pushes, pull requests and manual dispatches,
+    not both a branch push and its pull request. Separate concurrency groups
+    by workflow, event and PR or ref; manual runs use unique run IDs.
+
 ## Speech continuity and delivery
 
 -   Context is opt-in and session-local: retain at most three completed agent

@@ -1088,7 +1088,12 @@
   },
   "specs/check.sh": {
     "shell": {
-      "lines": 97
+      "lines": 100
+    }
+  },
+  "specs/run_configs.sh": {
+    "shell": {
+      "lines": 100
     }
   }
 }

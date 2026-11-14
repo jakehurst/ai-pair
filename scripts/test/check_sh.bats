@@ -71,3 +71,89 @@ TLC
   [[ "${output}" != *'Discovery: action Never'* ]]
   grep -q '| `specs/Discovery.tla` | TLA+ | - | - | 3 of 3 actions |' "${COVERAGE_MD}"
 }
+
+@test "bounded workers run independent configs concurrently and report every result" {
+  cat >"${TLC}" <<'TLC'
+#!/usr/bin/env python3
+import fcntl, os, sys, time
+args = sys.argv[1:]
+name = args[args.index('-config') + 1]
+workers = args[args.index('-workers') + 1]
+with open(os.environ['LOG'], 'a') as log:
+    fcntl.flock(log, fcntl.LOCK_EX)
+    log.write(f'start {name} {workers}\n')
+    log.flush()
+    fcntl.flock(log, fcntl.LOCK_UN)
+time.sleep(0.03)
+with open(os.environ['LOG'], 'a') as log:
+    fcntl.flock(log, fcntl.LOCK_EX)
+    log.write(f'end {name} {workers}\n')
+    log.flush()
+    fcntl.flock(log, fcntl.LOCK_UN)
+print('Model checking completed. No error has been found.')
+TLC
+  export LOG="${BATS_TEST_TMPDIR}/events" TLC_JOBS=2
+  run --separate-stderr bash "${ROOT}/specs/check.sh"
+  [[ "${status}" -eq 0 ]]
+  python3 - "${LOG}" <<'PY'
+import sys
+active = peak = starts = 0
+for line in open(sys.argv[1]):
+    kind, name, workers = line.split()
+    assert workers == '1', (name, workers)
+    active += 1 if kind == 'start' else -1
+    starts += kind == 'start'
+    peak = max(peak, active)
+    assert 0 <= active <= 2
+assert active == 0 and peak == 2 and starts > 2
+PY
+}
+
+@test "a nonzero TLC exit cannot pass even if it prints a success marker" {
+  printf '#!/bin/bash\necho "No error has been found."\nexit 1\n' >"${TLC}"
+  export TLC_JOBS=2
+  run --separate-stderr bash "${ROOT}/specs/check.sh"
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" == *'error     FAILED'* ]]
+}
+
+@test "rejects invalid or excessive worker counts before starting TLC" {
+  for jobs in 0 9 bad; do
+    export TLC_JOBS="${jobs}"
+    run --separate-stderr bash "${ROOT}/specs/check.sh"
+    [[ "${status}" -eq 1 ]]
+    [[ "${stderr}" == *'TLC_JOBS must be between 1 and 8'* ]]
+  done
+}
+
+@test "cancellation retires all active TLC processes" {
+  cat >"${TLC}" <<'TLC'
+#!/usr/bin/env python3
+import os, time
+with open(os.environ['LOG'], 'a') as log:
+    log.write(f'{os.getpid()}\n')
+    log.flush()
+time.sleep(30)
+TLC
+  export LOG="${BATS_TEST_TMPDIR}/pids" TLC_JOBS=2
+  bash "${ROOT}/specs/check.sh" >"${BATS_TEST_TMPDIR}/out" 2>&1 &
+  runner=$!
+  for unused in {1..100}; do
+    [[ -f "${LOG}" ]] && [[ "$(wc -l <"${LOG}")" -eq 2 ]] && break
+    sleep 0.02
+  done
+  [[ -f "${LOG}" ]]
+  kill -TERM "${runner}"
+  for unused in {1..30}; do
+    kill -TERM "${runner}" 2>/dev/null || break
+  done
+  wait "${runner}" || true
+  result=0
+  while read -r child; do
+    if kill -0 "${child}" 2>/dev/null; then
+      kill -TERM "${child}" 2>/dev/null || true
+      result=1
+    fi
+  done <"${LOG}"
+  [[ "${result}" -eq 0 ]]
+}

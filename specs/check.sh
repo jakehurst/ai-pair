@@ -1,19 +1,8 @@
 #!/bin/bash
-#
-# Runs TLC on every config in specs/. Spec.cfg checks the code as it is and
-# must pass. With --coverage, TLC also counts how often each action fired, the
-# full statistics go to coverage/tla/<Config>.txt, and an action that never
-# fired is named and fails the run, unless the spec's section of README.md
-# says, in a sentence naming it, that it never fires (#161).
-# A spec's other configs, Foo_<Model>.cfg (8.2 of the style guide), run
-# against Foo.tla, each with its own statistics file (#169).
+# Runs every config with bounded parallelism. Coverage aggregates each spec's
+# configurations and fails when an undocumented action never fires (#161).
 set -u
-
 cd "$(dirname "$0")" || exit 1
-# TLC: the command that runs TLC, with its arguments, split on spaces.
-read -r -a TLC_COMMAND <<<"${TLC:-tlc}"
-readonly TLC_COMMAND
-# COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
 readonly COVERAGE_DIR="${COVERAGE_ROOT:-../coverage}/tla"
 coverage=()
 if [[ "${1:-}" == '--coverage' ]]; then
@@ -21,28 +10,11 @@ if [[ "${1:-}" == '--coverage' ]]; then
   mkdir -p "${COVERAGE_DIR}"
 fi
 readonly coverage
-# TLC keeps its state files here, not in specs/.
 META="$(mktemp -d)" || exit 1
 readonly META
 status=0
-
-# Saves TLC's coverage statistics for a config to COVERAGE_DIR.
-save_coverage() {
-  local name="$1" out="$2"
-  { grep -v '^@!@!@' <<<"${out}" || true; } \
-    | sed -n '/^The coverage statistics/,$p' >"${COVERAGE_DIR}/${name}.txt"
-}
-
-#######################################
-# Names the actions that fired in none of a spec's configs, summing each
-# action's fires over the spec's statistics files. An action's line reads
-# `<Name line ... of module M>: distinct:total`, with the disjunct's location
-# in parentheses before `>` when the action is written inline in Next.
-# Globals:
-#   COVERAGE_DIR
-# Outputs:
-#   One line per action that never fired, to stdout, sorted.
-#######################################
+# Reports actions that fired in none of a spec's coverage files.
+# Globals: COVERAGE_DIR. Output: sorted spec and action names.
 # shellcheck disable=SC2016 # $1 and $2 are awk's fields, not the shell's.
 never_fired() {
   local program
@@ -56,27 +28,40 @@ never_fired() {
   program+=' print "  " key " never fired" }'
   { awk -F': ' "${program}" "${COVERAGE_DIR}"/*.txt || true; } | sort
 }
-
+# Retires the worker owner and its children before deleting its files.
+retire_child() {
+  trap '' INT TERM
+  kill "${child}" 2>/dev/null || true
+  wait "${child}" || true
+  rm -rf "${META}"
+  exit 1
+}
+# specs/CiScheduler.tla, Start and Finish: the helper owns each process.
+canceled=0
+trap 'canceled=1' INT TERM
+bash ./run_configs.sh "${META}" ${coverage[@]+"${coverage[@]}"} &
+child=$!
+((canceled)) && retire_child
+wait "${child}"
+code=$?
+((canceled)) && retire_child
+if ((code != 0)); then
+  rm -rf "${META}"
+  exit 1
+fi
+trap - INT TERM
+# specs/CiScheduler.tla, Report: aggregate only after every process settles.
 for cfg in ./*.cfg; do
   file="${cfg#./}"
   name="${file%.cfg}"
-  spec="${name%%_*}"
-  out="$(
-    "${TLC_COMMAND[@]}" -workers auto -cleanup -metadir "${META}/${name}" \
-      ${coverage[@]+"${coverage[@]}"} -config "${file}" "${spec}.tla" 2>&1
-  )"
-  if [[ "${out}" == *'No error has been found'* ]]; then
-    result='pass'
-  elif [[ "${out}" == *'violated'* ]]; then
-    result='violation'
-  else
-    result='error'
-  fi
-  if [[ "${result}" == 'pass' ]]; then
-    mark='ok'
-  else
-    mark='FAILED'
-    status=1
+  out="$(cat "${META}/${name}.out")"
+  code="$(cat "${META}/${name}.status")"
+  result=error
+  [[ "${out}" == *'violated'* ]] && result=violation
+  [[ "${code}" == 0 && "${out}" == *'No error has been found'* ]] && result=pass
+  mark=ok
+  if [[ "${result}" != pass ]]; then
+    mark=FAILED status=1
   fi
   printf '%-22s %-9s %s\n' "${file}" "${result}" "${mark}"
   if [[ "${mark}" != 'ok' ]]; then
@@ -84,10 +69,10 @@ for cfg in ./*.cfg; do
     tail -n 60 <<<"${excerpt}" >&2
   fi
   if ((${#coverage[@]} > 0)); then
-    save_coverage "${name}" "${out}"
+    { grep -v '^@!@!@' <<<"${out}" || true; } \
+      | sed -n '/^The coverage statistics/,$p' >"${COVERAGE_DIR}/${name}.txt"
   fi
 done
-
 rm -rf "${META}"
 if ((${#coverage[@]} > 0)); then
   never_fired

@@ -2,11 +2,17 @@ name: Build VSIX
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Separate workflows, event types and PRs; manual runs never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 # Speech runs on CPU; do not download unused CUDA provider binaries.
 env:

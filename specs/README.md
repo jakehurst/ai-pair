@@ -170,6 +170,9 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CommandEncoding.cfg` | two shell types, six abstract character classes | holds | 24 |
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
 
+| `CiScheduler.cfg` | three configs, two worker slots | holds | 134 |
+| `CiConcurrency.cfg` | two PR runs, one push, two manual runs | holds | 324 |
+
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
 Each violation TLC found was checked against the code step by step before it was
@@ -3845,3 +3848,43 @@ accepting unverified bytes violates `VerifiedSuccess`; refusing a valid
 fallback violates `FallbackWorks`; retaining failed output violates
 `FailureClean`; returning without a result violates `Finished`; and blocking
 fallback violates `EventuallySettled` under the modeled fairness assumption.
+
+### `CiScheduler`: bounded TLC workers
+
+The model bounds three configs to two worker slots. It retains active workers
+until `Finish`, including after cancellation, and reports only after all normal
+results settle. Cancellation sends `SIGKILL` to each TLC process and awaits
+exit. Weak fairness of `Next` assumes each TLC process eventually
+exits after completion or cancellation. Abrupt host termination and operating
+system failure are outside the model. A custom `TLC` wrapper must `exec` the
+checker: the helper owns and reaps the direct process, not arbitrary descendants.
+
+| Property | Code test or check |
+|---|---|
+| `TypeOK`, `Partition`, `Bounded` | `check_sh.bats`: bounded workers run independent configs concurrently and report every result |
+| `NoEarlyReport`, `FailurePreserved` | `check_sh.bats`: names every config and fails on a violation or an error; nonzero TLC cannot pass |
+| `NoReportAfterCancel`, `EventuallySettled` | `run_configs_sh.bats`: cancellation retires each started process before the owner exits |
+
+Mutations independently broke each invariant: an invalid result violated
+`TypeOK`, retaining started work in pending violated `Partition`, removing
+admission bounds violated `Bounded`, early reporting violated `NoEarlyReport`,
+reporting after cancellation violated `NoReportAfterCancel`, losing failure
+violated `FailurePreserved`, and preventing retirement violated
+`EventuallySettled`.
+
+### `CiConcurrency`: run grouping
+
+The model uses two runs for one pull request, one main push and two uniquely
+keyed manual runs. It assumes unique manual run IDs and event-qualified group
+keys; GitHub Actions enforces the cancellation operation. Weak fairness assumes
+pending runs eventually start and active runs eventually finish.
+
+| Property | Code test or check |
+|---|---|
+| `TypeOK`, `Partition` | `ci_workflows.bats`: CI and packaging isolate pull requests, main and manual runs |
+| `OnePerGroup`, `ManualSafe` | `ci_workflows.bats`: CI and packaging isolate pull requests, main and manual runs |
+| `AllStarted` | `ci_workflows.bats`: packaging runs for main, pull requests and manual dispatch only |
+
+Mutations independently broke type membership, run partitioning, group
+exclusivity, manual isolation and eventual start, respectively. The model does
+not simulate GitHub runner availability or prove its event delivery.
