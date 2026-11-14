@@ -39,15 +39,11 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check:ascii
-      # Pin shfmt 3.14.1's release asset ID and SHA-256; ShellCheck is Debian's.
+      # Pin shfmt 3.14.1 and verify its SHA-256 from either upstream URL.
       - name: Install shfmt
         run: |
-          curl --fail --silent --show-error --location --retry 5 --retry-all-errors \
-            --connect-timeout 20 --max-time 300 --retry-max-time 600 \
-            -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' \
-            -o "$RUNNER_TEMP/shfmt" \
-            https://api.github.com/repos/mvdan/sh/releases/assets/547320883
-          echo "76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf  $RUNNER_TEMP/shfmt" | sha256sum -c
+          bash scripts/download_shfmt.sh "$RUNNER_TEMP/shfmt" \
+            76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
           chmod +x "$RUNNER_TEMP/shfmt"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - run: npm run lint:sh

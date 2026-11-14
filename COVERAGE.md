@@ -20,7 +20,7 @@ Last updated: integration, 2026-11-14.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
-| `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | L 0.0% (0 of 16) | - |
+| `.claude/skills/reload-extension/scripts/reload.sh` | Shell | - | - | - | - | L 100.0% (16 of 16) | - |
 | `packages/audio-native/native/macos/main.swift` | Swift | - | - | - | - | - | - |
 | `packages/audio-native/src/admission.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 40.7% B 100.0% F 20.0% | - | - | - | - |
 | `packages/audio-native/src/factory.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.8% B 50.0% F 100.0% | - | - | - | - |
@@ -183,9 +183,9 @@ Last updated: integration, 2026-11-14.
 | `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 100.0% R 93.2% F 100.0% | - | - |
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.4% R 98.6% F 98.2% | - | - |
-| `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
-| `packages/vscode/scripts/integration_companion.sh` | Shell | - | - | - | - | - | - |
-| `packages/vscode/scripts/integration_speech_faults.sh` | Shell | - | - | - | - | - | - |
+| `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | L 89.7% (35 of 39) | - |
+| `packages/vscode/scripts/integration_companion.sh` | Shell | - | - | - | - | L 95.6% (43 of 45) | - |
+| `packages/vscode/scripts/integration_speech_faults.sh` | Shell | - | - | - | - | L 96.9% (31 of 32) | - |
 | `packages/vscode/scripts/speech_runtime.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -501,8 +501,9 @@ Last updated: integration, 2026-11-14.
 | `scripts/coverage_report.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/coverage_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/coverage_swift.sh` | Shell | - | - | - | - | - | - |
-| `scripts/download_tlc.sh` | Shell | - | - | - | - | - | - |
-| `scripts/lint_shell.sh` | Shell | - | - | - | - | - | - |
+| `scripts/download_shfmt.sh` | Shell | - | - | - | - | L 100.0% (18 of 18) | - |
+| `scripts/download_tlc.sh` | Shell | - | - | - | - | L 82.3% (14 of 17) | - |
+| `scripts/lint_shell.sh` | Shell | - | - | - | - | L 57.7% (15 of 26) | - |
 | `scripts/lint_tla.test.ts` | TypeScript | test | test | test | test | test | test |
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -513,7 +514,7 @@ Last updated: integration, 2026-11-14.
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/release_docs.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `scripts/specs_needed.sh` | Shell | - | - | - | - | - | - |
+| `scripts/specs_needed.sh` | Shell | - | - | - | - | L 92.3% (12 of 13) | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
 | `specs/ActionValidation.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ActionValidation.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
@@ -708,6 +709,8 @@ Last updated: integration, 2026-11-14.
 | `specs/SessionSpeechCost.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/ShfmtDownload.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ShfmtDownload.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/ShellIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ShellIdentity.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
@@ -770,5 +773,5 @@ Last updated: integration, 2026-11-14.
 | `specs/WarmSynthesisWorker_Watchdog.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
-| `specs/check.sh` | Shell | - | - | - | - | - | - |
+| `specs/check.sh` | Shell | - | - | - | - | L 100.0% (49 of 49) | - |
 | `vitest.config.ts` | TypeScript | - | - | - | - | - | - |

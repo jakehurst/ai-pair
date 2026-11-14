@@ -10,6 +10,15 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## CI tool downloads
+
+-   Download pinned shfmt from its direct upstream release first, then the
+    corresponding GitHub asset API. Verify the same pinned SHA-256 for either
+    source and remove failed output. This tolerates an API 403 but cannot make
+    either upstream service available; bounded failures still fail CI.
+-   The shell coverage run refreshed actual shell measurements. Its unrelated
+    test-row marker changes were normalized out of this change.
+
 ## Speech continuity and delivery
 
 -   Context is opt-in and session-local: retain at most three completed agent

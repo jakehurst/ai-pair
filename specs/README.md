@@ -165,6 +165,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
 | `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 80 |
 | `CommandDelivery.cfg` | queue bounded to two completions | holds | 84 |
+| `ShfmtDownload.cfg` | two sources, three outcomes each | holds | 10 |
 | `CommandTracking.cfg` | one execution, two session identities, late report and replay | holds | 18 |
 | `CommandEncoding.cfg` | two shell types, six abstract character classes | holds | 24 |
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
@@ -3822,3 +3823,25 @@ the granted-hand notice; release can also clear it.
 | `RequestedProgress` | `Attention: lowering a pending hand releases the boundary and rejects the late grant` | Disabling grant violates `RequestedProgress`. |
 | `NoticeIsGranted` | `controller.test.ts`: reports a granted raised hand once to a waiting navigator | Retaining the notice on release violates `NoticeIsGranted`. |
 | `NoticeDelivered` | `controller.test.ts`: reports a granted raised hand once to a waiting navigator | Disabling acknowledgement violates `NoticeDelivered`. |
+
+### `ShfmtDownload`: verified download and fallback
+
+The bounded model abstracts each URL's bounded curl retries as one of three
+outcomes: unavailable, wrong bytes, or the pinned bytes. Weak fairness of
+`Next` assumes each external download eventually returns; the model does not
+prove network availability or SHA-256 security. TLC checks 10 distinct states.
+
+| Property | Code test or check |
+|---|---|
+| `TypeOK` | `download_shfmt_sh.bats`: all bounded source outcomes |
+| `VerifiedSuccess` | `download_shfmt_sh.bats`: a matching download is accepted |
+| `FallbackWorks` | `download_shfmt_sh.bats`: failure or a bad digest falls back |
+| `FailureClean` | `download_shfmt_sh.bats`: bad and unavailable sources remove output |
+| `Finished` | `download_shfmt_sh.bats`: successful and failed downloads return |
+| `EventuallySettled` | Bounded curl retries and the four `download_shfmt_sh.bats` cases |
+
+Each mutation was checked independently: invalid phase violates `TypeOK`;
+accepting unverified bytes violates `VerifiedSuccess`; refusing a valid
+fallback violates `FallbackWorks`; retaining failed output violates
+`FailureClean`; returning without a result violates `Finished`; and blocking
+fallback violates `EventuallySettled` under the modeled fairness assumption.

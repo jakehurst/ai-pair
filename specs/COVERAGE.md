@@ -267,6 +267,12 @@ Code goes without a spec for one of these reasons:
 |---|---|
 | `load`, `invalidate`, `contains`, eligibility admission | `OpenRouterCatalog` (identity, stale replies and remembered-pair eligibility). |
 
+## CI scripts
+
+| Source | Spec |
+|---|---|
+| `scripts/download_shfmt.sh` | `ShfmtDownload` (`Primary`, `Fallback`) |
+
 ## Native test harness
 
 | Script | Spec |

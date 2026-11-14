@@ -1053,6 +1053,11 @@
       "functions": 100
     }
   },
+  "scripts/download_shfmt.sh": {
+    "shell": {
+      "lines": 100
+    }
+  },
   "scripts/lint_tla.ts": {
     "unit": {
       "lines": 100,
