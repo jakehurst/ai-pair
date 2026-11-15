@@ -172,7 +172,7 @@ jobs:
         if: steps.models.outputs.needed == 'true'
         run: |
           bash scripts/download_tlc.sh "$RUNNER_TEMP/tla2tools.jar" \
-            e1f11b75c4b5bc4478ba0ac5cb6ae28e40a01b0016bc33e0aa97da22dfdbcd7f
+            7e53aa636dac8a3cb0533f343115c0548e03fc0ce5edc7739becf58d3d0fb84f
       - name: Check every spec, with coverage
         if: steps.models.outputs.needed == 'true'
         run: specs/check.sh --coverage
