@@ -1,10 +1,10 @@
 # Nonverbal perception service: revised concept
 
-A revision of the [nonverbal feedback design](nonverbal-pairing-feedback-design.md),
-worked out with the programmer on 2026-11-15 and tracked on #83. Perception
-moves into a standalone local service that any tool can use, and AI Pair
-becomes one of its clients. Nothing here is built, and the spec-first process
-still applies.
+The perception half of nonverbal feedback, worked out with the programmer on
+2026-11-15 and tracked on #83. Perception moves into a standalone local
+service that any tool can use, and AI Pair becomes one of its clients;
+[AI Pair's side](nonverbal-pairing-feedback-design.md) is a separate file.
+Nothing here is built, and the spec-first process still applies.
 
 ## Goal
 
@@ -154,14 +154,58 @@ agent through the existing `hand_raised` wake and `attention` pause.
 
 A cue still never approves a command or any other action.
 
-## OpenFace as an optional input
+## Models and licences
+
+The licences were read from each repository's licence file on 2026-11-15. The
+weights are the binding constraint: most action unit, emotion, and gaze weights
+are trained on research-only datasets such as BP4D, DISFA, AffectNet,
+Aff-Wild2, and Gaze360.
+
+| Project | Gives | Code | Weights | Use |
+|---|---|---|---|---|
+| [MediaPipe](https://github.com/google-ai-edge/mediapipe) Face Landmarker | Head pose, 478 landmarks, 52 blendshapes | Apache-2.0 | Google's own; the cards point to Apache-2.0, but two are image-only and still need reading | Default |
+| [Nodding Pigeon](https://github.com/bhky/nodding-pigeon) | Nod, turn, or still | MIT | Trained by its author on MediaPipe features | Candidate nod detector |
+| [OpenFace 3.0](https://github.com/CMU-MultiComp-Lab/OpenFace-3.0) | Landmarks, action units, gaze, 8 emotions | CMU noncommercial research only, no distribution | Same | Bring your own |
+| [py-feat](https://github.com/cosanlab/py-feat) | Action units, emotion, gaze, pose | MIT | Noncommercial research | No |
+| [EmotiEffLib](https://github.com/sb-ai-lab/EmotiEffLib) | Emotion, engagement | Apache-2.0 | AffectNet-trained; terms unread | Not yet |
+| [OpenGraphAU](https://github.com/lingjivoo/OpenGraphAU) | Action units | Apache-2.0 | BP4D and DISFA | No |
+| [LibreFace](https://github.com/ihp-lab/LibreFace) | Action units, expressions | Educational, research, and non-profit only | Same | No |
+| [L2CS-Net](https://github.com/Ahmednull/L2CS-Net) | Gaze | MIT | Gaze360 and MPIIGaze, noncommercial | No |
+
+Nod and shake may need no second model: the oscillation of head pitch and yaw
+from the face model may be enough. The recorder can compare that with Nodding
+Pigeon on the same traces.
 
 OpenFace 3.0 adds proper gaze, action units, and a generic first guess at
-annoyance. Its emotion classes are not the four states, and its licence is
-unchanged. If installed, its outputs are extra inputs to the personal
+annoyance. Its emotion classes are not the four states. It is never bundled,
+and installing it separately does not grant commercial-use rights. If the
+programmer installs it, its outputs are extra inputs to the personal
 classifier; its raw emotion scores do not reach the agent. Whether it earns
 its place can be measured: record sessions with and without it and compare how
 well each predicts the programmer's actual reactions.
+
+## Platforms
+
+The service captures frames with AVFoundation on macOS and V4L2 on Linux, for
+`darwin-arm64`, `darwin-x64`, `linux-x64`, and `linux-arm64`. Support for the
+four targets is a goal, not a verified claim. On macOS the service needs the
+camera entitlement and takes the permission prompt itself (untested). On
+Linux, access comes from the `video` group or seat ACL with no prompt, so the
+service's own indicator matters more.
+
+## Gates carried over
+
+These held for the recorded design and hold for the service.
+
+-   **Retirement before reuse.** The camera is not reopened until the previous
+    capture is confirmed closed. Lost contact is unavailable, not proof that
+    the device closed.
+-   **The camera closes when the service dies,** and the service does not
+    outlive the last client that needs it without the programmer knowing.
+-   **Licences are a release gate.** Code, weights, training data and intended
+    use are verified for every model that ships.
+-   **Spec first.** The camera lifecycle, consent and client subscription are
+    modelled before code, and platform claims are tested on real devices.
 
 ## What the literature supports
 
@@ -208,6 +252,8 @@ views and the brief are revised.
 -   How many sessions the personal classifier needs.
 -   The generic vocabulary for context and outcome messages.
 -   Whether the service lives in this repository or its own.
+-   Whether Linux arm64 is required from the start, and how hard the
+    four-target native build is.
 -   Whether inferring annoyance at work falls under the EU AI Act's rule on
     emotion inference in the workplace. This is from memory, not a legal
     reading.
