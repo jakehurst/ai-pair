@@ -39,6 +39,8 @@ export class SpeechAudio {
   private current = 0;
   private clip?: AudioClip;
   private paused = false;
+  /** The browser refused to start the clip until a user gesture (#77). */
+  private blocked = false;
   private playAttempt = 0;
 
   constructor(
@@ -97,11 +99,23 @@ export class SpeechAudio {
     } else if (action === 'pause') {
       this.playAttempt++;
       this.paused = true;
+      this.blocked = false;
       this.clip?.audio.pause();
     } else if (this.paused) {
       this.paused = false;
       if (this.clip) this.play(id, pageId, this.clip);
     }
+  }
+
+  /**
+   * Starts the clip the browser refused before any gesture; called during a
+   * click or keypress in the panel, so the browser lets it play.
+   */
+  gesture(): void {
+    // specs/SpeechPage.tla, Gesture: only the current, unpaused unit starts.
+    if (!this.blocked || this.paused || this.clip === undefined) return;
+    this.blocked = false;
+    this.play(this.current, this.currentPage, this.clip);
   }
 
   /** Silences a named unit and confirms it cannot still be playing. */
@@ -120,6 +134,7 @@ export class SpeechAudio {
     // specs/SpeechPage.tla, Interrupt and Replace: never revive stopped audio.
     this.current = 0;
     this.paused = false;
+    this.blocked = false;
     const clip = this.clip;
     this.clip = undefined;
     if (clip) {
@@ -144,8 +159,14 @@ export class SpeechAudio {
           this.report({ id, pageId, event: 'started' });
         }
       },
-      () => {
+      (error: unknown) => {
         if (attempt !== this.playAttempt || this.current !== id || this.currentPage !== pageId || this.clip !== clip) return;
+        // specs/SpeechPage.tla, Audio with allowed = FALSE: keep the clip for
+        // the next gesture; the host's start timeout still bounds the wait.
+        if (error instanceof DOMException && error.name === 'NotAllowedError') {
+          this.blocked = true;
+          return;
+        }
         this.stop();
         this.report({ id, pageId, event: 'failed' });
       },

@@ -2174,6 +2174,47 @@ it('unlocks one shared player on a gesture so later narration can start without 
   expect(pause).toHaveBeenCalledOnce();
 });
 
+it('BlockedResolves: starts narration the browser refused from the next gesture in the panel (#77)', async () => {
+  const blocked = new window.DOMException('needs a gesture', 'NotAllowedError');
+  class FakeAudio {
+    paused = true;
+    src = '';
+    play = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(blocked)
+      .mockImplementation(() => {
+        this.paused = false;
+        return Promise.resolve();
+      });
+    pause = vi.fn<() => void>();
+    addEventListener(): void {}
+  }
+  const players: FakeAudio[] = [];
+  vi.stubGlobal(
+    'Audio',
+    class extends FakeAudio {
+      constructor() {
+        super();
+        players.push(this);
+      }
+    },
+  );
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:blocked');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 6, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 6, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(posted()).not.toContainEqual({ type: 'speechEvent', id: 6, pageId: 1, event: 'failed' });
+  document.dispatchEvent(new window.Event('pointerdown'));
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(posted()).toContainEqual({ type: 'speechEvent', id: 6, pageId: 1, event: 'started' });
+  expect(players[0]?.play).toHaveBeenCalledTimes(2);
+  expect(players[0]?.pause).not.toHaveBeenCalled();
+});
+
 it("drops a retired clip's listeners so its late error cannot fail the next clip", () => {
   const player = new EventTarget();
   class FakeAudio {

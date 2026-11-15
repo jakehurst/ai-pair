@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.39.1
+
+-   Keep the first narration after a window reload instead of dropping it. The
+    browser refuses to play sound before a click or keypress in the Pair panel;
+    the line now starts on that first gesture, or is given up after the usual
+    20 second start timeout (#77).
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply

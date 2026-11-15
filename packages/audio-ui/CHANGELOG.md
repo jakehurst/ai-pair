@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.39.1
+
+-   Keep the first narration after a window reload until the first click or
+    keypress in the Pair panel, instead of dropping it (#77).
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply

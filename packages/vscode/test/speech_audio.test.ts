@@ -211,3 +211,51 @@ it('acknowledges retirement only after the named current clip is silent', () => 
   expect(h.player.retire(4, 1)).toBe(true);
   expect(h.player.retire(0, 1)).toBe(false);
 });
+
+/** Rejects as a browser does before any user gesture. */
+function notAllowed(): Promise<void> {
+  return Promise.reject(new DOMException('needs a gesture', 'NotAllowedError'));
+}
+
+describe('BlockedResolves and AcceptedStarts: a clip the browser refuses before any gesture (#77)', () => {
+  it('keeps the refused clip and starts it from the next gesture', async () => {
+    const h = harness();
+    h.audio.play.mockImplementationOnce(notAllowed);
+    h.player.page(1);
+    h.player.begin(4, 1);
+    h.player.audio(4, 1, 'wav', false);
+    await Promise.resolve();
+    expect(h.send).not.toHaveBeenCalled();
+    expect(h.revoke).not.toHaveBeenCalled();
+    h.player.gesture();
+    await Promise.resolve();
+    expect(h.audio.play).toHaveBeenCalledTimes(2);
+    expect(h.send.mock.calls).toEqual([[{ id: 4, pageId: 1, event: 'started' }]]);
+    h.player.gesture();
+    expect(h.audio.play).toHaveBeenCalledTimes(2);
+  });
+
+  it('BlockedIsCurrent: a gesture after a pause or stop starts nothing', async () => {
+    const h = harness();
+    h.audio.play.mockImplementation(notAllowed);
+    h.player.page(1);
+    h.player.begin(4, 1);
+    h.player.audio(4, 1, 'wav', false);
+    await Promise.resolve();
+    h.player.control(4, 1, 'pause');
+    h.player.gesture();
+    expect(h.audio.play).toHaveBeenCalledOnce();
+    h.player.control(4, 1, 'resume');
+    await Promise.resolve();
+    h.player.stop();
+    h.player.gesture();
+    expect(h.audio.play).toHaveBeenCalledTimes(2);
+    expect(h.send).not.toHaveBeenCalled();
+  });
+
+  it('does nothing on a gesture when no clip is held', () => {
+    const h = harness();
+    h.player.gesture();
+    expect(h.audio.play).not.toHaveBeenCalled();
+  });
+});

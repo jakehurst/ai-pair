@@ -2545,16 +2545,32 @@ current narration ID. A delivery attempt records its eligibility independently
 of whether playback started. TLC checked 28 states. Mutating the initial page
 outside its range violates `TypeOK`; accepting a stale ID violates
 `PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
-The model takes the browser's permission to play as given. The page earns it
-by playing every clip through one shared element that any click or keypress
-in the panel unlocks, because a browser that wants a user gesture unlocks an
-element, not the page (#39). The model is unchanged.
+The page plays every clip through one shared element that any click or
+keypress in the panel unlocks, because a browser that wants a user gesture
+unlocks an element, not the page (#39). Before the first gesture the browser
+can still refuse an eligible clip: `Audio` takes the browser's answer as a
+parameter, a refused clip is held as `blocked`, and `Gesture` starts it on the
+next click or keypress (#77). `Interrupt` also stands for the host's 20 second
+start timeout, which gives up a clip no gesture starts; it is weakly fair, so
+`BlockedResolves` says a refused clip either plays or is given up, never waits
+silently forever. TLC checked 28 distinct states.
+
+| Mutation | Result |
+|---|---|
+| A refused clip is dropped, as before #77 (`blocked' = FALSE`) | `AcceptedStarts` violated |
+| `Gesture` leaves the clip silent | `AcceptedStarts` violated |
+| `Interrupt` keeps the clip blocked | `BlockedIsCurrent` violated |
+| `Pause` keeps the clip blocked | `BlockedIsCurrent` violated |
+| No start timeout (fairness on `Interrupt` removed) | `BlockedResolves` violated |
+| `Gesture` without its `~paused` guard | passes: `Pause` already clears `blocked`, so the guard is defensive |
 
 | Property | Test |
 |---|---|
 | `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
 | `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
-| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; keeps the refused clip and starts it from the next gesture; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
+| `BlockedIsCurrent` | `speech_audio.test.ts`: BlockedIsCurrent: a gesture after a pause or stop starts nothing. |
+| `BlockedResolves` | `panel.test.ts`: BlockedResolves: starts narration the browser refused from the next gesture in the panel; the timeout half is the host's start timeout, covered by `speech_service.test.ts`. |
 
 ### `SpeechSetup`: verified model installation
 
