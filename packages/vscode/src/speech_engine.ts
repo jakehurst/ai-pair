@@ -1,13 +1,30 @@
-import { env, Tensor } from '@huggingface/transformers';
+import { AutoTokenizer, env, StyleTextToSpeech2Model, Tensor } from '@huggingface/transformers';
 import { KokoroTTS } from 'kokoro-js';
 import { phonemize } from '../vendor/kokoro_phonemize.mjs';
 import type { SpeechEngine } from './speech_synthesis';
 
-/** Loads the fixed local model and exposes its non-truncating inference path. */
-export async function loadSpeechEngine(modelPath: string): Promise<SpeechEngine<Tensor>> {
+/**
+ * Loads the fixed local model and exposes its non-truncating inference path.
+ * With `coreMl`, the q8 model runs on ONNX Runtime's CoreML execution provider;
+ * a session that CoreML cannot create fails the load instead of using the CPU.
+ */
+export async function loadSpeechEngine(modelPath: string, coreMl = false): Promise<SpeechEngine<Tensor>> {
   env.allowRemoteModels = false;
   env.allowLocalModels = true;
-  const model = await KokoroTTS.from_pretrained(modelPath, { dtype: 'q8', device: 'cpu' });
+  // kokoro-js does not pass session options through, so a CoreML load builds
+  // the model and tokenizer that its constructor takes (#42).
+  const model = coreMl
+    ? new KokoroTTS(
+        ...(await Promise.all([
+          StyleTextToSpeech2Model.from_pretrained(modelPath, {
+            dtype: 'q8',
+            device: 'cpu',
+            session_options: { executionProviders: ['coreml'] },
+          }),
+          AutoTokenizer.from_pretrained(modelPath),
+        ])),
+      )
+    : await KokoroTTS.from_pretrained(modelPath, { dtype: 'q8', device: 'cpu' });
   return {
     phonemize,
     tokenize: (phones) => {

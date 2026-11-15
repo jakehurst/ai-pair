@@ -642,6 +642,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     },
     validCloudVoice: (id) => catalog.contains(id),
     supported: () => platform && runtimeAvailable,
+    gpuSupported: () => options.enableGpuInference === true && binding !== undefined,
     installed: async () => {
       const current = ++modelGeneration;
       modelReady = 'unknown';

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.40.0
+
+-   Tell the Pair panel whether this computer has a GPU path, so it offers GPU
+    and Auto only where they can work (#42).
+
 ## 0.39.2
 
 -   Warn when the old AI Pair (`michalstrba.ai-pair`) is still installed: it

@@ -67,10 +67,12 @@ import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { speechReady } from '../src/speech_readiness';
 import { OpenRouterClient } from '../src/speech_openrouter';
 import { localSpeechPlatform } from '../src/speech_platform';
+import { coreMlCompute } from '../src/speech_coreml';
 import type { SpeechOutput } from '../src/speech_service';
 import type { PanelWiring } from '../src/panel';
 import type { CatalogView } from '../src/speech_catalog';
 vi.mock('../src/speech_platform', () => ({ localSpeechPlatform: vi.fn() }));
+vi.mock('../src/speech_coreml', () => ({ coreMlCompute: vi.fn() }));
 import type { SpeechSettings } from '../src/speech_types';
 import type { OutputPreferenceWiring } from '../src/speech_output_preferences';
 import type { SpeechOutputRouter } from '../src/speech_output_router';
@@ -251,6 +253,7 @@ const fakes = vi.hoisted(() => {
         openRouterAllowed?: (model: string, voice: string) => boolean;
         computeMode: () => import('../src/speech_compute_types').SpeechComputeMode;
         computeChanged: (value: import('../src/speech_compute_types').SpeechComputeState) => void;
+        createCoreMl?: (listener: import('../src/speech_local_client').LocalListener) => unknown;
       },
     ) {
       this.compute = { requestedMode: options.computeMode(), actualBackend: 'none', gpuCheck: { phase: 'idle' } };
@@ -789,6 +792,11 @@ function changed(...names: string[]): void {
 /** Save and simulate the supported host without depending on the CI machine. */
 beforeEach(() => {
   vi.mocked(localSpeechPlatform).mockReturnValue({ supported: true });
+  vi.mocked(coreMlCompute).mockReturnValue({
+    gpu: false,
+    speechOptions: {},
+    check: () => Promise.resolve({ phase: 'unavailable', reason: 'unsupported' }),
+  });
   fakes.folders = [{ uri: { fsPath: '/project' } }];
   fakes.made.starting = Promise.resolve();
   fakes.made.arms = true;
@@ -2651,6 +2659,25 @@ it('uses the service manager as the sole compute authority', async () => {
   h.panel.wiring.speech.checkGpuSetup();
   await vi.waitFor(() => {
     expect(service.checkGpu).toHaveBeenCalledOnce();
+  });
+});
+
+it('CoreMlCompute: wires the host GPU offer, the CoreML worker and the explicit check into speech (#42)', async () => {
+  const check = vi.fn().mockResolvedValue({ phase: 'ready' });
+  const createCoreMl = vi.fn();
+  vi.mocked(coreMlCompute).mockReturnValueOnce({ gpu: true, speechOptions: { createCoreMl }, check });
+  const h = activated();
+  const service = last(fakes.made.speech);
+  const host = vi.mocked(coreMlCompute).mock.calls.at(-1)?.[0];
+  if (host === undefined) throw new Error('No CoreML host');
+  expect(host).toMatchObject({ supported: true, platform: process.platform, arch: process.arch, runtimeDirectory: '/ext/dist/speech' });
+  expect(host.installedModel).toBe(installedSpeechModel);
+  expect(host.storageDirectory).toBe('/storage');
+  expect(service.options.createCoreMl).toBe(createCoreMl);
+  expect(h.panel.wiring.speech.gpuSupported()).toBe(true);
+  h.panel.wiring.speech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(check).toHaveBeenCalledOnce();
   });
 });
 

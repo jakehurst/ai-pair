@@ -60,6 +60,8 @@ export interface LocalSynthesisClientOptions {
   /** Starts the transport; the model directory is also handed over for its bootstrap (e.g. worker data). */
   spawn(modelPath: string): WorkerLike;
   listener: LocalListener;
+  /** Bounds the model load; a CoreML session compiles the model on each load (#42). */
+  loadTimeoutMs?: number;
 }
 
 interface Inference {
@@ -108,7 +110,7 @@ export class LocalSynthesisClient implements LocalSynthesisPort {
     worker.on('exit', () => {
       this.exited(worker);
     });
-    this.arm();
+    this.arm(this.options.loadTimeoutMs);
     try {
       worker.postMessage(LOCAL_REQUEST.parse({ type: 'init', version: LOCAL_PROTOCOL_VERSION, epoch, modelPath }));
     } catch (error: unknown) {
@@ -270,11 +272,11 @@ export class LocalSynthesisClient implements LocalSynthesisPort {
   }
 
   /** Bounds the load or the current inference independently of any unit. */
-  private arm(): void {
+  private arm(ms = LOCAL_WORKER_TIMEOUT_MS): void {
     this.clearTimer();
     const timer = setTimeout(() => {
       this.retire('timeout');
-    }, LOCAL_WORKER_TIMEOUT_MS);
+    }, ms);
     this.timer = timer;
   }
 

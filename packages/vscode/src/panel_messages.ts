@@ -86,7 +86,7 @@ export type ToPanel =
   | { type: 'speechReadiness'; value: AudioDiagnostics }
   | { type: 'speechCost'; value: SessionSpeechCostView }
   | { type: 'speechTransport'; available: boolean }
-  | { type: 'speechSupport'; supported: boolean }
+  | { type: 'speechSupport'; supported: boolean; gpu: boolean }
   | { type: 'speechModelStatus'; value: SpeechModelStatus }
   | { type: 'speechModelStatusUnavailable' }
   | { type: 'speechCloudSupport'; supported: boolean }

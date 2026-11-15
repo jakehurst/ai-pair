@@ -87,7 +87,11 @@ it('keeps speech disabled by default and retains a missing local device', async 
   expect(list).not.toHaveBeenCalled();
   host.panelSpeech.computeMode('gpu');
   await host.speech.preview();
-  expect(panel.showSpeechStatus).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');
+  expect(panel.showSpeechStatus).toHaveBeenCalledWith(
+    expect.any(Number),
+    'unavailable',
+    'GPU speech is unavailable on this computer. Choose CPU in Pair Settings.',
+  );
   expect(host.panelSpeech.computeState().actualBackend).toBe('none');
   host.panelSpeech.checkGpuSetup();
   await vi.waitFor(() => {

@@ -42,6 +42,8 @@ const ENDED = { agent: 'The agent ended the session', programmer: 'You ended the
 
 // Tooltips: an element's data-tip shows under it after a moment's hover, or at once while one is
 // showing or just was, the way VS Code's own hovers do; and on keyboard focus. A click hides it.
+/** The GPU status on a host with no GPU path (#42). */
+const GPU_UNSUPPORTED = 'GPU speech is unavailable on this computer. Choose CPU.';
 const TIP_DELAY_MS = 500;
 const TIP_WARM_MS = 300;
 /** The delays in force: the shipped ones until the extension says otherwise (`timings`). */
@@ -207,6 +209,8 @@ let cloudSupported = false;
 let cloudHasKey = false;
 let cloudLoading = false;
 let speechSupported = false;
+/** The host has a GPU path (CoreML on macOS arm64, or the companion's Linux GPU). */
+let gpuSupported = false;
 let player: HTMLAudioElement | undefined;
 /**
  * Returns the one audio element every clip plays through. A browser that wants
@@ -1347,6 +1351,18 @@ ui.speechCompute.addEventListener('change', () => {
   const value = ui.speechCompute.value;
   if (value === 'cpu' || value === 'auto' || value === 'gpu') vscode.postMessage({ type: 'speechComputeMode', value });
 });
+/**
+ * Offers GPU and Auto only on a host with a GPU path; elsewhere the choices
+ * stay visible, disabled, with the reason in the GPU status (#42).
+ */
+function syncGpuOffer(): void {
+  // specs/CoreMlCompute.tla, Select: GPU is offered only where the path exists.
+  for (const option of ui.speechCompute.options) {
+    if (option.value !== 'cpu') option.disabled = !gpuSupported;
+  }
+  ui.gpuCheck.hidden = !gpuSupported;
+  if (!gpuSupported) ui.gpuStatus.textContent = GPU_UNSUPPORTED;
+}
 ui.gpuCheck.addEventListener('click', () => {
   vscode.postMessage({ type: 'checkGpuSetup' });
 });
@@ -1508,12 +1524,16 @@ function handle(message: ToPanel): void {
               : `: ${progress.current} of ${progress.total}`;
         detail = ` ${progress.stage}${counts}.`;
       }
-      ui.gpuStatus.textContent = `${status}${detail} ${actualBackend === 'none' ? 'No backend reported yet.' : `Using ${actualBackend.toUpperCase()}.`}`;
+      ui.gpuStatus.textContent = gpuSupported
+        ? `${status}${detail} ${actualBackend === 'none' ? 'No backend reported yet.' : `Using ${actualBackend.toUpperCase()}.`}`
+        : GPU_UNSUPPORTED;
       ui.gpuDetails.textContent = `Requested: ${requestedMode.toUpperCase()}. Actual backend: ${actualBackend.toUpperCase()}.`;
       return;
     }
     case 'speechSupport':
       speechSupported = message.supported;
+      gpuSupported = message.gpu;
+      syncGpuOffer();
       ui.speechSetup.disabled = !message.supported;
       syncSpeechProvider();
       if (!message.supported) ui.speechSettingsStatus.textContent = 'Local speech is unavailable in this build or on this host.';

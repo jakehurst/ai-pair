@@ -800,6 +800,8 @@ test('approval and queued work remain readable in a narrow panel', async ({ page
 test('experimental GPU setup remains readable and explicit in a narrow Settings dialog', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 360, height: 600 });
   const post = await load(page);
+  // GPU and Auto are offered only on a host with a GPU path (#42).
+  await post({ type: 'speechSupport', supported: true, gpu: true });
   await post({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });

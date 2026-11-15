@@ -437,6 +437,18 @@ or requests fresh GPU proof and loads the selected worker. Explicit GPU fails
 closed; Auto can fall back only after failed proof has been reaped. The Archi
 `Proof cancellation and CPU acquisition` sequence shows this path.
 
+On macOS arm64 the main extension's GPU path is Core ML (#42,
+`specs/CoreMlCompute.tla`). `speech_coreml.ts` gives `SpeechService` a
+`createCoreMl` factory: the GPU proof is a light check of the runtime and the
+installed q8 model, and the launch starts the CPU worker with
+`device: 'coreml'`, which builds the Kokoro model with
+`executionProviders: ['coreml']`. A session Core ML cannot create fails the
+load, so the backend is reported as GPU only by a loaded worker. Core ML
+compiles the model on every load (13 to 34 seconds measured), so that worker's
+load timeout is 120 seconds. **Set up GPU** loads the model in such a worker
+and retires it. The panel offers GPU and Auto only where `gpuSupported()` says
+a GPU path exists.
+
 Generation and unit identity fence discovery, progress, ready, result and exit
 callbacks. Cancellation, timeout, disposal or a later selection prevents stale
 work from starting a replacement, publishing readiness or playing audio.

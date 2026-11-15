@@ -94,6 +94,8 @@ export interface PanelWiring {
     diagnostic: (event: SpeechDiagnosticEvent) => void;
     settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
     supported: () => boolean;
+    /** Whether this host has a GPU path at all; the panel offers GPU and Auto only then. */
+    gpuSupported: () => boolean;
     installed: () => Promise<boolean>;
     modelStatus: () => Promise<SpeechModelStatus>;
     setup: () => Promise<void>;
@@ -586,7 +588,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       provider: 'kokoro',
       ...(supported ? {} : { reason: 'unsupported' }),
     });
-    this.send({ type: 'speechSupport', supported });
+    this.send({ type: 'speechSupport', supported, gpu: supported && this.wiring.speech.gpuSupported() });
     void this.wiring.speech
       .modelStatus()
       .then((value) => {

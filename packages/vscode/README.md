@@ -95,7 +95,9 @@ filter requests the ZDR routing policy, subject to account Safety Retention
 settings. A listed model can reject a format, voice, or text input. The
 companion's Kokoro requires a Linux x64 desktop with glibc; Mac users can use
 local main-extension Kokoro without the companion. Remote speech requires the
-companion. Experimental GPU support has limited hardware validation.
+companion. Experimental GPU support has limited hardware validation: Linux x64
+with the companion, and Apple silicon Macs through Core ML, which is not faster
+than the CPU there.
 
 **Listening speed** changes local playback independently of synthesis speed;
 rates other than 1 remain experimental. Agents can use `speech_mode: "continue"`

@@ -93,11 +93,14 @@ Choose a provider in Settings:
     Intel and Apple silicon.
     Enabled Kokoro prepares at extension load without downloading, speaking,
     or making a cloud request.
--   **Kokoro GPU** is experimental on supported Linux x64 systems. Select
-    **Auto** or **GPU**, then **Set up GPU**. Setup requires the CPU model and
-    can download a pinned GPU model (about 326 MB). Auto may fall back to CPU;
-    GPU mode fails closed. One AMD system has been tested; wider hardware and
-    listening validation remain open.
+-   **Kokoro GPU** is experimental on supported Linux x64 systems with the
+    companion, and on Apple silicon Macs with the main extension. Select
+    **Auto** or **GPU**, then **Set up GPU**. On Linux, setup requires the CPU
+    model and can download a pinned GPU model (about 326 MB); one AMD system has
+    been tested. On an Apple silicon Mac, GPU runs the same CPU model on Core ML
+    with no extra download. Its first load takes 15 to 35 seconds and it is not
+    faster than the CPU. Auto may fall back to CPU; GPU mode fails closed. Other
+    computers, including Intel Macs and Windows, offer only CPU.
 -   **ElevenLabs** uses a key saved through the secure VS Code prompt. Load
     account voices, select one, and preview it. Available voices depend on the
     account. Narration and previews use account credits.

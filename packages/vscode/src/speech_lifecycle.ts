@@ -1,6 +1,7 @@
 import type { GpuCapabilityResult } from './speech_gpu_capability';
 import { GpuProcessBusyError } from './speech_gpu_slot';
 import type { GpuLaunchCapability } from './speech_gpu_client';
+import type { CoreMlLaunch } from './speech_coreml';
 import type { GpuCheck, GpuCheckProgress, SpeechComputeBackend, SpeechComputeMode } from './speech_compute_types';
 import type { LocalListener, LocalSynthesisOutcome, LocalSynthesisPort, LocalSynthesisRequest } from './speech_local_client';
 import type { LocalSpeechFailureReason } from './speech_types';
@@ -35,7 +36,7 @@ export interface SpeechLifecycleOptions {
   resolveCpu: (signal: AbortSignal) => Promise<string | undefined>;
   proveGpu: (signal: AbortSignal) => Promise<GpuCapabilityResult>;
   createCpu: (listener: LocalListener) => LocalSynthesisPort;
-  createGpu: (capability: GpuLaunchCapability, listener: LocalListener) => LocalSynthesisPort;
+  createGpu: (capability: GpuLaunchCapability | CoreMlLaunch, listener: LocalListener) => LocalSynthesisPort;
   changed: (snapshot: SpeechLifecycleSnapshot) => void;
 }
 
@@ -195,7 +196,7 @@ export class SpeechLifecycle {
     await this.reap();
     if (!this.current(generation, signal)) return { status: 'canceled' };
     let backend: 'cpu' | 'gpu' = 'cpu';
-    let capability: GpuLaunchCapability | undefined;
+    let capability: GpuLaunchCapability | CoreMlLaunch | undefined;
     if (this.value.requestedMode !== 'cpu') {
       const controller = new AbortController();
       function abort(): void {

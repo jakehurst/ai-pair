@@ -172,6 +172,7 @@ interface Harness {
     outputRefresh: ReturnType<typeof vi.fn>;
     outputSelect: ReturnType<typeof vi.fn>;
     supported: ReturnType<typeof vi.fn<() => boolean>>;
+    gpuSupported: ReturnType<typeof vi.fn<() => boolean>>;
     installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
     modelStatus: ReturnType<typeof vi.fn<PanelWiring['speech']['modelStatus']>>;
     setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
@@ -280,6 +281,7 @@ function harness(
     loadVoices: vi.fn<(more: boolean) => void>(),
     validCloudVoice: vi.fn<(id: string) => boolean>(),
     supported: vi.fn(() => true),
+    gpuSupported: vi.fn(() => false),
     installed: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
     modelStatus: vi
       .fn<PanelWiring['speech']['modelStatus']>()
@@ -870,7 +872,7 @@ describe('receive', () => {
       { type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } },
       { type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } },
       { type: 'speechCloudSupport', supported: true },
-      { type: 'speechSupport', supported: true },
+      { type: 'speechSupport', supported: true, gpu: false },
       { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
@@ -1334,7 +1336,7 @@ it('does not offer setup or preview on an unsupported host', async () => {
   view.send({ type: 'speechSetup' });
   view.send({ type: 'speechPreview' });
   await flush();
-  expect(view.posted).toContainEqual({ type: 'speechSupport', supported: false });
+  expect(view.posted).toContainEqual({ type: 'speechSupport', supported: false, gpu: false });
   expect(speech.setup).not.toHaveBeenCalled();
   expect(speech.preview).not.toHaveBeenCalled();
 });
@@ -2069,4 +2071,16 @@ it('reconciles companion narration identity on replay and rejects stale sessions
     [2, true],
     [2, false],
   ]);
+});
+
+it('OfferedOnlyWhereCapable: tells the page GPU is possible only on a supported host with a GPU path (#42)', async () => {
+  const { panel, speech } = harness();
+  speech.gpuSupported.mockReturnValue(true);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSupport', supported: true, gpu: true });
+  speech.supported.mockReturnValue(false);
+  panel.refreshSpeechSupport();
+  expect(view.posted).toContainEqual({ type: 'speechSupport', supported: false, gpu: false });
 });

@@ -633,6 +633,7 @@ it('reads local settings, previews installed models, and keeps cloud unavailable
   });
   expect(host.panelSpeech.cloudSupported()).toBe(false);
   expect(host.panelSpeech.supported()).toBe(false);
+  expect(host.panelSpeech.gpuSupported()).toBe(false);
   expect(await host.panelSpeech.installed()).toBe(true);
   fakes.hasKey.mockResolvedValueOnce(true);
   host.panelSpeech.keyRefresh();
@@ -958,6 +959,7 @@ it('routes explicit GPU setup through preflight, model installation, fresh proof
 
 it('enables GPU inference only with an explicit reviewed gate and fresh host capability', async () => {
   const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  expect(host.panelSpeech.gpuSupported()).toBe(true);
   const capability: import('../../vscode/src/speech_gpu_client').GpuLaunchCapability = {
     modelDirectory: '/gpu',
     runtimeDirectory: '/runtime',

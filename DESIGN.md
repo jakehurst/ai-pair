@@ -163,6 +163,10 @@ pinned model and an isolated local worker. Settings discloses the additional
 model download and displays the requested mode, actual backend and setup
 status. Auto may use CPU when GPU verification fails; explicit GPU does not
 silently fall back. The GPU path remains subject to physical AMD validation.
+On Apple silicon, GPU runs the shipped q8 model on ONNX Runtime's Core ML
+execution provider instead, with no extra model (#42). Settings offers GPU and
+Auto only on a computer with a GPU path; elsewhere they are disabled and the
+status says to choose CPU.
 
 For ElevenLabs, Settings explains that selected text and previews leave the
 machine and consume account credits. Add or replace a key through VS Code's

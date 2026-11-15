@@ -120,6 +120,8 @@ export interface SpeechServiceOptions {
   gpuCapability?: (signal: AbortSignal) => Promise<GpuCapabilityResult>;
   /** Creates an isolated GPU worker using the fresh capability. */
   createGpu?: (capability: GpuLaunchCapability, listener: LocalListener) => LocalSynthesisPort;
+  /** Starts the speech worker on CoreML, on the one host with that GPU path (#42). */
+  createCoreMl?: (listener: LocalListener) => LocalSynthesisPort;
   /** Reports fixed GPU availability when Auto falls back. */
   gpuCheck?: (value: Extract<GpuCheck, { phase: 'unavailable' }>) => void;
 }
@@ -217,7 +219,10 @@ export class SpeechService implements NarrationPort {
         return model;
       },
       proveGpu: (signal) =>
-        options.gpuCapability?.(signal) ?? Promise.resolve({ check: { phase: 'unavailable', reason: 'runtime_missing' } }),
+        options.gpuCapability?.(signal) ??
+        (options.createCoreMl === undefined
+          ? Promise.resolve({ check: { phase: 'unavailable', reason: 'runtime_missing' } })
+          : this.coreMlLaunch(signal)),
       createCpu: (listener) =>
         options.createLocal?.(listener) ??
         new LocalSynthesisClient({
@@ -225,6 +230,11 @@ export class SpeechService implements NarrationPort {
           listener,
         }),
       createGpu: (capability, listener) => {
+        // specs/CoreMlCompute.tla, Load: a CoreML launch runs the CPU worker on the CoreML provider.
+        if ('kind' in capability) {
+          if (options.createCoreMl === undefined) throw new Error('GPU worker unavailable');
+          return options.createCoreMl(listener);
+        }
         if (options.createGpu === undefined) throw new Error('GPU worker unavailable');
         return options.createGpu(capability, listener);
       },
@@ -246,6 +256,21 @@ export class SpeechService implements NarrationPort {
         }
       },
     });
+  }
+
+  /**
+   * Checks the CoreML path before a GPU launch: the runtime and the installed
+   * q8 model. Whether CoreML can run it is proved by the worker's load, and
+   * only a loaded worker reports the GPU backend.
+   */
+  private async coreMlLaunch(signal: AbortSignal): Promise<GpuCapabilityResult> {
+    // specs/CoreMlCompute.tla, Check.
+    if (!(await speechRuntimeAvailable(this.options.runtimeDirectory)) || signal.aborted) {
+      return { check: { phase: 'unavailable', reason: 'runtime_missing' } };
+    }
+    const model = await installedSpeechModel(this.options.storageDirectory);
+    if (model === undefined || signal.aborted) return { check: { phase: 'unavailable', reason: 'model_missing' } };
+    return { check: { phase: 'ready' }, capability: { kind: 'coreml', modelDirectory: model } };
   }
 
   /** Selects the desired backend and invalidates old acquisition work. */
@@ -372,9 +397,11 @@ export class SpeechService implements NarrationPort {
     if (
       provider === 'kokoro' &&
       computeMode === 'gpu' &&
-      (this.options.gpuCapability === undefined || this.options.createGpu === undefined)
+      (this.options.gpuCapability === undefined || this.options.createGpu === undefined) &&
+      this.options.createCoreMl === undefined
     ) {
-      this.options.output.status(id, 'unavailable', 'GPU speech is not available. Check GPU setup.');
+      // specs/CoreMlCompute.tla, NoGpuWithoutPath: a saved GPU setting fails visibly here.
+      this.options.output.status(id, 'unavailable', 'GPU speech is unavailable on this computer. Choose CPU in Pair Settings.');
       return Promise.resolve();
     }
     const voice = SPEECH_VOICES.find((candidate) => candidate === settings.voice);

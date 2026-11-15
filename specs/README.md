@@ -99,6 +99,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
+| `CoreMlCompute.cfg` | every host capability, model and Core ML outcome, three modes | holds | 82 |
 | `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 264 |
 | `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 251 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
@@ -3255,6 +3256,39 @@ violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
 `attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
 exercise rejection and guidance. An already-installed old workspace may still
 select legacy fallback, which the new companion cannot prevent.
+
+### `CoreMlCompute`: GPU speech on Core ML
+
+On macOS arm64 the GPU path is ONNX Runtime's Core ML execution provider, with
+the shipped q8 model and no extra download (#42). The model covers whether the
+host has that path (`capable`), whether the model is installed, whether Core ML
+can create the session (`loads`), the three modes, and what the panel offers.
+A saved GPU setting can exist on any host. `Check` is the light check before a
+launch: Auto falls back to the CPU there, and only there; a Core ML session
+that then fails to load fails the unit in either mode. TLC checked 82 distinct
+states, with `GpuSpeaks` and `Settles`. `NoGpuWithoutPath` is implied by
+`GpuOnlyIfLoaded`, which catches its mutation first. Speed is not modelled:
+measured on one Apple silicon Mac, a Core ML load took 13 to 34 seconds and a
+sentence of 6.5 seconds of audio took 3.2 to 4.9 seconds, against 3.2 to 3.5 on
+the CPU.
+
+| Mutation | Result |
+|---|---|
+| Explicit GPU falls back to the CPU when Core ML fails | `ExplicitNoFallback` violated |
+| GPU reported without a Core ML session | `GpuOnlyIfLoaded` violated |
+| GPU offered on every host | `OfferedOnlyWhereCapable` violated |
+| GPU selected without checking the offer | `NoGpuSelectWithoutPath` violated |
+| Core ML run on a host without the path | `GpuOnlyIfLoaded` violated |
+| The check never settles without a model | `Settles` violated |
+| The GPU check always fails, as code that does nothing would | `GpuSpeaks` violated |
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `GpuOnlyIfLoaded` | `speech_coreml.test.ts`: GpuOnlyIfLoaded: reports ready only after a CoreML session loads, and waits for the worker to exit; a CoreML session that fails to load fails the check; `speech_engine.test.ts`: CoreMlCompute Load: loads the q8 model on the CoreML execution provider, never the CPU path. |
+| `ExplicitNoFallback`, `NoGpuWithoutPath` | `speech_service.test.ts`: refuses explicit GPU when GPU collaborators are missing; CoreMlCompute Check and Load: launches a CoreML worker only after the runtime and model check. |
+| `OfferedOnlyWhereCapable`, `NoGpuSelectWithoutPath` | `speech_coreml.test.ts`: OfferedOnlyWhereCapable: offers no GPU and checks nothing without the CoreML path; `panel.test.ts`: OfferedOnlyWhereCapable: tells the page GPU is possible only on a supported host with a GPU path; `webview/panel.test.ts`: OfferedOnlyWhereCapable: disables GPU and Auto and explains why on a host without a GPU path. |
+| `GpuSpeaks` | `speech_worker.test.ts`: CoreMlCompute Load: loads on CoreML only when the host asked for it; `extension.test.ts`: CoreMlCompute: wires the host GPU offer, the CoreML worker and the explicit check into speech. Real Core ML synthesis was run once by hand on an Apple silicon Mac; no automated test runs Core ML. |
+| `Settles` | `speech_coreml.test.ts`: Settles: reports a missing model, and an abort before or during the load; `speech_local_client.test.ts`: HealthyProgress: bounds a slow CoreML load by its own load timeout. |
 
 ### `GpuSetup`: preflight, download and hardware proof
 

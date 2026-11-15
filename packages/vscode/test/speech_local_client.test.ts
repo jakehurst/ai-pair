@@ -71,7 +71,7 @@ function request(id = 1, part = 0, final = true): LocalSynthesisRequest {
 }
 
 /** Makes a client over fake workers and records its listener calls. */
-function harness() {
+function harness(loadTimeoutMs?: number) {
   const made: FakeWorker[] = [];
   const listener: LocalListener = { ready: vi.fn<() => void>(), retired: vi.fn<(reason: string) => void>() };
   const spawn = vi.fn<(modelPath: string) => WorkerLike>(() => {
@@ -79,7 +79,7 @@ function harness() {
     made.push(worker);
     return worker;
   });
-  const client = new LocalSynthesisClient({ spawn, listener });
+  const client = new LocalSynthesisClient(loadTimeoutMs === undefined ? { spawn, listener } : { spawn, listener, loadTimeoutMs });
   /** Loads the first worker and makes it ready. */
   function warm(): FakeWorker {
     client.load('/model');
@@ -465,6 +465,19 @@ describe('LocalSynthesisClient watchdog', () => {
     vi.advanceTimersByTime(1);
     expect(client.state()).toBe('retiring');
     expect(made[0]?.terminate).toHaveBeenCalledTimes(1);
+    expect(listener.retired).toHaveBeenCalledExactlyOnceWith('timeout');
+  });
+
+  it('HealthyProgress: bounds a slow CoreML load by its own load timeout, and inference by the usual one (#42)', () => {
+    const loadTimeoutMs = LOCAL_WORKER_TIMEOUT_MS * 6;
+    const { client, listener, made } = harness(loadTimeoutMs);
+    client.load('/model');
+    vi.advanceTimersByTime(loadTimeoutMs - 1);
+    expect(client.state()).toBe('loading');
+    made[0]?.reply(ready(1));
+    expect(client.state()).toBe('ready');
+    void client.synthesize(request());
+    vi.advanceTimersByTime(LOCAL_WORKER_TIMEOUT_MS);
     expect(listener.retired).toHaveBeenCalledExactlyOnceWith('timeout');
   });
 

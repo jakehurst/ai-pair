@@ -51,6 +51,22 @@ vi.mock('../src/speech_segments', () => ({
   speechSegments: vi.fn((text: string) => text.match(/[^.!?]+[.!?]\s*/gu) ?? [text]),
 }));
 
+/** Returns a Linux GPU launch capability; the service only routes it by shape. */
+function linuxCapability(): import('../src/speech_gpu_client').GpuLaunchCapability {
+  return {
+    runtimeDirectory: '/runtime',
+    modelDirectory: '/gpu-model',
+    executablePath: '/node',
+    loaderPath: '/loader',
+    loaderSha256: 'a'.repeat(64),
+    driverPath: '/driver',
+    driverSha256: 'b'.repeat(64),
+    driverDevice: '1',
+    driverInode: '2',
+    environment: { LANG: 'C', VK_DRIVER_FILES: '/icd.json', VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: '' },
+  };
+}
+
 /** Checks a callback captured from the timer fake. */
 function isTimerCallback(value: unknown): value is () => void {
   return typeof value === 'function';
@@ -2034,7 +2050,7 @@ it('passes GPU proof and worker factories through to the manager', async () => {
   if (options === undefined) throw new Error('Missing lifecycle options');
   const signal = new AbortController().signal;
   expect(await options.proveGpu(signal)).toEqual({ check: { phase: 'unavailable', reason: 'runtime_missing' } });
-  expect(() => options.createGpu(mock(), mock())).toThrow('GPU worker unavailable');
+  expect(() => options.createGpu(linuxCapability(), mock())).toThrow('GPU worker unavailable');
   const createGpu = vi.fn(() => mock<LocalSynthesisPort>());
   const gpuCapability = vi.fn().mockResolvedValue({ check: { phase: 'unavailable', reason: 'probe_failed' } });
   const configuredService = new SpeechService({
@@ -2051,10 +2067,62 @@ it('passes GPU proof and worker factories through to the manager', async () => {
   if (configured === undefined) throw new Error('Missing lifecycle options');
   await configured.proveGpu(signal);
   expect(gpuCapability).toHaveBeenCalledWith(signal);
-  const capability = mock<import('../src/speech_gpu_client').GpuLaunchCapability>();
+  const capability = linuxCapability();
   const listener = mock<LocalListener>();
   configured.createGpu(capability, listener);
   expect(createGpu).toHaveBeenCalledWith(capability, listener);
+});
+
+it('CoreMlCompute Check and Load: launches a CoreML worker only after the runtime and model check (#42)', async () => {
+  const createCoreMl = vi.fn(() => mock<LocalSynthesisPort>());
+  const output = mock<SpeechOutput>();
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    createCoreMl,
+    computeMode: () => 'gpu',
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const options = local.options;
+  if (options === undefined) throw new Error('Missing lifecycle options');
+  const signal = new AbortController().signal;
+  vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(false);
+  expect(await options.proveGpu(signal)).toEqual({ check: { phase: 'unavailable', reason: 'runtime_missing' } });
+  vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(true);
+  vi.mocked(installedSpeechModel).mockResolvedValueOnce(undefined);
+  expect(await options.proveGpu(signal)).toEqual({ check: { phase: 'unavailable', reason: 'model_missing' } });
+  vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(true);
+  vi.mocked(installedSpeechModel).mockResolvedValueOnce('/model');
+  const result = await options.proveGpu(signal);
+  expect(result).toEqual({ check: { phase: 'ready' }, capability: { kind: 'coreml', modelDirectory: '/model' } });
+  const aborted = new AbortController();
+  aborted.abort();
+  vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(true);
+  expect(await options.proveGpu(aborted.signal)).toEqual({ check: { phase: 'unavailable', reason: 'runtime_missing' } });
+  const late = new AbortController();
+  const lookup = Promise.withResolvers<string | undefined>();
+  vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(true);
+  vi.mocked(installedSpeechModel).mockReturnValueOnce(lookup.promise);
+  const pending = options.proveGpu(late.signal);
+  await settle();
+  late.abort();
+  lookup.resolve('/model');
+  expect(await pending).toEqual({ check: { phase: 'unavailable', reason: 'model_missing' } });
+  const listener = mock<LocalListener>();
+  options.createGpu({ kind: 'coreml', modelDirectory: '/model' }, listener);
+  expect(createCoreMl).toHaveBeenCalledWith(listener);
+  expect(() => options.createGpu(linuxCapability(), listener)).toThrow('GPU worker unavailable');
+  await service.speak('Hello');
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('unavailable on this computer'));
+});
+
+it('refuses a CoreML launch when no CoreML worker factory was given', () => {
+  harness();
+  const options = local.options;
+  if (options === undefined) throw new Error('Missing lifecycle options');
+  expect(() => options.createGpu({ kind: 'coreml', modelDirectory: '/model' }, mock<LocalListener>())).toThrow('GPU worker unavailable');
 });
 
 it('projects manager snapshots and ignores a repeated mode selection', () => {
@@ -2115,7 +2183,7 @@ it('reports readiness from the selected mode and current lifecycle snapshot', ()
 it('refuses explicit GPU when GPU collaborators are missing', async () => {
   const { service, output } = harness(true, () => 'gpu');
   await service.speak('Hello');
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'GPU speech is not available. Check GPU setup.');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'GPU speech is unavailable on this computer. Choose CPU in Pair Settings.');
   expect(local.manager.acquire).not.toHaveBeenCalled();
 });
 

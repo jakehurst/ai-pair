@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.40.0
+
+-   Run Kokoro GPU speech on Apple silicon Macs through Core ML, with the CPU
+    model and no extra download. The first load takes 15 to 35 seconds and it is
+    not faster than the CPU; explicit GPU still never falls back to the CPU
+    (#42).
+-   Offer GPU and Auto only on a computer with a GPU path. Elsewhere, including
+    Intel Macs and Windows, they are disabled and Settings says to choose CPU;
+    a saved GPU setting there now says so instead of "Check GPU setup".
+
 ## 0.39.2
 
 -   Warn when the old AI Pair (`michalstrba.ai-pair`) is still installed: it

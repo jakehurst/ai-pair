@@ -1,6 +1,7 @@
 import { GpuProcessBusyError } from './speech_gpu_slot';
 import * as path from 'node:path';
 import type { GpuLaunchCapability } from './speech_gpu_client';
+import type { CoreMlLaunch } from './speech_coreml';
 import type { GpuCheck } from './speech_compute_types';
 import { gpuEnvironment } from './speech_gpu_environment';
 import { checkGpuSetup, type GpuSetupDependencies } from './speech_gpu_setup';
@@ -22,13 +23,16 @@ export interface GpuCapabilityInputs extends Omit<GpuSetupDependencies, 'probe'>
 }
 
 /** Result of a fresh setup and launch capability check. */
-export interface GpuCapabilityResult {
+export interface GpuCapabilityResult<C extends GpuLaunchCapability | CoreMlLaunch = GpuLaunchCapability | CoreMlLaunch> {
   check: GpuCheck;
-  capability?: GpuLaunchCapability;
+  capability?: C;
 }
 
 /** Issues a capability only after a fresh fail-closed check succeeds. */
-export async function issueGpuCapability(options: GpuCapabilityInputs, signal?: AbortSignal): Promise<GpuCapabilityResult> {
+export async function issueGpuCapability(
+  options: GpuCapabilityInputs,
+  signal?: AbortSignal,
+): Promise<GpuCapabilityResult<GpuLaunchCapability>> {
   function checkAbort(): void {
     if (signal?.aborted === true) throw new DOMException('Aborted', 'AbortError');
   }

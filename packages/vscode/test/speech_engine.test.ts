@@ -10,11 +10,28 @@ const fake = vi.hoisted(() => ({
     dims = [1, 3];
   },
   load: vi.fn(),
+  styleModel: vi.fn(),
+  tokenizer: vi.fn(),
+  constructed: vi.fn<(model: unknown, tokenizer: unknown) => unknown>(),
   tokenize: vi.fn(),
   generate: vi.fn(),
 }));
-vi.mock('@huggingface/transformers', () => ({ env: { allowRemoteModels: true, allowLocalModels: false }, Tensor: fake.Tensor }));
-vi.mock('kokoro-js', () => ({ KokoroTTS: { from_pretrained: fake.load } }));
+vi.mock('@huggingface/transformers', () => ({
+  env: { allowRemoteModels: true, allowLocalModels: false },
+  Tensor: fake.Tensor,
+  StyleTextToSpeech2Model: { from_pretrained: fake.styleModel },
+  AutoTokenizer: { from_pretrained: fake.tokenizer },
+}));
+vi.mock('kokoro-js', () => ({
+  KokoroTTS: Object.assign(
+    // A constructor mock must be constructable.
+    // oxlint-disable-next-line eslint/prefer-arrow-callback
+    function KokoroTTS(model: unknown, tokenizer: unknown) {
+      return fake.constructed(model, tokenizer);
+    },
+    { from_pretrained: fake.load },
+  ),
+}));
 vi.mock('../vendor/kokoro_phonemize.mjs', () => ({ phonemize: vi.fn() }));
 
 it('loads local CPU assets and forwards the same untruncated tokens to the model', async () => {
@@ -42,4 +59,25 @@ it('loads local CPU assets and forwards the same untruncated tokens to the model
   expect(fake.generate).toHaveBeenCalledWith(idsFromTokenizer, { voice: 'af_heart', speed: 1 });
   fake.tokenize.mockReturnValueOnce({ input_ids: 'invalid' });
   expect(() => engine.tokenize('phonemes')).toThrow('invalid data');
+});
+
+it('CoreMlCompute Load: loads the q8 model on the CoreML execution provider, never the CPU path (#42)', async () => {
+  const model = mock<KokoroTTS>();
+  const style = { model: 'style' };
+  const tokenizer = { tokenizer: 'tokenizer' };
+  fake.styleModel.mockResolvedValue(style);
+  fake.tokenizer.mockResolvedValue(tokenizer);
+  fake.constructed.mockReturnValue(model);
+  fake.load.mockClear();
+  await loadSpeechEngine('/local/model', true);
+  expect(fake.styleModel).toHaveBeenCalledWith('/local/model', {
+    dtype: 'q8',
+    device: 'cpu',
+    session_options: { executionProviders: ['coreml'] },
+  });
+  expect(fake.tokenizer).toHaveBeenCalledWith('/local/model');
+  expect(fake.constructed).toHaveBeenCalledWith(style, tokenizer);
+  expect(fake.load).not.toHaveBeenCalled();
+  fake.styleModel.mockRejectedValueOnce(new Error('CoreML could not create the session'));
+  await expect(loadSpeechEngine('/local/model', true)).rejects.toThrow('CoreML');
 });

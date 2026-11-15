@@ -742,6 +742,13 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/speech_coreml.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/speech_credentials.ts": {
     "unit": {
       "lines": 100,
