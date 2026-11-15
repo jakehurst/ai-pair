@@ -2,7 +2,9 @@
 
 The design that refines the [nonverbal feedback proposal](nonverbal-pairing-feedback.md).
 It was decided with the programmer on 2026-11-15 and is tracked on #83. It is a
-design only; nothing is built, and the spec-first process still applies.
+design only; nothing is built, and the spec-first process still applies. A
+later [revised concept](nonverbal-perception-service.md) moves perception into
+a standalone service; this file has not yet been revised to match it.
 
 ## Decisions
 
