@@ -1,0 +1,8 @@
+{
+  "name": "ai-pair",
+  "publisher": "michalstrba",
+  "version": "0.30.0",
+  "engines": {
+    "vscode": "^1.106.0"
+  }
+}

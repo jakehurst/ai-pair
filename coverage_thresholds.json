@@ -611,6 +611,18 @@
       "functions": 94
     }
   },
+  "packages/vscode/src/old_extension.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    },
+    "integration": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/output.ts": {
     "unit": {
       "lines": 100,

@@ -17,6 +17,12 @@ FAKE
 #!/bin/bash
 printf '%s\n' "$*" >>"${RECORD}"
 printf '%s %s %s %s\n' "${PULSE_SERVER}" "${PIPEWIRE_REMOTE}" "${NODE_V8_COVERAGE:-}" "${AI_PAIR_TEST_GPU_NODE:-}" >>"${RECORD}.env"
+for arg in "$@"; do
+  if [[ "${arg}" == --extensions-dir=* ]] \
+    && [[ -f "${arg#--extensions-dir=}/michalstrba.ai-pair-0.30.0/package.json" ]]; then
+    printf 'old %s\n' "${arg}" >>"${RECORD}.old"
+  fi
+done
 if [[ "${FAIL_CODE:-}" == 1 ]]; then exit 7; fi
 FAKE
   chmod +x "${BATS_TEST_TMPDIR}/bin/code"
@@ -29,19 +35,26 @@ FAKE
     "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode" --no-sandbox
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${RECORD}")" -eq 7 ]
+  [ "$(wc -l <"${RECORD}")" -eq 9 ]
   grep -q 'integration_catalog_paths.js' "${RECORD}"
   grep -q 'integration_companion_faults.js' "${RECORD}"
   grep -q 'integration_companion_version.js' "${RECORD}"
   grep -q 'integration_workspace_incompatible.js' "${RECORD}"
-  [ "$(grep -c -- '--remote-debugging-port=0' "${RECORD}")" -eq 2 ]
+  [ "$(grep -c -- '--remote-debugging-port=0' "${RECORD}")" -eq 4 ]
+  grep -q 'integration_old_extension.js' "${RECORD}"
+  grep -q 'integration_old_extension_dismissed.js' "${RECORD}"
+  # Only the old-extension fixtures get a copy of the old AI Pair (#78).
+  [ "$(wc -l <"${RECORD}.old")" -eq 2 ]
+  grep -q 'integration_old_extension/extensions' "${RECORD}.old"
+  grep -q 'integration_old_extension_dismissed/extensions' "${RECORD}.old"
+  [ -f "${ROOT}/packages/vscode/test/fixtures/old_extension/package.json" ]
   grep -q 'integration_no_workspace.js' "${RECORD}"
   grep -q 'integration_restricted_runtime.js' "${RECORD}"
   grep -q 'integration_release_extension_owner_paths.js' "${RECORD}"
   ! grep 'integration_no_workspace.js' "${RECORD}" | grep -Fq "${BATS_TEST_TMPDIR}/run/speech-faults/integration_no_workspace/workspace"
-  [ "$(grep -c -- '--shared-data-dir=' "${RECORD}")" -eq 7 ]
-  [ "$(grep -c -- '--password-store=basic' "${RECORD}")" -eq 7 ]
-  [ "$(grep -c "${NODE_V8_COVERAGE}" "${RECORD}.env")" -eq 7 ]
+  [ "$(grep -c -- '--shared-data-dir=' "${RECORD}")" -eq 9 ]
+  [ "$(grep -c -- '--password-store=basic' "${RECORD}")" -eq 9 ]
+  [ "$(grep -c "${NODE_V8_COVERAGE}" "${RECORD}.env")" -eq 9 ]
   grep -q 'unix:/nonexistent ai-pair-integration-no-audio' "${RECORD}.env"
   [ ! -e "${BATS_TEST_TMPDIR}/run/speech-faults" ]
 }
@@ -59,7 +72,7 @@ FAKE
     "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode"
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${RECORD}")" -eq 5 ]
+  [ "$(wc -l <"${RECORD}")" -eq 7 ]
   ! grep -q 'integration_catalog_paths.js' "${RECORD}"
   ! grep -q -- '--password-store=basic' "${RECORD}"
 }

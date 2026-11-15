@@ -7,8 +7,8 @@ const ATTEMPTS = 100;
 const INTERVAL_MS = 100;
 const TIMEOUT_MS = 2000;
 
-/** Checks whether one workbench renderer contains the exact notification text. */
-async function rendererContains(url: string, expected: string): Promise<boolean> {
+/** Evaluates an expression in one workbench renderer and reports whether it returned true. */
+async function rendererTrue(url: string, expression: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
     const timer = setTimeout(() => {
@@ -20,7 +20,7 @@ async function rendererContains(url: string, expected: string): Promise<boolean>
         JSON.stringify({
           id: 1,
           method: 'Runtime.evaluate',
-          params: { expression: `document.body.innerText.includes(${JSON.stringify(expected)})`, returnByValue: true },
+          params: { expression, returnByValue: true },
         }),
       );
     });
@@ -49,8 +49,8 @@ async function rendererContains(url: string, expected: string): Promise<boolean>
   });
 }
 
-/** Waits for the exact user-facing message in the disposable VS Code window. */
-export async function expectNotification(expected: string): Promise<void> {
+/** Polls every workbench renderer until the expression returns true in one of them, or fails with the message. */
+async function untilRenderer(expression: string, failure: string): Promise<void> {
   const portFile = process.env.AI_PAIR_TEST_CDP_FILE;
   assert.ok(portFile !== undefined && portFile !== '', 'isolated debugger port file is missing');
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
@@ -69,7 +69,8 @@ export async function expectNotification(expected: string): Promise<void> {
           typeof target.webSocketDebuggerUrl === 'string' &&
           target.webSocketDebuggerUrl.startsWith(`ws://127.0.0.1:${port}/`)
         ) {
-          if (await rendererContains(target.webSocketDebuggerUrl, expected)) return;
+          // A renderer still loading may not answer; the next poll asks it again.
+          if (await rendererTrue(target.webSocketDebuggerUrl, expression).catch(() => false)) return;
         }
       }
     }
@@ -77,5 +78,22 @@ export async function expectNotification(expected: string): Promise<void> {
       setTimeout(resolve, INTERVAL_MS);
     });
   }
-  assert.fail(`The workbench did not show the expected notification: ${expected}`);
+  assert.fail(failure);
+}
+
+/** Waits for the exact user-facing message in the disposable VS Code window. */
+export async function expectNotification(expected: string): Promise<void> {
+  await untilRenderer(
+    `document.body.innerText.includes(${JSON.stringify(expected)})`,
+    `The workbench did not show the expected notification: ${expected}`,
+  );
+}
+
+/** Clicks a notification's button or action by its exact label or the start of its accessible name, which may add a keybinding, as the programmer would. */
+export async function clickNotificationButton(label: string): Promise<void> {
+  const find = `[...document.querySelectorAll('.notification-list-item a')].find((b) => b.textContent === ${JSON.stringify(label)} || (b.getAttribute('aria-label') ?? '').startsWith(${JSON.stringify(label)}))`;
+  await untilRenderer(
+    `(() => { const button = ${find}; button?.click(); return button !== undefined; })()`,
+    `No notification button: ${label}`,
+  );
 }

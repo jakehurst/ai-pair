@@ -78,6 +78,7 @@ import { installedSpeechModel, setupSpeech, speechModelStatus } from '../src/spe
 import { discoverOutputs } from '../src/speech_native_output';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
+import { warnOldExtension } from '../src/old_extension';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -657,6 +658,7 @@ vi.mock('../src/panel_placement', () => ({
     }
   },
 }));
+vi.mock('../src/old_extension', () => ({ warnOldExtension: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
     narration = {
@@ -851,6 +853,7 @@ describe('activate', () => {
       launcher: '/ext/launcher',
     });
     expect(writeLauncher).toHaveBeenCalledWith('/ext');
+    expect(warnOldExtension).toHaveBeenCalled();
     expect(claudeStarter).toHaveBeenCalledWith('/ext/launcher');
     expect(watchOutside).toHaveBeenCalledWith(h.controller, h.editor, h.panel);
     expect(h.bridge.options.workspaceFolders()).toEqual(['/project']);

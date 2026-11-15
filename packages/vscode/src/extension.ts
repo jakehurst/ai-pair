@@ -44,6 +44,7 @@ import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 import { PanelPlacement, type PanelOwner, type PanelPrepareFailure } from './panel_placement';
 import { WorkspaceSession } from './workspace_session';
+import { warnOldExtension } from './old_extension';
 
 /** Values compiled into this running bundle, not the extension currently on disk. */
 declare const AI_PAIR_VERSION: string;
@@ -158,6 +159,7 @@ let stopSpeech: (() => Promise<void>) | undefined;
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
   const previousRetirement = stopSpeech?.() ?? Promise.resolve();
+  void warnOldExtension();
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
 
   // Activation is a cycle: the editor and the panel call the controller, which drives them through

@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-11-14.
+Last updated: css, 2026-11-15.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -196,6 +196,7 @@ Last updated: tla, 2026-11-14.
 | `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 90.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 88.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 92.3% F 94.5% | - | - | - | - |
+| `packages/vscode/src/old_extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.5% F 100.0% | - | - | - | - |
@@ -337,6 +338,8 @@ Last updated: tla, 2026-11-14.
 | `packages/vscode/test/integration_model_status.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_notification.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_old_extension.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_old_extension_dismissed.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | test | - | - | test |
@@ -357,6 +360,7 @@ Last updated: tla, 2026-11-14.
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/old_extension.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | test | test | - | test |

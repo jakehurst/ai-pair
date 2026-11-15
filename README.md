@@ -52,6 +52,12 @@ computer with your speakers. In an SSH or container window, install the
 companion on the local side. Reload the VS Code window after installing or
 updating both extensions.
 
+AI Pair was published as `michalstrba.ai-pair` before. VS Code treats that as a
+different extension, so uninstall it when you install `mattyv.ai-pair`; AI Pair
+warns while both are installed and offers to uninstall the old one. Speech API
+keys stay with the extension that saved them, so add your ElevenLabs or
+OpenRouter key again afterwards.
+
 Run **AI Pair: Set Up Agent** in the command palette, select your agent, then
 restart it so it reloads its MCP configuration. Open a project in VS Code,
 start the agent in that folder, and ask it to pair. See [Connect your

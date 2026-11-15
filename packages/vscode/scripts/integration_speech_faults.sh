@@ -26,7 +26,8 @@ fi
 for fixture in integration_catalog_paths integration_companion_faults \
   integration_companion_version integration_workspace_incompatible \
   integration_no_workspace integration_restricted_runtime \
-  integration_release_extension_owner_paths; do
+  integration_release_extension_owner_paths integration_old_extension \
+  integration_old_extension_dismissed; do
   if [[ "${platform}" != Linux ]] \
     && [[ "${fixture}" == integration_catalog_paths ||
       "${fixture}" == integration_restricted_runtime ]]; then
@@ -41,6 +42,11 @@ for fixture in integration_catalog_paths integration_companion_faults \
     ln -s "${root}/packages/vscode/test/fixtures/incompatible_companion" \
       "${profile}/${fixture}/extensions/mattyv.ai-pair-local-audio"
   fi
+  if [[ "${fixture}" == integration_old_extension* ]]; then
+    # A copy: uninstalling deletes it, which must not reach the repository.
+    cp -R "${root}/packages/vscode/test/fixtures/old_extension" \
+      "${profile}/${fixture}/extensions/michalstrba.ai-pair-0.30.0"
+  fi
   development="${extension}"
   if [[ "${fixture}" == integration_companion_version ]]; then
     development="${root}/packages/audio-ui"
@@ -49,7 +55,8 @@ for fixture in integration_catalog_paths integration_companion_faults \
   # so each array below expands with ${name[@]+...}.
   debug_args=()
   if [[ "${fixture}" == integration_companion_version ||
-    "${fixture}" == integration_workspace_incompatible ]]; then
+    "${fixture}" == integration_workspace_incompatible ||
+    "${fixture}" == integration_old_extension* ]]; then
     debug_args=(--remote-debugging-port=0)
   fi
   # specs/IntegrationFixture.tla, Build: attribute each fixture to its host.
