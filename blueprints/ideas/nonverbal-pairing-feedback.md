@@ -4,6 +4,9 @@ Deferred product proposal, recorded 2026-11-14. The programmer wants Pair to
 notice conversational feedback much as a human pairing partner would, without
 requiring every response to be typed or spoken. This document records an idea
 and research assessment; it does not authorize implementation or select a model.
+The design that refines it is in
+[nonverbal-pairing-feedback-design.md](nonverbal-pairing-feedback-design.md)
+(#83).
 
 ## Intended experience
 
