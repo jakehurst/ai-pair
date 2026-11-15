@@ -511,6 +511,13 @@
       "functions": 100
     }
   },
+  "packages/vscode/scripts/audio_helper.mts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/scripts/build.mts": {
     "unit": {
       "lines": 100,
@@ -939,6 +946,13 @@
     }
   },
   "packages/vscode/src/speech_service.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_system_output.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

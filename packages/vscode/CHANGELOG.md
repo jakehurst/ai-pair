@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.42.0
+
+-   Play speech on a Linux desktop through PipeWire's default sink from the
+    extension host, the same way Macs use the CoreAudio helper. Speech no
+    longer waits for a click in the Pair panel. It needs `pw-play`, `pw-dump`
+    and `setpriv`; without them, or with no default sink, speech plays in the
+    panel as before. Each line checks the default sink when it starts, so a
+    sink that disappears sends the next line to the panel (#84).
+-   Use the system default route only on a local desktop. Over a remote
+    connection the extension host is the remote machine, so its speakers are
+    never used (#84).
+
+## 0.41.0
+
+-   Play speech on a Mac through a bundled CoreAudio helper on the system
+    default output, from the extension host instead of the Pair panel. Speech
+    no longer waits for a click in the panel after a reload, and keeps playing
+    while the panel page is rebuilt. If the helper cannot run, speech plays in
+    the panel as before (#82).
+
 ## 0.40.0
 
 -   Run Kokoro GPU speech on Apple silicon Macs through Core ML, with the CPU

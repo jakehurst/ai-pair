@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.42.0
+
+-   Version aligned with the main extension, whose Linux builds now play speech
+    on PipeWire's default sink (#84). The companion is unchanged.
+
+## 0.41.0
+
+-   Version aligned with the main extension, whose Mac builds now play speech
+    through the bundled CoreAudio helper (#82). The companion is unchanged.
+
 ## 0.40.0
 
 -   Tell the Pair panel whether this computer has a GPU path, so it offers GPU

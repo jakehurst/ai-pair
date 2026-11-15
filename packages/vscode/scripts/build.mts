@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import * as esbuild from 'esbuild';
 import { stageSpeechRuntime } from './speech_runtime.mts';
+import { stageAudioHelper } from './audio_helper.mts';
 
 /** A compact SHA-256 prefix shown in the panel. */
 const BUILD_ID_LENGTH = 16;
@@ -74,6 +75,9 @@ await esbuild.build({
   outfile: 'dist/speech/worker.mjs',
 });
 
+// On a Mac, the CoreAudio helper plays speech without the panel page (#82).
+const audioHelper = await stageAudioHelper();
+
 // The local tempo transform runs off the extension-host event loop.
 await esbuild.build({
   ...common,
@@ -138,6 +142,7 @@ function addDirectory(directory: string): void {
   }
 }
 addDirectory('dist/speech');
+if (audioHelper) addDirectory('dist/audio-native');
 const buildId = hash.digest('hex').slice(0, BUILD_ID_LENGTH);
 await esbuild.build({
   ...extensionOptions,

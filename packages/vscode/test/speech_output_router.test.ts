@@ -371,3 +371,94 @@ it('does not retain browser ownership when a page rejects playback', async () =>
   expect(router.play(1, new Uint8Array(44), 1000)).toBeUndefined();
   expect(await router.prepare(2)).toBe(true);
 });
+
+/** Builds a router whose default choice can play through a system driver. */
+function systemHarness(supported: boolean | Promise<boolean>) {
+  const browser = { play: vi.fn(() => 3), control: vi.fn<(...args: unknown[]) => void>(), status: vi.fn<(...args: unknown[]) => void>() };
+  const driver = { available: vi.fn(() => true), play: vi.fn(() => true), control: vi.fn<(...args: unknown[]) => void>() };
+  const system = {
+    supported: vi.fn(() => Promise.resolve(supported)),
+    available: vi.fn(() => true),
+    play: vi.fn<(name: string, wav: Uint8Array, event: (kind: 'started' | 'ended' | 'failed') => void) => boolean>(() => true),
+    control: vi.fn<(action: 'pause' | 'resume' | 'stop') => void>(),
+  };
+  const audioEvent = vi.fn<(...args: unknown[]) => void>();
+  const router = new SpeechOutputRouter({
+    driver,
+    system,
+    discover: vi.fn(),
+    choice: () => ({ kind: 'default' }),
+    defaultOutput: browser,
+    currentPage: () => 7,
+    audioEvent,
+  });
+  return { browser, driver, system, audioEvent, router };
+}
+
+describe('the system default through a verified helper (#82)', () => {
+  it('NativeDefault: plays the default through the helper, never the browser, and controls only that job', async () => {
+    const h = systemHarness(true);
+    expect(await h.router.prepare(1)).toBe(true);
+    expect(h.router.play(1, new Uint8Array(44), 1000)).toBe(7);
+    expect(h.browser.play).not.toHaveBeenCalled();
+    expect(h.driver.play).not.toHaveBeenCalled();
+    expect(h.system.play).toHaveBeenCalledWith('', expect.any(Uint8Array), expect.any(Function));
+    const event = h.system.play.mock.calls[0]?.[2];
+    event?.('started');
+    await Promise.resolve();
+    expect(h.audioEvent).toHaveBeenCalledWith({ id: 1, pageId: 7, event: 'started' });
+    h.router.control(1, 7, 'pause');
+    expect(h.system.control).toHaveBeenCalledWith('pause');
+    h.router.invalidate();
+    expect(h.system.control).toHaveBeenCalledWith('stop');
+    expect(h.driver.control).not.toHaveBeenCalled();
+  });
+
+  it('HelperRoute: falls back to the browser only when the helper is not supported', async () => {
+    const h = systemHarness(false);
+    expect(await h.router.prepare(1)).toBe(true);
+    expect(h.router.play(1, new Uint8Array(44), 1000)).toBe(3);
+    expect(h.system.play).not.toHaveBeenCalled();
+  });
+
+  it('HelperRoute and NativeDefault: decides each line at admission, so a lost PipeWire default sink sends the next line to the browser (#84)', async () => {
+    const h = systemHarness(true);
+    expect(await h.router.prepare(1)).toBe(true);
+    expect(h.router.play(1, new Uint8Array(44), 1000)).toBe(7);
+    h.system.play.mock.calls[0]?.[2]('ended');
+    await Promise.resolve();
+    h.system.supported.mockResolvedValue(false);
+    expect(await h.router.prepare(2)).toBe(true);
+    expect(h.router.play(2, new Uint8Array(44), 1000)).toBe(3);
+    expect(h.system.play).toHaveBeenCalledOnce();
+    expect(h.browser.play).toHaveBeenCalledOnce();
+    expect(h.system.supported).toHaveBeenCalledTimes(2);
+  });
+
+  it('NoOverlap: refuses any route while the helper still owns a job', async () => {
+    const h = systemHarness(true);
+    h.system.available.mockReturnValue(false);
+    expect(await h.router.prepare(1)).toBe(false);
+    expect(h.router.idle()).toBe(false);
+  });
+
+  it('drops a reservation when a newer request or a busy driver appears while support is checked', async () => {
+    const support = Promise.withResolvers<boolean>();
+    const h = systemHarness(support.promise);
+    const first = h.router.prepare(1);
+    h.router.invalidate();
+    support.resolve(true);
+    expect(await first).toBe(false);
+    const late = systemHarness(true);
+    const pending = late.router.prepare(2);
+    late.system.available.mockReturnValue(false);
+    expect(await pending).toBe(false);
+  });
+
+  it('refuses playback when the system driver rejects the job', async () => {
+    const h = systemHarness(true);
+    h.system.play.mockReturnValue(false);
+    expect(await h.router.prepare(1)).toBe(true);
+    expect(h.router.play(1, new Uint8Array(44), 1000)).toBeUndefined();
+  });
+});

@@ -13,8 +13,17 @@ export interface NativeDriver {
   control(action: 'pause' | 'resume' | 'stop'): void;
 }
 
+/** A native driver for the system default output (macOS #82, Linux #84). */
+export interface SystemDriver extends NativeDriver {
+  supported(): Promise<boolean>;
+}
+
+type Route = OutputChoice | { kind: 'system'; driver: SystemDriver };
+
 interface RouterOptions {
   driver: NativeDriver;
+  /** Plays the default choice natively when its helper is supported; the browser is the fallback. */
+  system?: SystemDriver;
   discover(): Promise<OutputDiscovery>;
   choice(): OutputChoice;
   defaultOutput: SpeechOutput;
@@ -26,8 +35,8 @@ interface RouterOptions {
 export class SpeechOutputRouter implements SpeechOutput {
   private epoch = 0;
   private request = 0;
-  private reservation?: { id: number; choice: OutputChoice; epoch: number };
-  private active?: { id: number; pageId: number; epoch: number };
+  private reservation?: { id: number; choice: Route; epoch: number };
+  private active?: { id: number; pageId: number; epoch: number; driver: NativeDriver };
   private browser?: { id: number; pageId: number; retiring: boolean };
 
   constructor(private readonly options: RouterOptions) {}
@@ -36,11 +45,17 @@ export class SpeechOutputRouter implements SpeechOutput {
     const epoch = this.epoch;
     // specs/OutputAdmission.tla, Check: only the latest request may reserve.
     const request = ++this.request;
-    const choice = this.options.choice();
+    const selected = this.options.choice();
+    let choice: Route = selected;
     this.reservation = undefined;
     // specs/AudioOutput.tla, Reserve: no route starts while a child is owned.
-    if (!this.options.driver.available() || this.browser !== undefined) return false;
-    if (choice.kind === 'native') {
+    if (!this.idle()) return false;
+    const system = this.options.system;
+    if (selected.kind === 'default' && system !== undefined && (await system.supported())) {
+      // specs/AudioOutput.tla, Reserve("sys"): a verified helper plays the default, never the browser.
+      if (epoch !== this.epoch || request !== this.request || !this.idle()) return false;
+      choice = { kind: 'system', driver: system };
+    } else if (selected.kind === 'native') {
       let catalog: OutputDiscovery;
       try {
         catalog = await this.options.discover();
@@ -50,11 +65,10 @@ export class SpeechOutputRouter implements SpeechOutput {
       if (
         epoch !== this.epoch ||
         request !== this.request ||
-        !this.options.driver.available() ||
-        this.browser !== undefined ||
+        !this.idle() ||
         !catalog.supported ||
         !catalog.devices.some(
-          (device) => device.available && device.choice.backend === choice.backend && device.choice.name === choice.name,
+          (device) => device.available && device.choice.backend === selected.backend && device.choice.name === selected.name,
         )
       ) {
         return false;
@@ -69,7 +83,7 @@ export class SpeechOutputRouter implements SpeechOutput {
     // specs/OutputAdmission.tla, Play: an old generation cannot consume a new reservation.
     if (reservation === undefined || reservation.id !== id || reservation.epoch !== this.epoch) return undefined;
     this.reservation = undefined;
-    if (!this.options.driver.available() || this.browser !== undefined) return undefined;
+    if (!this.idle()) return undefined;
     if (reservation.choice.kind === 'default') {
       const pageId = this.options.defaultOutput.play(id, wav, durationMs);
       if (pageId !== undefined) this.browser = { id, pageId, retiring: false };
@@ -77,9 +91,11 @@ export class SpeechOutputRouter implements SpeechOutput {
     }
     const pageId = this.options.currentPage();
     if (pageId === undefined) return undefined;
-    const active = { id, pageId, epoch: this.epoch };
+    const driver = reservation.choice.kind === 'system' ? reservation.choice.driver : this.options.driver;
+    const name = reservation.choice.kind === 'system' ? '' : reservation.choice.name;
+    const active = { id, pageId, epoch: this.epoch, driver };
     this.active = active;
-    const accepted = this.options.driver.play(reservation.choice.name, wav, (event) => {
+    const accepted = driver.play(name, wav, (event) => {
       queueMicrotask(() => {
         if (this.active !== active || active.epoch !== this.epoch) return;
         if (event !== 'started') this.active = undefined;
@@ -97,7 +113,7 @@ export class SpeechOutputRouter implements SpeechOutput {
     const active = this.active;
     if (active?.id === id && active.pageId === pageId) {
       if (action === 'stop') this.active = undefined;
-      this.options.driver.control(action);
+      active.driver.control(action);
     } else {
       if (action === 'stop' && this.browser?.id === id && this.browser.pageId === pageId) this.browser.retiring = true;
       this.options.defaultOutput.control(id, pageId, action);
@@ -126,7 +142,12 @@ export class SpeechOutputRouter implements SpeechOutput {
   invalidate(): void {
     this.epoch++;
     this.reservation = undefined;
-    if (this.active !== undefined) this.options.driver.control('stop');
+    if (this.active !== undefined) this.active.driver.control('stop');
     this.active = undefined;
+  }
+
+  /** True when no native process of either driver nor a browser clip is owned. */
+  idle(): boolean {
+    return this.options.driver.available() && (this.options.system?.available() ?? true) && this.browser === undefined;
   }
 }

@@ -78,6 +78,7 @@ import type { OutputPreferenceWiring } from '../src/speech_output_preferences';
 import type { SpeechOutputRouter } from '../src/speech_output_router';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from '../src/speech_setup';
 import { discoverOutputs } from '../src/speech_native_output';
+import { systemOutputDriver } from '../src/speech_system_output';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
 import { warnOldExtension } from '../src/old_extension';
@@ -128,6 +129,7 @@ const fakes = vi.hoisted(() => {
     readonly browserRetired = vi.fn<(id: number, pageId: number) => void>();
     readonly pageClosed = vi.fn<(pageId: number) => void>();
     readonly prepare = vi.fn(() => Promise.resolve(true));
+    readonly idle = vi.fn(() => true);
     readonly play: SpeechOutput['play'];
     readonly control: SpeechOutput['control'];
     readonly status: SpeechOutput['status'];
@@ -697,6 +699,7 @@ vi.mock('../src/speech_native_output', () => ({
   discoverOutputs: vi.fn(() => Promise.resolve({ supported: false, devices: [], reason: 'unsupported' })),
 }));
 vi.mock('../src/speech_output_router', () => ({ SpeechOutputRouter: fakes.FakeOutputRouter }));
+vi.mock('../src/speech_system_output', () => ({ systemOutputDriver: vi.fn(() => undefined) }));
 vi.mock('../src/speech_setup', () => ({
   installedSpeechModel: vi.fn(() => Promise.resolve(undefined)),
   speechModelStatus: vi.fn(() =>
@@ -1074,6 +1077,16 @@ describe('activate', () => {
       ]);
     });
     expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain('private-key');
+  });
+
+  it('plays the default output natively only on a local desktop, never on a remote host (#84)', () => {
+    const ctx = context();
+    activated(ctx);
+    expect(vi.mocked(systemOutputDriver)).toHaveBeenLastCalledWith(ctx.extensionPath, true);
+    fakes.remoteName = 'ssh-remote';
+    activated(context());
+    expect(vi.mocked(systemOutputDriver)).toHaveBeenLastCalledWith(expect.any(String), false);
+    fakes.remoteName = undefined;
   });
 
   it('reports cloud capability as unsupported on remote hosts', async () => {

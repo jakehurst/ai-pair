@@ -104,7 +104,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 251 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
 | `ProviderChoice.cfg` | two ordered settings writes and credential change | holds | 122 |
-| `AudioOutput.cfg` | native jobs, route changes and retirement | holds | 3,180 |
+| `AudioOutput.cfg` | native jobs, route changes, retirement, and the system-default route (macOS helper, Linux PipeWire) | holds | 11,640 |
 | `OutputAdmission.cfg` | overlapping output checks and stale completion | holds | 140 |
 | `OutputHandoff.cfg` | worker admission and acknowledged browser retirement | holds | 270 |
 | `OutputReplacement.cfg` | view replacement and old-page disposal | holds | 22 |
@@ -2690,6 +2690,35 @@ discoveries, selected-route epochs, per-request reservation and timeout. The
 `pw-dump` catalog parser is outside both models; discovery changes do not alter
 the modeled admission or process ownership mechanics.
 
+On macOS the main extension also packages the CoreAudio helper (#82). The
+model's `helper` records whether that helper verified at startup; when it did,
+`Reserve("sys")` plays the system default through it, and the browser default
+(`DefaultStart`) is only the fallback when no helper can run. `NativeDefault`
+says the browser default is never used while a verified helper exists, and
+`HelperRoute` that the system route exists only with one.
+
+On a local Linux desktop the same route plays PipeWire's default sink through
+`pw-play` (#84). There the "helper" is PipeWire with a known default sink,
+which can appear or disappear while the extension runs, so `HelperChange`
+flips `helper` at any time, and the router asks before every line. Each route
+is therefore decided when it is admitted: `defaultHelper` and `sysHelper`
+record the helper's state at `DefaultStart` and at `Reserve("sys")`, and
+`NativeDefault` and `HelperRoute` are stated over those, not over the current
+state. A line already playing keeps its route. `GuardAdmit` controls the
+`Reserve("sys")` guard. TLC checked 11,640 distinct states, up from 7,242
+before #84, and every action fires.
+
+| Mutation | Result |
+|---|---|
+| `GuardHelper = FALSE`: the browser default runs beside a verified helper | `NativeDefault` violated |
+| `Reserve` takes `"sys"` without a verified helper | `HelperRoute` violated |
+| `GuardAdmit = FALSE`: `Reserve("sys")` while PipeWire has no default sink (#84) | `HelperRoute` violated |
+| `HelperRoute` judged by the current `helper` instead of `sysHelper`, the #82 form (#84) | `HelperRoute` violated: a sink that disappears mid-line would make a correct line look wrong, so the invariant has to be about admission |
+| `NativeDefault` judged by the current `helper` instead of `defaultHelper`, the #82 form (#84) | `NativeDefault` violated, for the same reason |
+| `HelperChange` moves a playing `"sys"` line to the browser when the sink disappears (#84) | `NoCrossRouteOverlap` violated |
+| `GuardTarget = FALSE`: a job opens another route than its target, including `"sys"` | `NoFallback` violated |
+| `GuardDefault = FALSE`: the browser default starts while a native job lives | `NoCrossRouteOverlap` violated |
+
 The `GuardDefault`, `GuardRetire`, callback, admission and play-ID negative
 controls violate their respective safety invariants. Disabled admission or
 completion controls violate enabledness checks. Each pending discovery can
@@ -2697,7 +2726,10 @@ settle through an independently fair timeout.
 
 | Property | Test |
 |---|---|
-| `NoOverlap`, `NoCrossRouteOverlap` | `speech_native_output.test.ts`: does not allow another route until the stopped process actually closes; `speech_output_router.test.ts`: blocks default synthesis and playback while a canceled native child is retiring. |
+| `NoOverlap`, `NoCrossRouteOverlap` | `speech_native_output.test.ts`: does not allow another route until the stopped process actually closes; `speech_output_router.test.ts`: blocks default synthesis and playback while a canceled native child is retiring; NoOverlap: refuses any route while the helper still owns a job. |
+| `NativeDefault` | `speech_output_router.test.ts`: NativeDefault: plays the default through the helper, never the browser, and controls only that job; `speech_system_output.test.ts`: NativeDefault: admits the default, plays, reports start and end, and releases only after the helper stops. |
+| `HelperRoute` | `speech_output_router.test.ts`: HelperRoute: falls back to the browser only when the helper is not supported; HelperRoute and NativeDefault: decides each line at admission, so a lost PipeWire default sink sends the next line to the browser; `speech_system_output.test.ts`: creates a driver on a local macOS or Linux desktop only; `extension.test.ts`: plays the default output natively only on a local desktop, never on a remote host. |
+| `RetirementCompletes` (system helper) | `speech_system_output.test.ts`: RetirementCompletes: pauses and resumes the job, and a stop keeps ownership until retirement with no late events. |
 | `NoRevival`, `NoCanceledEnd` | `speech_native_output.test.ts`: ignores callbacks retained from a retired process; keeps a timed-out child owned until close and ignores its late readiness. |
 | `NoFallback` | `speech_output_router.test.ts`: refuses an unavailable saved device before synthesis without falling back; isolated PipeWire target-loss test. |
 | `NoStartPaused` | `speech_native_output.test.ts`: freezes the startup deadline while paused; defers a readiness notification observed during pause until resume. |

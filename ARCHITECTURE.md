@@ -116,7 +116,16 @@ diagram was inspected in headless Chromium without page errors.
     local endpoint before synthesis. Linux uses PipeWire; macOS and Windows use
     bundled CoreAudio and WASAPI helpers. Each physical playback rechecks the
     captured endpoint and never substitutes another. The legacy local path
-    without a companion retains webview default audio and the PipeWire override.
+    without a companion retains webview default audio and the PipeWire override,
+    except on a local macOS or Linux desktop. There `SpeechOutputRouter` plays
+    the default output from the extension host: through the bundled CoreAudio
+    helper on macOS (#82), and through PipeWire's default sink with `pw-play`
+    on Linux (#84). The router decides each line's route when it admits the
+    line, because a PipeWire default sink can appear or disappear at any time;
+    a line already playing keeps its route. Webview audio is the fallback only
+    when the macOS helper does not verify against its packaged digest manifest,
+    or Linux has no usable PipeWire default sink. Over a remote connection the
+    extension host is the remote machine, so this route is never used there.
     The legacy router waits for matching
     browser retirement or actual page disposal, and retains native process
     ownership until close. Page replacement and interruption invalidate the

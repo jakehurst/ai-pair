@@ -11,6 +11,7 @@
 !media/comma-gets-a-cure-notice.txt
 !LICENSE
 !dist/speech/**
+!dist/audio-native/**
 !THIRD_PARTY_NOTICES.md
 !third_party/**
 

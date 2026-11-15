@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as esbuild from 'esbuild';
 import { stageSpeechRuntime } from './speech_runtime.mts';
+import { stageAudioHelper } from './audio_helper.mts';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs', () => ({
@@ -23,6 +24,7 @@ vi.mock('node:fs', () => ({
   ),
 }));
 vi.mock('./speech_runtime.mts', () => ({ stageSpeechRuntime: vi.fn() }));
+vi.mock('./audio_helper.mts', () => ({ stageAudioHelper: vi.fn(() => Promise.resolve(false)) }));
 vi.mock('esbuild', () => ({
   build: vi.fn(() => Promise.resolve({ outputFiles: [{ path: '/dist/extension.js', contents: Buffer.from('extension') }] })),
 }));
@@ -42,6 +44,7 @@ function builds(): esbuild.BuildOptions[] {
 beforeEach(() => {
   vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ version: '1.2.3' }));
   vi.mocked(stageSpeechRuntime).mockReturnValue(true);
+  vi.mocked(stageAudioHelper).mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -218,4 +221,11 @@ it('changes the build ID when the staged tempo worker changes', async () => {
   );
   await built();
   expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).not.toBe(first);
+});
+
+it('hashes the staged Mac audio helper into the build identity (#82)', async () => {
+  vi.mocked(stageAudioHelper).mockResolvedValue(true);
+  await built();
+  expect(stageAudioHelper).toHaveBeenCalledOnce();
+  expect(fs.readdirSync).toHaveBeenCalledWith('dist/audio-native', { withFileTypes: true });
 });

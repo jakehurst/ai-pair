@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-11-15.
+Last updated: css, 2026-11-15.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -177,6 +177,8 @@ Last updated: tla, 2026-11-15.
 | `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/scripts/audio_helper.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/scripts/audio_helper.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/scripts/icon/Package.swift` | Swift | - | - | - | - | - | - |
@@ -280,6 +282,7 @@ Last updated: tla, 2026-11-15.
 | `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 65.5% B 51.0% F 74.5% | - | - | - | - |
 | `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 33.5% B 36.4% F 57.1% | - | - | - | - |
 | `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_system_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_tempo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_tempo_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 36.0% B 66.7% F 25.0% | - | - | - | - |
 | `packages/vscode/src/speech_tempo_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -475,6 +478,7 @@ Last updated: tla, 2026-11-15.
 | `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_system_output.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | test | test | - | - | test |
