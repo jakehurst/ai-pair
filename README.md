@@ -20,12 +20,14 @@ it again while waiting to lower your hand; once the floor is yours, press it
 to focus Reply. The panel shows "What's up?" and, when speech is available,
 plays the same cue. Other pauses still apply.
 
-During a session, the default shortcuts are **Alt+Q** to pause or
+On Windows and Linux, the default shortcuts are **Alt+Q** to pause or
 resume, **Alt+W** to raise or lower your hand, and
 **Ctrl+Alt+Space** to focus Reply. Once your hand is granted, its shortcut
-focuses Reply. Pair Settings opens VS Code's Keyboard Shortcuts editor to
-customize these bindings. Desktop shortcuts and keyboard layouts can reserve
-these combinations. In a focused terminal, VS Code may send them to the shell;
+focuses Reply. On macOS, the defaults are **Ctrl+Shift+Q**, **Ctrl+Shift+W**,
+and **Ctrl+Shift+Space**, respectively. Pair Settings opens VS Code's
+Keyboard Shortcuts editor to customize these bindings. Desktop shortcuts and
+keyboard layouts can reserve these combinations. In a focused terminal, VS Code
+may send them to the shell;
 its `terminal.integrated.commandsToSkipShell` setting can route the Pair
 commands to VS Code instead.
 

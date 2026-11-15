@@ -737,3 +737,21 @@ Pair shortcut dispatch stays with VS Code's keybinding service. The workspace
 commands delegate to the existing session and attention owners; the panel
 retains only a pending focus request until its page is ready. The companion
 forwards the Settings action over the existing validated panel boundary.
+
+## Proposed nonverbal feedback architecture
+
+The proposed `PROPOSED: Nonverbal feedback ownership` Archi view is a design,
+not implemented behavior. It separates local camera and calibration owners,
+known editor/layout facts, session-scoped observations and the existing relay.
+Raw frames remain local; consented derived cues alone may reach the agent and
+its model. Independent camera and voice controls preserve speech independence.
+Physical retirement, calibrated estimates, report replay and platform support
+are implementation gates rather than established guarantees. The full design,
+uncertainties and prospective spec gates are in
+[the nonverbal design](blueprints/ideas/nonverbal-pairing-feedback-design.md).
+
+Archi-Techture 1.5.1 validated the source and generated the normalized HTML
+export. The architecture normalizer's unit and composed tests passed, and
+Chromium rendered the proposed view without page errors; the labeled owners and
+connections were visually inspected. This verifies the diagram, not the proposed
+platform support or inference accuracy.

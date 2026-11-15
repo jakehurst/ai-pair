@@ -3973,6 +3973,10 @@ not simulate GitHub runner availability or prove its event delivery.
 
 ## PairShortcuts
 
+The model abstracts key resolution; platform-specific default key values are
+checked by `shortcuts_manifest.test.ts`. macOS overrides use Control+Shift;
+other platforms retain their defaults and the modeled transitions are unchanged.
+
 `PairShortcuts.cfg` checks active-session dispatch, attention grant, deferred
 reply focus, page reload and customization without draft submission. TLC
 checked 38 distinct states (247 generated, depth 9). `FocusProgress` assumes

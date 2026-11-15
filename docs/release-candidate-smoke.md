@@ -1,13 +1,13 @@
-# 0.39.0 local candidate smoke test
+# 0.39.1 local candidate smoke test
 
 Install both candidate VSIX files (`mattyv.ai-pair` and
-`mattyv.ai-pair-local-audio`, both 0.39.0), reload the VS Code window, and reconnect
+`mattyv.ai-pair-local-audio`, both 0.39.1), reload the VS Code window, and reconnect
 Pair MCP. Enable speech with your usual provider and output. Start a fresh
 Pair session if you want to test a subtotal without unknown earlier costs.
 
 Paste this request into your coding agent:
 
-> Run an AI Pair 0.39.0 smoke test in a new scratch text file inside this
+> Run an AI Pair 0.39.1 smoke test in a new scratch text file inside this
 > workspace. Do not overwrite an existing file. First use a short `say` with
 > `speech_mode: "continue"`, then type a few short lines while it speaks.
 > Keep the normal reading pause. Next send a short question using the default
@@ -33,9 +33,10 @@ Check these observable behaviors:
 6.  Ask to end the session while a continued voiceover is playing. Remaining
     audio should stop. Pair must not end itself at an earlier natural pause.
 
-7.  In an active session, press Alt+Q to pause and again to resume. Press
-    Alt+W to raise and lower your hand while it is waiting; once granted,
-    Alt+W focuses Reply. Ctrl+Alt+Space also focuses Reply. In Pair Settings,
+7.  In an active session on Windows or Linux, press Alt+Q to pause and resume,
+    Alt+W to raise or lower your hand, and Ctrl+Alt+Space to focus Reply.
+    On macOS, use Ctrl+Shift+Q, Ctrl+Shift+W, and Ctrl+Shift+Space instead.
+    Once granted, the hand shortcut focuses Reply. In Pair Settings,
     open Keyboard Shortcuts and verify that you can remap these commands.
     Desktop shortcuts, keyboard layouts and terminal shell routing can
     intercept the defaults; check those if a key does not reach VS Code.

@@ -43,6 +43,8 @@
     browser refuses to play sound before a click or keypress in the Pair panel;
     the line now starts on that first gesture, or is given up after the usual
     20 second start timeout (#77).
+-   Use Control+Shift shortcut defaults on macOS; keep the existing defaults
+    on Windows and Linux.
 
 ## 0.39.0
 

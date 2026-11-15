@@ -41,6 +41,20 @@ Issue discussions and working notes hold the detailed evidence and history.
     granted hand focuses Reply rather than changing the turn. Pending focus
     waits for the panel page and is discarded when the session ends. Desktop
     bindings, keyboard layouts and terminal shell routing can intercept keys.
+    macOS uses Control+Shift defaults; Settings lists both platform mappings
+    because the workspace and local companion may run on different systems.
+
+## Proposed nonverbal feedback controls
+
+-   The #83 design proposes independent voice and camera mute controls, each
+    with its own owner. This replaces the earlier combined mute proposal; the
+    existing consent opt-ins remain independent. Calibrated gaze and native
+    screen-layout access require a platform and permissions spike before any
+    implementation or claim of accurate region tracking.
+    Qualitative and numeric emotion estimates remain a proposed feature behind
+    per-user calibration and evaluated thresholds, without assuming calibrated
+    probabilities. Camera retirement, report replay and model-use rights are
+    explicit gates; bringing a noncommercial model does not grant commercial use.
 
 ## Speech continuity and delivery
 

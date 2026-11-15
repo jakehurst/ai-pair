@@ -26,6 +26,8 @@
 
 -   Keep the first narration after a window reload until the first click or
     keypress in the Pair panel, instead of dropping it (#77).
+-   Use Control+Shift shortcut defaults on macOS; keep the existing defaults
+    on Windows and Linux.
 
 ## 0.39.0
 

@@ -155,16 +155,19 @@
       {
         "command": "aiPair.togglePause",
         "key": "alt+q",
+        "mac": "ctrl+shift+q",
         "when": "aiPair.active"
       },
       {
         "command": "aiPair.toggleAttention",
         "key": "alt+w",
+        "mac": "ctrl+shift+w",
         "when": "aiPair.active"
       },
       {
         "command": "aiPair.focusReply",
         "key": "ctrl+alt+space",
+        "mac": "ctrl+shift+space",
         "when": "aiPair.active"
       }
     ],
